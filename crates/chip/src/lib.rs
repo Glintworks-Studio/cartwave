@@ -9,7 +9,10 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod dmc;
 pub mod math;
+pub mod noise;
 pub mod pulse;
 pub mod tables;
+pub mod triangle;
 pub mod units;
