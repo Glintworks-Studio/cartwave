@@ -674,7 +674,7 @@ mod tests {
         for w in snap.lanes[0].windows(2) {
             assert!(w[0].end <= w[1].start, "{w:?}");
         }
-        let last_of_1 = snap.lanes[0].iter().filter(|n| n.start < 4 * q).last().unwrap();
+        let last_of_1 = snap.lanes[0].iter().rfind(|n| n.start < 4 * q).unwrap();
         assert!(last_of_1.end <= 4 * q);
     }
 
