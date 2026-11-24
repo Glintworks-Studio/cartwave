@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/chip", "crates/ui", "crates/app"]
+members = ["crates/chip", "crates/engine", "crates/ui", "crates/app"]
 
 [workspace.dependencies]
 vizia = "0.4.0"

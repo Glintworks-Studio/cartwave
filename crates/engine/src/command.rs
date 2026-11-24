@@ -1,0 +1,34 @@
+//! UI -> engine commands, carried by a lock-free SPSC queue.
+
+use crate::song::SongSnapshot;
+use chip::driver::ParamId;
+use chip::filter::FilterMode;
+
+pub enum Command {
+    /// Replace the song. The old snapshot is returned to the UI thread to be
+    /// freed there.
+    Song(Box<SongSnapshot>),
+    Play,
+    /// Stop in place.
+    Stop,
+    Seek(f64),
+    Bpm(f64),
+    LoopEnd(f64),
+    /// Bit per lane.
+    Mute(u8),
+    Solo(u8),
+    Param { lane: u8, id: ParamId, value: i8 },
+    Vrc6(bool),
+    Filter(FilterMode),
+    /// Output gain (linear).
+    Gain(f32),
+    /// Test only: busy-wait this many microseconds inside the next callback,
+    /// to validate the underrun detectors.
+    TestStall(u32),
+    /// Test only: mix a quiet pilot tone (Hz, 0 = off) for loopback glitch
+    /// detection.
+    TestPilot(f32),
+    /// Test only: a short full-scale click at the next frame that crosses this
+    /// song position (ticks), for A/V sync measurement. Negative = off.
+    TestClickAt(f64),
+}

@@ -16,12 +16,14 @@ extern crate std;
 
 pub mod blep;
 pub mod dmc;
+pub mod driver;
 pub mod filter;
 pub mod frame_counter;
 pub mod math;
 pub mod mixer;
 pub mod noise;
 pub mod pitch;
+pub mod player;
 pub mod pulse;
 pub mod samples;
 pub mod synth;

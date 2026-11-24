@@ -1,0 +1,12 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Real-time audio host for the chip engine: cpal output, lock-free queues, song snapshots."
+
+[dependencies]
+chip = { path = "../chip" }
+# Approved 2026-11-24. Default features only (no asio/jack/realtime).
+cpal = "0.18.2"
+rtrb = "0.4.1"
