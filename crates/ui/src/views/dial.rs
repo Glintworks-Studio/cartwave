@@ -7,7 +7,7 @@ use vizia::prelude::*;
 use vizia::vg;
 
 use super::gfx::{self, Face};
-use crate::state::{DialSpec, DIALS};
+use crate::state::DialSpec;
 use crate::theme::tokens::*;
 use crate::{AppEvent, Signals};
 
@@ -45,8 +45,9 @@ pub struct Dial {
 }
 
 impl Dial {
-    pub fn new(cx: &mut Context, s: Signals, index: usize) -> Handle<'_, Self> {
-        let spec = DIALS[index];
+    /// `index` is the dial slot (`Signals::dials`); `spec` describes the
+    /// hardware control it shows for the selected lane.
+    pub fn new(cx: &mut Context, s: Signals, index: usize, spec: DialSpec) -> Handle<'_, Self> {
         let n = spec.to_norm(s.dials.get_untracked()[index]);
         let animating = Rc::new(Cell::new(false));
         Self {

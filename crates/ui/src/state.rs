@@ -1,6 +1,8 @@
 //! Plain data model for the prototype. No audio; everything is mock data.
 
 use crate::theme::tokens::{self, Rgba};
+use engine::{ClipInput, ParamId, SongSnapshot};
+use std::hash::{Hash, Hasher};
 
 /// Ticks per quarter note. All timing and snapping is done in ticks.
 pub const PPQ: u32 = 960;
@@ -183,6 +185,10 @@ pub struct Arrangement {
     pub snap: Snap,
     pub view: Viewport,
     pub next_id: u32,
+    /// Clips being dragged/resized right now. They are the "newer" clips: the
+    /// engine hears them trimming whatever they overlap (without changing the
+    /// other clips until the drop), and on release the trim is applied.
+    pub editing: Vec<u32>,
 }
 
 impl Arrangement {
@@ -213,6 +219,114 @@ impl Arrangement {
 
     pub fn first_selected(&self) -> Option<&Clip> {
         self.selection.first().and_then(|id| self.clip(*id))
+    }
+
+    /// Monophonic overlap rule: each clip in `winners` trims, splits or
+    /// removes every other clip it overlaps in its lane. Split-off right parts
+    /// get new ids. Winners don't trim each other.
+    pub fn resolve_overlaps(&mut self, winners: &[u32]) {
+        for &w in winners {
+            let Some(wc) = self.clip(w) else { continue };
+            let (lane, ws, we) = (wc.lane, wc.start_ticks, wc.end_ticks());
+            let mut out = Vec::with_capacity(self.clips.len() + 1);
+            for c in std::mem::take(&mut self.clips) {
+                if winners.contains(&c.id)
+                    || c.lane != lane
+                    || c.end_ticks() <= ws
+                    || c.start_ticks >= we
+                {
+                    out.push(c);
+                    continue;
+                }
+                let left = (c.start_ticks < ws).then(|| c.trimmed(c.start_ticks, ws));
+                let right = (c.end_ticks() > we).then(|| c.trimmed(we, c.end_ticks()));
+                match (left, right) {
+                    (Some(l), Some(mut r)) => {
+                        r.id = self.next_id;
+                        self.next_id += 1;
+                        out.push(l);
+                        out.push(r);
+                    }
+                    (Some(l), None) => out.push(l),
+                    (None, Some(r)) => out.push(r),
+                    (None, None) => {}
+                }
+            }
+            self.clips = out;
+        }
+        let ids: Vec<u32> = self.clips.iter().map(|c| c.id).collect();
+        self.selection.retain(|id| ids.contains(id));
+    }
+
+    /// The clips as the engine should hear them right now (with `editing`
+    /// winning over everything it overlaps).
+    pub fn resolved_clips(&self) -> std::borrow::Cow<'_, [Clip]> {
+        if self.editing.is_empty() {
+            std::borrow::Cow::Borrowed(&self.clips)
+        } else {
+            let mut a = self.clone();
+            let w = a.editing.clone();
+            a.resolve_overlaps(&w);
+            std::borrow::Cow::Owned(a.clips)
+        }
+    }
+
+    /// Changes whenever anything audible changes (not selection or view).
+    pub fn content_key(&self) -> u64 {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for c in &self.clips {
+            (c.id, c.lane, c.start_ticks, c.len_ticks, c.notes.len()).hash(&mut h);
+            if let (Some(f), Some(l)) = (c.notes.first(), c.notes.last()) {
+                (f.start, f.pitch, l.start, l.len).hash(&mut h);
+            }
+        }
+        self.editing.hash(&mut h);
+        h.finish()
+    }
+
+    /// Builds the engine's immutable snapshot (UI thread).
+    pub fn song_snapshot(&self, version: u64) -> SongSnapshot {
+        let clips = self.resolved_clips();
+        let notes: Vec<Vec<(u32, u32, u8)>> = clips
+            .iter()
+            .map(|c| c.notes.iter().map(|n| (n.start, n.len, n.pitch)).collect())
+            .collect();
+        SongSnapshot::build(
+            clips.iter().zip(&notes).map(|(c, n)| ClipInput {
+                lane: c.lane,
+                start: c.start_ticks,
+                len: c.len_ticks,
+                notes: n,
+            }),
+            version,
+        )
+    }
+}
+
+impl Clip {
+    /// The part of this clip between absolute ticks `from..to`; notes keep
+    /// their song positions (notes starting before `from` are dropped, notes
+    /// crossing `to` are shortened).
+    pub fn trimmed(&self, from: u32, to: u32) -> Clip {
+        let shift = from - self.start_ticks;
+        let len = to - from;
+        Clip {
+            id: self.id,
+            lane: self.lane,
+            start_ticks: from,
+            len_ticks: len,
+            name: self.name.clone(),
+            notes: self
+                .notes
+                .iter()
+                .filter(|n| n.start >= shift && n.start < shift + len)
+                .map(|n| MockNote {
+                    start: n.start - shift,
+                    len: n.len.min(shift + len - n.start),
+                    pitch: n.pitch,
+                })
+                .collect(),
+        }
     }
 }
 
@@ -250,7 +364,23 @@ pub struct Meters {
     pub light: [f32; 8],
 }
 
-pub const DIAL_COUNT: usize = 6;
+/// Most dials any channel shows (pulse: duty, volume, envelope, sweep, rate).
+pub const MAX_DIALS: usize = 5;
+
+/// How a dial shows its value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fmt {
+    Int,
+    PulseDuty,
+    Vrc6Duty,
+    Envelope,
+    Sweep,
+    NoiseMode,
+    NoisePeriod,
+    Sample,
+    OnOff,
+    SawRate,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DialSpec {
@@ -260,69 +390,29 @@ pub struct DialSpec {
     pub default: f32,
     /// Discrete steps (0 = continuous).
     pub steps: u32,
-    pub unit: &'static str,
+    pub fmt: Fmt,
 }
-
-pub const DIALS: [DialSpec; DIAL_COUNT] = [
-    DialSpec {
-        label: "Duty",
-        min: 0.0,
-        max: 3.0,
-        default: 2.0,
-        steps: 3,
-        unit: "",
-    },
-    DialSpec {
-        label: "Volume",
-        min: 0.0,
-        max: 15.0,
-        default: 12.0,
-        steps: 15,
-        unit: "",
-    },
-    DialSpec {
-        label: "Env Attack",
-        min: 0.0,
-        max: 1000.0,
-        default: 8.0,
-        steps: 0,
-        unit: "ms",
-    },
-    DialSpec {
-        label: "Env Decay",
-        min: 0.0,
-        max: 2000.0,
-        default: 420.0,
-        steps: 0,
-        unit: "ms",
-    },
-    DialSpec {
-        label: "Sweep",
-        min: -7.0,
-        max: 7.0,
-        default: 0.0,
-        steps: 14,
-        unit: "",
-    },
-    DialSpec {
-        label: "Detune",
-        min: -50.0,
-        max: 50.0,
-        default: 0.0,
-        steps: 0,
-        unit: "ct",
-    },
-];
 
 impl DialSpec {
     pub fn format(&self, v: f32) -> String {
-        match self.label {
-            "Duty" => {
-                ["12.5%", "25%", "50%", "75%"][v.round().clamp(0.0, 3.0) as usize].to_string()
-            }
-            _ if self.steps > 0 => format!("{}{}", v.round() as i32, self.unit),
-            _ if self.min < 0.0 => format!("{:+.1}{}", v, self.unit),
-            _ => format!("{:.0}{}", v, self.unit),
+        let i = v.round() as i32;
+        match self.fmt {
+            Fmt::Int => format!("{i}"),
+            Fmt::PulseDuty => ["12.5%", "25%", "50%", "75%"][i.clamp(0, 3) as usize].into(),
+            Fmt::Vrc6Duty if i >= 8 => "digi".into(),
+            Fmt::Vrc6Duty => format!("{}/16", i + 1),
+            Fmt::Envelope => ["const", "decay", "loop"][i.clamp(0, 2) as usize].into(),
+            Fmt::Sweep if i == 0 => "off".into(),
+            Fmt::Sweep if i < 0 => format!("up {}", -i),
+            Fmt::Sweep => format!("down {i}"),
+            Fmt::NoiseMode => ["long", "short"][i.clamp(0, 1) as usize].into(),
+            Fmt::NoisePeriod if i < 0 => "note".into(),
+            Fmt::NoisePeriod => format!("{i}"),
+            Fmt::Sample if i < 0 => "note".into(),
+            Fmt::Sample => sample_name(i as usize).into(),
+            Fmt::OnOff => if i != 0 { "on" } else { "off" }.into(),
+            Fmt::SawRate if i > 42 => format!("{i} wrap"),
+            Fmt::SawRate => format!("{i}"),
         }
     }
 
@@ -339,6 +429,62 @@ impl DialSpec {
             v
         }
     }
+}
+
+fn sample_name(i: usize) -> &'static str {
+    ["Kick", "Snare", "Tom", "Crash"].get(i).copied().unwrap_or("?")
+}
+
+/// The dials a lane really has (hardware controls only), in display order.
+pub fn lane_dials(lane: usize) -> Vec<(ParamId, DialSpec)> {
+    ParamId::for_lane(lane)
+        .iter()
+        .map(|&p| {
+            let (lo, hi, def) = p.range(lane);
+            let (label, fmt) = match p {
+                ParamId::Duty if lane >= 5 => ("Duty", Fmt::Vrc6Duty),
+                ParamId::Duty => ("Duty", Fmt::PulseDuty),
+                ParamId::Volume => ("Volume", Fmt::Int),
+                ParamId::Envelope => ("Envelope", Fmt::Envelope),
+                ParamId::Sweep => ("Sweep", Fmt::Sweep),
+                ParamId::SweepRate => ("Sweep rate", Fmt::Int),
+                ParamId::NoiseMode => ("Mode", Fmt::NoiseMode),
+                ParamId::NoisePeriod => ("Period", Fmt::NoisePeriod),
+                ParamId::Sample => ("Sample", Fmt::Sample),
+                ParamId::Rate if lane == 7 => ("Rate", Fmt::SawRate),
+                ParamId::Rate => ("Rate", Fmt::Int),
+                ParamId::Loop => ("Loop", Fmt::OnOff),
+            };
+            (
+                p,
+                DialSpec {
+                    label,
+                    min: lo as f32,
+                    max: hi as f32,
+                    default: def as f32,
+                    steps: (hi - lo) as u32,
+                    fmt,
+                },
+            )
+        })
+        .collect()
+}
+
+/// Engine status for the F3 overlay and the error line.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct AudioStats {
+    pub device: String,
+    pub running: bool,
+    pub filter: &'static str,
+    pub frames_per_cb: u32,
+    pub latency_ms: f32,
+    pub cb_mean: f32,
+    pub cb_p99: f32,
+    pub cb_max: f32,
+    pub underruns: u64,
+    pub overruns: u64,
+    pub edits: u64,
+    pub edit_tick_ms: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -439,5 +585,107 @@ impl FrameCap {
             Self::Fps120 => "120",
             Self::Display => "display",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn clip(id: u32, lane: usize, start: u32, len: u32) -> Clip {
+        // One note per quarter, absolute pitch = 60 + quarter index.
+        let notes = (0..len / PPQ)
+            .map(|q| MockNote { start: q * PPQ, len: PPQ / 2, pitch: 60 + q as u8 })
+            .collect();
+        Clip { id, lane, start_ticks: start, len_ticks: len, name: format!("c{id}"), notes }
+    }
+
+    fn arr(clips: Vec<Clip>) -> Arrangement {
+        let next_id = clips.iter().map(|c| c.id).max().unwrap_or(0) + 1;
+        Arrangement {
+            lanes: default_lanes(),
+            clips,
+            selection: vec![],
+            snap: Snap::Sixteenth,
+            view: Viewport::default(),
+            next_id,
+            editing: vec![],
+        }
+    }
+
+    fn spans(a: &Arrangement, lane: usize) -> Vec<(u32, u32, u32)> {
+        let mut v: Vec<_> = a
+            .clips
+            .iter()
+            .filter(|c| c.lane == lane)
+            .map(|c| (c.id, c.start_ticks, c.end_ticks()))
+            .collect();
+        v.sort_by_key(|x| x.1);
+        v
+    }
+
+    #[test]
+    fn newer_clip_trims_end_and_start() {
+        let q = PPQ;
+        let mut a = arr(vec![clip(1, 0, 0, 8 * q), clip(2, 0, 12 * q, 8 * q), clip(3, 0, 6 * q, 8 * q)]);
+        a.resolve_overlaps(&[3]);
+        assert_eq!(spans(&a, 0), [(1, 0, 6 * q), (3, 6 * q, 14 * q), (2, 14 * q, 20 * q)]);
+        // Notes keep their song positions: clip 2 lost its first two quarters.
+        let c2 = a.clip(2).unwrap();
+        assert_eq!(c2.notes.first().map(|n| (n.start, n.pitch)), Some((0, 62)));
+    }
+
+    #[test]
+    fn dropped_in_the_middle_splits() {
+        let q = PPQ;
+        let mut a = arr(vec![clip(1, 0, 0, 16 * q), clip(2, 0, 4 * q, 4 * q)]);
+        a.resolve_overlaps(&[2]);
+        let s = spans(&a, 0);
+        assert_eq!(s.len(), 3);
+        assert_eq!((s[0].1, s[0].2), (0, 4 * q));
+        assert_eq!(s[1], (2, 4 * q, 8 * q));
+        assert_eq!((s[2].1, s[2].2), (8 * q, 16 * q));
+        assert!(s[2].0 > 2, "the right part is a new clip");
+        let right = a.clip(s[2].0).unwrap();
+        assert_eq!(right.notes.first().map(|n| (n.start, n.pitch)), Some((0, 68)));
+    }
+
+    #[test]
+    fn covered_clip_is_removed_other_lanes_untouched() {
+        let q = PPQ;
+        let mut a = arr(vec![clip(1, 0, 2 * q, 2 * q), clip(2, 0, 0, 8 * q), clip(3, 1, 0, 8 * q)]);
+        a.selection = vec![1];
+        a.resolve_overlaps(&[2]);
+        assert_eq!(spans(&a, 0), [(2, 0, 8 * q)]);
+        assert_eq!(spans(&a, 1), [(3, 0, 8 * q)]);
+        assert!(a.selection.is_empty(), "removed clips leave the selection");
+    }
+
+    #[test]
+    fn snapshot_never_overlaps_while_dragging() {
+        let q = PPQ;
+        let mut a = arr(vec![clip(1, 0, 0, 8 * q), clip(2, 0, 4 * q, 8 * q)]);
+        // Mid-drag: clip 2 overlaps clip 1, the model isn't trimmed yet...
+        a.editing = vec![2];
+        let snap = a.song_snapshot(1);
+        assert_eq!(a.clips.len(), 2);
+        assert_eq!(a.clip(1).unwrap().len_ticks, 8 * q);
+        // ...but the engine hears clip 2 winning.
+        for w in snap.lanes[0].windows(2) {
+            assert!(w[0].end <= w[1].start, "{w:?}");
+        }
+        let last_of_1 = snap.lanes[0].iter().filter(|n| n.start < 4 * q).last().unwrap();
+        assert!(last_of_1.end <= 4 * q);
+    }
+
+    #[test]
+    fn content_key_ignores_selection_and_view() {
+        let mut a = arr(vec![clip(1, 0, 0, 8 * PPQ)]);
+        let k = a.content_key();
+        a.selection = vec![1];
+        a.view.scroll_ticks = 100.0;
+        assert_eq!(a.content_key(), k);
+        a.clips[0].start_ticks += 240;
+        assert_ne!(a.content_key(), k);
     }
 }

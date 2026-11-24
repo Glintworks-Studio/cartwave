@@ -13,8 +13,9 @@ use crate::Signals;
 const WIDTH: f32 = 300.0;
 const LINE_H: f32 = 16.0;
 const PAD: f32 = 12.0;
-/// Header lines + blank + phases + blank + spans.
-const LINES: usize = 5 + 1 + PHASE_NAMES.len() + 1 + SPANS.len();
+/// Header lines + blank + phases + blank + spans + audio.
+const LINES: usize = 5 + 1 + PHASE_NAMES.len() + 1 + SPANS.len() + AUDIO_LINES;
+const AUDIO_LINES: usize = 5;
 
 pub struct StatsOverlay {
     s: Signals,
@@ -34,6 +35,7 @@ impl StatsOverlay {
             .hoverable(false)
             .display(visible)
             .bind(s.stats, |mut h| h.needs_redraw())
+            .bind(s.audio, |mut h| h.needs_redraw())
     }
 }
 
@@ -103,6 +105,34 @@ impl View for StatsOverlay {
             ));
         }
 
+        let a = self.s.audio.get_untracked();
+        lines.push((
+            format!("audio  {}", if a.running { "running" } else { "STOPPED" }),
+            ACCENT.lighten(0.4),
+        ));
+        let dev: String = a.device.chars().take(36).collect();
+        lines.push((format!("  {dev}"), TEXT_LO.mix(TEXT_HI, 0.5)));
+        lines.push((
+            format!(
+                "  {} fr/cb  lat {:5.1} ms  filter {}",
+                a.frames_per_cb, a.latency_ms, a.filter
+            ),
+            TEXT_HI,
+        ));
+        lines.push((
+            format!(
+                "  cb {:4.2}/{:4.2}/{:4.1} %  mean/p99/max",
+                a.cb_mean, a.cb_p99, a.cb_max
+            ),
+            TEXT_HI,
+        ));
+        lines.push((
+            format!(
+                "  xruns {}  overruns {}  edits {}",
+                a.underruns, a.overruns, a.edits
+            ),
+            if a.underruns > 0 { METER_AMBER } else { TEXT_HI },
+        ));
         for (i, (l, col)) in lines.iter().enumerate() {
             let y = b.y + (PAD + 11.0 + i as f32 * LINE_H) * s;
             gfx::draw_text(canvas, l, b.x + PAD * s, y, &f, *col);

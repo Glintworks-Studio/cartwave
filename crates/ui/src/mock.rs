@@ -209,6 +209,7 @@ pub fn demo_arrangement() -> Arrangement {
         snap: Snap::Sixteenth,
         view: Viewport::default(),
         next_id,
+        editing: vec![],
     }
 }
 
@@ -245,6 +246,7 @@ pub fn stress_arrangement() -> Arrangement {
             scroll_ticks: 0.0,
         },
         next_id,
+        editing: vec![],
     }
 }
 
@@ -310,6 +312,38 @@ pub fn step_meters(
             *lvl = (*lvl - DECAY_PER_SEC * dt * (*lvl).max(0.2)).max(target);
         }
 
+        if *lvl >= m.peak[lane] {
+            m.peak[lane] = *lvl;
+            m.peak_hold[lane] = PEAK_HOLD_SECS;
+        } else if m.peak_hold[lane] > 0.0 {
+            m.peak_hold[lane] -= dt;
+        } else {
+            m.peak[lane] = (m.peak[lane] - PEAK_FALL_PER_SEC * dt).max(*lvl);
+        }
+    }
+}
+
+/// Real meters: `levels` are the per-channel peaks the engine measured since
+/// the last frame (0..1); `note_on` marks channels whose note-on became
+/// audible this frame. Same ballistics as the mock meters.
+pub fn step_meters_engine(m: &mut Meters, levels: [f32; 8], note_on: [bool; 8], dt: f32) {
+    const DECAY_PER_SEC: f32 = 1.8;
+    const PEAK_HOLD_SECS: f32 = 0.9;
+    const PEAK_FALL_PER_SEC: f32 = 0.5;
+    const LIGHT_DECAY_PER_SEC: f32 = 5.0;
+    for lane in 0..8 {
+        if note_on[lane] {
+            m.light[lane] = 1.0;
+        }
+        m.light[lane] =
+            (m.light[lane] - LIGHT_DECAY_PER_SEC * dt * m.light[lane].max(0.15)).max(0.0);
+        let target = levels[lane].clamp(0.0, 1.0);
+        let lvl = &mut m.level[lane];
+        if target > *lvl {
+            *lvl = target;
+        } else {
+            *lvl = (*lvl - DECAY_PER_SEC * dt * (*lvl).max(0.2)).max(target);
+        }
         if *lvl >= m.peak[lane] {
             m.peak[lane] = *lvl;
             m.peak_hold[lane] = PEAK_HOLD_SECS;

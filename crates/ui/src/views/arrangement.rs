@@ -227,7 +227,11 @@ impl Arrangement {
                 .collect::<Vec<_>>()
         });
         let ids: Vec<u32> = origins.iter().map(|o| o.id).collect();
-        arr.update(|a| a.raise(&ids));
+        arr.update(|a| {
+            a.raise(&ids);
+            // The engine hears these trimming what they overlap during the drag.
+            a.editing = ids.clone();
+        });
 
         self.drag = Some(Drag {
             mode,
@@ -335,6 +339,14 @@ impl Arrangement {
     fn on_release(&mut self, cx: &mut EventContext) {
         if let Some(drag) = self.drag.take() {
             cx.release();
+            // Drop: the moved/resized/duplicated clips win and trim (or split)
+            // whatever they overlap in their lane.
+            self.s.arrangement.update(|a| {
+                let winners = std::mem::take(&mut a.editing);
+                if drag.moved {
+                    a.resolve_overlaps(&winners);
+                }
+            });
             if !drag.moved {
                 if let Some(id) = drag.collapse_to {
                     self.s.arrangement.update(|a| a.selection = vec![id]);
@@ -827,18 +839,18 @@ pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
                 .gap(Pixels(3.0))
                 .height(Auto)
                 .width(Stretch(1.0));
-                let mute = Signal::new(false);
-                let solo = Signal::new(false);
+                let mute = s.mute.map(move |m| m & (1 << i) != 0);
+                let solo = s.solo.map(move |m| m & (1 << i) != 0);
                 Button::new(cx, |cx| Label::new(cx, "M"))
                     .class("btn")
                     .class("small")
                     .toggle_class("checked", mute)
-                    .on_press(move |_| mute.update(|m| *m = !*m));
+                    .on_press(move |cx| cx.emit(crate::AppEvent::ToggleMute(i)));
                 Button::new(cx, |cx| Label::new(cx, "S"))
                     .class("btn")
                     .class("small")
                     .toggle_class("checked", solo)
-                    .on_press(move |_| solo.update(|m| *m = !*m));
+                    .on_press(move |cx| cx.emit(crate::AppEvent::ToggleSolo(i)));
             })
             .class("track-header")
             .toggle_class("selected", selected_lane);

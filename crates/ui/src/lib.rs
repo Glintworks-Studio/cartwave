@@ -5,10 +5,13 @@ pub mod input;
 pub mod mock;
 pub mod perf;
 pub mod state;
+pub mod testing;
 pub mod theme;
 pub mod views;
 
 use vizia::prelude::*;
+
+use engine::{Command, Engine, EngineConfig, FilterMode, Params};
 
 use crate::mock::Rng;
 use crate::state::*;
@@ -29,7 +32,16 @@ pub struct Signals {
     pub arrangement: Signal<state::Arrangement>,
     pub transport: Signal<Transport>,
     pub meters: Signal<Meters>,
-    pub dials: Signal<[f32; DIAL_COUNT]>,
+    /// Values of the dial slots shown for `lane_sel`.
+    pub dials: Signal<[f32; MAX_DIALS]>,
+    /// Lane whose hardware controls the device panel shows.
+    pub lane_sel: Signal<usize>,
+    /// Bit per lane.
+    pub mute: Signal<u8>,
+    pub solo: Signal<u8>,
+    pub audio: Signal<AudioStats>,
+    /// Shown in the transport bar when the audio device has a problem.
+    pub audio_msg: Signal<String>,
     pub chip: Signal<SoundChip>,
     pub stats: Signal<FrameStats>,
     /// Incremented once per animation tick; views that animate bind to it.
@@ -57,6 +69,18 @@ pub struct AppState {
     cap: FrameCap,
     /// The (cap, display rate) last applied to the backend and the pump.
     applied: Option<(FrameCap, Option<f64>)>,
+    /// The real-time audio engine (`None` if `CHIPDAW_AUDIO=0`).
+    engine: Option<Engine>,
+    /// UI copy of every lane's hardware parameters.
+    params: Params,
+    song_key: u64,
+    song_version: u64,
+    filter: FilterMode,
+    note_ons: [u32; 8],
+    /// When each lane's last note-on becomes audible (lights wait for it).
+    light_due: [Option<Instant>; 8],
+    last_audio_stats: Option<Instant>,
+    tests: testing::Tests,
 }
 
 pub enum AppEvent {
@@ -74,35 +98,84 @@ pub enum AppEvent {
     ToggleStress,
     CycleFrameCap,
     RenameSelected(String),
+    ToggleMute(usize),
+    ToggleSolo(usize),
+    CycleFilter,
 }
 
 impl Model for AppState {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|e, _| match e {
             AppEvent::Tick => self.tick(cx),
-            AppEvent::TogglePlay => self.s.transport.update(|t| t.playing = !t.playing),
-            AppEvent::Stop => self.s.transport.update(|t| {
-                if !t.playing {
-                    t.playhead_ticks = 0.0;
+            AppEvent::TogglePlay => {
+                let t = self.s.transport.get_untracked();
+                if t.playing {
+                    self.send(Command::Stop);
+                } else {
+                    // Start from where the UI shows the playhead.
+                    self.send(Command::Seek(t.playhead_ticks));
+                    self.send(Command::Play);
                 }
-                t.playing = false;
-            }),
+                self.s.transport.update(|t| t.playing = !t.playing);
+            }
+            AppEvent::Stop => {
+                let was_playing = self.s.transport.with_untracked(|t| t.playing);
+                self.send(Command::Stop);
+                if !was_playing {
+                    self.send(Command::Seek(0.0));
+                }
+                self.s.transport.update(|t| {
+                    if !t.playing {
+                        t.playhead_ticks = 0.0;
+                    }
+                    t.playing = false;
+                });
+            }
             AppEvent::ToggleRecord => self
                 .s
                 .transport
                 .update(|t| t.record_armed = !t.record_armed),
-            AppEvent::SetBpm(b) => self
-                .s
-                .transport
-                .update(|t| t.bpm = b.clamp(Transport::MIN_BPM, Transport::MAX_BPM)),
-            AppEvent::SetPlayhead(p) => self.s.transport.update(|t| t.playhead_ticks = p.max(0.0)),
-            AppEvent::SetDial(i, v) => self.s.dials.update(|d| d[*i] = *v),
-            AppEvent::CycleChip => self.s.chip.update(|c| {
-                *c = match c {
-                    SoundChip::Base2A03 => SoundChip::WithVrc6,
-                    SoundChip::WithVrc6 => SoundChip::Base2A03,
-                }
-            }),
+            AppEvent::SetBpm(b) => {
+                let b = b.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
+                self.send(Command::Bpm(b as f64));
+                self.s.transport.update(|t| t.bpm = b);
+            }
+            AppEvent::SetPlayhead(p) => {
+                let p = p.max(0.0);
+                self.send(Command::Seek(p));
+                self.s.transport.update(|t| t.playhead_ticks = p);
+            }
+            AppEvent::SetDial(i, v) => {
+                let lane = self.s.lane_sel.get_untracked();
+                self.set_param(lane, *i, *v);
+            }
+            AppEvent::CycleChip => {
+                self.s.chip.update(|c| {
+                    *c = match c {
+                        SoundChip::Base2A03 => SoundChip::WithVrc6,
+                        SoundChip::WithVrc6 => SoundChip::Base2A03,
+                    }
+                });
+                let on = self.s.chip.get_untracked() == SoundChip::WithVrc6;
+                self.send(Command::Vrc6(on));
+            }
+            AppEvent::ToggleMute(i) => {
+                self.s.mute.update(|m| *m ^= 1 << *i);
+                let m = self.s.mute.get_untracked();
+                self.send(Command::Mute(m));
+            }
+            AppEvent::ToggleSolo(i) => {
+                self.s.solo.update(|m| *m ^= 1 << *i);
+                let m = self.s.solo.get_untracked();
+                self.send(Command::Solo(m));
+            }
+            AppEvent::CycleFilter => {
+                let all = FilterMode::ALL;
+                let i = all.iter().position(|m| *m == self.filter).unwrap_or(0);
+                self.filter = all[(i + 1) % all.len()];
+                self.send(Command::Filter(self.filter));
+                self.last_audio_stats = None;
+            }
             AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
             AppEvent::ToggleStats => self.s.stats.update(|s| s.visible = !s.visible),
             AppEvent::CycleFrameCap => {
@@ -151,6 +224,7 @@ impl Model for AppState {
                     Code::F4 => cx.emit(AppEvent::ToggleStress),
                     Code::F5 => cx.emit(WindowEvent::ReloadStyles),
                     Code::F6 => cx.emit(AppEvent::CycleFrameCap),
+                    Code::F7 => cx.emit(AppEvent::CycleFilter),
                     _ => {}
                 }
             }
@@ -167,8 +241,10 @@ impl AppState {
     /// vsync-spaced present interval, gives evenly spaced motion without the
     /// drift (and periodic dropped/doubled frame) of a free-running clock.
     fn tick(&mut self, cx: &mut EventContext) {
+        self.tests.maybe_stall();
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
+        self.sync_engine();
         let ft = cx.frame_timings();
         self.adapt_pump(cx, &ft);
         // Without presents for this long (idle, minimized), fall back to wall time.
@@ -200,22 +276,58 @@ impl AppState {
 
         let mut tr = self.s.transport.get_untracked();
         if tr.playing {
-            let ticks_per_sec = tr.bpm as f64 / 60.0 * PPQ as f64;
-            tr.playhead_ticks += ticks_per_sec * dt as f64;
-            if tr.playhead_ticks >= tr.loop_end_ticks {
-                tr.playhead_ticks -= tr.loop_end_ticks;
+            // The audio clock is the master: show what is being heard now.
+            let heard = self
+                .engine
+                .as_ref()
+                .filter(|e| e.shared().stream_running.load(std::sync::atomic::Ordering::Relaxed))
+                .and_then(|e| e.audible_position());
+            match heard {
+                Some((t, true)) => tr.playhead_ticks = t,
+                _ => {
+                    // No audio (or a command in flight): integrate locally.
+                    let ticks_per_sec = tr.bpm as f64 / 60.0 * PPQ as f64;
+                    tr.playhead_ticks += ticks_per_sec * dt as f64;
+                    if tr.playhead_ticks >= tr.loop_end_ticks {
+                        tr.playhead_ticks -= tr.loop_end_ticks;
+                    }
+                }
             }
             self.s.transport.set(tr);
         }
+        self.tests
+            .av_frame(ft.frame_count, ft.presented_at, tr.playhead_ticks);
 
-        let rng = &mut self.rng;
-        let (arr, meters) = (self.s.arrangement, self.s.meters);
-        arr.with_untracked(|a| {
-            // Only notify (and so redraw) when something actually moved.
-            let mut m = meters.get_untracked();
-            mock::step_meters(&mut m, a, tr.playhead_ticks, tr.playing, dt, rng);
-            meters.set_if_changed(m);
-        });
+        let meters = self.s.meters;
+        let mut m = meters.get_untracked();
+        if let Some(e) = self.engine.as_ref() {
+            let sh = e.shared();
+            let levels = sh.take_levels();
+            let now = Instant::now();
+            let latency = Duration::from_nanos(
+                sh.position().map_or(0, |p| p.latency_ns),
+            );
+            let mut fire = [false; 8];
+            for lane in 0..8 {
+                let n = sh.note_ons[lane].load(std::sync::atomic::Ordering::Relaxed);
+                if n != self.note_ons[lane] {
+                    self.note_ons[lane] = n;
+                    self.light_due[lane] = Some(now + latency);
+                }
+                if self.light_due[lane].is_some_and(|d| now >= d) {
+                    self.light_due[lane] = None;
+                    fire[lane] = true;
+                }
+            }
+            mock::step_meters_engine(&mut m, levels, fire, dt);
+        } else {
+            let rng = &mut self.rng;
+            self.s.arrangement.with_untracked(|a| {
+                mock::step_meters(&mut m, a, tr.playhead_ticks, tr.playing, dt, rng);
+            });
+        }
+        // Only notify (and so redraw) when something actually moved.
+        meters.set_if_changed(m);
 
         self.record_frame_stats(ft, tr.playhead_ticks);
 
@@ -224,6 +336,124 @@ impl AppState {
 }
 
 impl AppState {
+    fn send(&mut self, c: Command) {
+        if let Some(e) = self.engine.as_mut() {
+            e.send(c);
+        }
+    }
+
+    /// Dial slot `slot` of `lane` changed: store, show, send to the engine.
+    fn set_param(&mut self, lane: usize, slot: usize, v: f32) {
+        let dials = lane_dials(lane);
+        let Some(&(pid, _)) = dials.get(slot) else { return };
+        self.params.set(lane, pid, v.round() as i32);
+        let stored = self.params.get(lane, pid);
+        self.send(Command::Param {
+            lane: lane as u8,
+            id: pid,
+            value: stored as i8,
+        });
+        if lane == self.s.lane_sel.get_untracked() {
+            self.s.dials.update(|d| d[slot] = v);
+        }
+    }
+
+    fn dial_values(&self, lane: usize) -> [f32; MAX_DIALS] {
+        let mut d = [0f32; MAX_DIALS];
+        for (slot, (pid, _)) in lane_dials(lane).into_iter().enumerate() {
+            d[slot] = self.params.get(lane, pid) as f32;
+        }
+        d
+    }
+
+    /// Once per pump tick: keep the engine's song in step with the
+    /// arrangement, free old snapshots, follow the selected lane, update the
+    /// audio stats, and run the test hooks.
+    fn sync_engine(&mut self) {
+        // Selected lane follows the first selected clip.
+        if let Some(l) = self
+            .s
+            .arrangement
+            .with_untracked(|a| a.first_selected().map(|c| c.lane))
+        {
+            if l != self.s.lane_sel.get_untracked() {
+                self.s.dials.set(self.dial_values(l));
+                self.s.lane_sel.set(l);
+            }
+        }
+        // Test B: scripted edits through the same model operations.
+        if self.tests.auto_edit {
+            let mut dial = None;
+            self.s
+                .arrangement
+                .update(|a| dial = self.tests.auto_edit(a));
+            if let Some((lane, pid, v)) = dial {
+                if let Some(slot) = lane_dials(lane).iter().position(|(p, _)| *p == pid) {
+                    self.set_param(lane, slot, v as f32);
+                }
+            }
+            if let Some((mute, lane)) = self.tests.auto_mute() {
+                let sig = if mute { self.s.mute } else { self.s.solo };
+                sig.update(|m| *m ^= 1 << lane);
+                // Never leave a solo on for long: it would silence the test.
+                if !mute && self.s.solo.get_untracked().count_ones() > 1 {
+                    self.s.solo.set(0);
+                }
+                let (m, so) = (self.s.mute.get_untracked(), self.s.solo.get_untracked());
+                self.send(Command::Mute(m));
+                self.send(Command::Solo(so));
+            }
+        }
+        let Some(e) = self.engine.as_mut() else { return };
+        e.collect_garbage();
+        let key = self.s.arrangement.with_untracked(|a| a.content_key());
+        if key != self.song_key {
+            self.song_key = key;
+            self.song_version += 1;
+            let v = self.song_version;
+            let snap = self.s.arrangement.with_untracked(|a| a.song_snapshot(v));
+            e.send_song(snap);
+        }
+        // Status: a few times a second is plenty.
+        let now = Instant::now();
+        if self
+            .last_audio_stats
+            .is_none_or(|t| now - t > Duration::from_millis(250))
+        {
+            self.last_audio_stats = Some(now);
+            use std::sync::atomic::Ordering::Relaxed;
+            let sh = e.shared();
+            let (_, mean, p99, max) = sh.callback_cost();
+            let running = sh.stream_running.load(Relaxed);
+            let stats = AudioStats {
+                device: e.device_info(),
+                running,
+                filter: self.filter.label(),
+                frames_per_cb: sh.cb_frames_last.load(Relaxed),
+                latency_ms: sh.position().map_or(0.0, |p| p.latency_ns as f32 / 1e6),
+                cb_mean: mean as f32,
+                cb_p99: p99 as f32,
+                cb_max: max as f32,
+                underruns: sh.underruns(),
+                overruns: sh.xrun_overrun.load(Relaxed),
+                edits: sh.edits_applied.load(Relaxed),
+                edit_tick_ms: sh.edit_to_tick_max_ns.load(Relaxed) as f32 / 1e6,
+            };
+            let msg = match sh.device_error.load(Relaxed) {
+                _ if running => String::new(),
+                engine::device_error::NO_DEVICE => "AUDIO: no output device".into(),
+                engine::device_error::REBUILDING => "AUDIO: device changed, reconnecting".into(),
+                engine::device_error::BUILD_FAILED => "AUDIO: can't open output".into(),
+                _ => "AUDIO: starting".into(),
+            };
+            self.s.audio.set_if_changed(stats);
+            self.s.audio_msg.set_if_changed(msg);
+        }
+        if let Some(e) = self.engine.as_ref() {
+            self.tests.periodic(e);
+        }
+    }
+
     /// Passes the frame-rate cap to the backend. The pump stays at 4 ms for
     /// every cap: neither a shorter pump at 320 Hz nor a half-frame pump at
     /// 60 fps lowered CPU (PERF-macos.md §7).
@@ -249,7 +479,7 @@ impl AppState {
             self.last_activity = self.last_activity.max(ft.presented_at.unwrap_or(now));
         }
         let playing = self.s.transport.with_untracked(|t| t.playing);
-        let fast = playing || now - self.last_activity < STAY_FAST;
+        let fast = playing || self.tests.auto_edit || now - self.last_activity < STAY_FAST;
         self.set_pump(cx, fast);
     }
 
@@ -371,7 +601,12 @@ pub fn build_ui(cx: &mut Context) {
             loop_end_ticks: (32 * TICKS_PER_BAR) as f64,
         }),
         meters: Signal::new(Meters::default()),
-        dials: Signal::new(DIALS.map(|d| d.default)),
+        dials: Signal::new([0.0; MAX_DIALS]),
+        lane_sel: Signal::new(usize::MAX),
+        mute: Signal::new(0),
+        solo: Signal::new(0),
+        audio: Signal::new(AudioStats::default()),
+        audio_msg: Signal::new(String::new()),
         chip: Signal::new(SoundChip::WithVrc6),
         stats: Signal::new(FrameStats::default()),
         frame: Signal::new(0),
@@ -386,7 +621,8 @@ pub fn build_ui(cx: &mut Context) {
     });
     cx.start_timer(timer);
 
-    AppState {
+    let tests = testing::Tests::from_env();
+    let mut state = AppState {
         s,
         rng: Rng::new(7),
         last_tick: None,
@@ -400,8 +636,18 @@ pub fn build_ui(cx: &mut Context) {
         frame_log: perf::FrameLog::from_env(),
         cap: FrameCap::from_env(),
         applied: None,
-    }
-    .build(cx);
+        engine: None,
+        params: Params::default(),
+        song_key: 0,
+        song_version: 0,
+        filter: tests.filter.unwrap_or_default(),
+        note_ons: [0; 8],
+        light_due: [None; 8],
+        last_audio_stats: None,
+        tests,
+    };
+    state.start_engine();
+    state.build(cx);
 
     VStack::new(cx, |cx| {
         transport_bar(cx, s);
@@ -423,6 +669,55 @@ pub fn build_ui(cx: &mut Context) {
     .gap(Pixels(10.0));
 
     StatsOverlay::new(cx, s);
+}
+
+impl AppState {
+    /// Starts the audio engine and sends it the initial state.
+    fn start_engine(&mut self) {
+        if std::env::var("CHIPDAW_AUDIO").is_ok_and(|v| v == "0") {
+            return;
+        }
+        let e = Engine::start(EngineConfig {
+            buffer_frames: self.tests.buffer,
+            ..Default::default()
+        });
+        self.engine = Some(e);
+        if self.tests.stress {
+            self.s.arrangement.set(mock::stress_arrangement());
+            self.s.stress.set(true);
+        }
+        let tr = self.s.transport.get_untracked();
+        self.send(Command::Bpm(tr.bpm as f64));
+        self.send(Command::LoopEnd(tr.loop_end_ticks));
+        self.send(Command::Filter(self.filter));
+        let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
+        self.send(Command::Vrc6(vrc6));
+        if self.tests.pilot || self.tests.avsync {
+            match engine::testkit::Loopback::start(
+                self.tests.pilot.then_some(engine::testkit::PILOT_HZ),
+            ) {
+                Ok(lb) => self.tests.loopback = Some(lb),
+                Err(err) => eprintln!("loopback: {err}"),
+            }
+            if self.tests.pilot {
+                self.send(Command::TestPilot(engine::testkit::PILOT_HZ));
+            }
+        }
+        if self.tests.avsync {
+            // One-bar loop, music muted, a click at mid-bar.
+            self.s
+                .transport
+                .update(|t| t.loop_end_ticks = testing::AV_LOOP_TICKS);
+            self.send(Command::LoopEnd(testing::AV_LOOP_TICKS));
+            self.s.mute.set(0xFF);
+            self.send(Command::Mute(0xFF));
+            self.send(Command::TestClickAt(testing::AV_MARKER_TICKS));
+        }
+        if self.tests.autoplay || self.tests.avsync || self.tests.stress {
+            self.send(Command::Play);
+            self.s.transport.update(|t| t.playing = true);
+        }
+    }
 }
 
 fn transport_bar(cx: &mut Context, s: Signals) {
@@ -470,6 +765,9 @@ fn transport_bar(cx: &mut Context, s: Signals) {
 
         Element::new(cx).class("divider-v");
 
+        // Only shows text when the audio device has a problem.
+        Label::new(cx, s.audio_msg).class("field-label").class("audio-msg");
+
         Label::new(cx, "CHIP").class("field-label");
         let chip = s.chip.map(|c| format!("{}  \u{25BE}", c.label()));
         Button::new(cx, |cx| Label::new(cx, chip))
@@ -489,23 +787,37 @@ fn device_panel(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
         // Dials
         VStack::new(cx, |cx| {
-            let title = s.arrangement.map(|a| {
-                let lane = a.first_selected().map(|c| c.lane).unwrap_or(0);
-                format!("DEVICE  ·  {}", a.lanes[lane].name.to_uppercase())
+            let title = s.lane_sel.map(move |&lane| {
+                let name = state::default_lanes()
+                    .get(lane)
+                    .map_or("", |l| l.name)
+                    .to_uppercase();
+                format!("DEVICE  ·  {name}")
             });
             Label::new(cx, title).class("section-title");
-            HStack::new(cx, |cx| {
-                for i in 0..DIAL_COUNT {
-                    Dial::new(cx, s, i).class("dial");
-                }
-            })
-            .gap(Pixels(DIAL_GAP))
-            .height(Auto)
-            .width(Auto);
+            // Only the controls the selected channel's hardware has.
+            Binding::new(cx, s.lane_sel, move |cx| {
+                let lane = s.lane_sel.get();
+                let dials = if lane < 8 { lane_dials(lane) } else { Vec::new() };
+                HStack::new(cx, |cx| {
+                    if lane == 2 {
+                        Label::new(cx, "No controls: the triangle has no volume or duty.")
+                            .class("section-title");
+                    } else if lane >= 8 {
+                        Label::new(cx, "Select a clip to edit its channel.").class("section-title");
+                    }
+                    for (slot, (_, spec)) in dials.into_iter().enumerate() {
+                        Dial::new(cx, s, slot, spec).class("dial");
+                    }
+                })
+                .gap(Pixels(DIAL_GAP))
+                .height(Auto)
+                .width(Auto);
+            });
         })
         .class("device-section")
         .width(Pixels(
-            DIAL_COUNT as f32 * DIAL_W + (DIAL_COUNT - 1) as f32 * DIAL_GAP + 24.0,
+            MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0,
         ));
 
         // Text fields

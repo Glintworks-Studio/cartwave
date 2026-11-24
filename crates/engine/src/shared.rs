@@ -4,10 +4,10 @@
 use chip::driver::LANES;
 use std::sync::atomic::{fence, AtomicBool, AtomicU32, AtomicU64, AtomicU8, Ordering};
 
-/// Callback-time histogram: buckets of 0.5% of the buffer period, 0..100%,
-/// plus one overflow bucket.
+/// Callback-time histogram: buckets of 0.1% of the buffer period, 0..20%,
+/// plus one overflow bucket (the exact maximum is kept separately).
 pub const HIST_BUCKETS: usize = 201;
-pub const HIST_STEP_PERMILLE: u64 = 5;
+pub const HIST_STEP_PERMILLE: u64 = 1;
 
 /// Position snapshot, written once per callback under a sequence lock.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

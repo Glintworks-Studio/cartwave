@@ -13,8 +13,10 @@ pub mod core;
 mod host;
 pub mod shared;
 pub mod song;
+pub mod testkit;
 
-pub use chip::driver::{ParamId, LANES};
+pub use chip;
+pub use chip::driver::{ParamId, Params, LANES};
 pub use chip::filter::FilterMode;
 pub use command::Command;
 pub use host::EngineConfig;
