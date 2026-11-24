@@ -7,11 +7,14 @@ param(
     [string]$Repo = (Resolve-Path "$PSScriptRoot\..\..\.."),
     [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { "$env:TEMP\chipdaw-engine" }),
     [string[]]$Tests = @('A', 'B', 'C', 'D', 'G', 'E'),
-    [int[]]$Buffers = @(128, 256, 512),
+    [string[]]$Buffers = @('128', '256', '512'),
     [int]$LongSecs = 600,
     [double]$Gain = 0.3
 )
 $ErrorActionPreference = 'Stop'
+# `pwsh -File` passes "A,B" as one string: split comma lists.
+$Tests = $Tests | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
+$Buffers = $Buffers | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 New-Item -ItemType Directory -Force $Work | Out-Null
 $app = Join-Path $Repo 'target\release\app.exe'
 
