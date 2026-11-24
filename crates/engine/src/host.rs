@@ -67,10 +67,12 @@ impl Default for EngineConfig {
     }
 }
 
-/// Error from the stream's error callback (1 = device gone, 2 = invalidated).
+/// Error from the stream's error callback (1 = device gone, 2 = invalidated,
+/// 3 = CoreAudio rerouted the stream to a new default device).
 const ERR_NONE: u32 = 0;
 const ERR_DEVICE_GONE: u32 = 1;
 const ERR_INVALIDATED: u32 = 2;
+const ERR_REROUTED: u32 = 3;
 
 pub(crate) fn run(
     cell: Arc<CoreCell>,
@@ -112,8 +114,11 @@ pub(crate) fn run(
                         },
                         Ordering::Relaxed,
                     );
-                    // Let Windows settle the new default before rebuilding.
-                    thread::park_timeout(Duration::from_millis(250));
+                    // Let Windows settle the new default before rebuilding. A
+                    // CoreAudio reroute has already settled: rebuild now.
+                    if kind != ERR_REROUTED {
+                        thread::park_timeout(Duration::from_millis(250));
+                    }
                 }
             }
             Err(e) => {
@@ -199,9 +204,13 @@ fn build(
                 let k = match e.kind() {
                     cpal::ErrorKind::DeviceNotAvailable => ERR_DEVICE_GONE,
                     // CoreAudio reroutes a default-device stream by itself and
-                    // reports this; the stream keeps running (WASAPI can't
-                    // rebind and reports StreamInvalidated instead).
-                    cpal::ErrorKind::DeviceChanged => return,
+                    // reports this. The rerouted stream keeps playing, but with
+                    // the new device's own buffer size (the requested one is
+                    // lost: 256 -> 512 frames when the M2 was unplugged), a
+                    // stale device name and stale detector baselines. Rebuild
+                    // on the new default (ENGINE-macos.md, test H). WASAPI
+                    // reports StreamInvalidated instead.
+                    cpal::ErrorKind::DeviceChanged => ERR_REROUTED,
                     // An overload (CoreAudio's kAudioDeviceProcessorOverload):
                     // one late cycle, already over. The stream is fine; count it.
                     // Rebuilding here turned every overload into a ~100 ms+

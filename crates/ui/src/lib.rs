@@ -83,6 +83,9 @@ pub struct AppState {
     /// When each lane's last note-on becomes audible (lights wait for it).
     light_due: [Option<Instant>; 8],
     last_audio_stats: Option<Instant>,
+    /// Stream generation last seen, and a temporary "now playing on" notice.
+    audio_generation: u32,
+    device_notice: Option<(Instant, String)>,
     tests: testing::Tests,
 }
 
@@ -471,7 +474,20 @@ impl AppState {
                 edits: sh.edits_applied.load(Relaxed),
                 edit_tick_ms: sh.edit_to_tick_max_ns.load(Relaxed) as f32 / 1e6,
             };
+            // After a device change, say where the sound went, for a few
+            // seconds (ENGINE-macos.md, test H).
+            let generation = sh.generation.load(Relaxed);
+            if running && generation > self.audio_generation {
+                if self.audio_generation > 0 {
+                    let dev = e.device_info();
+                    let name = dev.split(" · ").next().unwrap_or("?").to_string();
+                    self.device_notice = Some((now + Duration::from_secs(5), format!("AUDIO: now playing on {name}")));
+                }
+                self.audio_generation = generation;
+            }
+            let notice = self.device_notice.as_ref().filter(|(until, _)| now < *until);
             let msg = match sh.device_error.load(Relaxed) {
+                _ if running && notice.is_some() => notice.map(|(_, m)| m.clone()).unwrap_or_default(),
                 _ if running => String::new(),
                 engine::device_error::NO_DEVICE => "AUDIO: no output device".into(),
                 engine::device_error::REBUILDING => "AUDIO: device changed, reconnecting".into(),
@@ -687,6 +703,8 @@ pub fn build_ui(cx: &mut Context) {
         note_ons: [0; 8],
         light_due: [None; 8],
         last_audio_stats: None,
+        audio_generation: 0,
+        device_notice: None,
         tests,
     };
     state.start_engine();
