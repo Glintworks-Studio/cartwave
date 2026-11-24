@@ -1,0 +1,55 @@
+From 5063670461184bcbc255eed280af287bc2f83be3 Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 20:55:25 -0600
+Subject: [PATCH 2/6] winit: skip make_current when the window's context is
+ already current
+
+`RedrawRequested` called `WinState::make_current()` for every frame, and
+glutin forwards that to `wglMakeCurrent` unconditionally. On NVIDIA's
+OpenGL driver (threaded optimization on, the default), make-current
+synchronizes with the driver's worker thread; if the previous frame's
+swap is still waiting for vblank, `DrvReleaseContext` busy-polls
+(`GetExitCodeThread`/`SwitchToThread`) until it is presented. Any app that
+requests redraws faster than the display refresh rate therefore pinned a
+core at 100%.
+
+Each window owns its context and only binds it to its own surface, so
+"context is current" implies the right surface is bound; skip the call
+in that case.
+
+Tested (Windows 11, RTX 4070 SUPER, driver 610.88, 60 Hz display): a
+minimal app redrawing an 8 px rect on a 15 ms timer went from ~100% CPU
+(main thread in nvoglv64!DrvReleaseContext) to 2.7%; on an 8 ms timer
+3.3%. No change at 16.8 ms (no pending swap to wait on).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_winit/src/window.rs | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/crates/vizia_winit/src/window.rs b/crates/vizia_winit/src/window.rs
+index 7e694e4a..30758897 100644
+--- a/crates/vizia_winit/src/window.rs
++++ b/crates/vizia_winit/src/window.rs
+@@ -209,8 +209,17 @@ impl WinState {
+         &self.window
+     }
+ 
++    /// Makes this window's GL context current, unless it already is.
++    ///
++    /// Each window owns its context and only ever binds it to its own surface,
++    /// so "context is current" implies the right surface is bound. Skipping the
++    /// redundant `wglMakeCurrent` matters: some drivers (e.g. NVIDIA with
++    /// threaded optimization) synchronize with their worker thread on every
++    /// make-current call and spin-wait until a pending swap has been presented.
+     pub fn make_current(&mut self) {
+-        self.gl_context.make_current(&self.gl_surface).unwrap();
++        if !self.gl_context.is_current() {
++            self.gl_context.make_current(&self.gl_surface).unwrap();
++        }
+     }
+ 
+     pub fn resize(&mut self, size: PhysicalSize<u32>) {
+-- 
+2.55.0.windows.2
+

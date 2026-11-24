@@ -1,0 +1,131 @@
+PROCESS app.exe: total CPU 12.09 s over 12.8 s = 94.5% of one core
+Category breakdown (share of process CPU):
+    43.9%  ( 41.5% core)  5 GL driver worker thread (nvoglv64)
+    12.8%  ( 12.1% core)  1 our code: custom view draw recording (incl. Skia record calls)
+    12.6%  ( 11.9% core)  6 make-current
+     9.5%  (  9.0% core)  3 Skia flush: GPU-backend CPU work (ops prepare, triangulation, uploads)
+     8.4%  (  7.9% core)  3b Skia CPU rasterization (glyphs/masks) from our custom views
+     4.5%  (  4.2% core)  2 vizia draw traversal + stylesheet recording
+     4.4%  (  4.1% core)  4 GL driver (in Skia flush, main thread)
+     1.8%  (  1.7% core)  4 GL driver (during draw recording, main thread)
+     0.8%  (  0.7% core)  3b Skia CPU rasterization (glyphs/masks) from vizia stylesheet drawing (bg/shadow/border/text)
+     0.5%  (  0.4% core)  4 GL driver (other, main thread)
+     0.3%  (  0.2% core)  7 event-loop wait / message dispatch
+     0.2%  (  0.2% core)  6 present (SwapBuffers)
+     0.2%  (  0.2% core)  1b events, timers, bindings, our model update
+     0.1%  (  0.1% core)  8 other (main thread)
+     0.1%  (  0.1% core)  3b Skia CPU rasterization (in flush)
+     0.1%  (  0.1% core)  2b vizia style/layout
+
+=== thread 32332 (app.exe): CPU 6.78 s over 12.8 s = 53.0% of one core
+    22.8%  1 our code: custom view draw recording (incl. Skia record calls)
+    22.5%  6 make-current
+    17.0%  3 Skia flush: GPU-backend CPU work (ops prepare, triangulation, uploads)
+    14.9%  3b Skia CPU rasterization (glyphs/masks) from our custom views
+     8.0%  2 vizia draw traversal + stylesheet recording
+     7.8%  4 GL driver (in Skia flush, main thread)
+     3.3%  4 GL driver (during draw recording, main thread)
+     1.3%  3b Skia CPU rasterization (glyphs/masks) from vizia stylesheet drawing (bg/shadow/border/text)
+     0.8%  4 GL driver (other, main thread)
+     0.5%  7 event-loop wait / message dispatch
+     0.3%  6 present (SwapBuffers)
+     0.3%  1b events, timers, bindings, our model update
+     0.2%  8 other (main thread)
+     0.2%  3b Skia CPU rasterization (in flush)
+     0.2%  2b vizia style/layout
+   -- top self (CPU-weighted):
+     8.4%  app.pdb!SkMaskBlurFilter::blur(SkMask const&, SkMaskBuilder*)
+     5.4%  ntkrnlmp.pdb!KiSystemServiceUser
+     4.4%  app.pdb!unknown
+     3.9%  ntkrnlmp.pdb!NtQueryInformationThread
+     3.8%  ntdll.pdb!RtlpLowFragHeapAllocFromContext
+     3.3%  ntdll.pdb!NtWaitForSingleObject
+     2.9%  ntdll.pdb!NtDelayExecution
+     2.4%  ntkrnlmp.pdb!KeQueryBasePriorityThread
+     2.1%  ntkrnlmp.pdb!RtlpUnwindPrologue
+     2.0%  ntdll.pdb!RtlFreeHeap
+     1.7%  app.pdb!skgpu::KeyBuilder::addBits(unsigned int, unsigned int, std::basic_string_view<char, std::char_traits<char> >)
+     1.3%  nvoglv64.pdb!fun_a3b6d0
+     1.1%  ntkrnlmp.pdb!RtlpLookupFunctionEntryForStackWalks
+     0.9%  ntdll.pdb!ZwQueryInformationThread
+     0.9%  app.pdb!skia_private::TArray<int, 1>::push_back(int&&)
+     0.8%  ntkrnlmp.pdb!ObpReferenceObjectByHandleWithTag
+     0.8%  nvoglv64.pdb!fun_7c1ab0
+     0.8%  vcruntime140.amd64.pdb!memset_avx512_ermsb_amd()
+     0.7%  app.pdb!SkIRect::intersect(SkIRect const&, SkIRect const&)
+     0.6%  ntdll.pdb!RtlpAllocateNTHeapInternal
+     0.6%  app.pdb!skgpu::ganesh::OpsTask::OpChain::appendOp(std::unique_ptr<GrOp, std::default_delete<GrOp> >, GrProcessorSet::Analysis, GrDstProxyView const*, 
+     0.6%  app.pdb!GrProcessor::operator delete(void*)
+     0.6%  app.pdb!SkPath::conservativelyContainsRect(SkRect const&)
+     0.4%  kernelbase.pdb!GetExitCodeThread
+     0.4%  app.pdb!skgpu::ganesh::ClipStack::apply(GrRecordingContext*, skgpu::ganesh::SurfaceDrawContext*, GrDrawOp*, GrAAType, GrAppliedClip*, SkRect*)
+   -- top inclusive (app frames):
+   100.0%  app.pdb!__scrt_common_main_seh()
+   100.0%  app.pdb!std::rt::lang_start_internal()
+   100.0%  app.pdb!winit::platform_impl::windows::event_loop::EventLoop<enum2$<vizia_winit::application::UserEvent> >::run<enum2$<vizia_winit::application::UserE
+   100.0%  app.pdb!main
+   100.0%  app.pdb!vizia_winit::application::Application::run(vizia_winit::application::Application)
+   100.0%  app.pdb!app::main()
+   100.0%  app.pdb!std::sys::backtrace::__rust_begin_short_backtrace<enum2$<core::result::Result<tuple$<>,enum2$<vizia_winit::application::ApplicationError> > > 
+   100.0%  app.pdb!std::rt::lang_start::closure$0<enum2$<core::result::Result<tuple$<>,enum2$<vizia_winit::application::ApplicationError> > > >(std::rt::lang_sta
+    98.7%  app.pdb!accesskit_windows::subclass::wnd_proc(windows::Win32::Foundation::HWND, unsigned int, windows::Win32::Foundation::WPARAM, windows::Win32::Foun
+    98.7%  app.pdb!winit::platform_impl::windows::event_loop::runner::EventLoopRunner<winit::platform_impl::windows::event_loop::UserEventPlaceholder>::catch_unw
+    98.7%  app.pdb!winit::platform_impl::windows::event_loop::impl$3::run_on_demand::closure$0<enum2$<vizia_winit::application::UserEvent>,winit::event_loop::imp
+    98.5%  app.pdb!winit::platform_impl::windows::event_loop::public_window_callback(long long, unsigned int, unsigned long long, long long)
+    98.5%  app.pdb!winit::platform_impl::windows::event_loop::public_window_callback_inner::closure$4(winit::platform_impl::windows::event_loop::public_window_ca
+    98.5%  app.pdb!winit::platform_impl::windows::event_loop::runner::EventLoopRunner<winit::platform_impl::windows::event_loop::UserEventPlaceholder>::catch_unw
+    98.1%  app.pdb!winit::platform_impl::windows::event_loop::runner::EventLoopRunner<winit::platform_impl::windows::event_loop::UserEventPlaceholder>::send_even
+    98.1%  app.pdb!vizia_winit::application::impl$6::window_event(vizia_winit::application::Application*, winit::event_loop::ActiveEventLoop*, winit::window::Win
+    50.3%  app.pdb!vizia_core::systems::draw::draw_system(vizia_core::context::Context*, vizia_core::entity::Entity, skia_safe::prelude::RCHandle<skia_bindings::
+    50.2%  app.pdb!vizia_core::systems::draw::draw_entity(vizia_core::context::draw::DrawContext*, enum2$<core::option::Option<vizia_core::layout::bounds::Boundi
+    44.8%  app.pdb!unknown
+    35.1%  app.pdb!ui::views::arrangement::impl$1::draw(ui::views::arrangement::Arrangement*, vizia_core::context::draw::DrawContext*, skia_safe::core::canvas::C
+    35.1%  app.pdb!vizia_reactive::state::SignalState::with_untracked<tuple$<>,ui::state::Arrangement,ui::views::arrangement::impl$1::draw::closure_env$4>(ui::vi
+    35.1%  app.pdb!ui::views::arrangement::impl$1::draw::closure$4(ui::views::arrangement::impl$1::draw::closure_env$4, ui::state::Arrangement*)
+    35.1%  app.pdb!vizia_reactive::read::SignalWith::with_untracked<vizia_reactive::signal::Signal<ui::state::Arrangement>,ui::state::Arrangement,tuple$<>,ui::vi
+    25.3%  app.pdb!vizia_winit::window::WinState::swap_buffers()
+    25.0%  app.pdb!C_GrDirectContext_flushAndSubmit
+    25.0%  app.pdb!GrDirectContext::flush(GrFlushInfo const&)
+    25.0%  app.pdb!GrDrawingManager::flushSurfaces(SkSpan<GrSurfaceProxy*>, SkSurfaces::BackendSurfaceAccess, GrFlushInfo const&, skgpu::MutableTextureState cons
+    25.0%  app.pdb!skia_safe::prelude::RCHandle<skia_bindings::GrDirectContext>::flush_and_submit()
+    25.0%  app.pdb!GrDrawingManager::flush(SkSpan<GrSurfaceProxy*>, SkSurfaces::BackendSurfaceAccess, GrFlushInfo const&, skgpu::MutableTextureState const*)
+    23.1%  app.pdb!GrDrawingManager::executeRenderTasks(GrOpFlushState*)
+    22.5%  app.pdb!glutin::context::impl$10::make_current<glutin::surface::WindowSurface>(enum2$<glutin::context::PossiblyCurrentContext>*, enum2$<glutin::surfac
+    20.8%  app.pdb!SkCanvas::onDrawRRect(SkRRect const&, SkPaint const&)
+    20.5%  app.pdb!skgpu::ganesh::Device::drawRRect(SkRRect const&, SkPaint const&)
+    18.4%  app.pdb!ui::views::clip::draw_clip_body(skia_safe::core::canvas::Canvas*, ui::views::clip::ClipPaint*)
+    18.1%  app.pdb!GrBlurUtils::DrawShapeWithMaskFilter(GrRecordingContext*, skgpu::ganesh::SurfaceDrawContext*, GrClip const*, SkPaint const&, SkMatrix const&, 
+    16.0%  app.pdb!ui::views::gfx::drop_shadow(skia_safe::core::canvas::Canvas*, skia_safe::core::rrect::RRect*, float, float, float, float, ui::theme::tokens::R
+    15.9%  app.pdb!ui::views::clip::draw_clip_shadow(skia_safe::core::canvas::Canvas*, ui::views::clip::ClipPaint*)
+    11.8%  app.pdb!skgpu::ganesh::OpsTask::onExecute(GrOpFlushState*)
+     9.5%  app.pdb!vizia_core::view::impl$0::draw<vizia_core::views::stack::HStack>(vizia_core::views::stack::HStack*, vizia_core::context::draw::DrawContext*, s
+     9.4%  app.pdb!skgpu::ganesh::SurfaceDrawContext::addDrawOp(GrClip const*, std::unique_ptr<GrOp, std::default_delete<GrOp> >, std::function<void (GrOp*, unsi
+=== thread 5524 (Thread <5524>): CPU 5.31 s over 12.8 s = 41.5% of one core
+   100.0%  5 GL driver worker thread (nvoglv64)
+   -- top self (CPU-weighted):
+     5.6%  win32u.pdb!NtGdiDdDDIWaitForVerticalBlankEvent
+     5.6%  ntkrnlmp.pdb!KiSystemServiceUser
+     2.4%  nvoglv64.pdb!fun_bf5bc0
+     2.1%  ntkrnlmp.pdb!_guard_retpoline_indirect_cfg_rax
+     2.0%  ntdll.pdb!NtDelayExecution
+     1.9%  nvoglv64.pdb!fun_a3b8d0
+     1.8%  ntdll.pdb!RtlTryAcquireSRWLockExclusive
+     1.6%  dxgkrnl.pdb!DxgkEscape
+     1.5%  ntkrnlmp.pdb!ExReleasePushLockSharedEx
+     1.5%  ntdll.pdb!RtlQueryPerformanceCounter
+     1.5%  ntkrnlmp.pdb!ExReleaseResourceLite
+     1.4%  ntdll.pdb!NtWaitForSingleObject
+     1.4%  ntkrnlmp.pdb!ExAcquirePushLockSharedEx
+     1.3%  ntkrnlmp.pdb!ExTryAcquirePushLockSharedEx
+     1.2%  win32u.pdb!NtGdiDdDDIEscape
+     1.2%  ntkrnlmp.pdb!ExpAcquireResourceSharedLite
+     1.2%  ntkrnlmp.pdb!KscpCfgDispatchUserCallTargetEsSmep
+     1.2%  nvoglv64.pdb!fun_ba738a
+     1.1%  nvoglv64.pdb!fun_bc73f4
+     1.1%  nvoglv64.pdb!fun_bb6bb0
+     1.1%  dxgkrnl.pdb!DxgkGetDeviceStateInternal
+     1.1%  nvlddmkm.pdb!fun_123f60
+     1.0%  ntkrnlmp.pdb!_guard_retpoline_indirect_rax
+     1.0%  nvlddmkm.pdb!fun_18f3eb0
+     1.0%  ntkrnlmp.pdb!_guard_retpoline_exit
+   -- top inclusive (app frames):

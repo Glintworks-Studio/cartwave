@@ -1,0 +1,35 @@
+# Build output
+/target/
+**/*.rs.bk
+
+# Profiling / tracing output (keep these out of the repo; see docs/perf/tools/README.md)
+*.etl
+*.pdb
+*.json.gz
+perf.data*
+*.trace/
+/prof/
+/etl/
+/capq/
+
+# Frame logs and scratch captures written by the harness outside docs/
+/pace_*.csv
+/bench_*.txt
+
+# Local config and secrets
+.env
+.env.*
+.claude/settings.local.json
+*.local.toml
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Python bytecode
+__pycache__/
+*.pyc

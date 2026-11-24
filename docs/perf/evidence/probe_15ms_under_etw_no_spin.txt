@@ -1,0 +1,90 @@
+PROCESS redraw_probe.exe: total CPU 0.48 s over 11.1 s = 4.3% of one core
+Category breakdown (share of process CPU):
+    96.3%  (  4.1% core)  OpenGL driver (other)
+     2.2%  (  0.1% core)  other: ntkrnlmp.pdb
+     0.4%  (  0.0% core)  swap/present (incl. driver work under SwapBuffers)
+     0.4%  (  0.0% core)  other: win32kbase.pdb
+     0.2%  (  0.0% core)  other: redraw_probe.pdb
+     0.2%  (  0.0% core)  other: win32u.pdb
+     0.1%  (  0.0% core)  other: win32kfull.pdb
+     0.1%  (  0.0% core)  other: ntdll.pdb
+     0.1%  (  0.0% core)  other: win32k.pdb
+     0.0%  (  0.0% core)  other: uxtheme.pdb
+     0.0%  (  0.0% core)  other: win32kbase_rs.pdb
+     0.0%  (  0.0% core)  other: vcruntime140.amd64.pdb
+     0.0%  (  0.0% core)  other: user32.pdb
+
+=== thread 33048 (redraw_probe.exe): CPU 0.33 s over 11.1 s = 2.9% of one core
+    95.5%  OpenGL driver (other)
+     2.5%  other: ntkrnlmp.pdb
+     0.5%  swap/present (incl. driver work under SwapBuffers)
+     0.4%  other: win32kbase.pdb
+     0.3%  other: redraw_probe.pdb
+     0.3%  other: win32u.pdb
+     0.2%  other: win32kfull.pdb
+     0.1%  other: ntdll.pdb
+     0.1%  other: win32k.pdb
+     0.1%  other: uxtheme.pdb
+     0.0%  other: win32kbase_rs.pdb
+     0.0%  other: vcruntime140.amd64.pdb
+     0.0%  other: user32.pdb
+   -- top self (CPU-weighted):
+    24.9%  ntdll.pdb!NtWaitForSingleObject
+    17.0%  ntkrnlmp.pdb!KiSystemServiceUser
+    11.2%  ntkrnlmp.pdb!NtQueryInformationThread
+    10.7%  ntdll.pdb!NtDelayExecution
+     8.9%  ntkrnlmp.pdb!KeQueryBasePriorityThread
+     5.3%  ntdll.pdb!RtlDelayExecution
+     4.4%  ntdll.pdb!ZwQueryInformationThread
+     2.1%  nvoglv64.pdb!fun_a3b6d0
+     1.5%  ntkrnlmp.pdb!ObpReferenceObjectByHandleWithTag
+     1.5%  kernelbase.pdb!SwitchToThread
+     1.1%  ntkrnlmp.pdb!KiSystemServiceCopyStart
+     1.0%  kernelbase.pdb!GetExitCodeThread
+     0.9%  nvoglv64.pdb!fun_7c1ab0
+     0.9%  ntkrnlmp.pdb!_guard_retpoline_indirect_rax
+     0.9%  ntkrnlmp.pdb!KiSystemServiceExit
+     0.6%  ntkrnlmp.pdb!_memset_spec_ermsb
+     0.6%  ntkrnlmp.pdb!KeYieldExecution
+     0.6%  ntkrnlmp.pdb!ExpLookupHandleTableEntry
+     0.6%  ntkrnlmp.pdb!NtDelayExecution
+     0.3%  ntkrnlmp.pdb!_guard_retpoline_indirect_cfg_rax
+     0.3%  nvlddmkm.pdb!fun_20ee0
+     0.3%  ntkrnlmp.pdb!KiSystemServiceGdiTebAccess
+     0.3%  ntkrnlmp.pdb!RtlpInterlockedPushEntrySList
+     0.3%  nvoglv64.pdb!0xa3b465
+     0.3%  nvoglv64.pdb!0xa3b45f
+   -- top inclusive (app frames):
+=== thread 25992 (Thread <25992>): CPU 0.15 s over 11.1 s = 1.4% of one core
+    98.0%  OpenGL driver (other)
+     1.6%  other: ntkrnlmp.pdb
+     0.3%  other: win32kbase.pdb
+     0.1%  other: win32k.pdb
+     0.0%  other: win32kfull.pdb
+   -- top self (CPU-weighted):
+    84.6%  win32u.pdb!NtGdiDdDDIWaitForVerticalBlankEvent
+     2.1%  ntdll.pdb!NtWaitForSingleObject
+     0.7%  ntkrnlmp.pdb!_guard_retpoline_indirect_cfg_rax
+     0.5%  ntdll.pdb!ZwQuerySystemInformation
+     0.4%  ntkrnlmp.pdb!KeAbPreAcquire
+     0.3%  ntkrnlmp.pdb!KzLowerIrql
+     0.3%  watchdog.pdb!WdLogSingleEntry5
+     0.3%  win32kbase.pdb!HANDLELOCK::vLockHandle(unsigned int, HandleLockOptions)
+     0.3%  nvlddmkm.pdb!fun_19931f0
+     0.2%  dxgkrnl.pdb!SubmitPresentHistoryToken(_D3DKMT_PRESENTHISTORYTOKEN const*, COREDEVICEACCESS*, DXGADAPTERSTOPRESETLOCKSHARED*, CWin32kLocks*, int, _LARG
+     0.2%  dxgkrnl.pdb!DxgkEscape
+     0.2%  nvlddmkm.pdb!0x12da47
+     0.2%  ntkrnlmp.pdb!KeLeaveCriticalRegionThread
+     0.2%  nvoglv64.pdb!fun_15b9270
+     0.2%  nvlddmkm.pdb!fun_fe760
+     0.2%  nvlddmkm.pdb!fun_15559a6
+     0.2%  win32u.pdb!NtGdiDdDDIEscape
+     0.2%  ntkrnlmp.pdb!EtwWriteEx
+     0.2%  ntkrnlmp.pdb!KiAbEntryFreeAndEnableInterrupts
+     0.2%  ntkrnlmp.pdb!KeSetPriorityThread
+     0.2%  ntkrnlmp.pdb!RtlpLookupFunctionEntryForStackWalks
+     0.2%  ntkrnlmp.pdb!KiInsertTimerTable
+     0.2%  ntkrnlmp.pdb!ObpReferenceObjectByHandleWithTag
+     0.2%  win32u.pdb!ZwUserGetProp2
+     0.2%  ntkrnlmp.pdb!ExAllocateHeapPool
+   -- top inclusive (app frames):

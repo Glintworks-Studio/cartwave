@@ -1,0 +1,416 @@
+From 68af1a5e9b5b82a12de01d3b8941cc57ba8a4367 Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 20:55:25 -0600
+Subject: [PATCH 3/6] Cache shadow geometry and draw view paths in local space
+
+`draw_shadows` rebuilt every shadow path each frame and, for inset
+shadows, ran an `SkPathOps` difference per shadow per frame. Paths were
+also positioned with `make_offset`, which creates a new `SkPath` with a
+new generation ID every frame, so Skia's GPU caches (triangulated
+vertex buffers, blur masks), which are keyed by path identity, never
+hit: every frame re-triangulated each shadow, allocated new GPU vertex
+buffers and kept the GL driver busy.
+
+- Cache each view's shadow layers (path + paint) in view-local space in
+  `CachedData::shadows`, keyed by the resolved shadow list and scale
+  factor. Invalidate together with the cached outline path through a
+  new `CachedData::invalidate_path` (all former `cache.path.remove`
+  sites).
+- Draw shadows and the background colour from the cached local outline
+  under a canvas translation instead of offsetting paths.
+- `DrawContext::path()` keeps its behaviour (absolute coordinates).
+
+Rendering: a pixel diff of a 1440x900 frame before/after differs in
+2.6k pixels, all on anti-aliased edges of small rounded shadow rings
+(max 16/255 per channel; corners are now slightly smoother because Skia
+can use its cached path renderers). Shadow transitions still work: the
+cache simply misses while a transition is running.
+
+Tested on the ChipDAW GUI prototype (about 30 inset + 30 outer shadows
+redrawn per frame during playback), Windows/NVIDIA, 60 Hz:
+process CPU 59.5% -> 24.3% (43-clip demo playing), 96.8% -> 50.5%
+(200 clips playing).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_core/src/cache.rs           |  30 ++++-
+ crates/vizia_core/src/context/backend.rs |   2 +-
+ crates/vizia_core/src/context/draw.rs    | 156 ++++++++++++++---------
+ crates/vizia_core/src/modifiers/style.rs |   2 +-
+ crates/vizia_core/src/systems/layout.rs  |   2 +
+ crates/vizia_core/src/systems/style.rs   |  18 +--
+ 6 files changed, 137 insertions(+), 73 deletions(-)
+
+diff --git a/crates/vizia_core/src/cache.rs b/crates/vizia_core/src/cache.rs
+index eb4e7518..e8ac195b 100644
+--- a/crates/vizia_core/src/cache.rs
++++ b/crates/vizia_core/src/cache.rs
+@@ -2,7 +2,7 @@
+ //! results. The main type here is CachedData, usually accessed via `cx.cache`.
+ 
+ use crate::prelude::*;
+-use skia_safe::{Matrix, Path};
++use skia_safe::{Matrix, Paint, Path};
+ use vizia_storage::SparseSet;
+ 
+ /// Stores data which can be cached between system runs.
+@@ -18,6 +18,27 @@ pub struct CachedData {
+     pub(crate) transform: SparseSet<Matrix>,
+     pub(crate) clip_path: SparseSet<Option<Path>>,
+     pub(crate) path: SparseSet<Path>,
++    pub(crate) shadows: SparseSet<ShadowCache>,
++}
++
++/// Shadow geometry of one view, in view-local coordinates.
++///
++/// Building shadow paths (and the path-op difference for inset shadows) is
++/// expensive, and a fresh `SkPath` every frame also defeats Skia's GPU caches
++/// (triangulated vertices and blur masks are keyed by path identity). So the
++/// layers are built once and reused until the shadows, scale factor or the
++/// view's outline path change.
++pub(crate) struct ShadowCache {
++    pub(crate) shadows: Vec<Shadow>,
++    pub(crate) scale_factor: f32,
++    /// In draw order.
++    pub(crate) layers: Vec<ShadowLayer>,
++}
++
++pub(crate) struct ShadowLayer {
++    pub(crate) path: Path,
++    pub(crate) paint: Paint,
++    pub(crate) inset: bool,
+ }
+ 
+ impl CachedData {
+@@ -36,6 +57,13 @@ impl CachedData {
+         self.transform.remove(entity);
+         self.clip_path.remove(entity);
+         self.path.remove(entity);
++        self.shadows.remove(entity);
++    }
++
++    /// Invalidates the cached outline path of `entity` and the geometry derived from it.
++    pub(crate) fn invalidate_path(&mut self, entity: Entity) {
++        self.path.remove(entity);
++        self.shadows.remove(entity);
+     }
+ 
+     /// Returns the bounding box of the entity, determined by the layout system.
+diff --git a/crates/vizia_core/src/context/backend.rs b/crates/vizia_core/src/context/backend.rs
+index aa0ab92d..34a4532d 100644
+--- a/crates/vizia_core/src/context/backend.rs
++++ b/crates/vizia_core/src/context/backend.rs
+@@ -267,7 +267,7 @@ impl BackendContext {
+     }
+ 
+     pub fn needs_refresh(&mut self, window_entity: Entity) {
+-        self.0.cache.path.remove(window_entity);
++        self.0.cache.invalidate_path(window_entity);
+         self.0.style.system_flags = SystemFlags::all();
+         self.0.needs_redraw(window_entity);
+         self.0.style.needs_restyle(window_entity);
+diff --git a/crates/vizia_core/src/context/draw.rs b/crates/vizia_core/src/context/draw.rs
+index 579c0c9e..82c02161 100644
+--- a/crates/vizia_core/src/context/draw.rs
++++ b/crates/vizia_core/src/context/draw.rs
+@@ -12,7 +12,7 @@ use vizia_style::LengthPercentageOrAuto;
+ 
+ use hashbrown::HashMap;
+ 
+-use crate::cache::CachedData;
++use crate::cache::{CachedData, ShadowCache, ShadowLayer};
+ use crate::events::ViewHandler;
+ use crate::prelude::*;
+ use crate::resource::{ImageOrSvg, ResourceManager};
+@@ -470,11 +470,20 @@ impl DrawContext<'_> {
+     }
+ 
+     pub fn path(&mut self) -> Path {
++        let bounds = self.bounds();
++        self.local_path().make_offset(bounds.top_left())
++    }
++
++    /// The cached outline path of the current view, relative to its top-left corner.
++    ///
++    /// Unlike [`path`](Self::path) this returns the same `Path` (same identity)
++    /// every frame until the outline changes, which lets Skia reuse GPU-side
++    /// caches. Draw it under a canvas translation to the view's position.
++    fn local_path(&mut self) -> Path {
+         if self.cache.path.get(self.current).is_none() {
+             self.cache.path.insert(self.current, self.build_path(self.bounds(), (0.0, 0.0)));
+         }
+-        let bounds = self.bounds();
+-        self.cache.path.get(self.current).unwrap().make_offset(bounds.top_left())
++        self.cache.path.get(self.current).unwrap().clone()
+     }
+ 
+     /// Get the vector path of the current view.
+@@ -651,7 +660,8 @@ impl DrawContext<'_> {
+     pub fn draw_background(&mut self, canvas: &Canvas) {
+         let background_color = self.background_color();
+         if background_color.a() > 0 {
+-            let path = self.path();
++            let path = self.local_path();
++            let bounds = self.bounds();
+ 
+             let mut paint = Paint::default();
+             paint.set_color(skia_safe::Color::from_argb(
+@@ -661,7 +671,10 @@ impl DrawContext<'_> {
+                 background_color.b(),
+             ));
+             paint.set_anti_alias(true);
++            canvas.save();
++            canvas.translate((bounds.x, bounds.y));
+             canvas.draw_path(&path, &paint);
++            canvas.restore();
+         }
+ 
+         self.draw_background_images(canvas);
+@@ -732,71 +745,92 @@ impl DrawContext<'_> {
+ 
+     /// Draw shadows for the current view.
+     pub fn draw_shadows(&mut self, canvas: &Canvas) {
+-        if let Some(shadows) = self.shadows() {
+-            if shadows.is_empty() {
+-                return;
+-            }
+-
+-            let bounds = self.bounds();
+-
+-            let path = self.build_path(bounds, (0.0, 0.0)).make_offset(bounds.top_left());
+-
+-            for shadow in shadows.iter().rev() {
+-                let shadow_color = shadow.color.unwrap_or_default();
+-
+-                let shadow_x_offset = shadow.x_offset.to_px().unwrap_or(0.0) * self.scale_factor();
+-                let shadow_y_offset = shadow.y_offset.to_px().unwrap_or(0.0) * self.scale_factor();
+-                let spread_radius =
+-                    shadow.spread_radius.as_ref().and_then(|l| l.to_px()).unwrap_or(0.0)
+-                        * self.scale_factor();
+-
+-                let blur_radius =
+-                    shadow.blur_radius.as_ref().and_then(|br| br.to_px()).unwrap_or(0.0);
+-
+-                if shadow_color.a() == 0
+-                    || (shadow_x_offset == 0.0
+-                        && shadow_y_offset == 0.0
+-                        && spread_radius == 0.0
+-                        && blur_radius == 0.0)
+-                {
+-                    continue;
+-                }
+-
+-                let mut shadow_paint = Paint::default();
+-
+-                let outset = if shadow.inset { -spread_radius } else { spread_radius };
+-
+-                shadow_paint.set_style(PaintStyle::Fill);
++        let Some(shadows) = self.shadows() else { return };
++        if shadows.is_empty() {
++            return;
++        }
+ 
+-                let mut shadow_path = self.build_path(bounds, (outset, outset));
+-                shadow_path = shadow_path.make_offset(bounds.top_left());
++        let entity = self.current;
++        let scale_factor = self.scale_factor();
++        let stale = self
++            .cache
++            .shadows
++            .get(entity)
++            .is_none_or(|c| c.scale_factor != scale_factor || c.shadows != shadows);
++        if stale {
++            let layers = self.build_shadow_layers(&shadows, scale_factor);
++            self.cache.shadows.insert(entity, ShadowCache { shadows, scale_factor, layers });
++        }
+ 
+-                shadow_paint.set_color(shadow_color);
++        let outline = self.local_path();
++        let bounds = self.bounds();
++        let Some(cache) = self.cache.shadows.get(entity) else { return };
++
++        canvas.save();
++        canvas.translate((bounds.x, bounds.y));
++        for layer in &cache.layers {
++            canvas.save();
++            canvas.clip_path(
++                &outline,
++                if layer.inset { ClipOp::Intersect } else { ClipOp::Difference },
++                true,
++            );
++            canvas.draw_path(&layer.path, &layer.paint);
++            canvas.restore();
++        }
++        canvas.restore();
++    }
+ 
+-                if blur_radius > 0.0 {
+-                    shadow_paint.set_mask_filter(MaskFilter::blur(
+-                        BlurStyle::Normal,
+-                        blur_radius / 2.0,
+-                        false,
+-                    ));
+-                }
++    /// Builds the shadow layers of the current view in view-local coordinates, in draw order.
++    fn build_shadow_layers(&mut self, shadows: &[Shadow], scale_factor: f32) -> Vec<ShadowLayer> {
++        let bounds = self.bounds();
++        let outline = self.local_path();
++        let mut layers = Vec::with_capacity(shadows.len());
++
++        for shadow in shadows.iter().rev() {
++            let shadow_color = shadow.color.unwrap_or_default();
++
++            let shadow_x_offset = shadow.x_offset.to_px().unwrap_or(0.0) * scale_factor;
++            let shadow_y_offset = shadow.y_offset.to_px().unwrap_or(0.0) * scale_factor;
++            let spread_radius =
++                shadow.spread_radius.as_ref().and_then(|l| l.to_px()).unwrap_or(0.0) * scale_factor;
++
++            let blur_radius = shadow.blur_radius.as_ref().and_then(|br| br.to_px()).unwrap_or(0.0);
++
++            if shadow_color.a() == 0
++                || (shadow_x_offset == 0.0
++                    && shadow_y_offset == 0.0
++                    && spread_radius == 0.0
++                    && blur_radius == 0.0)
++            {
++                continue;
++            }
+ 
+-                shadow_path = shadow_path.make_offset((shadow_x_offset, shadow_y_offset));
++            let mut paint = Paint::default();
++            paint.set_style(PaintStyle::Fill);
++            paint.set_color(shadow_color);
++            paint.set_anti_alias(true);
++            if blur_radius > 0.0 {
++                paint.set_mask_filter(MaskFilter::blur(
++                    BlurStyle::Normal,
++                    blur_radius / 2.0,
++                    false,
++                ));
++            }
+ 
+-                if shadow.inset {
+-                    shadow_path = path.op(&shadow_path, skia_safe::PathOp::Difference).unwrap();
+-                }
++            let outset = if shadow.inset { -spread_radius } else { spread_radius };
++            let mut path = self
++                .build_path(bounds, (outset, outset))
++                .make_offset((shadow_x_offset, shadow_y_offset));
+ 
+-                canvas.save();
+-                canvas.clip_path(
+-                    &path,
+-                    if shadow.inset { ClipOp::Intersect } else { ClipOp::Difference },
+-                    true,
+-                );
+-                canvas.draw_path(&shadow_path, &shadow_paint);
+-                canvas.restore();
++            if shadow.inset {
++                path = outline.op(&path, skia_safe::PathOp::Difference).unwrap_or(path);
+             }
++
++            layers.push(ShadowLayer { path, paint, inset: shadow.inset });
+         }
++
++        layers
+     }
+ 
+     /// Draw background images (including gradients) for the current view.
+diff --git a/crates/vizia_core/src/modifiers/style.rs b/crates/vizia_core/src/modifiers/style.rs
+index 8beb34d1..5bcbfb59 100644
+--- a/crates/vizia_core/src/modifiers/style.rs
++++ b/crates/vizia_core/src/modifiers/style.rs
+@@ -468,7 +468,7 @@ pub trait StyleModifiers: internal::Modifiable {
+         let _current = self.current();
+         value.set_or_bind(self.context(), move |cx, v| {
+             cx.style.border_width.insert(entity, v.get_value(cx).into());
+-            cx.cache.path.remove(entity);
++            cx.cache.invalidate_path(entity);
+             cx.style.system_flags |= SystemFlags::RELAYOUT | SystemFlags::REDRAW;
+             cx.set_system_flags(entity, SystemFlags::RELAYOUT | SystemFlags::REDRAW);
+         });
+diff --git a/crates/vizia_core/src/systems/layout.rs b/crates/vizia_core/src/systems/layout.rs
+index 38d8e0ff..a7fb2191 100644
+--- a/crates/vizia_core/src/systems/layout.rs
++++ b/crates/vizia_core/src/systems/layout.rs
+@@ -58,11 +58,13 @@ pub(crate) fn layout_system(cx: &mut Context) {
+                         if w != bounds.w {
+                             geo_changed.set(GeoChanged::WIDTH_CHANGED, true);
+                             cx.cache.path.remove(entity);
++                            cx.cache.shadows.remove(entity);
+                         }
+ 
+                         if h != bounds.h {
+                             geo_changed.set(GeoChanged::HEIGHT_CHANGED, true);
+                             cx.cache.path.remove(entity);
++                            cx.cache.shadows.remove(entity);
+                         }
+ 
+                         if let Some(geo) = cx.cache.geo_changed.get_mut(entity) {
+diff --git a/crates/vizia_core/src/systems/style.rs b/crates/vizia_core/src/systems/style.rs
+index 86f607bf..e189d14c 100644
+--- a/crates/vizia_core/src/systems/style.rs
++++ b/crates/vizia_core/src/systems/style.rs
+@@ -694,7 +694,7 @@ fn link_style_data(
+     if style.border_width.link(entity, matched_rules, &style.custom_length_props) {
+         should_relayout = true;
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.border_color.link(entity, matched_rules, &style.custom_color_props) {
+@@ -709,42 +709,42 @@ fn link_style_data(
+ 
+     if style.corner_top_left_shape.link(entity, matched_rules) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_top_right_shape.link(entity, matched_rules) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_bottom_left_shape.link(entity, matched_rules) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_bottom_right_shape.link(entity, matched_rules) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_top_left_radius.link(entity, matched_rules, &style.custom_length_props) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_top_right_radius.link(entity, matched_rules, &style.custom_length_props) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_bottom_left_radius.link(entity, matched_rules, &style.custom_length_props) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.corner_bottom_right_radius.link(entity, matched_rules, &style.custom_length_props) {
+         should_redraw = true;
+-        cache.path.remove(entity);
++        cache.invalidate_path(entity);
+     }
+ 
+     if style.outline_width.link(entity, matched_rules, &style.custom_length_props) {
+-- 
+2.55.0.windows.2
+

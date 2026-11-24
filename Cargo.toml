@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["crates/ui", "crates/app"]
+
+[workspace.dependencies]
+vizia = "0.4.0"
+
+[profile.release]
+debug = false
+
+# Release + full debug info, for sampling profilers (samply / WPR).
+# Usage: cargo build --profile profiling -p app
+[profile.profiling]
+inherits = "release"
+debug = true
+
+# vizia fork: tag 0.4.0 + six focused perf fixes (branch `chipdaw-perf` on
+# https://github.com/jeffreyfrederick/vizia), kept upstream-ready. See PERF.md for
+# the commit list. Pinned to an exact commit; to hack on a local checkout, swap
+# these for `path = "../vizia/..."` entries.
+[patch.crates-io]
+vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
+vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "259e1cb30fa2cdfa1dcaac701c9f45f89da2c270" }
