@@ -5,7 +5,7 @@
 //!
 //! `--render-demo DIR [SECONDS]` renders the demo arrangement offline through
 //! the chip engine (no audio device, no window) into `DIR/demo_excerpt_*.wav`
-//! (NES filter and raw), for the listening pack.
+//! (NES filter, Famicom filter and raw), for the listening pack.
 
 use vizia::prelude::*;
 
@@ -62,7 +62,11 @@ fn render_demo(dir: &str, secs: f64) {
     let song = ui::mock::demo_arrangement().song_snapshot(1);
     let dir = std::path::Path::new(dir);
     std::fs::create_dir_all(dir).expect("output dir");
-    for (suffix, mode) in [("nes", engine::FilterMode::Nes), ("raw", engine::FilterMode::Off)] {
+    for (suffix, mode) in [
+        ("nes", engine::FilterMode::Nes),
+        ("famicom", engine::FilterMode::Famicom),
+        ("raw", engine::FilterMode::Off),
+    ] {
         let mut p = Box::new(Player::new(48_000.0));
         p.set_bpm(150.0);
         p.synth.set_filter(mode);

@@ -11,6 +11,10 @@ Each chip-level file comes in two versions:
   ENGINE.md §3.4).
 - `*_raw.wav`: no console filtering (only a 5 Hz DC blocker).
 
+The demo excerpt also comes as `demo_excerpt_famicom.wav`: the Famicom output stage (first-order
+high-pass 37 Hz only). That is the app's default whenever VRC6 is enabled, because VRC6 cartridges
+only existed for the Famicom; with the 2A03 alone the default is NES.
+
 Compare both against hardware recordings. Real consoles differ (front-loader, top-loader,
 Famicom, AV mods), and so do their capture chains.
 
@@ -23,7 +27,7 @@ Famicom, AV mods), and so do their capture chains.
 | `vrc6_pulse_duties_*` | VRC6 pulse 1 at A3, duty 1/16 .. 8/16 | Eight distinct timbres |
 | `dpcm_kit_*` | Our synthesised DPCM kick, snare, tom, crash at rate 15 (native), 12 and 9 | 1-bit delta-modulation grit. Pitch drops at lower rates. **These samples are our own, made for this test, not taken from any game.** |
 | `aliasing_naive.wav` vs `aliasing_bandlimited.wav` | 12.5% pulse arpeggio C6..G8, NES filter. Naive point sampling vs our band-limited synthesis | The naive file has inharmonic "whistles" moving against the notes; the band-limited one doesn't |
-| `demo_excerpt_*` | The app's demo arrangement, bars 1-16 at 150 BPM, all 8 channels through the sound driver (frame-tick timing) | Overall balance, including the VRC6 level (ENGINE.md §6.5, gap 1) |
+| `demo_excerpt_{nes,famicom,raw}` | The app's demo arrangement, bars 1-16 at 150 BPM, all 8 channels through the sound driver (frame-tick timing) | Overall balance, including the VRC6 level (ENGINE.md §6.5, gap 1). Famicom vs NES: more bass (37 vs 90 Hz high-pass) and full treble (no 14 kHz low-pass) |
 
 Regenerate:
 
