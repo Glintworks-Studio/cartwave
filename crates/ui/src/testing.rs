@@ -6,7 +6,7 @@
 //! - `CHIPDAW_UI_STALL=1`   test C: busy-wait 250 ms on the UI thread every 2 s.
 //! - `CHIPDAW_AUDIOLOG=path` one CSV line of engine stats per second, plus a
 //!   summary at exit.
-//! - `CHIPDAW_PILOT=1`      mix a 19 kHz pilot and watch it via WASAPI loopback
+//! - `CHIPDAW_PILOT=1`      mix a 19 kHz pilot (`CHIPDAW_PILOT_HZ` to change) and watch it via WASAPI loopback
 //!   (ground-truth dropout count).
 //! - `CHIPDAW_AVSYNC=1`     test G: 1-bar loop, music muted, a click at mid-bar;
 //!   loopback click times vs the presented playhead crossing.

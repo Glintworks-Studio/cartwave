@@ -20,6 +20,17 @@ use std::time::{Duration, Instant};
 
 pub const PILOT_HZ: f32 = 19_000.0;
 
+/// The pilot frequency: `CHIPDAW_PILOT_HZ`, or `PILOT_HZ`. A pilot above the
+/// band-limited synthesis' passband (21.6 kHz at 48 kHz) can't be masked by
+/// music; with the Famicom filter (no 14 kHz low-pass) a 19 kHz pilot can
+/// (ENGINE-macos.md §3).
+pub fn pilot_hz() -> f32 {
+    std::env::var("CHIPDAW_PILOT_HZ")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(PILOT_HZ)
+}
+
 pub struct Loopback {
     _stream: cpal::Stream,
     pub dropouts: Arc<AtomicU64>,

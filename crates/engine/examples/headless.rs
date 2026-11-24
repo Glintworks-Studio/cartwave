@@ -28,7 +28,6 @@ use std::time::{Duration, Instant};
 #[global_allocator]
 static ALLOC: engine::alloc_check::CheckingAllocator = engine::alloc_check::CheckingAllocator;
 
-const PILOT_HZ: f32 = 19_000.0;
 const PPQ: u32 = 960;
 
 struct Rng(u64);
@@ -90,7 +89,7 @@ fn start_loopback(epoch: Instant, block: usize) -> Loopback {
     let (d2, b2) = (dropouts.clone(), blocks.clone());
     // Goertzel over `block`-frame blocks (128 = 2.7 ms at 48 kHz).
     let block_len = block;
-    let k = (2.0 * std::f32::consts::PI * PILOT_HZ / sr).cos() * 2.0;
+    let k = (2.0 * std::f32::consts::PI * engine::testkit::pilot_hz() / sr).cos() * 2.0;
     let (mut s1, mut s2, mut n) = (0f32, 0f32, 0usize);
     let mut level_avg = 0f32;
     let mut low_run = 0u32;
@@ -142,6 +141,28 @@ fn start_loopback(epoch: Instant, block: usize) -> Loopback {
     }
 }
 
+/// Host clock in ns (macOS: mach_absolute_time, the clock of tapmon's events).
+fn host_ns() -> u64 {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn mach_absolute_time() -> u64;
+            fn mach_timebase_info(info: *mut [u32; 2]) -> i32;
+        }
+        let mut tb = [0u32; 2];
+        // SAFETY: plain libc calls with a valid out-pointer.
+        let t = unsafe {
+            mach_timebase_info(&mut tb);
+            mach_absolute_time()
+        };
+        (t as u128 * tb[0] as u128 / tb[1].max(1) as u128) as u64
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        0
+    }
+}
+
 /// Records the detector counters and takes (resets) the largest gap.
 fn snap(e: &Engine, v: &mut Vec<[u64; 4]>) {
     let sh = e.shared();
@@ -182,7 +203,7 @@ fn main() {
         e.send(Command::Mute(0xFF));
     }
     if lb.is_some() || has("--pilot") {
-        e.send(Command::TestPilot(PILOT_HZ));
+        e.send(Command::TestPilot(engine::testkit::pilot_hz()));
     }
     e.send(Command::Play);
 
@@ -194,6 +215,7 @@ fn main() {
     let mut injected: Vec<(f64, f64)> = Vec::new();
     // Detector counters at each injection: (overloads, late, overrun, max gap ns).
     let mut per_stall: Vec<[u64; 4]> = Vec::new();
+    let mut injected_host: Vec<u64> = Vec::new();
     let mut frames = 0u64;
     let mut edits = 0u64;
     let mut wait_max = 0f64;
@@ -230,6 +252,7 @@ fn main() {
             inject_i += 1;
             snap(&e, &mut per_stall);
             injected.push((epoch.elapsed().as_secs_f64(), ms));
+            injected_host.push(host_ns());
             e.send(Command::TestStall((ms * 1000.0) as u32));
         }
         wait_max = wait_max.max(e.pending() as f64);
@@ -278,15 +301,16 @@ fn main() {
         sh.device_error.load(Ordering::Relaxed)
     );
     if !injected.is_empty() {
-        println!("per stall: ms, overloads, late, overrun, largest gap ms");
+        println!("per stall: ms, overloads, late, overrun, largest gap ms, host ns");
         for (i, (_, ms)) in injected.iter().enumerate() {
             let (a, b) = (per_stall[i], per_stall[i + 1]);
             println!(
-                "  stall {ms:7.3}  {:2}  {:2}  {:2}  {:7.3}",
+                "  stall {ms:7.3}  {:2}  {:2}  {:2}  {:7.3}  {}",
                 b[0] - a[0],
                 b[1] - a[1],
                 b[2] - a[2],
-                b[3] as f64 / 1e6
+                b[3] as f64 / 1e6,
+                injected_host[i]
             );
         }
         println!("injected stalls (t s, ms): {:?}", injected.iter().map(|(t, m)| (format!("{t:.2}"), *m)).collect::<Vec<_>>());

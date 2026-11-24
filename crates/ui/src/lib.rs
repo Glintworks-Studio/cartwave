@@ -740,13 +740,13 @@ impl AppState {
         self.send(Command::Vrc6(vrc6));
         if self.tests.pilot || self.tests.avsync {
             match engine::testkit::Loopback::start(
-                self.tests.pilot.then_some(engine::testkit::PILOT_HZ),
+                self.tests.pilot.then_some(engine::testkit::pilot_hz()),
             ) {
                 Ok(lb) => self.tests.loopback = Some(lb),
                 Err(err) => eprintln!("loopback: {err}"),
             }
             if self.tests.pilot {
-                self.send(Command::TestPilot(engine::testkit::PILOT_HZ));
+                self.send(Command::TestPilot(engine::testkit::pilot_hz()));
             }
         }
         if self.tests.avsync {
