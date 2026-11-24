@@ -1,6 +1,7 @@
 # Perf harness (as used for PERF.md)
 
-These scripts drove every measurement in `PERF.md` (Windows only). Nothing is hard-coded:
+These scripts drove every measurement in `PERF.md` (Windows only; the macOS harness is in
+[`macos/`](macos/README.md)). Nothing is hard-coded:
 
 - **Repo root:** defaults to this folder's repo (`docs/perf/tools/../../..`); override with `-Repo`
   (PowerShell) or `CHIPDAW_REPO` (`prof.sh`).
