@@ -25,6 +25,7 @@ fn main() -> Result<(), ApplicationError> {
     .title("ChipDAW — GUI prototype")
     .inner_size(size)
     // Present on vblank; the UI advances its model once per presented frame.
-    .vsync(true)
+    // `CHIPDAW_VSYNC=0` turns it off (an experiment knob for PERF measurements).
+    .vsync(std::env::var("CHIPDAW_VSYNC").map_or(true, |v| v != "0"))
     .run()
 }
