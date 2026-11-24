@@ -508,6 +508,7 @@ impl View for Arrangement {
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let _perf = crate::perf::scope(crate::perf::Span::Arrangement);
+        crate::perf::log_gl_info_once();
         let b = cx.bounds();
         let s = cx.scale_factor();
         let rect: vg::Rect = b.into();

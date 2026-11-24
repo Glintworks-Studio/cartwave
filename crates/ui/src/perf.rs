@@ -93,7 +93,60 @@ pub fn process_cpu_time() -> Option<Duration> {
         // FILETIME is in 100 ns units.
         Some(Duration::from_nanos((ticks(&k) + ticks(&u)) * 100))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn clock_gettime_nsec_np(clock_id: u32) -> u64;
+        }
+        /// `CLOCK_PROCESS_CPUTIME_ID` in `<_time.h>`.
+        const CLOCK_PROCESS_CPUTIME_ID: u32 = 12;
+        // SAFETY: plain libc call with a valid clock id; returns 0 on error.
+        let ns = unsafe { clock_gettime_nsec_np(CLOCK_PROCESS_CPUTIME_ID) };
+        (ns != 0).then(|| Duration::from_nanos(ns))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        None
+    }
+}
+
+/// Prints the GL vendor, renderer and version of the current context to
+/// stderr, once. Call it from a `View::draw` (the window's context is current
+/// there). Confirms at runtime which GL implementation the backend landed on.
+pub fn log_gl_info_once() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        if let Some(info) = gl_info() {
+            eprintln!("chipdaw: {info}");
+        }
+    });
+}
+
+fn gl_info() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        #[link(name = "OpenGL", kind = "framework")]
+        unsafe extern "C" {
+            fn glGetString(name: u32) -> *const std::ffi::c_char;
+        }
+        const GL_VENDOR: u32 = 0x1F00;
+        const GL_RENDERER: u32 = 0x1F01;
+        const GL_VERSION: u32 = 0x1F02;
+        let get = |name| {
+            // SAFETY: called with a current GL context; glGetString returns a
+            // static NUL-terminated string or null.
+            let p = unsafe { glGetString(name) };
+            (!p.is_null())
+                .then(|| unsafe { std::ffi::CStr::from_ptr(p) }.to_string_lossy().into_owned())
+        };
+        Some(format!(
+            "GL_VENDOR={:?} GL_RENDERER={:?} GL_VERSION={:?}",
+            get(GL_VENDOR)?,
+            get(GL_RENDERER)?,
+            get(GL_VERSION)?
+        ))
+    }
+    #[cfg(not(target_os = "macos"))]
     {
         None
     }
