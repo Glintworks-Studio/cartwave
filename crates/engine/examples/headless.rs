@@ -5,9 +5,17 @@
 //!     --buffer N|default  requested buffer frames (default: device default)
 //!     --ui-stall          busy-wait 250 ms on the sending thread every 2 s
 //!     --edits             send a new song snapshot + param/mute changes every frame
-//!     --inject MS,MS,...  inject audio-thread stalls (every 3 s), to calibrate detectors
-//!     --loopback          ground truth: capture the output via WASAPI loopback and
-//!                         detect dropouts of a 19 kHz pilot tone
+//!     --inject MS,MS,...  inject audio-thread stalls (every 3 s; fractional ms
+//!                         allowed), to calibrate detectors
+//!     --every S           seconds between injected stalls (default 3)
+//!     --loopback          ground truth: capture the output via WASAPI loopback
+//!                         (macOS: cpal's process tap) and detect dropouts of a
+//!                         19 kHz pilot tone
+//!     --gain G            output gain (default 1.0; the app's stress runs use 0.3)
+//!     --mute              mute all eight channels (pilot only)
+//!     --pilot             mix the pilot without in-process loopback (for an
+//!                         external capture such as tapmon on macOS)
+//!     --block N           loopback analysis block in frames (default 128)
 //!
 //! The "UI" here is the main thread running at ~60 Hz.
 
@@ -71,7 +79,7 @@ struct Loopback {
     blocks: Arc<AtomicU64>,
 }
 
-fn start_loopback(epoch: Instant) -> Loopback {
+fn start_loopback(epoch: Instant, block: usize) -> Loopback {
     let host = cpal::default_host();
     let dev = host.default_output_device().expect("output device");
     let cfg = dev.default_output_config().expect("config");
@@ -80,8 +88,8 @@ fn start_loopback(epoch: Instant) -> Loopback {
     let dropouts = Arc::new(Mutex::new(Vec::new()));
     let blocks = Arc::new(AtomicU64::new(0));
     let (d2, b2) = (dropouts.clone(), blocks.clone());
-    // Goertzel over 128-frame blocks (2.7 ms at 48 kHz).
-    const BLOCK: usize = 128;
+    // Goertzel over `block`-frame blocks (128 = 2.7 ms at 48 kHz).
+    let block_len = block;
     let k = (2.0 * std::f32::consts::PI * PILOT_HZ / sr).cos() * 2.0;
     let (mut s1, mut s2, mut n) = (0f32, 0f32, 0usize);
     let mut level_avg = 0f32;
@@ -96,9 +104,9 @@ fn start_loopback(epoch: Instant) -> Loopback {
                     s2 = s1;
                     s1 = s0;
                     n += 1;
-                    if n == BLOCK {
+                    if n == block_len {
                         let p = s1 * s1 + s2 * s2 - k * s1 * s2;
-                        let amp = p.max(0.0).sqrt() * 2.0 / BLOCK as f32;
+                        let amp = p.max(0.0).sqrt() * 2.0 / block_len as f32;
                         let b = b2.fetch_add(1, Ordering::Relaxed);
                         if b > 200 {
                             // Dropout: a block below 30% of the running level.
@@ -134,36 +142,58 @@ fn start_loopback(epoch: Instant) -> Loopback {
     }
 }
 
+/// Records the detector counters and takes (resets) the largest gap.
+fn snap(e: &Engine, v: &mut Vec<[u64; 4]>) {
+    let sh = e.shared();
+    v.push([
+        sh.overloads.load(Ordering::Relaxed),
+        sh.xrun_late.load(Ordering::Relaxed),
+        sh.xrun_overrun.load(Ordering::Relaxed),
+        sh.max_gap_ns.swap(0, Ordering::Relaxed),
+    ]);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let get = |k: &str| args.iter().position(|a| a == k).and_then(|i| args.get(i + 1)).cloned();
     let has = |k: &str| args.iter().any(|a| a == k);
     let secs: f64 = get("--secs").and_then(|s| s.parse().ok()).unwrap_or(30.0);
     let buffer = get("--buffer").and_then(|s| s.parse().ok());
-    let inject: Vec<u32> = get("--inject")
+    let inject: Vec<f64> = get("--inject")
         .map(|s| s.split(',').filter_map(|x| x.parse().ok()).collect())
         .unwrap_or_default();
 
+    let gain: Option<f32> = get("--gain").and_then(|s| s.parse().ok());
+    let block: usize = get("--block").and_then(|s| s.parse().ok()).unwrap_or(128);
     let mut e = Engine::start(EngineConfig {
         buffer_frames: buffer,
         ..Default::default()
     });
     let epoch = Instant::now();
-    let lb = has("--loopback").then(|| start_loopback(epoch));
+    let lb = has("--loopback").then(|| start_loopback(epoch, block));
     let mut rng = Rng(0x1234_5678_9ABC);
     let mut version = 1;
     e.send_song(song(&mut rng, version));
     e.send(Command::Bpm(150.0));
-    if lb.is_some() {
+    if let Some(g) = gain {
+        e.send(Command::Gain(g));
+    }
+    if has("--mute") {
+        e.send(Command::Mute(0xFF));
+    }
+    if lb.is_some() || has("--pilot") {
         e.send(Command::TestPilot(PILOT_HZ));
     }
     e.send(Command::Play);
 
     let t0 = Instant::now();
     let mut next_stall = 2.0;
-    let mut next_inject = 3.0;
+    let every: f64 = get("--every").and_then(|s| s.parse().ok()).unwrap_or(3.0);
+    let mut next_inject = every;
     let mut inject_i = 0;
-    let mut injected: Vec<(f64, u32)> = Vec::new();
+    let mut injected: Vec<(f64, f64)> = Vec::new();
+    // Detector counters at each injection: (overloads, late, overrun, max gap ns).
+    let mut per_stall: Vec<[u64; 4]> = Vec::new();
     let mut frames = 0u64;
     let mut edits = 0u64;
     let mut wait_max = 0f64;
@@ -195,15 +225,20 @@ fn main() {
             }
         }
         if !inject.is_empty() && now >= next_inject {
-            next_inject += 3.0;
+            next_inject += every;
             let ms = inject[inject_i % inject.len()];
             inject_i += 1;
+            snap(&e, &mut per_stall);
             injected.push((epoch.elapsed().as_secs_f64(), ms));
-            e.send(Command::TestStall(ms * 1000));
+            e.send(Command::TestStall((ms * 1000.0) as u32));
         }
         wait_max = wait_max.max(e.pending() as f64);
     }
 
+    if !injected.is_empty() {
+        std::thread::sleep(Duration::from_millis(300));
+        snap(&e, &mut per_stall);
+    }
     let sh = e.shared();
     let (n, mean, p99, max) = sh.callback_cost();
     println!("device: {}", e.device_info());
@@ -234,7 +269,26 @@ fn main() {
         sh.driver_ticks.load(Ordering::Relaxed) as f64 / (sh.frames.load(Ordering::Relaxed) as f64 / 48_000.0),
         engine::alloc_check::VIOLATIONS.load(Ordering::Relaxed)
     );
+    println!(
+        "stream builds {} (rebuilds {}), silent callbacks {}, overload reports {}, device error {}",
+        sh.generation.load(Ordering::Relaxed),
+        sh.generation.load(Ordering::Relaxed).saturating_sub(1),
+        sh.silent_callbacks.load(Ordering::Relaxed),
+        sh.overloads.load(Ordering::Relaxed),
+        sh.device_error.load(Ordering::Relaxed)
+    );
     if !injected.is_empty() {
+        println!("per stall: ms, overloads, late, overrun, largest gap ms");
+        for (i, (_, ms)) in injected.iter().enumerate() {
+            let (a, b) = (per_stall[i], per_stall[i + 1]);
+            println!(
+                "  stall {ms:7.3}  {:2}  {:2}  {:2}  {:7.3}",
+                b[0] - a[0],
+                b[1] - a[1],
+                b[2] - a[2],
+                b[3] as f64 / 1e6
+            );
+        }
         println!("injected stalls (t s, ms): {:?}", injected.iter().map(|(t, m)| (format!("{t:.2}"), *m)).collect::<Vec<_>>());
     }
     if let Some(lb) = lb {
