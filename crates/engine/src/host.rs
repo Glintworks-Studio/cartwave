@@ -178,6 +178,7 @@ fn build(
     let ch = channels as usize;
     let err_flag = err.clone();
     let wake = host_thread.clone();
+    let err_shared = shared.clone();
     let stream = dev
         .build_output_stream(
             config,
@@ -201,6 +202,14 @@ fn build(
                     // reports this; the stream keeps running (WASAPI can't
                     // rebind and reports StreamInvalidated instead).
                     cpal::ErrorKind::DeviceChanged => return,
+                    // An overload (CoreAudio's kAudioDeviceProcessorOverload):
+                    // one late cycle, already over. The stream is fine; count it.
+                    // Rebuilding here turned every overload into a ~100 ms+
+                    // gap (ENGINE-macos.md, bug 1).
+                    cpal::ErrorKind::Xrun => {
+                        err_shared.overloads.fetch_add(1, Ordering::Relaxed);
+                        return;
+                    }
                     _ => ERR_INVALIDATED,
                 };
                 err_flag.store(k, Ordering::Release);
