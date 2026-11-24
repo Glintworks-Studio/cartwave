@@ -53,6 +53,14 @@ pub struct Tests {
     pending_shown: Option<(u64, f64)>,
     pub edits: u64,
     pub stalls: u64,
+    pub gain: Option<f32>,
+    audio_clock: Option<(u32, engine::cpu::ThreadClock)>,
+    /// (audio cycles, callbacks) and (ui cycles, frames) at the last log line.
+    last_audio: Option<(u64, u64)>,
+    last_ui: Option<(u64, u64)>,
+    /// Totals since the first log line: audio cycles/callbacks, ui cycles/frames.
+    acc: [u64; 4],
+    pub ui_frames: u64,
 }
 
 impl Tests {
@@ -88,11 +96,17 @@ impl Tests {
             pending_shown: None,
             edits: 0,
             stalls: 0,
+            gain: std::env::var("CHIPDAW_GAIN").ok().and_then(|v| v.parse().ok()),
+            audio_clock: None,
+            last_audio: None,
+            last_ui: None,
+            acc: [0; 4],
+            ui_frames: 0,
         };
         if let Some(f) = t.log.as_mut() {
             let _ = writeln!(
                 f,
-                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls"
+                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame"
             );
         }
         t
@@ -245,10 +259,38 @@ impl Tests {
         let sh = e.shared();
         let (n, mean, p99, max) = sh.callback_cost();
         let lb = self.loopback.as_ref().map_or(0, |l| l.dropouts.load(Relaxed));
+        // Per-thread cycles: audio per callback, UI per presented frame.
+        let tid = sh.audio_tid.load(Relaxed);
+        if tid != 0 && self.audio_clock.as_ref().is_none_or(|(t, _)| *t != tid) {
+            self.audio_clock = engine::cpu::ThreadClock::open(tid).map(|c| (tid, c));
+            self.last_audio = None;
+        }
+        let mut audio_k = 0.0;
+        if let Some(c) = self.audio_clock.as_ref().and_then(|(_, c)| c.cycles()) {
+            if let Some((c0, n0)) = self.last_audio {
+                if n > n0 {
+                    audio_k = (c - c0) as f64 / (n - n0) as f64 / 1e3;
+                    self.acc[0] += c - c0;
+                    self.acc[1] += n - n0;
+                }
+            }
+            self.last_audio = Some((c, n));
+        }
+        let mut ui_k = 0.0;
+        if let Some(c) = engine::cpu::current_thread_cycles() {
+            if let Some((c0, f0)) = self.last_ui {
+                if self.ui_frames > f0 {
+                    ui_k = (c - c0) as f64 / (self.ui_frames - f0) as f64 / 1e3;
+                    self.acc[2] += c - c0;
+                    self.acc[3] += self.ui_frames - f0;
+                }
+            }
+            self.last_ui = Some((c, self.ui_frames));
+        }
         if let Some(f) = self.log.as_mut() {
             let _ = writeln!(
                 f,
-                "{t:.1},{n},{},{},{},{mean:.3},{p99:.2},{max:.2},{},{},{:.2},{:.2},{},{},{},{},{},{},{},{:.2},{lb},{}",
+                "{t:.1},{n},{},{},{},{mean:.3},{p99:.2},{max:.2},{},{},{:.2},{:.2},{},{},{},{},{},{},{},{:.2},{lb},{},{audio_k:.1},{ui_k:.1}",
                 sh.xrun_starved.load(Relaxed),
                 sh.xrun_late.load(Relaxed),
                 sh.xrun_overrun.load(Relaxed),
@@ -294,6 +336,13 @@ impl Tests {
             engine::alloc_check::VIOLATIONS.load(Relaxed),
             self.stalls,
             sh.generation.load(Relaxed).saturating_sub(1),
+        );
+        let per = |c: u64, n: u64| if n > 0 { c as f64 / n as f64 / 1e3 } else { 0.0 };
+        s += &format!(
+            "# thread cycles (TSC, QueryThreadCycleTime): audio {:.1} k/callback, ui {:.1} k/presented frame
+",
+            per(self.acc[0], self.acc[1]),
+            per(self.acc[2], self.acc[3])
         );
         if let Some(lb) = &self.loopback {
             s += &format!(

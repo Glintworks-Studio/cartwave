@@ -94,6 +94,8 @@ pub struct Shared {
     pub generation: AtomicU32,
     pub device_error: AtomicU32,
     pub stream_running: AtomicBool,
+    /// The audio thread's OS id (for per-thread cycle counters).
+    pub audio_tid: AtomicU32,
     /// Stream callbacks that found the engine core missing (during rebuilds).
     pub silent_callbacks: AtomicU64,
 }

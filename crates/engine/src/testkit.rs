@@ -53,8 +53,9 @@ impl Loopback {
                         .unwrap_or(now);
                     for (i, f) in data.chunks(ch).enumerate() {
                         let x = f[0] as f64;
-                        // Click onset: loud after >= 50 ms of quiet.
-                        if x.abs() > 0.3 {
+                        // Click onset: loud after >= 50 ms of quiet. (The test
+                        // mutes the music; the click is 0.9 x output gain.)
+                        if x.abs() > 0.1 {
                             if quiet > (0.05 * sr) as usize {
                                 if let Ok(mut c) = c2.lock() {
                                     c.push(first + Duration::from_secs_f64(i as f64 / sr));

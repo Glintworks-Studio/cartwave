@@ -165,6 +165,8 @@ impl Core {
         // A second handle (an atomic increment, no allocation) so `self` stays free.
         let shared = self.shared.clone();
         let sh = &*shared;
+        sh.audio_tid
+            .store(crate::cpu::current_thread_id(), Ordering::Relaxed);
 
         // ---- underrun detectors
         self.stream_callbacks += 1;

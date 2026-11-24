@@ -276,12 +276,25 @@ impl AppState {
 
         let mut tr = self.s.transport.get_untracked();
         if tr.playing {
-            // The audio clock is the master: show what is being heard now.
+            // The audio clock is the master: show what will be heard when this
+            // frame reaches the screen (the next vblank after the last
+            // present), not what is heard while it is being prepared.
+            let now = Instant::now();
+            let show_at = match (ft.presented_at, ft.interval) {
+                (Some(p), Some(i)) if i > Duration::ZERO && i <= Duration::from_millis(50) => {
+                    let mut t = p + i;
+                    while t < now {
+                        t += i;
+                    }
+                    t
+                }
+                _ => now,
+            };
             let heard = self
                 .engine
                 .as_ref()
                 .filter(|e| e.shared().stream_running.load(std::sync::atomic::Ordering::Relaxed))
-                .and_then(|e| e.audible_position());
+                .and_then(|e| e.audible_position_at(show_at));
             match heard {
                 Some((t, true)) => tr.playhead_ticks = t,
                 _ => {
@@ -297,6 +310,7 @@ impl AppState {
         }
         self.tests
             .av_frame(ft.frame_count, ft.presented_at, tr.playhead_ticks);
+        self.tests.ui_frames = ft.frame_count;
 
         let meters = self.s.meters;
         let mut m = meters.get_untracked();
@@ -690,6 +704,9 @@ impl AppState {
         self.send(Command::Bpm(tr.bpm as f64));
         self.send(Command::LoopEnd(tr.loop_end_ticks));
         self.send(Command::Filter(self.filter));
+        if let Some(g) = self.tests.gain {
+            self.send(Command::Gain(g));
+        }
         let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
         self.send(Command::Vrc6(vrc6));
         if self.tests.pilot || self.tests.avsync {

@@ -10,6 +10,7 @@
 pub mod alloc_check;
 pub mod command;
 pub mod core;
+pub mod cpu;
 mod host;
 pub mod shared;
 pub mod song;
@@ -141,11 +142,17 @@ impl Engine {
         self.sample_rate
     }
 
-    /// The song position being heard right now (ticks), compensated for the
-    /// output latency the driver reports, plus whether it is playing.
-    /// `None` before the first callback or while commands are in flight
-    /// (the caller should keep showing what it requested).
+    /// The song position being heard right now; see `audible_position_at`.
     pub fn audible_position(&self) -> Option<(f64, bool)> {
+        self.audible_position_at(Instant::now())
+    }
+
+    /// The song position (ticks) that will be heard at `at`, compensated for
+    /// the output latency the driver reports, plus whether it is playing.
+    /// `None` before the first callback or while commands are in flight
+    /// (the caller should keep showing what it requested). The UI asks for
+    /// the time its next frame will be presented, not "now".
+    pub fn audible_position_at(&self, at: Instant) -> Option<(f64, bool)> {
         if self.pending() > 0 {
             return None;
         }
@@ -153,7 +160,7 @@ impl Engine {
         if !p.playing {
             return Some((p.ticks, false));
         }
-        let now = self.now_ns() as f64;
+        let now = at.saturating_duration_since(self.epoch).as_nanos() as f64;
         let sr = p.sample_rate.max(1) as f64;
         // Frames since the first frame of the last buffer reached the speaker.
         let mut frames = (now - p.callback_ns as f64 - p.latency_ns as f64) * sr / 1e9;
