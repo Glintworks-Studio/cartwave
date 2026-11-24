@@ -197,6 +197,10 @@ fn build(
             move |e: cpal::Error| {
                 let k = match e.kind() {
                     cpal::ErrorKind::DeviceNotAvailable => ERR_DEVICE_GONE,
+                    // CoreAudio reroutes a default-device stream by itself and
+                    // reports this; the stream keeps running (WASAPI can't
+                    // rebind and reports StreamInvalidated instead).
+                    cpal::ErrorKind::DeviceChanged => return,
                     _ => ERR_INVALIDATED,
                 };
                 err_flag.store(k, Ordering::Release);
