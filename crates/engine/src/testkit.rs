@@ -1,6 +1,11 @@
 //! Test instrumentation (not a user feature): WASAPI loopback capture of the
 //! output, as ground truth for dropouts and for A/V sync.
 //!
+//! On macOS this in-process capture is refused for output devices that also
+//! have inputs: cpal then records the physical inputs, not the output (it only
+//! builds a process tap for output-only devices). The macOS ground truth is
+//! the external `docs/engine/tools/macos/tapmon` (ENGINE-macos.md §3).
+//!
 //! - Dropouts: the engine mixes a quiet pilot tone (`Command::TestPilot`); a
 //!   Goertzel filter over 128-frame blocks flags blocks where the pilot falls
 //!   below 30% of its running level.
@@ -28,6 +33,9 @@ impl Loopback {
     pub fn start(pilot_hz: Option<f32>) -> Result<Self, String> {
         let host = cpal::default_host();
         let dev = host.default_output_device().ok_or("no output device")?;
+        if cfg!(target_os = "macos") && dev.supports_input() {
+            return Err("the output device also has inputs, so cpal would record them instead of the output; use tapmon".into());
+        }
         let cfg = dev.default_output_config().map_err(|e| e.to_string())?;
         let ch = cfg.channels() as usize;
         let sr = cfg.sample_rate() as f64;

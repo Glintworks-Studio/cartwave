@@ -24,6 +24,29 @@ use engine::cpu::Counts;
 use engine::testkit::Loopback;
 use engine::Engine;
 
+/// The host clock now, in ns (`mach_absolute_time`, the clock behind
+/// `Instant` on macOS). `None` elsewhere.
+fn host_ns_now() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn mach_absolute_time() -> u64;
+            fn mach_timebase_info(info: *mut [u32; 2]) -> i32;
+        }
+        let mut tb = [0u32; 2];
+        // SAFETY: plain libc calls with a valid out-pointer.
+        let t = unsafe {
+            mach_timebase_info(&mut tb);
+            mach_absolute_time()
+        };
+        Some((t as u128 * tb[0] as u128 / tb[1].max(1) as u128) as u64)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
 fn zero_counts() -> Counts {
     // Zeros (not None) so `add` accumulates on platforms that measure them.
     Counts { cycles: 0, instructions: Some(0), energy_nj: Some(0), p_ns: Some(0), e_ns: Some(0) }
@@ -56,6 +79,7 @@ pub struct Tests {
     pub buffer: Option<u32>,
     pub filter: Option<engine::FilterMode>,
     log: Option<File>,
+    log_path: Option<String>,
     quit_after: Option<f64>,
     start: Instant,
     next_stall: f64,
@@ -84,9 +108,8 @@ pub struct Tests {
 
 impl Tests {
     pub fn from_env() -> Self {
-        let log = std::env::var("CHIPDAW_AUDIOLOG")
-            .ok()
-            .and_then(|p| File::create(p).ok());
+        let log_path = std::env::var("CHIPDAW_AUDIOLOG").ok();
+        let log = log_path.as_ref().and_then(|p| File::create(p).ok());
         let filter = std::env::var("CHIPDAW_FILTER").ok().and_then(|v| match v.as_str() {
             "off" => Some(engine::FilterMode::Off),
             "nes" => Some(engine::FilterMode::Nes),
@@ -104,6 +127,7 @@ impl Tests {
             buffer: std::env::var("CHIPDAW_BUFFER").ok().and_then(|v| v.parse().ok()),
             filter,
             log,
+            log_path,
             quit_after: std::env::var("CHIPDAW_QUIT_AFTER").ok().and_then(|v| v.parse().ok()),
             start: Instant::now(),
             next_stall: 2.0,
@@ -421,6 +445,9 @@ impl Tests {
             sh.overloads.load(Relaxed),
             sh.silent_callbacks.load(Relaxed)
         );
+        if self.avsync {
+            s += &self.write_crossings();
+        }
         if let Some(lb) = &self.loopback {
             s += &format!(
                 "# loopback: {} blocks, {} pilot dropouts\n",
@@ -438,8 +465,8 @@ impl Tests {
         eprint!("{s}");
     }
 
-    /// Pairs each visual marker crossing with the nearest audible click.
-    fn av_report(&self, lb: &Loopback) -> String {
+    /// When the presented playhead crossed the A/V marker.
+    fn crossings(&self) -> Vec<Instant> {
         let mut crossings = Vec::new();
         for w in self.shown.windows(2) {
             let ((t0, p0), (t1, p1)) = (w[0], w[1]);
@@ -448,6 +475,34 @@ impl Tests {
                 crossings.push(t0 + (t1 - t0).mul_f64(f));
             }
         }
+        crossings
+    }
+
+    /// Writes the marker crossings as host-clock ns (`mach_absolute_time` in
+    /// ns, the clock of `Instant` and of tapmon's events) to
+    /// `<CHIPDAW_AUDIOLOG>.crossings.csv`, for pairing with clicks captured
+    /// outside the app (macOS).
+    fn write_crossings(&self) -> String {
+        let (Some(path), Some(now_host)) = (self.log_path.as_ref(), host_ns_now()) else {
+            return String::new();
+        };
+        let now = Instant::now();
+        let mut out = String::from("crossing_host_ns\n");
+        let c = self.crossings();
+        for t in &c {
+            let back = now.saturating_duration_since(*t).as_nanos() as u64;
+            out += &format!("{}\n", now_host - back);
+        }
+        let file = format!("{path}.crossings.csv");
+        match std::fs::write(&file, out) {
+            Ok(()) => format!("# avsync: {} marker crossings written to {file}\n", c.len()),
+            Err(e) => format!("# avsync: can't write {file}: {e}\n"),
+        }
+    }
+
+    /// Pairs each visual marker crossing with the nearest audible click.
+    fn av_report(&self, lb: &Loopback) -> String {
+        let crossings = self.crossings();
         let clicks = lb.clicks.lock().map(|c| c.clone()).unwrap_or_default();
         let mut offs: Vec<f64> = Vec::new();
         for v in &crossings {
