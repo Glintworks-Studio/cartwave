@@ -190,8 +190,8 @@ impl Core {
         }
         self.capacity = self.capacity.max(frames);
         // (2) Late: more time passed since the last callback than the whole
-        // device buffer holds. Coarser (it missed 22-23 ms stalls on a 23.5 ms
-        // buffer); kept as an independent second signal.
+        // device buffer holds. Coarser on WASAPI (it missed 22-23 ms stalls on
+        // a 23.5 ms buffer); kept as an independent second signal.
         if let Some(prev) = self.prev_any_cb_ns {
             sh.max_gap_ns.fetch_max(t0 - prev, Ordering::Relaxed);
         }
@@ -199,7 +199,18 @@ impl Core {
         if let Some(last) = self.last_cb_ns {
             let gap = t0 - last;
             let capacity_ns = self.capacity as u64 * 1_000_000_000 / sr;
-            if warm && gap > capacity_ns {
+            // CoreAudio calls back with exactly one period every time, so the
+            // largest callback is the period and ordinary scheduling jitter
+            // (measured up to 2.3% at 64 frames) would cross it. When no
+            // callback has been bigger than the period, allow 1/8 of it (at
+            // least 0.25 ms). WASAPI's first callback is the whole device
+            // buffer, so its threshold is unchanged.
+            let jitter_ns = if self.capacity == self.period_frames {
+                (capacity_ns / 8).max(250_000)
+            } else {
+                0
+            };
+            if warm && gap > capacity_ns + jitter_ns {
                 sh.xrun_late.fetch_add(1, Ordering::Relaxed);
             }
         }
