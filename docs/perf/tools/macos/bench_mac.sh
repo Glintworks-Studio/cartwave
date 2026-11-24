@@ -1,5 +1,5 @@
 #!/bin/bash
-# usage: bench_mac.sh [label] [secs=12] [caps="off 60 120 display"] [scenarios="idle demo 200 drag"]
+# usage: bench_mac.sh [label] [secs=12] [caps="off 60 120"] [scenarios="idle demo 200 drag"]
 #
 # macOS counterpart of bench.ps1: process CPU (+ P-core share, energy) for every
 # scenario x frame-rate cap. One fresh app launch per cell. Results are appended
