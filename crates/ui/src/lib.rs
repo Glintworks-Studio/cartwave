@@ -76,6 +76,9 @@ pub struct AppState {
     song_key: u64,
     song_version: u64,
     filter: FilterMode,
+    /// The user picked the filter (F7 or `CHIPDAW_FILTER`); it no longer
+    /// follows the chip.
+    filter_manual: bool,
     note_ons: [u32; 8],
     /// When each lane's last note-on becomes audible (lights wait for it).
     light_due: [Option<Instant>; 8],
@@ -158,6 +161,11 @@ impl Model for AppState {
                 });
                 let on = self.s.chip.get_untracked() == SoundChip::WithVrc6;
                 self.send(Command::Vrc6(on));
+                if !self.filter_manual {
+                    self.filter = FilterMode::default_for(on);
+                    self.send(Command::Filter(self.filter));
+                    self.last_audio_stats = None;
+                }
             }
             AppEvent::ToggleMute(i) => {
                 self.s.mute.update(|m| *m ^= 1 << *i);
@@ -173,6 +181,7 @@ impl Model for AppState {
                 let all = FilterMode::ALL;
                 let i = all.iter().position(|m| *m == self.filter).unwrap_or(0);
                 self.filter = all[(i + 1) % all.len()];
+                self.filter_manual = true;
                 self.send(Command::Filter(self.filter));
                 self.last_audio_stats = None;
             }
@@ -443,6 +452,7 @@ impl AppState {
                 device: e.device_info(),
                 running,
                 filter: self.filter.label(),
+                filter_auto: !self.filter_manual,
                 frames_per_cb: sh.cb_frames_last.load(Relaxed),
                 latency_ms: sh.position().map_or(0.0, |p| p.latency_ns as f32 / 1e6),
                 cb_mean: mean as f32,
@@ -610,6 +620,8 @@ pub fn build_ui(cx: &mut Context) {
     register_fonts(cx);
     add_styles(cx);
 
+    // The default chip; the default output filter follows it.
+    let chip = SoundChip::WithVrc6;
     let s = Signals {
         arrangement: Signal::new(mock::demo_arrangement()),
         transport: Signal::new(Transport {
@@ -626,7 +638,7 @@ pub fn build_ui(cx: &mut Context) {
         solo: Signal::new(0),
         audio: Signal::new(AudioStats::default()),
         audio_msg: Signal::new(String::new()),
-        chip: Signal::new(SoundChip::WithVrc6),
+        chip: Signal::new(chip),
         stats: Signal::new(FrameStats::default()),
         frame: Signal::new(0),
         stress: Signal::new(false),
@@ -659,7 +671,10 @@ pub fn build_ui(cx: &mut Context) {
         params: Params::default(),
         song_key: 0,
         song_version: 0,
-        filter: tests.filter.unwrap_or_default(),
+        filter: tests
+            .filter
+            .unwrap_or(FilterMode::default_for(chip == SoundChip::WithVrc6)),
+        filter_manual: tests.filter.is_some(),
         note_ons: [0; 8],
         light_due: [None; 8],
         last_audio_stats: None,

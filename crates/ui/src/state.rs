@@ -476,6 +476,8 @@ pub struct AudioStats {
     pub device: String,
     pub running: bool,
     pub filter: &'static str,
+    /// The filter follows the chip (false once the user picks one with F7).
+    pub filter_auto: bool,
     pub frames_per_cb: u32,
     pub latency_ms: f32,
     pub cb_mean: f32,

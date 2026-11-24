@@ -30,6 +30,18 @@ pub enum FilterMode {
 impl FilterMode {
     pub const ALL: [FilterMode; 4] = [Self::Off, Self::Nes, Self::NesWith440, Self::Famicom];
 
+    /// The default output stage for a chip configuration. VRC6 expansion
+    /// audio only existed on the Famicom (its cartridge pins carry expansion
+    /// audio; the NES's don't), so with VRC6 it is the Famicom stage, and with
+    /// the 2A03 alone the NES one.
+    pub fn default_for(vrc6: bool) -> Self {
+        if vrc6 {
+            Self::Famicom
+        } else {
+            Self::Nes
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Off => "off",
@@ -159,6 +171,12 @@ impl OutputFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_follows_the_chip() {
+        assert_eq!(FilterMode::default_for(true), FilterMode::Famicom);
+        assert_eq!(FilterMode::default_for(false), FilterMode::Nes);
+    }
 
     #[test]
     fn cutoffs_are_minus_3db() {

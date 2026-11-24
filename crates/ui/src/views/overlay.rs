@@ -114,8 +114,11 @@ impl View for StatsOverlay {
         lines.push((format!("  {dev}"), TEXT_LO.mix(TEXT_HI, 0.5)));
         lines.push((
             format!(
-                "  {} fr/cb  lat {:5.1} ms  filter {}",
-                a.frames_per_cb, a.latency_ms, a.filter
+                "  {} fr/cb  lat {:5.1} ms  filter {} ({})",
+                a.frames_per_cb,
+                a.latency_ms,
+                a.filter,
+                if a.filter_auto { "auto" } else { "set" }
             ),
             TEXT_HI,
         ));
