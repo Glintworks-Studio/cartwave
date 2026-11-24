@@ -307,6 +307,7 @@ impl AppState {
             match heard {
                 Some((t, true)) => tr.playhead_ticks = t,
                 _ => {
+                    self.tests.playhead_local_frames += 1;
                     // No audio (or a command in flight): integrate locally.
                     let ticks_per_sec = tr.bpm as f64 / 60.0 * PPQ as f64;
                     tr.playhead_ticks += ticks_per_sec * dt as f64;
@@ -492,6 +493,7 @@ impl AppState {
             return;
         }
         self.applied = Some((self.cap, display_hz));
+        self.tests.display_hz = display_hz;
         cx.set_max_frame_rate(self.cap.max_fps());
         let cap = self.cap;
         self.s.stats.update(|s| {

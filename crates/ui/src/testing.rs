@@ -104,6 +104,14 @@ pub struct Tests {
     acc_ui: (Counts, u64),
     acc_proc: (Counts, f64),
     pub ui_frames: u64,
+    /// Frames where the playhead was integrated locally instead of read from
+    /// the audio clock (no stream, or a command in flight), since the last line.
+    pub playhead_local_frames: u64,
+    /// Refresh rate of the display the window is on (for the display-move test).
+    pub display_hz: Option<f64>,
+    last_tick: Option<Instant>,
+    /// Largest gap between UI pump ticks since the last line (App Nap, stalls).
+    tick_gap_max: Duration,
 }
 
 impl Tests {
@@ -148,11 +156,15 @@ impl Tests {
             acc_ui: (zero_counts(), 0),
             acc_proc: (zero_counts(), 0.0),
             ui_frames: 0,
+            playhead_local_frames: 0,
+            display_hz: None,
+            last_tick: None,
+            tick_gap_max: Duration::ZERO,
         };
         if let Some(f) = t.log.as_mut() {
             let _ = writeln!(
                 f,
-                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame,audio_kinstr_per_cb,audio_uj_per_cb,audio_p_share,ui_kinstr_per_frame,ui_uj_per_frame,ui_p_share,proc_minstr_per_s,proc_mw,proc_p_share,overloads,silent_callbacks"
+                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame,audio_kinstr_per_cb,audio_uj_per_cb,audio_p_share,ui_kinstr_per_frame,ui_uj_per_frame,ui_p_share,proc_minstr_per_s,proc_mw,proc_p_share,overloads,silent_callbacks,ui_tick_gap_max_ms,playhead_local_frames,display_hz,max_gap_ms"
             );
         }
         t
@@ -162,8 +174,14 @@ impl Tests {
         self.start.elapsed().as_secs_f64()
     }
 
-    /// Test C: busy-wait 250 ms every 2 s.
+    /// Test C: busy-wait 250 ms every 2 s. Called at the start of every pump
+    /// tick, so it also records the largest gap between ticks.
     pub fn maybe_stall(&mut self) {
+        let now = Instant::now();
+        if let Some(t) = self.last_tick {
+            self.tick_gap_max = self.tick_gap_max.max(now - t);
+        }
+        self.last_tick = Some(now);
         if self.ui_stall && self.elapsed() >= self.next_stall {
             self.next_stall += 2.0;
             self.stalls += 1;
@@ -360,6 +378,15 @@ impl Tests {
             sh.overloads.load(Relaxed),
             sh.silent_callbacks.load(Relaxed),
         );
+        let extra = format!(
+            "{extra},{:.1},{},{},{:.2}",
+            self.tick_gap_max.as_secs_f64() * 1e3,
+            self.playhead_local_frames,
+            self.display_hz.map_or(String::new(), |h| format!("{h:.0}")),
+            sh.max_gap_ns.load(Relaxed) as f64 / 1e6,
+        );
+        self.tick_gap_max = Duration::ZERO;
+        self.playhead_local_frames = 0;
         if let Some(f) = self.log.as_mut() {
             let _ = writeln!(
                 f,
@@ -445,6 +472,22 @@ impl Tests {
             sh.overloads.load(Relaxed),
             sh.silent_callbacks.load(Relaxed)
         );
+        // Callback cost histogram (0.1%-of-period buckets; the last is >= 20%).
+        let hist: Vec<String> = sh
+            .cb_hist
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                let c = c.load(Relaxed);
+                (c > 0).then(|| format!("{i}:{c}"))
+            })
+            .collect();
+        s += &format!("# cb_hist_permille: {}\n", hist.join(" "));
+        if let Some(now) = host_ns_now() {
+            // For lining up events captured outside the app (tapmon).
+            let start = now - self.start.elapsed().as_nanos() as u64;
+            s += &format!("# window_host_ns: {start} {now}\n");
+        }
         if self.avsync {
             s += &self.write_crossings();
         }
