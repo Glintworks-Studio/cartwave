@@ -54,6 +54,9 @@ pub struct AppState {
     last_frame_seen: u64,
     cpu: perf::CpuMeter,
     frame_log: perf::FrameLog,
+    cap: FrameCap,
+    /// The (cap, display rate) last applied to the backend and the pump.
+    applied: Option<(FrameCap, Option<f64>)>,
 }
 
 pub enum AppEvent {
@@ -69,6 +72,7 @@ pub enum AppEvent {
     CycleSnap,
     ToggleStats,
     ToggleStress,
+    CycleFrameCap,
     RenameSelected(String),
 }
 
@@ -101,6 +105,10 @@ impl Model for AppState {
             }),
             AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
             AppEvent::ToggleStats => self.s.stats.update(|s| s.visible = !s.visible),
+            AppEvent::CycleFrameCap => {
+                self.cap = self.cap.next();
+                self.apply_frame_cap(cx);
+            }
             AppEvent::ToggleStress => {
                 let on = !self.s.stress.get();
                 self.s.stress.set(on);
@@ -142,6 +150,7 @@ impl Model for AppState {
                     Code::F3 => cx.emit(AppEvent::ToggleStats),
                     Code::F4 => cx.emit(AppEvent::ToggleStress),
                     Code::F5 => cx.emit(WindowEvent::ReloadStyles),
+                    Code::F6 => cx.emit(AppEvent::CycleFrameCap),
                     _ => {}
                 }
             }
@@ -158,6 +167,8 @@ impl AppState {
     /// vsync-spaced present interval, gives evenly spaced motion without the
     /// drift (and periodic dropped/doubled frame) of a free-running clock.
     fn tick(&mut self, cx: &mut EventContext) {
+        // Re-applies the cap if the window moved to a display with another rate.
+        self.apply_frame_cap(cx);
         let ft = cx.frame_timings();
         self.adapt_pump(cx, &ft);
         // Without presents for this long (idle, minimized), fall back to wall time.
@@ -213,6 +224,23 @@ impl AppState {
 }
 
 impl AppState {
+    /// Passes the frame-rate cap to the backend. The pump stays at 4 ms for
+    /// every cap: neither a shorter pump at 320 Hz nor a half-frame pump at
+    /// 60 fps lowered CPU (PERF-macos.md §7).
+    fn apply_frame_cap(&mut self, cx: &mut EventContext) {
+        let display_hz = cx.display_refresh_rate();
+        if self.applied == Some((self.cap, display_hz)) {
+            return;
+        }
+        self.applied = Some((self.cap, display_hz));
+        cx.set_max_frame_rate(self.cap.max_fps(display_hz));
+        let cap = self.cap;
+        self.s.stats.update(|s| {
+            s.cap = cap;
+            s.display_hz = display_hz;
+        });
+    }
+
     /// Runs the pump fast only while something animates; idle wakes it rarely.
     fn adapt_pump(&mut self, cx: &mut EventContext, ft: &FrameTimings) {
         const STAY_FAST: Duration = Duration::from_millis(250);
@@ -295,8 +323,8 @@ impl AppState {
     }
 }
 
-/// Animation pump interval. Must be shorter than a display refresh; the
-/// model still advances only once per presented frame (see `AppState::tick`).
+/// Animation pump interval. Must be shorter than a frame; the model still
+/// advances only once per presented frame (see `AppState::tick`).
 const ANIMATION_PUMP: Duration = Duration::from_millis(4);
 /// Pump interval while nothing animates (meter decay etc. still settles).
 const IDLE_PUMP: Duration = Duration::from_millis(50);
@@ -370,6 +398,8 @@ pub fn build_ui(cx: &mut Context) {
         last_frame_seen: 0,
         cpu: perf::CpuMeter::default(),
         frame_log: perf::FrameLog::from_env(),
+        cap: FrameCap::from_env(),
+        applied: None,
     }
     .build(cx);
 

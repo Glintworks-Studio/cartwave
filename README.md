@@ -37,6 +37,7 @@ Layout: `crates/ui` is the library (views, theme, state; reusable in a plugin ho
 | | `F3` | Frame-time overlay |
 | | `F4` | Toggle the 200-clip stress set |
 | | `F5` | Reload stylesheets |
+| | `F6` | Cycle the frame-rate cap: off / 60 / 120 / display rate (shown in F3) |
 | Arrangement | Click / `Shift`-click | Select / add to selection |
 | | Drag clip body | Move (time and lane), snapped to the grid |
 | | Drag clip edge | Resize |
@@ -52,7 +53,10 @@ Layout: `crates/ui` is the library (views, theme, state; reusable in a plugin ho
 | BPM / Pos fields | Drag, wheel | Scrub value (`Shift`: fine, BPM) |
 | | Double-click | Reset (150 BPM / start) |
 
-Set `CHIPDAW_FRAMELOG=<path>` to write a per-frame CSV log (frame timings by phase).
+Set `CHIPDAW_FRAMELOG=<path>` to write a per-frame CSV log (frame timings by phase), and
+`CHIPDAW_FPS_CAP=off|60|120|display` to start with a frame-rate cap (default `off`; see
+[PERF-macos.md](PERF-macos.md)). On macOS the modifier mappings follow Mac conventions; they are
+defined in `crates/ui/src/input.rs`.
 
 ## Documents
 

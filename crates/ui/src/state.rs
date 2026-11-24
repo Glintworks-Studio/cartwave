@@ -360,6 +360,9 @@ impl SoundChip {
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct FrameStats {
     pub visible: bool,
+    /// Active frame-rate cap and the display's refresh rate, for the header line.
+    pub cap: FrameCap,
+    pub display_hz: Option<f64>,
     /// Smoothed interval between presented frames, ms.
     pub frame_ms: f32,
     /// Worst presented-frame interval in the last second, ms.
@@ -383,3 +386,58 @@ pub const PHASE_NAMES: [&str; 7] = [
     "flush",
     "present",
 ];
+
+/// Frame-rate cap (F6 cycles; start value from `CHIPDAW_FPS_CAP=off|60|120|display`).
+///
+/// `Off` presents as often as vsync allows; the others ask the backend for
+/// fixed-rate frame slots. On a 60 Hz display they all behave the same. The
+/// product default is still to be decided (PERF-macos.md); `Off` keeps the
+/// behaviour PERF.md measured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FrameCap {
+    #[default]
+    Off,
+    Fps60,
+    Fps120,
+    /// The refresh rate of the display the window is on.
+    Display,
+}
+
+impl FrameCap {
+    pub fn from_env() -> Self {
+        match std::env::var("CHIPDAW_FPS_CAP").as_deref() {
+            Ok("60") => Self::Fps60,
+            Ok("120") => Self::Fps120,
+            Ok("display") => Self::Display,
+            _ => Self::Off,
+        }
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Fps60,
+            Self::Fps60 => Self::Fps120,
+            Self::Fps120 => Self::Display,
+            Self::Display => Self::Off,
+        }
+    }
+
+    /// The frame-rate limit to request from the backend.
+    pub fn max_fps(self, display_hz: Option<f64>) -> Option<f64> {
+        match self {
+            Self::Off => None,
+            Self::Fps60 => Some(60.0),
+            Self::Fps120 => Some(120.0),
+            Self::Display => display_hz,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Fps60 => "60",
+            Self::Fps120 => "120",
+            Self::Display => "display",
+        }
+    }
+}

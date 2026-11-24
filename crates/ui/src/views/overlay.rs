@@ -14,7 +14,7 @@ const WIDTH: f32 = 300.0;
 const LINE_H: f32 = 16.0;
 const PAD: f32 = 12.0;
 /// Header lines + blank + phases + blank + spans.
-const LINES: usize = 4 + 1 + PHASE_NAMES.len() + 1 + SPANS.len();
+const LINES: usize = 5 + 1 + PHASE_NAMES.len() + 1 + SPANS.len();
 
 pub struct StatsOverlay {
     s: Signals,
@@ -72,6 +72,14 @@ impl View for StatsOverlay {
                 },
             ),
             (format!("cpu    {:6.1} %  process", st.cpu_percent), TEXT_HI),
+            (
+                format!(
+                    "cap    {:<7} display {}",
+                    st.cap.label(),
+                    st.display_hz.map_or("?".into(), |hz| format!("{hz:.0} Hz"))
+                ),
+                TEXT_HI,
+            ),
             (
                 format!("clips  {:6}    frames {}", st.clip_count, st.frames),
                 TEXT_LO,

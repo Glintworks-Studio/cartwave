@@ -1,0 +1,318 @@
+From 40ef8cfeaefaa09c77171375e037ca04c99e065a Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 23:42:13 -0600
+Subject: [PATCH] winit: optional frame-rate limit and the display's refresh
+ rate
+
+Problem: on high-refresh displays an app that animates continuously renders
+at the full refresh rate (or as fast as the swap allows), and there is no way
+to ask for fewer frames. Throttling in app code only covers the app's own
+animation: input-driven redraws (a drag at the mouse's report rate) and CSS
+transitions still request frames as fast as they come. Apps also cannot see
+the display's refresh rate to make that decision.
+
+Fix:
+- `EventContext::set_max_frame_rate(Option<f64>)` (also on `Context`): the
+  winit backend requests a redraw only once the next frame slot has come and
+  otherwise sleeps until it (`ControlFlow::WaitUntil`). Redraws are deferred,
+  never dropped. Slots are fixed-rate (slot += interval), so the average rate
+  is the limit even when it doesn't divide the refresh rate; after a stall the
+  schedule restarts from "now" instead of bursting. Pacing from "last present +
+  interval" instead would round every frame up to the next vblank (e.g. 53 fps
+  for a 60 fps limit on a 320 Hz display).
+- `display_refresh_rate()`: the root window's monitor refresh rate from winit
+  (`MonitorHandle::refresh_rate_millihertz`), updated when the window moves or
+  its scale factor changes.
+
+Default: no limit, so behaviour is unchanged unless an app opts in.
+
+Tested (macOS 26, M1, 320 Hz display, OpenGL-on-Metal): ChipDAW prototype
+with a 60 / 120 fps limit presents 60.0 / 120.1 frames per second with p99
+frame interval 21.5 / 10.2 ms (E-core scheduling and vblank quantization
+widen the 60 fps spread); the 200-clip drag (mouse events at 125 Hz) stays
+at the limit (60.0 / 120.0 fps). With no limit set, frame rate and CPU are
+unchanged within run-to-run noise.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_core/src/context/backend.rs      | 11 ++++
+ crates/vizia_core/src/context/event.rs        | 29 +++++++--
+ .../vizia_core/src/context/frame_timings.rs   | 14 +++-
+ crates/vizia_core/src/context/mod.rs          | 11 ++++
+ crates/vizia_winit/src/application.rs         | 64 ++++++++++++++++---
+ 5 files changed, 113 insertions(+), 16 deletions(-)
+
+diff --git a/crates/vizia_core/src/context/backend.rs b/crates/vizia_core/src/context/backend.rs
+index 34a4532d..27c29eac 100644
+--- a/crates/vizia_core/src/context/backend.rs
++++ b/crates/vizia_core/src/context/backend.rs
+@@ -136,6 +136,17 @@ impl BackendContext {
+         self.0.frame_timings.finish_frame(presented_at);
+     }
+ 
++    /// Minimum time between the starts of two frames requested by the app via
++    /// `set_max_frame_rate`, if any. Backends that pace frames should honour it.
++    pub fn min_frame_interval(&self) -> Option<Duration> {
++        self.0.frame_timings.min_frame_interval()
++    }
++
++    /// Reports the refresh rate (Hz) of the display showing the window.
++    pub fn set_display_refresh_rate(&mut self, hz: Option<f64>) {
++        self.0.frame_timings.display_refresh_rate = hz;
++    }
++
+     /// Calls the draw system.
+     pub fn draw(
+         &mut self,
+diff --git a/crates/vizia_core/src/context/event.rs b/crates/vizia_core/src/context/event.rs
+index 51113e60..d612031b 100644
+--- a/crates/vizia_core/src/context/event.rs
++++ b/crates/vizia_core/src/context/event.rs
+@@ -22,7 +22,7 @@ use crate::text::TextContext;
+ #[cfg(feature = "clipboard")]
+ use copypasta::ClipboardProvider;
+ 
+-use super::{LocalizationContext, ModelData};
++use super::{FrameTimingState, LocalizationContext, ModelData};
+ 
+ type Views = HashMap<Entity, Box<dyn ViewHandler>>;
+ type Models = HashMap<Entity, HashMap<TypeId, Box<dyn ModelData>>>;
+@@ -87,7 +87,7 @@ pub struct EventContext<'a> {
+     clipboard: &'a mut Box<dyn ClipboardProvider>,
+     pub(crate) event_proxy: &'a mut Option<Box<dyn crate::context::EventProxy>>,
+     pub(crate) drop_data: &'a mut Option<DropData>,
+-    pub(crate) frame_timings: &'a FrameTimings,
++    pub(crate) frame_timings: &'a mut FrameTimingState,
+     pub windows: &'a mut HashMap<Entity, WindowState>,
+ }
+ 
+@@ -140,7 +140,7 @@ impl<'a> EventContext<'a> {
+             clipboard: &mut cx.clipboard,
+             event_proxy: &mut cx.event_proxy,
+             drop_data: &mut cx.drop_data,
+-            frame_timings: &cx.frame_timings.last,
++            frame_timings: &mut cx.frame_timings,
+             windows: &mut cx.windows,
+         }
+     }
+@@ -174,7 +174,7 @@ impl<'a> EventContext<'a> {
+             clipboard: &mut cx.clipboard,
+             event_proxy: &mut cx.event_proxy,
+             drop_data: &mut cx.drop_data,
+-            frame_timings: &cx.frame_timings.last,
++            frame_timings: &mut cx.frame_timings,
+             windows: &mut cx.windows,
+         }
+     }
+@@ -282,7 +282,26 @@ impl<'a> EventContext<'a> {
+     /// Returns per-phase timings of the most recently presented frame, as
+     /// reported by the windowing backend. All zero if the backend does not report them.
+     pub fn frame_timings(&self) -> FrameTimings {
+-        *self.frame_timings
++        self.frame_timings.last
++    }
++
++    /// Limits how many frames per second the backend presents (`None`: no limit
++    /// beyond vsync). Redraws requested sooner are deferred, not dropped; frames
++    /// are scheduled at a fixed rate so the average matches the limit even when
++    /// it doesn't divide the display's refresh rate. Backends that don't support
++    /// it ignore it.
++    pub fn set_max_frame_rate(&mut self, fps: Option<f64>) {
++        self.frame_timings.max_frame_rate = fps;
++    }
++
++    /// The frame-rate limit set with [`set_max_frame_rate`](Self::set_max_frame_rate).
++    pub fn max_frame_rate(&self) -> Option<f64> {
++        self.frame_timings.max_frame_rate
++    }
++
++    /// Refresh rate (Hz) of the display showing the window, if the backend reports it.
++    pub fn display_refresh_rate(&self) -> Option<f64> {
++        self.frame_timings.display_refresh_rate
+     }
+ 
+     /// Converts logical points to physical pixels.
+diff --git a/crates/vizia_core/src/context/frame_timings.rs b/crates/vizia_core/src/context/frame_timings.rs
+index 19ca6328..82569955 100644
+--- a/crates/vizia_core/src/context/frame_timings.rs
++++ b/crates/vizia_core/src/context/frame_timings.rs
+@@ -70,11 +70,16 @@ impl FrameTimings {
+     }
+ }
+ 
+-/// Accumulates the in-progress frame and keeps the last completed one.
++/// Accumulates the in-progress frame and keeps the last completed one, plus
++/// the frame-pacing settings shared between the app and the backend.
+ #[derive(Debug, Default)]
+ pub(crate) struct FrameTimingState {
+     pub(crate) pending: FrameTimings,
+     pub(crate) last: FrameTimings,
++    /// Upper bound on presented frames per second requested by the app.
++    pub(crate) max_frame_rate: Option<f64>,
++    /// Refresh rate of the display the window is on, as reported by the backend.
++    pub(crate) display_refresh_rate: Option<f64>,
+ }
+ 
+ impl FrameTimingState {
+@@ -86,4 +91,11 @@ impl FrameTimingState {
+         done.frame_count = self.last.frame_count + 1;
+         self.last = done;
+     }
++
++    /// Minimum time between the starts of two frames, if a frame-rate limit is set.
++    pub(crate) fn min_frame_interval(&self) -> Option<Duration> {
++        self.max_frame_rate
++            .filter(|r| r.is_finite() && *r > 0.0)
++            .map(|r| Duration::from_secs_f64(1.0 / r))
++    }
+ }
+diff --git a/crates/vizia_core/src/context/mod.rs b/crates/vizia_core/src/context/mod.rs
+index 79e48bfa..7581dbde 100644
+--- a/crates/vizia_core/src/context/mod.rs
++++ b/crates/vizia_core/src/context/mod.rs
+@@ -279,6 +279,17 @@ impl Context {
+         self.frame_timings.last
+     }
+ 
++    /// Limits how many frames per second the backend presents. See
++    /// [`EventContext::set_max_frame_rate`].
++    pub fn set_max_frame_rate(&mut self, fps: Option<f64>) {
++        self.frame_timings.max_frame_rate = fps;
++    }
++
++    /// Refresh rate (Hz) of the display showing the window, if the backend reports it.
++    pub fn display_refresh_rate(&self) -> Option<f64> {
++        self.frame_timings.display_refresh_rate
++    }
++
+     /// Mark the application as needing to rerun the draw method
+     pub fn needs_redraw(&mut self, entity: Entity) {
+         if self.entity_manager.is_alive(entity) {
+diff --git a/crates/vizia_winit/src/application.rs b/crates/vizia_winit/src/application.rs
+index 139e40b0..382aaac5 100644
+--- a/crates/vizia_winit/src/application.rs
++++ b/crates/vizia_winit/src/application.rs
+@@ -106,6 +106,8 @@ pub struct Application {
+     event_loop_proxy: EventLoopProxy<UserEvent>,
+     windows: HashMap<WindowId, WinState>,
+     window_ids: HashMap<Entity, WindowId>,
++    /// Earliest time the next frame may start, when the app limits the frame rate.
++    next_frame_due: Option<Instant>,
+     #[cfg(feature = "accesskit")]
+     accesskit_adapter: Option<accesskit_winit::Adapter>,
+     #[cfg(feature = "accesskit")]
+@@ -164,6 +166,7 @@ impl Application {
+             event_loop_proxy: proxy,
+             windows: HashMap::new(),
+             window_ids: HashMap::new(),
++            next_frame_due: None,
+             #[cfg(feature = "accesskit")]
+             accesskit_adapter: None,
+             #[cfg(feature = "accesskit")]
+@@ -298,6 +301,9 @@ impl Application {
+         let window_id = window_state.window.id();
+         self.windows.insert(window_id, window_state);
+         self.window_ids.insert(window_entity, window_id);
++        if window_entity == Entity::root() {
++            self.cx.set_display_refresh_rate(monitor_refresh_rate(&window));
++        }
+         Ok(window)
+     }
+ 
+@@ -546,6 +552,10 @@ impl ApplicationHandler<UserEvent> for Application {
+ 
+             winit::event::WindowEvent::Moved(position) => {
+                 let window_entity = window.entity;
++                if window_entity == Entity::root() {
++                    // The window may now be on a display with a different refresh rate.
++                    self.cx.set_display_refresh_rate(monitor_refresh_rate(window.window()));
++                }
+                 self.cx.emit_window_event(
+                     window_entity,
+                     WindowEvent::WindowMoved(WindowPosition { x: position.x, y: position.y }),
+@@ -725,6 +735,9 @@ impl ApplicationHandler<UserEvent> for Application {
+             } => {
+                 self.cx.set_scale_factor(scale_factor);
+                 self.cx.needs_refresh(window.entity);
++                if window.entity == Entity::root() {
++                    self.cx.set_display_refresh_rate(monitor_refresh_rate(window.window()));
++                }
+             }
+             winit::event::WindowEvent::ThemeChanged(theme) => {
+                 let theme = match theme {
+@@ -782,11 +795,7 @@ impl ApplicationHandler<UserEvent> for Application {
+ 
+         self.cx.process_style_updates();
+ 
+-        if self.cx.process_animations() {
+-            for window in self.windows.values() {
+-                window.window().request_redraw();
+-            }
+-        }
++        let mut wants_redraw = self.cx.process_animations();
+         let style_done = Instant::now();
+         self.cx.record_frame_phase(FramePhase::Style, style_done - events_done);
+ 
+@@ -820,15 +829,39 @@ impl ApplicationHandler<UserEvent> for Application {
+                 .expect("Failed to send event");
+         }
+ 
+-        if self.cx.0.windows.iter().any(|(_, window_state)| !window_state.redraw_list.is_empty()) {
+-            for window in self.windows.values() {
+-                window.window().request_redraw();
++        wants_redraw |=
++            self.cx.0.windows.iter().any(|(_, window_state)| !window_state.redraw_list.is_empty());
++
++        // With a frame-rate limit, a redraw is requested only once the next frame
++        // slot has come; until then the loop sleeps until that slot (or a timer).
++        let mut deferred_until = None;
++        if wants_redraw {
++            let now = Instant::now();
++            match (self.cx.min_frame_interval(), self.next_frame_due) {
++                // Allow a little early: wake-ups are late more often than early,
++                // and the swap still waits for vblank.
++                (Some(_), Some(due)) if now + FRAME_SLOT_SLACK < due => deferred_until = Some(due),
++                (interval, due) => {
++                    for window in self.windows.values() {
++                        window.window().request_redraw();
++                    }
++                    // Fixed-rate slots keep the average rate at the limit even when it
++                    // doesn't divide the refresh rate; after a stall, restart from now
++                    // instead of bursting to catch up.
++                    self.next_frame_due = interval.map(|interval| {
++                        due.filter(|due| now < *due + interval).unwrap_or(now) + interval
++                    });
++                }
+             }
+         }
+ 
+         if self.control_flow != ControlFlow::Poll {
+-            if let Some(timer_time) = self.cx.get_next_timer_time() {
+-                event_loop.set_control_flow(ControlFlow::WaitUntil(timer_time));
++            let wake = match (self.cx.get_next_timer_time(), deferred_until) {
++                (Some(timer), Some(due)) => Some(timer.min(due)),
++                (timer, due) => timer.or(due),
++            };
++            if let Some(wake) = wake {
++                event_loop.set_control_flow(ControlFlow::WaitUntil(wake));
+             } else {
+                 event_loop.set_control_flow(ControlFlow::Wait);
+             }
+@@ -1208,3 +1241,14 @@ pub fn load_default_cursors(event_loop: &ActiveEventLoop) -> HashMap<CursorIcon,
+ 
+     custom_cursors
+ }
++
++/// How early a rate-limited frame may start relative to its slot.
++const FRAME_SLOT_SLACK: Duration = Duration::from_micros(500);
++
++/// Refresh rate (Hz) of the monitor the window is on, if the platform reports it.
++fn monitor_refresh_rate(window: &winit::window::Window) -> Option<f64> {
++    window
++        .current_monitor()
++        .and_then(|m| m.refresh_rate_millihertz())
++        .map(|mhz| mhz as f64 / 1000.0)
++}
+-- 
+2.54.0 (Apple Git-157)
+
