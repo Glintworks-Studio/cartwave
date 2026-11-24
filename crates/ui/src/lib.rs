@@ -199,7 +199,14 @@ impl Model for AppState {
                 } else {
                     mock::demo_arrangement()
                 });
-                if on {
+                // The stress set starts playing, in the engine too: setting
+                // only the UI transport showed "playing" while the engine
+                // stayed stopped (silent, meters idle, playhead on the local
+                // clock; ENGINE-macos.md, bug 3).
+                if on && !self.s.transport.with_untracked(|t| t.playing) {
+                    let at = self.s.transport.with_untracked(|t| t.playhead_ticks);
+                    self.send(Command::Seek(at));
+                    self.send(Command::Play);
                     self.s.transport.update(|t| t.playing = true);
                 }
             }
