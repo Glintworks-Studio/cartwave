@@ -1,6 +1,6 @@
 #!/bin/bash
 # usage: matrix_mac.sh [TESTS] [BUFFERS] [LONG_SECS] [SHORT_SECS]
-#   TESTS    space-separated, default "A B C D G E"
+#   TESTS    space-separated, default "A B C D G E" (E256: E at a fixed 256 frames)
 #   BUFFERS  default "64 128 256 512"
 #   LONG_SECS (A, B) default 600; SHORT_SECS (C, D, G) default 120
 # env:
@@ -9,7 +9,9 @@
 #   CHIPDAW_GAIN         output gain (default 0.3)
 #   CHIPDAW_SWITCH_TO    device for test E to switch to and back from
 #                        (default: the built-in speakers, matched by "Speakers")
-#   CHIPDAW_NO_TAP=1     run without the tapmon ground truth
+#   CHIPDAW_NO_TAP=1     run without tapmon
+#   CHIPDAW_PILOT_HZ     pilot frequency (default 23000: above the band-limited
+#                        synthesis, so music can't mask it; ENGINE-macos.md §3)
 #
 # The macOS counterpart of ../matrix.ps1 (ENGINE.md §7). Each run writes
 # <test>_<buffer>.csv (the app's per-second log and summary, see
@@ -28,6 +30,7 @@ SHORT="${4:-120}"
 W="${CHIPDAW_ENGINE_WORK:-${TMPDIR:-/tmp}/chipdaw-engine}"
 APP="${CHIPDAW_APP:-$REPO/target/release/app}"
 GAIN="${CHIPDAW_GAIN:-0.3}"
+PILOT="${CHIPDAW_PILOT_HZ:-23000}"
 mkdir -p "$W/bin"
 for t in tapmon coreaudio winctl; do
   if [ ! -x "$W/bin/$t" ] || [ "$HERE/$t.swift" -nt "$W/bin/$t" ]; then
@@ -45,7 +48,7 @@ run() {
   local log="$W/$name.csv" tap=""
   rm -f "$log" "$W/$name.tap.csv" "$W/$name.tap.txt" "$W/$name.actions.txt"
   if [ "${CHIPDAW_NO_TAP:-0}" != 1 ]; then
-    "$TAPMON" --secs $((secs + 60)) --device "$ORIG_DEFAULT" --events "$W/$name.tap.csv" --quiet \
+    "$TAPMON" --secs $((secs + 60)) --device "$ORIG_DEFAULT" --pilot "$PILOT" --events "$W/$name.tap.csv" --quiet \
       > "$W/$name.tap.txt" 2>&1 &
     tap=$!
     for _ in $(seq 1 50); do grep -q "tapping" "$W/$name.tap.txt" 2>/dev/null && break; sleep 0.1; done
@@ -54,7 +57,7 @@ run() {
       kill "$tap" 2>/dev/null; tap=""
     fi
   fi
-  env CHIPDAW_AUDIOLOG="$log" CHIPDAW_QUIT_AFTER="$secs" CHIPDAW_PILOT=1 CHIPDAW_GAIN="$GAIN" \
+  env CHIPDAW_AUDIOLOG="$log" CHIPDAW_QUIT_AFTER="$secs" CHIPDAW_PILOT=1 CHIPDAW_PILOT_HZ="$PILOT" CHIPDAW_GAIN="$GAIN" \
     CHIPDAW_FPS_CAP=60 "$@" "$APP" >/dev/null 2>&1 &
   local app=$!
   case "$action" in
@@ -84,6 +87,7 @@ for t in $TESTS; do
     D) for b in $BUFFERS; do run "D_$b" "$SHORT" churn CHIPDAW_BUFFER="$b" CHIPDAW_AVSYNC=1; done ;;
     G) for b in $BUFFERS; do run "G_$b" "$SHORT" none CHIPDAW_BUFFER="$b" CHIPDAW_AVSYNC=1; done ;;
     E) run "E" 50 switch CHIPDAW_AUTOPLAY=1 ;;
+    E256) run "E_256" 50 switch CHIPDAW_AUTOPLAY=1 CHIPDAW_BUFFER=256 ;;
   esac
 done
 restore_default
