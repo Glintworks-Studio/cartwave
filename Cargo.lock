@@ -3186,7 +3186,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vizia"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "skia-safe",
  "vizia_core",
@@ -3196,7 +3196,7 @@ dependencies = [
 [[package]]
 name = "vizia_core"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "accesskit",
  "bitflags 2.13.2",
@@ -3230,12 +3230,12 @@ dependencies = [
 [[package]]
 name = "vizia_id"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 
 [[package]]
 name = "vizia_input"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "bitflags 2.13.2",
  "keyboard-types",
@@ -3245,7 +3245,7 @@ dependencies = [
 [[package]]
 name = "vizia_reactive"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "parking_lot",
  "smallvec",
@@ -3254,7 +3254,7 @@ dependencies = [
 [[package]]
 name = "vizia_storage"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "vizia_id",
 ]
@@ -3262,7 +3262,7 @@ dependencies = [
 [[package]]
 name = "vizia_style"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "bitflags 2.13.2",
  "cssparser",
@@ -3277,7 +3277,7 @@ dependencies = [
 [[package]]
 name = "vizia_window"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "bitflags 2.13.2",
  "vizia_input",
@@ -3286,7 +3286,7 @@ dependencies = [
 [[package]]
 name = "vizia_winit"
 version = "0.4.0"
-source = "git+https://github.com/jeffreyfrederick/vizia?rev=40ef8cfeaefaa09c77171375e037ca04c99e065a#40ef8cfeaefaa09c77171375e037ca04c99e065a"
+source = "git+https://github.com/jeffreyfrederick/vizia?rev=54766d7744fe9c2da8f11da1dd6f499cb69554fb#54766d7744fe9c2da8f11da1dd6f499cb69554fb"
 dependencies = [
  "accesskit",
  "accesskit_winit",
