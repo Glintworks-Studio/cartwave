@@ -10,13 +10,18 @@
 //! Design (my own; see ENGINE.md for the measurements):
 //! - Kernel: Kaiser-windowed sinc, `TAPS` = 32 output samples wide, cutoff
 //!   `CUTOFF_RATIO` x fs, beta `KAISER_BETA`. Tabulated for `PHASES` = 256
-//!   sub-sample positions (1/256 sample = 0.15 CPU cycle at 48 kHz).
+//!   sub-sample positions and **linearly interpolated** between them. Without
+//!   the interpolation, the 1/256-sample timing quantisation was the noise
+//!   floor (~-57 dB for a 4 kHz 12.5% pulse; kernel length/shape made no
+//!   difference). With it, 15-bit tap quantisation became the floor (-76 dB),
+//!   so taps are 20-bit. Result: aliasing -85..-89 dB (ENGINE.md).
 //! - Exact integer arithmetic: each phase's taps are integers that sum to
-//!   exactly `UNIT`, and amplitudes are fixed-point integers, so the
+//!   exactly `UNIT`; a step `d` is split into `d0 + d1 = d` for the two
+//!   neighbouring phases; amplitudes are fixed-point integers. So the
 //!   integrator never drifts (a constant input reproduces exactly).
 //! - Latency: `TAPS / 2` output samples (0.33 ms at 48 kHz).
 //!
-//! Cost: `TAPS` multiply-adds per output change, independent of the CPU clock.
+//! Cost: 2 x `TAPS` multiply-adds per output change, independent of the CPU clock.
 
 use crate::math;
 
@@ -24,7 +29,7 @@ pub const TAPS: usize = 32;
 pub const PHASE_BITS: u32 = 8;
 pub const PHASES: usize = 1 << PHASE_BITS;
 /// Tap scale: each phase's taps sum to this.
-pub const UNIT_BITS: u32 = 15;
+pub const UNIT_BITS: u32 = 20;
 pub const UNIT: i32 = 1 << UNIT_BITS;
 /// Fixed-point amplitude scale for `add`.
 pub const AMP_BITS: u32 = 24;
@@ -37,24 +42,31 @@ pub const DELAY: usize = TAPS / 2;
 
 const FRAC_BITS: u32 = 32;
 
+/// Bits of interpolation between neighbouring phases.
+const INTERP_BITS: u32 = 16;
+
 pub struct Kernel {
-    pub taps: [[i32; TAPS]; PHASES],
+    /// Row `ph` is the kernel for a step at fraction `ph / PHASES` of a sample;
+    /// row `PHASES` (fraction 1) closes the interpolation interval.
+    pub taps: [[i32; TAPS]; PHASES + 1],
 }
 
 impl Kernel {
     pub fn new(cutoff_ratio: f64, beta: f64) -> Self {
-        let mut taps = [[0i32; TAPS]; PHASES];
+        let mut taps = [[0i32; TAPS]; PHASES + 1];
         let half = (TAPS / 2) as f64;
+        // Window half-width: one less than the delay, so that every non-zero
+        // tap of every row (fractions 0..=1) falls inside 0..TAPS.
+        let w_half = half - 1.0;
         let i0b = math::bessel_i0(beta);
         let fc2 = 2.0 * cutoff_ratio;
         for (ph, row) in taps.iter_mut().enumerate() {
-            // Centre of the phase bin.
-            let f = (ph as f64 + 0.5) / PHASES as f64;
+            let f = ph as f64 / PHASES as f64;
             let mut vals = [0f64; TAPS];
             let mut sum = 0.0;
             for (j, v) in vals.iter_mut().enumerate() {
                 let x = j as f64 - f - half; // distance from the step, minus the delay
-                let r = x / half;
+                let r = x / w_half;
                 let w = if math::abs(r) >= 1.0 {
                     0.0
                 } else {
@@ -137,10 +149,12 @@ impl Blep {
         let p = self.pos(cycle);
         let i = (p >> FRAC_BITS) as usize;
         let ph = ((p >> (FRAC_BITS - PHASE_BITS)) as usize) & (PHASES - 1);
-        let k = &self.kernel.taps[ph];
-        let d = d as i64;
-        for (b, &t) in self.buf[i..i + TAPS].iter_mut().zip(k.iter()) {
-            *b += d * t as i64;
+        let frac = ((p >> (FRAC_BITS - PHASE_BITS - INTERP_BITS)) & ((1 << INTERP_BITS) - 1)) as i64;
+        let d1 = (d as i64 * frac) >> INTERP_BITS;
+        let d0 = d as i64 - d1;
+        let (k0, k1) = (&self.kernel.taps[ph], &self.kernel.taps[ph + 1]);
+        for ((b, &t0), &t1) in self.buf[i..i + TAPS].iter_mut().zip(k0.iter()).zip(k1.iter()) {
+            *b += d0 * t0 as i64 + d1 * t1 as i64;
         }
     }
 

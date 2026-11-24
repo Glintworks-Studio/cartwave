@@ -1,7 +1,7 @@
 //! 2A03 pulse channel. NESdev "APU Pulse" (incl. the sweep section).
 
 use crate::tables::PULSE_DUTY;
-use crate::units::{Envelope, LengthCounter};
+use crate::units::{catch_up_timer, Envelope, LengthCounter};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pulse {
@@ -74,6 +74,18 @@ impl Pulse {
     pub fn clock_timer(&mut self) {
         self.step = (self.step + 1) & 7;
         self.timer_left = 2 * (self.period as u32 + 1);
+    }
+
+    /// Output is 0 whatever the sequencer does, until a register write or a
+    /// frame-counter clock changes something.
+    pub fn can_sleep(&self) -> bool {
+        !self.len.active() || self.sweep_muted() || self.env.output() == 0
+    }
+
+    /// Advances the timer and sequencer by `elapsed` cycles in closed form.
+    pub fn catch_up(&mut self, elapsed: u64) {
+        let n = catch_up_timer(&mut self.timer_left, 2 * (self.period as u64 + 1), elapsed);
+        self.step = ((self.step as u64 + n) & 7) as u8;
     }
 
     pub fn target_period(&self) -> u32 {

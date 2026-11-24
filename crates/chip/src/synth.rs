@@ -3,7 +3,14 @@
 //!
 //! Event-driven: instead of stepping every CPU cycle, `run_until` jumps to the
 //! next cycle where any timer or the frame counter fires. Between events no
-//! output can change. The result is identical to per-cycle stepping (tested).
+//! output can change.
+//!
+//! Sleeping: a channel whose output cannot change until the next register
+//! write or frame-counter clock (muted pulse, gated triangle, silent noise,
+//! disabled VRC6 voice) is taken out of the event loop. At the next write or
+//! frame clock its timer phase (and sequencer/LFSR) is fast-forwarded in
+//! closed form. Both mechanisms are tested to give results identical to
+//! unoptimised stepping (`reference = true`).
 
 use crate::blep::{Blep, AMP_BITS, MAX_FRAMES};
 use crate::dmc::{Dmc, ROM_SIZE};
@@ -16,6 +23,15 @@ use crate::tables::CPU_HZ_NTSC;
 use crate::triangle::Triangle;
 use crate::vrc6::Vrc6;
 
+// Sleep bits, by lane index.
+const P1: u8 = 1 << 0;
+const P2: u8 = 1 << 1;
+const TRI: u8 = 1 << 2;
+const NOI: u8 = 1 << 3;
+const V1: u8 = 1 << 5;
+const V2: u8 = 1 << 6;
+const SAW: u8 = 1 << 7;
+
 pub struct Synth {
     pub pulse1: Pulse,
     pub pulse2: Pulse,
@@ -25,7 +41,7 @@ pub struct Synth {
     pub frame: FrameCounter,
     pub vrc6: Vrc6,
     /// Whether the VRC6 is present (2A03 only otherwise).
-    pub vrc6_on: bool,
+    vrc6_on: bool,
     pub rom: [u8; ROM_SIZE],
     /// CPU cycles emulated so far.
     pub cycle: u64,
@@ -40,10 +56,16 @@ pub struct Synth {
     dmc_max: u8,
     /// Output changes fed to the step buffer (cost metric).
     pub events: u64,
-    /// When false, `run_until` point-samples instead of band-limiting
+    /// Event-loop iterations (cost metric).
+    pub iterations: u64,
+    /// When false, `render` point-samples instead of band-limiting
     /// (the naive reference for the aliasing measurement).
     pub band_limited: bool,
     naive_amp: f32,
+    /// Disables sleeping (reference behaviour for tests).
+    pub reference: bool,
+    asleep: u8,
+    slept_at: u64,
 }
 
 impl Synth {
@@ -67,8 +89,12 @@ impl Synth {
             dmc_min: 0,
             dmc_max: 0,
             events: 0,
+            iterations: 0,
             band_limited: true,
             naive_amp: 0.0,
+            reference: false,
+            asleep: 0,
+            slept_at: 0,
         };
         // Power-up levels (the triangle rests on step 0 = 15) are treated as
         // having always been there: no click when the engine starts.
@@ -76,6 +102,7 @@ impl Synth {
         let amp = mixer::mix(&s.outputs, s.vrc6_step);
         s.blep.preset(Self::fixed(amp));
         s.filter.settle(Self::quantized(amp));
+        s.sleep_check();
         s
     }
 
@@ -95,7 +122,8 @@ impl Synth {
     pub fn set_filter(&mut self, mode: FilterMode) {
         if mode != self.filter.mode {
             self.filter = OutputFilter::new(mode, self.blep.sample_rate);
-            self.filter.settle(Self::quantized(mixer::mix(&self.outputs, self.vrc6_step)));
+            self.filter
+                .settle(Self::quantized(mixer::mix(&self.outputs, self.vrc6_step)));
         }
     }
 
@@ -103,8 +131,21 @@ impl Synth {
         self.filter.mode
     }
 
+    pub fn vrc6_on(&self) -> bool {
+        self.vrc6_on
+    }
+
+    /// Plugs the VRC6 in or out (2A03 + VRC6 vs 2A03 only).
+    pub fn set_vrc6(&mut self, on: bool) {
+        self.wake_all();
+        self.vrc6_on = on;
+        self.sleep_check();
+        self.refresh_output();
+    }
+
     /// CPU register write at the current cycle. $4000-$4017 and the VRC6 ranges.
     pub fn write(&mut self, addr: u16, v: u8) {
+        self.wake_all();
         match addr {
             0x4000..=0x4003 => self.pulse1.write(addr & 3, v),
             0x4004..=0x4007 => self.pulse2.write(addr & 3, v),
@@ -122,6 +163,7 @@ impl Synth {
             0x9000..=0x9003 | 0xA000..=0xA002 | 0xB000..=0xB002 => self.vrc6.write(addr, v),
             _ => {}
         }
+        self.sleep_check();
         self.refresh_output();
     }
 
@@ -138,6 +180,75 @@ impl Synth {
 
     pub fn outputs(&self) -> Outputs {
         self.outputs
+    }
+
+    /// Brings every sleeping channel's timer phase up to `self.cycle`.
+    fn wake_all(&mut self) {
+        if self.asleep == 0 {
+            return;
+        }
+        let e = self.cycle - self.slept_at;
+        let a = self.asleep;
+        if a & P1 != 0 {
+            self.pulse1.catch_up(e);
+        }
+        if a & P2 != 0 {
+            self.pulse2.catch_up(e);
+        }
+        if a & TRI != 0 {
+            self.triangle.catch_up(e);
+        }
+        if a & NOI != 0 {
+            self.noise.catch_up(e);
+        }
+        // VRC6 timers only run while present and not halted; both can only
+        // change through a write, which wakes everything first.
+        if self.vrc6_on && !self.vrc6.halt {
+            let sh = self.vrc6.shift;
+            if a & V1 != 0 {
+                self.vrc6.pulse1.catch_up(e, sh);
+            }
+            if a & V2 != 0 {
+                self.vrc6.pulse2.catch_up(e, sh);
+            }
+            if a & SAW != 0 {
+                self.vrc6.saw.catch_up(e, sh);
+            }
+        }
+        self.asleep = 0;
+    }
+
+    /// Puts channels that can't change their output to sleep. Call only when
+    /// nothing is asleep (after `wake_all`).
+    fn sleep_check(&mut self) {
+        debug_assert_eq!(self.asleep, 0);
+        if self.reference {
+            return;
+        }
+        let mut a = 0;
+        if self.pulse1.can_sleep() {
+            a |= P1;
+        }
+        if self.pulse2.can_sleep() {
+            a |= P2;
+        }
+        if self.triangle.can_sleep() {
+            a |= TRI;
+        }
+        if self.noise.can_sleep() {
+            a |= NOI;
+        }
+        if self.vrc6.pulse1.can_sleep() {
+            a |= V1;
+        }
+        if self.vrc6.pulse2.can_sleep() {
+            a |= V2;
+        }
+        if self.vrc6.saw.can_sleep() {
+            a |= SAW;
+        }
+        self.asleep = a;
+        self.slept_at = self.cycle;
     }
 
     #[inline]
@@ -178,41 +289,62 @@ impl Synth {
     /// Emulates up to (excluding) CPU cycle `target`.
     pub fn run_until(&mut self, target: u64) {
         while self.cycle < target {
-            let mut dt = (target - self.cycle).min(u32::MAX as u64) as u32;
-            dt = dt
-                .min(self.pulse1.timer_left)
-                .min(self.pulse2.timer_left)
-                .min(self.triangle.timer_left)
-                .min(self.noise.timer_left)
-                .min(self.dmc.timer_left)
-                .min(self.frame.left());
+            self.iterations += 1;
+            let awake = !self.asleep;
             let vrc6_running = self.vrc6_on && !self.vrc6.halt;
+            let mut dt = (target - self.cycle).min(u32::MAX as u64) as u32;
+            dt = dt.min(self.dmc.timer_left).min(self.frame.left());
+            if awake & P1 != 0 {
+                dt = dt.min(self.pulse1.timer_left);
+            }
+            if awake & P2 != 0 {
+                dt = dt.min(self.pulse2.timer_left);
+            }
+            if awake & TRI != 0 {
+                dt = dt.min(self.triangle.timer_left);
+            }
+            if awake & NOI != 0 {
+                dt = dt.min(self.noise.timer_left);
+            }
             if vrc6_running {
-                dt = dt
-                    .min(self.vrc6.pulse1.timer_left)
-                    .min(self.vrc6.pulse2.timer_left)
-                    .min(self.vrc6.saw.timer_left);
+                if awake & V1 != 0 {
+                    dt = dt.min(self.vrc6.pulse1.timer_left);
+                }
+                if awake & V2 != 0 {
+                    dt = dt.min(self.vrc6.pulse2.timer_left);
+                }
+                if awake & SAW != 0 {
+                    dt = dt.min(self.vrc6.saw.timer_left);
+                }
             }
             self.cycle += dt as u64;
             let mut dirty = false;
 
-            self.pulse1.timer_left -= dt;
-            if self.pulse1.timer_left == 0 {
-                self.pulse1.clock_timer();
-                dirty = true;
+            if awake & P1 != 0 {
+                self.pulse1.timer_left -= dt;
+                if self.pulse1.timer_left == 0 {
+                    self.pulse1.clock_timer();
+                    dirty = true;
+                }
             }
-            self.pulse2.timer_left -= dt;
-            if self.pulse2.timer_left == 0 {
-                self.pulse2.clock_timer();
-                dirty = true;
+            if awake & P2 != 0 {
+                self.pulse2.timer_left -= dt;
+                if self.pulse2.timer_left == 0 {
+                    self.pulse2.clock_timer();
+                    dirty = true;
+                }
             }
-            self.triangle.timer_left -= dt;
-            if self.triangle.timer_left == 0 {
-                dirty |= self.triangle.clock_timer();
+            if awake & TRI != 0 {
+                self.triangle.timer_left -= dt;
+                if self.triangle.timer_left == 0 {
+                    dirty |= self.triangle.clock_timer();
+                }
             }
-            self.noise.timer_left -= dt;
-            if self.noise.timer_left == 0 {
-                dirty |= self.noise.clock_timer();
+            if awake & NOI != 0 {
+                self.noise.timer_left -= dt;
+                if self.noise.timer_left == 0 {
+                    dirty |= self.noise.clock_timer();
+                }
             }
             self.dmc.timer_left -= dt;
             if self.dmc.timer_left == 0 {
@@ -220,32 +352,42 @@ impl Synth {
             }
             if vrc6_running {
                 let sh = self.vrc6.shift;
-                self.vrc6.pulse1.timer_left -= dt;
-                if self.vrc6.pulse1.timer_left == 0 {
-                    dirty |= self.vrc6.pulse1.clock_timer(sh);
+                if awake & V1 != 0 {
+                    self.vrc6.pulse1.timer_left -= dt;
+                    if self.vrc6.pulse1.timer_left == 0 {
+                        dirty |= self.vrc6.pulse1.clock_timer(sh);
+                    }
                 }
-                self.vrc6.pulse2.timer_left -= dt;
-                if self.vrc6.pulse2.timer_left == 0 {
-                    dirty |= self.vrc6.pulse2.clock_timer(sh);
+                if awake & V2 != 0 {
+                    self.vrc6.pulse2.timer_left -= dt;
+                    if self.vrc6.pulse2.timer_left == 0 {
+                        dirty |= self.vrc6.pulse2.clock_timer(sh);
+                    }
                 }
-                self.vrc6.saw.timer_left -= dt;
-                if self.vrc6.saw.timer_left == 0 {
-                    dirty |= self.vrc6.saw.clock_timer(sh);
+                if awake & SAW != 0 {
+                    self.vrc6.saw.timer_left -= dt;
+                    if self.vrc6.saw.timer_left == 0 {
+                        dirty |= self.vrc6.saw.clock_timer(sh);
+                    }
                 }
             }
             let c = self.frame.advance(dt);
-            if c.quarter {
-                self.pulse1.env.clock();
-                self.pulse2.env.clock();
-                self.noise.env.clock();
-                self.triangle.clock_quarter();
+            if c.quarter || c.half {
+                self.wake_all();
+                if c.quarter {
+                    self.pulse1.env.clock();
+                    self.pulse2.env.clock();
+                    self.noise.env.clock();
+                    self.triangle.clock_quarter();
+                }
+                if c.half {
+                    self.pulse1.clock_half();
+                    self.pulse2.clock_half();
+                    self.triangle.len.clock();
+                    self.noise.len.clock();
+                }
+                self.sleep_check();
                 dirty = true;
-            }
-            if c.half {
-                self.pulse1.clock_half();
-                self.pulse2.clock_half();
-                self.triangle.len.clock();
-                self.noise.len.clock();
             }
             if dirty {
                 self.refresh_output();
@@ -259,8 +401,8 @@ impl Synth {
     }
 
     /// Renders `out.len()` mono samples (<= `MAX_FRAMES`), emulating the chip
-    /// up to the matching cycle. Register writes must be applied between
-    /// `run_until` calls before this; see `Player` for frame-tick scheduling.
+    /// up to the matching cycle. Register writes are applied between renders
+    /// (or between `run_until` calls up to `cycle_for_samples(out.len())`).
     pub fn render(&mut self, out: &mut [f32]) {
         debug_assert!(out.len() <= MAX_FRAMES);
         if self.band_limited {
@@ -284,13 +426,13 @@ impl Synth {
     /// Per-channel activity since the last call, 0..1, in lane order.
     pub fn take_peaks(&mut self) -> [f32; 8] {
         let mut r = [0f32; 8];
-        for i in 0..8 {
+        for (i, v) in r.iter_mut().enumerate() {
             let full = match i {
                 4 => 127.0,
                 7 => 31.0,
                 _ => 15.0,
             };
-            r[i] = self.peaks[i] as f32 / full;
+            *v = self.peaks[i] as f32 / full;
         }
         // DMC: its level is a DC offset; show the swing instead.
         r[4] = (self.dmc_max - self.dmc_min.min(self.dmc_max)) as f32 / 64.0;
@@ -333,36 +475,78 @@ mod tests {
         s.write(0xB002, 0x80);
     }
 
-    /// Event-driven stepping must match stepping one cycle at a time.
+    /// A script that puts channels to sleep and wakes them in many ways.
+    fn script() -> Vec<(u64, u16, u8)> {
+        vec![
+            (30_011, 0x4004, 0x70),        // pulse 2 volume 0 -> sleeps
+            (41_003, 0x4004, 0x70 | 0x09), // wakes mid-period
+            (52_000, 0x4015, 0x1B),        // triangle off (length 0 -> gated)
+            (61_777, 0x4015, 0x1F),
+            (61_778, 0x400B, 0x10),        // triangle on again
+            (70_001, 0x400C, 0x30),        // noise constant volume 0
+            (88_888, 0x400C, 0x3C),
+            (90_000, 0x9002, 0x01),        // VRC6 pulse 1 disabled
+            (99_999, 0x9002, 0x81),
+            (100_500, 0xA000, 0x00),       // VRC6 pulse 2 volume 0 (but enabled)
+            (100_501, 0xA001, 0x33),
+            (100_502, 0xA002, 0x80),
+            (130_000, 0xA000, 0x47),
+            (140_000, 0xB002, 0x00),       // saw disabled
+            (150_003, 0xB002, 0x81),
+            (155_000, 0x9003, 0x02),       // 16x
+            (160_000, 0x9003, 0x01),       // halt
+            (170_000, 0x9003, 0x00),
+            (175_000, 0x4003, 0x00),       // pulse 1 period high 0: sweep target...
+            (176_000, 0x4002, 0x05),       // period 5 < 8 -> muted, sleeps
+            (190_000, 0x4002, 0x80),       // wakes
+        ]
+    }
+
+    fn run_scripted(s: &mut Synth, stride: u64, n: u64) -> Vec<(Outputs, u8)> {
+        let sc = script();
+        let mut next = 0;
+        let mut trace = Vec::new();
+        let mut t = 0;
+        while t < n {
+            let mut target = t + stride;
+            while next < sc.len() && sc[next].0 < target {
+                s.run_until(sc[next].0);
+                s.write(sc[next].1, sc[next].2);
+                next += 1;
+            }
+            if target > n {
+                target = n;
+            }
+            s.run_until(target);
+            t = target;
+            trace.push((s.outputs(), s.status()));
+        }
+        trace
+    }
+
+    /// Event-driven stepping with sleeping must match one-cycle-at-a-time
+    /// reference stepping exactly, through sleeps, wakes, halts and shifts.
     #[test]
-    fn event_driven_equals_per_cycle() {
+    fn optimised_equals_reference() {
         let mut a = Box::new(Synth::new(48_000.0));
         let mut b = Box::new(Synth::new(48_000.0));
         // Compare channel states only; don't feed the step buffer.
         a.band_limited = false;
         b.band_limited = false;
+        b.reference = true;
+        b.asleep = 0;
         setup(&mut a);
         setup(&mut b);
-        let n = 200_000u64;
-        let mut trace_a = Vec::new();
-        let mut trace_b = Vec::new();
-        // a: big jumps, recording outputs at every 997th cycle.
-        let mut t = 0;
-        while t < n {
-            t += 997;
-            a.run_until(t);
-            trace_a.push(a.outputs());
+        let n = 997 * 221u64;
+        let ta = run_scripted(&mut a, 997, n);
+        let tb = run_scripted(&mut b, 1, n);
+        let tb: Vec<_> = tb.into_iter().skip(996).step_by(997).collect();
+        assert_eq!(ta.len(), tb.len());
+        for (i, (x, y)) in ta.iter().zip(tb.iter()).enumerate() {
+            assert_eq!(x, y, "diverged at sample {i} (cycle {})", (i as u64 + 1) * 997);
         }
-        let mut t = 0;
-        while t < n {
-            for _ in 0..997 {
-                b.run_until(b.cycle + 1);
-            }
-            t += 997;
-            trace_b.push(b.outputs());
-        }
-        assert_eq!(trace_a, trace_b);
-        assert_eq!(a.status(), b.status());
+        // And the sleeping actually happened.
+        assert!(a.iterations < b.iterations / 10, "{} vs {}", a.iterations, b.iterations);
     }
 
     #[test]

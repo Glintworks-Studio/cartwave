@@ -4,6 +4,8 @@
 //! address lines A0/A1 are swapped ($x001 <-> $x002); that's a cartridge
 //! wiring detail with no effect on the sound, so we only expose VRC6a.
 
+use crate::units::catch_up_timer;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Vrc6Pulse {
     pub volume: u8,
@@ -63,6 +65,17 @@ impl Vrc6Pulse {
             !self.mode
         } else {
             false
+        }
+    }
+
+    pub fn can_sleep(&self) -> bool {
+        !self.enabled || self.volume == 0
+    }
+
+    pub fn catch_up(&mut self, elapsed: u64, shift: u8) {
+        let n = catch_up_timer(&mut self.timer_left, (self.period >> shift) as u64 + 1, elapsed);
+        if self.enabled {
+            self.step = ((self.step as u64 + 16 - n % 16) % 16) as u8;
         }
     }
 
@@ -142,6 +155,18 @@ impl Vrc6Saw {
             self.adds += 1;
         }
         old != self.acc >> 3
+    }
+
+    /// Disabled: the accumulator is held at 0 (only the divider parity moves).
+    pub fn can_sleep(&self) -> bool {
+        !self.enabled
+    }
+
+    pub fn catch_up(&mut self, elapsed: u64, shift: u8) {
+        let n = catch_up_timer(&mut self.timer_left, (self.period >> shift) as u64 + 1, elapsed);
+        if n & 1 == 1 {
+            self.odd = !self.odd;
+        }
     }
 
     /// High 5 bits of the accumulator.

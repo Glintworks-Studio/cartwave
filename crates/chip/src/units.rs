@@ -2,6 +2,21 @@
 
 use crate::tables::LENGTH_TABLE;
 
+/// Fast-forwards a down-counting timer with a constant reload `period` by
+/// `elapsed` cycles. Returns how many times it reached zero (and reloaded).
+#[inline]
+pub fn catch_up_timer(timer_left: &mut u32, period: u64, elapsed: u64) -> u64 {
+    let tl = *timer_left as u64;
+    if elapsed < tl {
+        *timer_left = (tl - elapsed) as u32;
+        0
+    } else {
+        let r = elapsed - tl;
+        *timer_left = (period - r % period) as u32;
+        1 + r / period
+    }
+}
+
 /// Envelope generator (pulse and noise). NESdev "APU Envelope".
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Envelope {

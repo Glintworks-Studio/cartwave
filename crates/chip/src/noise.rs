@@ -1,7 +1,7 @@
 //! 2A03 noise channel. NESdev "APU Noise".
 
 use crate::tables::NOISE_PERIOD_NTSC;
-use crate::units::{Envelope, LengthCounter};
+use crate::units::{catch_up_timer, Envelope, LengthCounter};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Noise {
@@ -64,6 +64,20 @@ impl Noise {
         let old = self.shift;
         self.shift = Self::step_lfsr(old, self.mode);
         (old ^ self.shift) & 1 != 0
+    }
+
+    pub fn can_sleep(&self) -> bool {
+        !self.len.active() || self.env.output() == 0
+    }
+
+    /// Advances the timer and the LFSR by `elapsed` cycles. The LFSR is
+    /// stepped once per timer clock (at most ~1900 steps between frame clocks).
+    pub fn catch_up(&mut self, elapsed: u64) {
+        let p = NOISE_PERIOD_NTSC[self.period_index as usize] as u64;
+        let n = catch_up_timer(&mut self.timer_left, p, elapsed);
+        for _ in 0..n {
+            self.shift = Self::step_lfsr(self.shift, self.mode);
+        }
     }
 
     /// Silent while bit 0 of the LFSR is set or the length counter is 0.

@@ -11,7 +11,7 @@
 //! while it lasts (measured in ENGINE.md).
 
 use crate::tables::TRIANGLE_SEQ;
-use crate::units::LengthCounter;
+use crate::units::{catch_up_timer, LengthCounter};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Triangle {
@@ -71,6 +71,16 @@ impl Triangle {
         } else {
             false
         }
+    }
+
+    /// The sequencer is gated: the output holds until a write or frame clock.
+    pub fn can_sleep(&self) -> bool {
+        self.linear == 0 || !self.len.active()
+    }
+
+    /// Advances the timer by `elapsed` cycles while gated (no steps).
+    pub fn catch_up(&mut self, elapsed: u64) {
+        catch_up_timer(&mut self.timer_left, self.period as u64 + 1, elapsed);
     }
 
     /// Quarter-frame clock: the linear counter.
