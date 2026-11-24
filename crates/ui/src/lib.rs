@@ -460,7 +460,12 @@ impl AppState {
                 engine::device_error::BUILD_FAILED => "AUDIO: can't open output".into(),
                 _ => "AUDIO: starting".into(),
             };
-            self.s.audio.set_if_changed(stats);
+            // The stats change on every refresh and only the F3 overlay shows
+            // them: publishing them while it is hidden would draw a frame every
+            // 250 ms and keep the pump fast, so the app would never go idle.
+            if self.s.stats.with_untracked(|s| s.visible) {
+                self.s.audio.set_if_changed(stats);
+            }
             self.s.audio_msg.set_if_changed(msg);
         }
         if let Some(e) = self.engine.as_ref() {
