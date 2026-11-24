@@ -20,8 +20,23 @@ use std::time::{Duration, Instant};
 
 use crate::mock::Rng;
 use crate::state::*;
+use engine::cpu::Counts;
 use engine::testkit::Loopback;
 use engine::Engine;
+
+fn zero_counts() -> Counts {
+    // Zeros (not None) so `add` accumulates on platforms that measure them.
+    Counts { cycles: 0, instructions: Some(0), energy_nj: Some(0), p_ns: Some(0), e_ns: Some(0) }
+}
+
+/// `c / n / 1000`, or 0.
+fn per(c: u64, n: u64) -> f64 {
+    if n > 0 {
+        c as f64 / n as f64 / 1e3
+    } else {
+        0.0
+    }
+}
 
 fn env_on(k: &str) -> bool {
     std::env::var(k).is_ok_and(|v| v != "0" && !v.is_empty())
@@ -54,12 +69,16 @@ pub struct Tests {
     pub edits: u64,
     pub stalls: u64,
     pub gain: Option<f32>,
-    audio_clock: Option<(u32, engine::cpu::ThreadClock)>,
-    /// (audio cycles, callbacks) and (ui cycles, frames) at the last log line.
-    last_audio: Option<(u64, u64)>,
-    last_ui: Option<(u64, u64)>,
-    /// Totals since the first log line: audio cycles/callbacks, ui cycles/frames.
-    acc: [u64; 4],
+    audio_clock: Option<(u64, engine::cpu::ThreadClock)>,
+    /// (audio counters, callbacks) and (ui counters, frames) at the last log line.
+    last_audio: Option<(Counts, u64)>,
+    last_ui: Option<(Counts, u64)>,
+    last_proc: Option<(Counts, Instant)>,
+    /// Totals since the first log line: audio counters / callbacks, ui
+    /// counters / frames, process counters / seconds.
+    acc_audio: (Counts, u64),
+    acc_ui: (Counts, u64),
+    acc_proc: (Counts, f64),
     pub ui_frames: u64,
 }
 
@@ -100,13 +119,16 @@ impl Tests {
             audio_clock: None,
             last_audio: None,
             last_ui: None,
-            acc: [0; 4],
+            last_proc: None,
+            acc_audio: (zero_counts(), 0),
+            acc_ui: (zero_counts(), 0),
+            acc_proc: (zero_counts(), 0.0),
             ui_frames: 0,
         };
         if let Some(f) = t.log.as_mut() {
             let _ = writeln!(
                 f,
-                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame"
+                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame,audio_kinstr_per_cb,audio_uj_per_cb,audio_p_share,ui_kinstr_per_frame,ui_uj_per_frame,ui_p_share,proc_minstr_per_s,proc_mw,proc_p_share,overloads,silent_callbacks"
             );
         }
         t
@@ -259,38 +281,65 @@ impl Tests {
         let sh = e.shared();
         let (n, mean, p99, max) = sh.callback_cost();
         let lb = self.loopback.as_ref().map_or(0, |l| l.dropouts.load(Relaxed));
-        // Per-thread cycles: audio per callback, UI per presented frame.
+        // Per-thread counters: audio per callback, UI per presented frame.
         let tid = sh.audio_tid.load(Relaxed);
         if tid != 0 && self.audio_clock.as_ref().is_none_or(|(t, _)| *t != tid) {
             self.audio_clock = engine::cpu::ThreadClock::open(tid).map(|c| (tid, c));
             self.last_audio = None;
         }
-        let mut audio_k = 0.0;
-        if let Some(c) = self.audio_clock.as_ref().and_then(|(_, c)| c.cycles()) {
+        let mut audio = (zero_counts(), 0u64);
+        if let Some(c) = self.audio_clock.as_ref().and_then(|(_, c)| c.counts()) {
             if let Some((c0, n0)) = self.last_audio {
                 if n > n0 {
-                    audio_k = (c - c0) as f64 / (n - n0) as f64 / 1e3;
-                    self.acc[0] += c - c0;
-                    self.acc[1] += n - n0;
+                    audio = (c.since(&c0), n - n0);
+                    self.acc_audio.0.add(&audio.0);
+                    self.acc_audio.1 += audio.1;
                 }
             }
             self.last_audio = Some((c, n));
         }
-        let mut ui_k = 0.0;
-        if let Some(c) = engine::cpu::current_thread_cycles() {
+        let mut ui = (zero_counts(), 0u64);
+        if let Some(c) = engine::cpu::current_thread_counts() {
             if let Some((c0, f0)) = self.last_ui {
                 if self.ui_frames > f0 {
-                    ui_k = (c - c0) as f64 / (self.ui_frames - f0) as f64 / 1e3;
-                    self.acc[2] += c - c0;
-                    self.acc[3] += self.ui_frames - f0;
+                    ui = (c.since(&c0), self.ui_frames - f0);
+                    self.acc_ui.0.add(&ui.0);
+                    self.acc_ui.1 += ui.1;
                 }
             }
             self.last_ui = Some((c, self.ui_frames));
         }
+        let mut proc = (zero_counts(), 0.0f64);
+        if let Some(c) = engine::cpu::process_counts() {
+            let now = Instant::now();
+            if let Some((c0, t0)) = self.last_proc {
+                proc = (c.since(&c0), (now - t0).as_secs_f64());
+                self.acc_proc.0.add(&proc.0);
+                self.acc_proc.1 += proc.1;
+            }
+            self.last_proc = Some((c, now));
+        }
+        let audio_k = per(audio.0.cycles, audio.1);
+        let ui_k = per(ui.0.cycles, ui.1);
+        let opt = |v: Option<f64>, scale: f64, prec: usize| v.map_or(String::new(), |v| format!("{:.*}", prec, v * scale));
+        let extra = format!(
+            "{},{},{},{},{},{},{},{},{},{},{}",
+            opt(audio.0.instructions.map(|i| i as f64 / audio.1.max(1) as f64), 1e-3, 1),
+            opt(audio.0.energy_nj.map(|e| e as f64 / audio.1.max(1) as f64), 1e-3, 2),
+            opt(audio.0.p_share(), 1.0, 3),
+            opt(ui.0.instructions.map(|i| i as f64 / ui.1.max(1) as f64), 1e-3, 0),
+            opt(ui.0.energy_nj.map(|e| e as f64 / ui.1.max(1) as f64), 1e-3, 1),
+            opt(ui.0.p_share(), 1.0, 3),
+            opt(proc.0.instructions.map(|i| i as f64 / proc.1.max(1e-9)), 1e-6, 1),
+            opt(proc.0.energy_nj.map(|e| e as f64 / proc.1.max(1e-9)), 1e-6, 1),
+            opt(proc.0.p_share(), 1.0, 3),
+            sh.overloads.load(Relaxed),
+            sh.silent_callbacks.load(Relaxed),
+        );
         if let Some(f) = self.log.as_mut() {
             let _ = writeln!(
                 f,
-                "{t:.1},{n},{},{},{},{mean:.3},{p99:.2},{max:.2},{},{},{:.2},{:.2},{},{},{},{},{},{},{},{:.2},{lb},{},{audio_k:.1},{ui_k:.1}",
+                "{t:.1},{n},{},{},{},{mean:.3},{p99:.2},{max:.2},{},{},{:.2},{:.2},{},{},{},{},{},{},{},{:.2},{lb},{},{audio_k:.1},{ui_k:.1},{extra}",
                 sh.xrun_starved.load(Relaxed),
                 sh.xrun_late.load(Relaxed),
                 sh.xrun_overrun.load(Relaxed),
@@ -337,12 +386,40 @@ impl Tests {
             self.stalls,
             sh.generation.load(Relaxed).saturating_sub(1),
         );
-        let per = |c: u64, n: u64| if n > 0 { c as f64 / n as f64 / 1e3 } else { 0.0 };
+        let (a, na) = self.acc_audio;
+        let (u, nu) = self.acc_ui;
+        let (p, secs) = self.acc_proc;
         s += &format!(
-            "# thread cycles (TSC, QueryThreadCycleTime): audio {:.1} k/callback, ui {:.1} k/presented frame
-",
-            per(self.acc[0], self.acc[1]),
-            per(self.acc[2], self.acc[3])
+            "# thread cycles: audio {:.1} k/callback, ui {:.1} k/presented frame\n",
+            per(a.cycles, na),
+            per(u.cycles, nu)
+        );
+        if let (Some(ai), Some(ui)) = (a.instructions, u.instructions) {
+            let pct = |v: Option<f64>| v.map_or("?".into(), |v| format!("{:.1}%", v * 100.0));
+            s += &format!(
+                "# audio thread: {:.1} k instr/callback, {:.2} uJ/callback, P-core share {}; ui thread: {:.0} k instr/frame, {:.1} uJ/frame, P-core share {}\n",
+                per(ai, na),
+                per(a.energy_nj.unwrap_or(0), na),
+                pct(a.p_share()),
+                per(ui, nu),
+                per(u.energy_nj.unwrap_or(0), nu),
+                pct(u.p_share()),
+            );
+            let s_ = secs.max(1e-9);
+            s += &format!(
+                "# process: {:.1} M instr/s, {:.1} mW, P-core share {}, {:.1} % of a core; audio thread {:.2} M instr/s, {:.2} mW\n",
+                p.instructions.unwrap_or(0) as f64 / s_ / 1e6,
+                p.energy_nj.unwrap_or(0) as f64 / s_ / 1e6,
+                pct(p.p_share()),
+                (p.p_ns.unwrap_or(0) + p.e_ns.unwrap_or(0)) as f64 / s_ / 1e7,
+                ai as f64 / s_ / 1e6,
+                a.energy_nj.unwrap_or(0) as f64 / s_ / 1e6,
+            );
+        }
+        s += &format!(
+            "# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): {}; silent callbacks {}\n",
+            sh.overloads.load(Relaxed),
+            sh.silent_callbacks.load(Relaxed)
         );
         if let Some(lb) = &self.loopback {
             s += &format!(

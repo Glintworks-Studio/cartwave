@@ -95,9 +95,12 @@ pub struct Shared {
     pub device_error: AtomicU32,
     pub stream_running: AtomicBool,
     /// The audio thread's OS id (for per-thread cycle counters).
-    pub audio_tid: AtomicU32,
+    pub audio_tid: AtomicU64,
     /// Stream callbacks that found the engine core missing (during rebuilds).
     pub silent_callbacks: AtomicU64,
+    /// Overload reports from the audio API (CoreAudio's
+    /// `kAudioDeviceProcessorOverload`, which cpal reports as `Xrun`).
+    pub overloads: AtomicU64,
 }
 
 pub mod device_error {
