@@ -1,9 +1,11 @@
 # ChipDAW: Vizia GUI prototype
 
-> **Prototype.** "ChipDAW" is a working title. This repository is a GUI bake-off: it tests
-> whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom, premium-looking
-> DAW interface drawn entirely with stylesheets and procedural drawing (no bitmap images).
-> There is no audio engine. All data (clips, notes, meters, playhead) is mocked.
+> **Prototype.** "ChipDAW" is a working title. This repository started as a GUI bake-off: it
+> tests whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom,
+> premium-looking DAW interface drawn entirely with stylesheets and procedural drawing (no
+> bitmap images). It now plays the arrangement in real time through a clean-room NES 2A03 +
+> VRC6 emulator (`crates/chip`, `crates/engine`; see [ENGINE.md](ENGINE.md)). The clips and
+> notes are still demo data.
 
 ![Arrangement view at 200% scaling](docs/screens/main-200.png)
 
@@ -26,8 +28,12 @@ Vizia is pulled from a fork, pinned by commit in `[patch.crates-io]` in `Cargo.t
 build compiles Skia through `skia-safe`, which downloads prebuilt binaries when they are
 available for your target.
 
-Layout: `crates/ui` is the library (views, theme, state; reusable in a plugin host) and
-`crates/app` is the standalone window.
+Layout:
+
+- `crates/chip`: the emulator and sound driver (`no_std`, no dependencies).
+- `crates/engine`: the real-time host (cpal output, lock-free queues, song snapshots).
+- `crates/ui`: the library (views, theme, state; reusable in a plugin host).
+- `crates/app`: the standalone window. `--render-demo DIR` renders the demo offline to WAV.
 
 ## Controls
 
@@ -38,6 +44,8 @@ Layout: `crates/ui` is the library (views, theme, state; reusable in a plugin ho
 | | `F4` | Toggle the 200-clip stress set |
 | | `F5` | Reload stylesheets |
 | | `F6` | Cycle the frame-rate cap: off / 60 / 120 / display rate (shown in F3) |
+| | `F7` | Cycle the analog output filter: NES / NES + 440 Hz / Famicom / off (shown in F3) |
+| Track headers | `M` / `S` | Mute / solo the channel |
 | Arrangement | Click / `Shift`-click | Select / add to selection |
 | | Drag clip body | Move (time and lane), snapped to the grid |
 | | Drag clip edge | Resize |
@@ -64,6 +72,9 @@ defined in `crates/ui/src/input.rs`.
 - [FINDINGS.md](FINDINGS.md): bake-off report and verdict.
 - [PERF.md](PERF.md): playback CPU and frame-pacing investigation and fixes (Windows).
 - [PERF-macos.md](PERF-macos.md): the same on macOS (Apple M1, 320 Hz), and the frame-rate cap.
+- [ENGINE.md](ENGINE.md): the chip engine. Emulation, band-limiting, the real-time architecture,
+  stress tests, authenticity checks and known gaps. The listening pack is in
+  [`docs/audio/`](docs/audio/), and the tuning table is in [`docs/tuning.md`](docs/tuning.md).
 - [CLAUDE.md](CLAUDE.md): the original prototype brief.
 
 Screenshots and a demo recording are in [`docs/screens/`](docs/screens/). Profiles,
