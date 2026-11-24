@@ -276,7 +276,10 @@ Answers to Step 1.4:
 
 ## 8. vizia fork ([jeffreyfrederick/vizia](https://github.com/jeffreyfrederick/vizia/tree/chipdaw-perf), branch `chipdaw-perf` on tag `0.4.0`)
 
-Wired in via `[patch.crates-io]` in `Cargo.toml`, as a git dependency pinned to commit `259e1cb30fa2cdfa1dcaac701c9f45f89da2c270`. The patches are also in `docs/perf/vizia-patches/`.
+Wired in via `[patch.crates-io]` in `Cargo.toml`, as a git dependency pinned to commit
+`40ef8cfeaefaa09c77171375e037ca04c99e065a` (the six commits below plus commit 7, the frame-rate
+limit added during the macOS pass; see [PERF-macos.md](PERF-macos.md) §3). The patches are also
+in `docs/perf/vizia-patches/`.
 
 Tests:
 
@@ -333,6 +336,13 @@ Commits 1, 2, 5 and 6 address code that is unchanged on `main`.
      least wasteful pair. One clipped pass per rect. No damage still means a full repaint, and
      filter semantics are kept.
    - *Tested:* 16.3% → 10.3% (demo). No stale pixels or seams in dynamic captures.
+7. **`40ef8cfe` winit: optional frame-rate limit and the display's refresh rate** (macOS pass)
+   - *Problem:* on high-refresh displays there's no way to ask for fewer frames, and app-side
+     throttles miss input- and transition-driven redraws.
+   - *Fix:* `set_max_frame_rate` defers redraw requests to fixed-rate frame slots in the winit
+     backend; `display_refresh_rate()` reports the monitor's rate.
+   - *Tested:* on M1 / 320 Hz, 60 / 120 fps caps give exactly 60.0 / 120.0 fps with ideal vblank
+     cadence, including while dragging. No change without a limit. vizia_core tests 48/48.
 
 **Not done in the fork** (outside this task's scope; they're features/visual fixes, not
 performance): the Textbox shadow draw order and DPI-scaling of CSS shadow blur (both in
@@ -350,6 +360,8 @@ Shows:
   overlay.
 
 ## 10. What is platform-specific (to check on AMD, Intel, macOS)
+
+macOS has now been measured: see [PERF-macos.md](PERF-macos.md) §8 for which findings carried over.
 
 | Finding | Likely scope | What to check elsewhere |
 |---|---|---|

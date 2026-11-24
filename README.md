@@ -63,6 +63,7 @@ defined in `crates/ui/src/input.rs`.
 - [NOTES.md](NOTES.md): Vizia capability checklist (what the stylesheet system supports, and the fallbacks).
 - [FINDINGS.md](FINDINGS.md): bake-off report and verdict.
 - [PERF.md](PERF.md): playback CPU and frame-pacing investigation and fixes (Windows).
+- [PERF-macos.md](PERF-macos.md): the same on macOS (Apple M1, 320 Hz), and the frame-rate cap.
 - [CLAUDE.md](CLAUDE.md): the original prototype brief.
 
 Screenshots and a demo recording are in [`docs/screens/`](docs/screens/). Profiles,
