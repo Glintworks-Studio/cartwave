@@ -226,6 +226,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "engine",
  "ui",
  "vizia",
 ]
@@ -3091,6 +3092,7 @@ dependencies = [
 name = "ui"
 version = "0.1.0"
 dependencies = [
+ "engine",
  "vizia",
 ]
 
