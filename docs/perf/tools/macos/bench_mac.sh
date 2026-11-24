@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="${CHIPDAW_REPO:-$(cd "$HERE/../../../.." && pwd)}"
 WORK="${CHIPDAW_PERF_WORK:-${TMPDIR:-/tmp}/chipdaw-perf}"
 APP="${CHIPDAW_APP:-$REPO/target/release/app}"
-LABEL="${1:-run}"; SECS="${2:-12}"; CAPS="${3:-off 60 120 display}"; SCENARIOS="${4:-idle demo 200 drag}"
+LABEL="${1:-run}"; SECS="${2:-12}"; CAPS="${3:-off 60 120}"; SCENARIOS="${4:-idle demo 200 drag}"
 mkdir -p "$WORK"
 BENCH="$WORK/chipbench"
 if [ ! -x "$BENCH" ] || [ "$HERE/chipbench.swift" -nt "$BENCH" ]; then

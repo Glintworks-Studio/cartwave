@@ -43,8 +43,8 @@ Layout:
 | | `F3` | Frame-time overlay |
 | | `F4` | Toggle the 200-clip stress set |
 | | `F5` | Reload stylesheets |
-| | `F6` | Cycle the frame-rate cap: off / 60 / 120 / display rate (shown in F3) |
-| | `F7` | Cycle the analog output filter: NES / NES + 440 Hz / Famicom / off (shown in F3) |
+| | `F6` | Cycle the frame-rate cap: 60 (default) / 120 / off (shown in F3) |
+| | `F7` | Cycle the analog output filter: NES / NES + 440 Hz / Famicom / off (shown in F3). Until you press it, the filter follows the chip: Famicom with VRC6, NES with the 2A03 alone |
 | Track headers | `M` / `S` | Mute / solo the channel |
 | Arrangement | Click / `Shift`-click | Select / add to selection |
 | | Drag clip body | Move (time and lane), snapped to the grid |
@@ -62,8 +62,8 @@ Layout:
 | | Double-click | Reset (150 BPM / start) |
 
 Set `CHIPDAW_FRAMELOG=<path>` to write a per-frame CSV log (frame timings by phase), and
-`CHIPDAW_FPS_CAP=off|60|120|display` to start with a frame-rate cap (default `off`; see
-[PERF-macos.md](PERF-macos.md)). On macOS the modifier mappings follow Mac conventions; they are
+`CHIPDAW_FPS_CAP=60|120|off` to choose the starting frame-rate cap (default `60`; `display` is an
+alias for `off`; see [PERF-macos.md](PERF-macos.md) §6). On macOS the modifier mappings follow Mac conventions; they are
 defined in `crates/ui/src/input.rs`.
 
 ## Documents

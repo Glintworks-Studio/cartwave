@@ -535,48 +535,49 @@ pub const PHASE_NAMES: [&str; 7] = [
     "present",
 ];
 
-/// Frame-rate cap (F6 cycles; start value from `CHIPDAW_FPS_CAP=off|60|120|display`).
+/// Frame-rate cap (F6 cycles 60 → 120 → off; start value from
+/// `CHIPDAW_FPS_CAP=60|120|off`).
 ///
-/// `Off` presents as often as vsync allows; the others ask the backend for
-/// fixed-rate frame slots. On a 60 Hz display they all behave the same. The
-/// product default is still to be decided (PERF-macos.md); `Off` keeps the
-/// behaviour PERF.md measured.
+/// The default is 60 fps (decided after PERF-macos.md §6): half the CPU and
+/// energy of anything else on a 320 Hz display, with the most even cadence.
+/// 120 is the opt-in "smooth motion" setting. `Off` presents as often as vsync
+/// allows. The former "display rate" setting measured strictly worse than 120
+/// and was removed; `display` is accepted as an alias for `off`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FrameCap {
-    #[default]
     Off,
+    #[default]
     Fps60,
     Fps120,
-    /// The refresh rate of the display the window is on.
-    Display,
 }
 
 impl FrameCap {
     pub fn from_env() -> Self {
-        match std::env::var("CHIPDAW_FPS_CAP").as_deref() {
-            Ok("60") => Self::Fps60,
-            Ok("120") => Self::Fps120,
-            Ok("display") => Self::Display,
-            _ => Self::Off,
+        Self::parse(std::env::var("CHIPDAW_FPS_CAP").ok().as_deref())
+    }
+
+    fn parse(v: Option<&str>) -> Self {
+        match v {
+            Some("off" | "display") => Self::Off,
+            Some("120") => Self::Fps120,
+            _ => Self::Fps60,
         }
     }
 
     pub fn next(self) -> Self {
         match self {
-            Self::Off => Self::Fps60,
             Self::Fps60 => Self::Fps120,
-            Self::Fps120 => Self::Display,
-            Self::Display => Self::Off,
+            Self::Fps120 => Self::Off,
+            Self::Off => Self::Fps60,
         }
     }
 
     /// The frame-rate limit to request from the backend.
-    pub fn max_fps(self, display_hz: Option<f64>) -> Option<f64> {
+    pub fn max_fps(self) -> Option<f64> {
         match self {
             Self::Off => None,
             Self::Fps60 => Some(60.0),
             Self::Fps120 => Some(120.0),
-            Self::Display => display_hz,
         }
     }
 
@@ -585,7 +586,6 @@ impl FrameCap {
             Self::Off => "off",
             Self::Fps60 => "60",
             Self::Fps120 => "120",
-            Self::Display => "display",
         }
     }
 }
@@ -593,6 +593,18 @@ impl FrameCap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn frame_cap_default_and_aliases() {
+        assert_eq!(FrameCap::default(), FrameCap::Fps60);
+        assert_eq!(FrameCap::parse(None), FrameCap::Fps60);
+        assert_eq!(FrameCap::parse(Some("120")), FrameCap::Fps120);
+        assert_eq!(FrameCap::parse(Some("off")), FrameCap::Off);
+        assert_eq!(FrameCap::parse(Some("display")), FrameCap::Off);
+        let mut c = FrameCap::default();
+        let cycle: Vec<_> = (0..3).map(|_| { c = c.next(); c }).collect();
+        assert_eq!(cycle, [FrameCap::Fps120, FrameCap::Off, FrameCap::Fps60]);
+    }
 
     fn clip(id: u32, lane: usize, start: u32, len: u32) -> Clip {
         // One note per quarter, absolute pitch = 60 + quarter index.

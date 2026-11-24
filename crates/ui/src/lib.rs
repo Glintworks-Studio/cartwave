@@ -492,7 +492,7 @@ impl AppState {
             return;
         }
         self.applied = Some((self.cap, display_hz));
-        cx.set_max_frame_rate(self.cap.max_fps(display_hz));
+        cx.set_max_frame_rate(self.cap.max_fps());
         let cap = self.cap;
         self.s.stats.update(|s| {
             s.cap = cap;
