@@ -26,6 +26,7 @@ pub struct ScrubField {
     dragging: bool,
     press: (f32, f32),
     start_value: f64,
+    wheel: crate::input::WheelSteps,
 }
 
 impl ScrubField {
@@ -36,6 +37,7 @@ impl ScrubField {
             dragging: false,
             press: (0.0, 0.0),
             start_value: 0.0,
+            wheel: Default::default(),
         }
         .build(cx, |_| {})
         .class("field")
@@ -121,11 +123,13 @@ impl View for ScrubField {
                 meta.consume();
             }
             WindowEvent::MouseScroll(_, sy) => {
+                let steps = self.wheel.steps(*sy);
                 let t = self.s.transport.get_untracked();
                 match self.kind {
-                    FieldKind::Bpm => cx.emit(AppEvent::SetBpm(t.bpm + sy.signum())),
+                    _ if steps == 0 => {}
+                    FieldKind::Bpm => cx.emit(AppEvent::SetBpm(t.bpm + steps as f32)),
                     FieldKind::Position => cx.emit(AppEvent::SetPlayhead(
-                        t.playhead_ticks + sy.signum() as f64 * PPQ as f64,
+                        t.playhead_ticks + steps as f64 * PPQ as f64,
                     )),
                 }
                 meta.consume();

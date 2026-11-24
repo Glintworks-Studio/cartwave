@@ -40,13 +40,13 @@ Layout: `crates/ui` is the library (views, theme, state; reusable in a plugin ho
 | Arrangement | Click / `Shift`-click | Select / add to selection |
 | | Drag clip body | Move (time and lane), snapped to the grid |
 | | Drag clip edge | Resize |
-| | `Alt` while dragging | Disable snap |
-| | `Ctrl`/`Cmd`-drag | Duplicate |
+| | `Alt` while dragging (macOS: `Cmd`) | Disable snap |
+| | `Ctrl`-drag (macOS: `Option`-drag) | Duplicate |
 | | `Delete` / `Backspace` | Delete selection |
-| | `Ctrl`+`A`, `Esc` | Select all, clear selection |
-| | Wheel | Scroll horizontally |
+| | `Ctrl`+`A` (macOS: `Cmd`+`A`), `Esc` | Select all, clear selection |
+| | Wheel / two-finger swipe | Scroll horizontally |
 | | `Ctrl`/`Cmd`+wheel | Zoom around the cursor |
-| Ruler | Click / drag | Move the playhead (`Alt`: no snap) |
+| Ruler | Click / drag | Move the playhead (`Alt`, macOS `Cmd`: no snap) |
 | Dials | Vertical drag, wheel | Change value (`Shift`: fine) |
 | | Double-click | Reset to default |
 | BPM / Pos fields | Drag, wheel | Scrub value (`Shift`: fine, BPM) |

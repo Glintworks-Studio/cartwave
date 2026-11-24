@@ -189,8 +189,8 @@ impl Arrangement {
         };
 
         let mut anchor = id;
-        // Ctrl/Cmd-drag duplicates the selection and drags the copies.
-        if mode == DragMode::Move && (mods.ctrl() || mods.logo()) {
+        // Ctrl-drag (Option-drag on macOS) duplicates the selection and drags the copies.
+        if mode == DragMode::Move && crate::input::duplicate_drag(&mods) {
             arr.update(|a| {
                 let mut new_sel = Vec::new();
                 let originals: Vec<Clip> = a
@@ -243,7 +243,7 @@ impl Arrangement {
 
     fn on_drag(&mut self, cx: &mut EventContext) {
         let (mx, my) = Self::local_mouse(cx);
-        let no_snap = cx.modifiers().alt();
+        let no_snap = crate::input::bypass_snap(cx.modifiers());
         let Some(drag) = self.drag.as_mut() else {
             return;
         };
@@ -467,7 +467,7 @@ impl View for Arrangement {
             }
             WindowEvent::MouseScroll(sx, sy) => {
                 let (mx, _) = Self::local_mouse(cx);
-                let zoom = cx.modifiers().ctrl() || cx.modifiers().logo();
+                let zoom = crate::input::zoom_wheel(cx.modifiers());
                 let (sx, sy) = (*sx, *sy);
                 self.s.arrangement.update(|a| {
                     if zoom {
@@ -494,7 +494,7 @@ impl View for Arrangement {
                     meta.consume();
                 }
                 Code::Escape => self.s.arrangement.update(|a| a.selection.clear()),
-                Code::KeyA if cx.modifiers().ctrl() => {
+                Code::KeyA if crate::input::command(cx.modifiers()) => {
                     self.s
                         .arrangement
                         .update(|a| a.selection = a.clips.iter().map(|c| c.id).collect());

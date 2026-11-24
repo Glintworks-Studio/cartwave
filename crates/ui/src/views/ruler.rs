@@ -43,7 +43,7 @@ impl Ruler {
         let x = ((cx.mouse().cursor_x - b.x) / s) as f64;
         let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.snap));
         let mut t = view.x_to_tick(x).max(0.0);
-        if !cx.modifiers().alt() {
+        if !crate::input::bypass_snap(cx.modifiers()) {
             t = snap.round(t as i64).max(0) as f64;
         }
         cx.emit(AppEvent::SetPlayhead(t));

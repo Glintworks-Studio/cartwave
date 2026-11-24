@@ -35,6 +35,7 @@ pub struct Dial {
     drag_norm: f32,
     last_y: f32,
     hovered: bool,
+    wheel: crate::input::WheelSteps,
     /// Animated display state.
     shown_norm: Cell<f32>,
     active_t: Cell<f32>,
@@ -56,6 +57,7 @@ impl Dial {
             drag_norm: n,
             last_y: 0.0,
             hovered: false,
+            wheel: Default::default(),
             shown_norm: Cell::new(n),
             active_t: Cell::new(0.0),
             last_draw: Cell::new(None),
@@ -123,8 +125,11 @@ impl View for Dial {
                     WHEEL_STEP
                 };
                 let fine = if cx.modifiers().shift() { 0.25 } else { 1.0 };
-                let n = self.spec.to_norm(self.value()) + sy.signum() * step * fine;
-                self.set_norm(cx, n);
+                let steps = self.wheel.steps(*sy);
+                if steps != 0 {
+                    let n = self.spec.to_norm(self.value()) + steps as f32 * step * fine;
+                    self.set_norm(cx, n);
+                }
                 meta.consume();
             }
             WindowEvent::MouseEnter => {
