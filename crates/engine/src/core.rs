@@ -40,6 +40,9 @@ pub struct Core {
     gain: f32,
     // Underrun detection.
     last_cb_ns: Option<u64>,
+    /// Last callback of any stream (not reset on a rebuild), so the largest
+    /// gap includes the silence while a stream is rebuilt.
+    prev_any_cb_ns: Option<u64>,
     stream_callbacks: u64,
     /// Largest callback seen (the device buffer; the first callback gets it all).
     capacity: u32,
@@ -73,6 +76,7 @@ impl Core {
             sample_rate,
             gain: 1.0,
             last_cb_ns: None,
+            prev_any_cb_ns: None,
             stream_callbacks: 0,
             capacity: 0,
             period_frames: 0,
@@ -188,9 +192,12 @@ impl Core {
         // (2) Late: more time passed since the last callback than the whole
         // device buffer holds. Coarser (it missed 22-23 ms stalls on a 23.5 ms
         // buffer); kept as an independent second signal.
+        if let Some(prev) = self.prev_any_cb_ns {
+            sh.max_gap_ns.fetch_max(t0 - prev, Ordering::Relaxed);
+        }
+        self.prev_any_cb_ns = Some(t0);
         if let Some(last) = self.last_cb_ns {
             let gap = t0 - last;
-            sh.max_gap_ns.fetch_max(gap, Ordering::Relaxed);
             let capacity_ns = self.capacity as u64 * 1_000_000_000 / sr;
             if warm && gap > capacity_ns {
                 sh.xrun_late.fetch_add(1, Ordering::Relaxed);
