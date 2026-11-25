@@ -11,6 +11,7 @@ param(
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" })
 )
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 # 30 s frame-pacing run: app frame log (submit intervals, per-phase timings) +
 # DXGI desktop-duplication capture (ffmpeg ddagrab, dup_frames=0, no encode) to
 # count display refreshes that showed no new frame.
@@ -22,7 +23,7 @@ if ($Env) { foreach ($kv in $Env.Split(';')) { $k, $v = $kv.Split('='); Set-Item
 $log = "$S\pace_$Label`_$Scenario.csv"
 $env:CHIPDAW_FRAMELOG = $log
 "exe: $Exe"
-$p = Start-Process $Exe -PassThru
+$p = Start-Process $Exe -PassThru -RedirectStandardError "$S\pace_err.txt"
 Start-Sleep -Seconds 3
 . "$PSScriptRoot\input.ps1"
 Move-To 1430 890
@@ -52,3 +53,9 @@ $env:CHIPDAW_FRAMELOG = ""
 if ($Env) { foreach ($kv in $Env.Split(';')) { $k = $kv.Split('=')[0]; Remove-Item "Env:$k" -ErrorAction SilentlyContinue } }
 Select-String -Path "$S\pace_showinfo.txt" -Pattern "pts_time:\s*([0-9.]+)" | ForEach-Object { $_.Matches[0].Groups[1].Value } | Set-Content "$S\pace_pts.txt"
 python -I "$PSScriptRoot\pacing_analyze.py" $log "$S\pace_pts.txt" $Secs ("{0:N1}" -f $cpu) "$Label/$Scenario"
+# Proof the scenario ran (F-02): dev mode on (the frame log needs it), F4 for stress/drag.
+$err = Get-Content "$S\pace_err.txt" -Raw -ErrorAction SilentlyContinue
+$ok = ($err -match "dev: mode on") -and (Test-Path $log) -and ((Get-Content $log | Measure-Object -Line).Lines -gt 100)
+if ($Scenario -in "stress", "drag") { $ok = $ok -and ($err -match "dev: F4 stress set on") }
+if ($Scenario -in "pr", "prdrag") { $ok = $ok -and ($err -match "dev: CHIPDAW_OPEN_CLIP \d+ \(piano roll open: true\)") }
+"scenario $Scenario " + $(if ($ok) { "reached" } else { "NOT REACHED (dev-mode lines missing on stderr, or no frame log)" })

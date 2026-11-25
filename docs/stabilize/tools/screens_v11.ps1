@@ -4,6 +4,7 @@
 param([string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-screens-v11"))
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 $out = Join-Path $Repo "docs\screens\v1.1"
@@ -16,6 +17,7 @@ $env:CHIPDAW_EXPORT_TO = "$Work\export\song.wav"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"
+. "$Repo\docs\shell\tools\dialog.ps1"
 function Click($x, $y) { Move-To $x $y; Down; Up; Start-Sleep -Milliseconds 250 }
 function Full($n) { pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out "$Work\$n.png" | Out-Null }
 # Crop a screen-space rectangle of the last full shot into docs/screens/v1.1.
@@ -23,12 +25,12 @@ function Crop($n, $from, $x0, $y0, $x1, $y1) {
   python -c "from PIL import Image; Image.open(r'$Work\$from.png').crop(($x0,$y0,$x1,$y1)).save(r'$out\$n.png')"
 }
 
-# Clock: m:ss.cc, then a click switches it to bars.beats.sixteenths.
+# Clock: m:ss.cc, then View > Clock Shows Bars (the clock click left with the app shell).
 Move-To 1430 890; Full "f_clock_time"
 Crop "clock-time" "f_clock_time" 610 36 830 88
-Click 720 30; Move-To 1430 890; Start-Sleep -Milliseconds 300; Full "f_clock_bars"
+Invoke-Menu "View" 2; Move-To 1430 890; Start-Sleep -Milliseconds 300; Full "f_clock_bars"
 Crop "clock-bars" "f_clock_bars" 610 36 830 88
-Click 720 30                               # back to m:ss.cc
+Invoke-Menu "View" 2                       # back to m:ss.cc
 
 # A clip with its own instrument: Cello dropped on "Hook A".
 Click 120 110
@@ -44,7 +46,7 @@ Crop "clip-own-instrument" "f_main" 598 125 1442 200
 Crop "knobs-and-macros" "f_main" 0 700 1442 932
 
 # The export dialog, with group stems shown; then a real export (8 channel stems).
-Click 272 29
+KeyDown 0x11; KeyDown 0x10; Key 0x52; KeyUp 0x10; KeyUp 0x11; Start-Sleep -Milliseconds 400   # Ctrl+Shift+R (the EXPORT key left the top bar)
 Click 710 229                              # Groups (a row of lane chips appears)
 Move-To 1430 890; Start-Sleep -Milliseconds 300
 Full "f_dialog"

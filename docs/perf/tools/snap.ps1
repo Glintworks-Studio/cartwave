@@ -3,6 +3,7 @@
 # -Focus focuses the search field first (to show the glow). Default -Repo = this script's repo.
 param([string]$Out, [switch]$Focus,
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path)
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $Out = [IO.Path]::GetFullPath($Out)
 Set-Location $Repo
 Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force

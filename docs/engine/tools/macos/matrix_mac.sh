@@ -21,6 +21,7 @@
 # System Audio Recording (tapmon) permission. Test E changes the default
 # output device and always restores the original one, also on Ctrl-C.
 set -u
+export CHIPDAW_DEV=1   # F-02: test hooks and F3-F7 need dev mode
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../../../.." && pwd)"
 TESTS="${1:-A B C D G E}"

@@ -9,6 +9,7 @@ param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\
   [int]$DragX = 720, [int]$DragY = 130,
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
 Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -40,6 +41,9 @@ Cpu "stress_playing"
 CpuDrag "stress_drag"
 Stop-Process -Id $p.Id -Force
 if ($Env) { foreach ($kv in $Env.Split(';')) { $k = $kv.Split('=')[0]; Remove-Item "Env:$k" -ErrorAction SilentlyContinue } }
-$line = "{0,-28} idle {1,5}%  demo {2,5}%  200 {3,5}%  200drag {4,5}%" -f $Label, $Res.idle, $Res.demo_playing, $Res.stress_playing, $Res.stress_drag
+# Proof the scenario ran (F-02): dev mode on, and F4 really swapped in the 200-clip set.
+$err = Get-Content "$Work\bench_err.txt" -Raw -ErrorAction SilentlyContinue
+$proof = if ($err -match "dev: mode on" -and $err -match "dev: F4 stress set on") { "reached" } else { "NOT REACHED (no dev-mode F4 line on stderr)" }
+$line = "{0,-28} idle {1,5}%  demo {2,5}%  200 {3,5}%  200drag {4,5}%  stress set {5}" -f $Label, $Res.idle, $Res.demo_playing, $Res.stress_playing, $Res.stress_drag, $proof
 Add-Content "$Work\bench_log.txt" $line
 $line

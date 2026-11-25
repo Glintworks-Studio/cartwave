@@ -2,6 +2,7 @@
 # Writes the piano-roll screenshots in docs/screens/pianoroll/ (1440x900, 100%).
 param([string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path)
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 Set-Location $Repo
 $out = Join-Path $Repo "docs\screens\pianoroll"
 New-Item -ItemType Directory -Force $out | Out-Null

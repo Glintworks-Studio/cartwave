@@ -13,6 +13,7 @@ param(
     # A frozen copy of the build, so the repo can be rebuilt while the matrix runs.
     [string]$AppExe = ''
 )
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = 'Stop'
 # `pwsh -File` passes "A,B" as one string: split comma lists.
 $Tests = $Tests | ForEach-Object { $_ -split ',' } | Where-Object { $_ }

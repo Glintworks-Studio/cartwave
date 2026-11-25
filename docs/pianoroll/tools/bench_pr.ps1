@@ -6,11 +6,12 @@
 param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 Set-Location $Repo
 Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
 $env:CHIPDAW_PROJECT = Join-Path $Work "piano_bench.chipdaw"
 $env:CHIPDAW_OPEN_CLIP = "1"; $env:CHIPDAW_PIANO_ZOOM = "32"; $env:CHIPDAW_DATA_DIR = Join-Path $Work "bench-data"
-$p = Start-Process $Exe -PassThru
+$p = Start-Process $Exe -PassThru -RedirectStandardError "$Work\bench_pr_err.txt"
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"
 function Cpu([scriptblock]$during) {
@@ -25,6 +26,10 @@ $drag = Cpu { param($t) $i = 0; while ($t.Elapsed.TotalSeconds -lt $Secs) { Move
 Up
 Stop-Process -Id $p.Id -Force
 Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_OPEN_CLIP, Env:CHIPDAW_PIANO_ZOOM, Env:CHIPDAW_DATA_DIR
-$line = "{0,-24} piano roll 2000 notes: playing {1,5}%  dragging {2,5}%" -f $Label, $play, $drag
+# Proof the scenario ran (F-02): the project hook loaded the 2,000-note song and the
+# piano roll opened on it.
+$err = Get-Content "$Work\bench_pr_err.txt" -Raw -ErrorAction SilentlyContinue
+$proof = if ($err -match "dev: CHIPDAW_PROJECT .*piano_bench" -and $err -match "dev: CHIPDAW_OPEN_CLIP 1 \(piano roll open: true\)") { "reached" } else { "NOT REACHED (dev-mode lines missing on stderr)" }
+$line = "{0,-24} piano roll 2000 notes: playing {1,5}%  dragging {2,5}%  scenario {3}" -f $Label, $play, $drag, $proof
 Add-Content "$Work\bench_log.txt" $line
 $line

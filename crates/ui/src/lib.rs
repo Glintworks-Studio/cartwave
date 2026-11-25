@@ -537,7 +537,10 @@ impl Model for AppState {
                 let end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
                 self.send(Command::LoopEnd(self.engine_loop_end(end)));
             }
-            AppEvent::ToggleStats => self.s.stats.update(|s| s.visible = !s.visible),
+            AppEvent::ToggleStats => {
+                self.s.stats.update(|s| s.visible = !s.visible);
+                eprintln!("dev: F3 overlay {}", if self.s.stats.with_untracked(|s| s.visible) { "on" } else { "off" });
+            }
             AppEvent::CycleFrameCap => {
                 self.cap = self.cap.next();
                 self.apply_frame_cap(cx);
@@ -545,6 +548,7 @@ impl Model for AppState {
             AppEvent::ToggleStress => {
                 let on = !self.s.stress.get();
                 self.s.stress.set(on);
+                eprintln!("dev: F4 stress set {}", if on { "on (200 clips)" } else { "off (demo song)" });
                 self.s.arrangement.set(if on {
                     mock::stress_arrangement()
                 } else {
@@ -2711,7 +2715,9 @@ impl AppState {
         if let Some(path) = crate::dev::var("CHIPDAW_PROJECT") {
             match file::load(std::path::Path::new(&path)) {
                 Ok(p) => {
+                    let n = p.arrangement.clips.len();
                     self.load_project(p);
+                    eprintln!("dev: CHIPDAW_PROJECT {path} ({n} clips)");
                     self.s.file_path.set(path);
                     self.mark_saved();
                 }
@@ -2720,6 +2726,7 @@ impl AppState {
         }
         if let Some(id) = crate::dev::var("CHIPDAW_OPEN_CLIP").and_then(|v| v.parse().ok()) {
             self.open_piano(id);
+            eprintln!("dev: CHIPDAW_OPEN_CLIP {id} (piano roll open: {})", self.s.piano_open.get_untracked());
         }
         // `CHIPDAW_PIANO_ZOOM=px per bar` (the piano-roll benchmark shows
         // all 2,000 notes at 32).

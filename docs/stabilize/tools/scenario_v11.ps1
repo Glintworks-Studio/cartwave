@@ -13,6 +13,7 @@
 param([string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-scenario-v11"))
+$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 New-Item -ItemType Directory -Force $Work | Out-Null

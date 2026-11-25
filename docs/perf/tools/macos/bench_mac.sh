@@ -10,6 +10,7 @@
 #       CHIPDAW_APP         app binary (default: $CHIPDAW_REPO/target/release/app)
 #       CHIPDAW_BENCH_ARGS  extra chipbench arguments, e.g. "--pos 0,508" or "--trace" setups
 set -euo pipefail
+export CHIPDAW_DEV=1   # F-02: test hooks and F3-F7 need dev mode
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="${CHIPDAW_REPO:-$(cd "$HERE/../../../.." && pwd)}"
 WORK="${CHIPDAW_PERF_WORK:-${TMPDIR:-/tmp}/chipdaw-perf}"

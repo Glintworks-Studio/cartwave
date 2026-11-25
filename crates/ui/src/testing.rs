@@ -166,6 +166,25 @@ impl Tests {
             last_tick: None,
             tick_gap_max: Duration::ZERO,
         };
+        // F-02: every harness proves it reached its scenario from this line
+        // (stderr), since a release build without CHIPDAW_DEV ignores the hooks.
+        if crate::dev::enabled() {
+            let on: Vec<&str> = [
+                ("auto_edit", t.auto_edit),
+                ("ui_stall", t.ui_stall),
+                ("avsync", t.avsync),
+                ("pilot", t.pilot),
+                ("stress", t.stress),
+                ("heavy", t.heavy),
+                ("autoplay", t.autoplay),
+                ("audiolog", t.log.is_some()),
+                ("quit_after", t.quit_after.is_some()),
+            ]
+            .into_iter()
+            .filter_map(|(n, b)| b.then_some(n))
+            .collect();
+            eprintln!("dev: mode on; test hooks: [{}]; buffer {:?}; filter {:?}", on.join(", "), t.buffer, t.filter);
+        }
         if let Some(f) = t.log.as_mut() {
             let _ = writeln!(
                 f,
