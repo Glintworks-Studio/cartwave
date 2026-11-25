@@ -528,6 +528,40 @@ pub fn draw_text_clipped(
     }
 }
 
+
+/// Text wrapped at word breaks into at most `lines` lines inside `max_w`
+/// (the last line ends in an ellipsis if the text goes on). `top` is the top
+/// of the first line; lines are 1.35 × the font size apart.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_text_wrapped(canvas: &vg::Canvas, s: &str, x: f32, top: f32, max_w: f32, font: &vg::Font, color: Rgba, lines: usize) {
+    let lh = font.size() * 1.35;
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut rest = s.split_whitespace().peekable();
+    while let Some(w) = rest.next() {
+        let try_line = if cur.is_empty() { w.to_string() } else { format!("{cur} {w}") };
+        if text_width(font, &try_line) <= max_w || cur.is_empty() {
+            cur = try_line;
+        } else {
+            out.push(std::mem::take(&mut cur));
+            cur = w.to_string();
+            if out.len() + 1 == lines {
+                // The last line takes everything left (clipped below).
+                for w in rest.by_ref() {
+                    cur.push(' ');
+                    cur.push_str(w);
+                }
+            }
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    for (i, l) in out.iter().take(lines).enumerate() {
+        draw_text_clipped(canvas, l, x, (top + font.size() + i as f32 * lh).round(), max_w, font, color);
+    }
+}
+
 const MAX_FITTED_STRINGS: usize = 4096;
 
 /// (text, font size in 1/4 px, max width in px) -> fitted text, or None if nothing fits.

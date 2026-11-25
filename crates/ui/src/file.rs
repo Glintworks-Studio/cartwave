@@ -3,7 +3,9 @@
 //!
 //! Versions: 1 (piano roll), 2 (instruments, DPCM samples), 3 (the lane
 //! Volume control is a channel volume that scales note volumes; loop start
-//! and loop on/off are saved). Older files are migrated on load so they
+//! and loop on/off are saved), 4 (track names and colours, clip colours:
+//! Batch 3. A version 1–3 lane `name` was informational and is not read, so
+//! those files open with the default names, exactly as before). Older files are migrated on load so they
 //! sound exactly as before (`migrate_v2`).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
@@ -25,7 +27,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const EXTENSION: &str = "chipdaw";
 
 /// Everything a project file stores.
@@ -112,8 +114,12 @@ struct SampleV2 {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LaneV1 {
-    /// Informational; lanes are identified by their position (0..8).
+    /// The track's name (version 4; before, informational and ignored).
+    /// Lanes are identified by their position (0..8).
     name: String,
+    /// Version 4: the track's colour, "#RRGGBB", when not the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
     #[serde(default)]
     mute: bool,
     #[serde(default)]
@@ -274,6 +280,9 @@ struct ClipV1 {
     /// Version 3: the clip's own instrument (an id); missing: the lane's.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     instrument: Option<u32>,
+    /// Version 4: the clip's own colour, "#RRGGBB"; missing: the track's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
     notes: Vec<Note>,
 }
 
@@ -309,13 +318,31 @@ fn filter_key(f: FilterMode) -> &'static str {
     }
 }
 
+/// A colour as file text: "#RRGGBB".
+fn hex_text(c: u32) -> String {
+    format!("#{c:06X}")
+}
+
+/// "#RRGGBB" → a colour; errors are user-facing.
+fn parse_hex(t: &str) -> Result<crate::theme::tokens::Rgba, String> {
+    let h = t.strip_prefix('#').filter(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit())).ok_or_else(|| format!("Bad colour \"{t}\" (use #RRGGBB)."))?;
+    Ok(crate::theme::tokens::Rgba::hex(u32::from_str_radix(h, 16).map_err(|_| format!("Bad colour \"{t}\"."))?))
+}
+
 // ───────────────────────────── Save / load ─────────────────────────────
 
 /// The project as file text (pretty-printed JSON, one note per line).
 pub fn to_string(p: &Project) -> String {
     let lanes = (0..LANES)
         .map(|lane| LaneV1 {
-            name: default_lanes()[lane].name.to_string(),
+            name: p.arrangement.lanes.get(lane).map_or_else(|| default_lanes()[lane].name.clone(), |l| l.name.clone()),
+            color: p
+                .arrangement
+                .lanes
+                .get(lane)
+                .map(|l| crate::state::rgb_hex(l.color))
+                .filter(|c| *c != crate::state::rgb_hex(default_lanes()[lane].color))
+                .map(hex_text),
             mute: p.mute & (1 << lane) != 0,
             solo: p.solo & (1 << lane) != 0,
             params: ParamId::for_lane(lane)
@@ -337,6 +364,7 @@ pub fn to_string(p: &Project) -> String {
             len: c.len_ticks,
             name: c.name.clone(),
             instrument: c.instrument,
+            color: c.color.map(|c| hex_text(crate::state::rgb_hex(c))),
             notes: c.notes.clone(),
         })
         .collect();
@@ -476,6 +504,18 @@ pub fn from_str(text: &str) -> Result<Project, String> {
     }
     let mut arrangement = Arrangement::empty();
     arrangement.instruments = instrument_table(&f)?;
+    // Version 4: track names and colours (older files keep the defaults).
+    if h.version.unwrap_or(VERSION) >= 4 {
+        for (lane, l) in f.lanes.iter().enumerate() {
+            let name: String = l.name.trim().chars().filter(|c| !c.is_control()).take(crate::user_presets::MAX_NAME).collect();
+            if !name.is_empty() {
+                arrangement.lanes[lane].name = name;
+            }
+            if let Some(c) = &l.color {
+                arrangement.lanes[lane].color = parse_hex(c)?;
+            }
+        }
+    }
     let mut seen = std::collections::HashSet::new();
     for c in f.clips {
         if c.lane >= LANES {
@@ -497,8 +537,13 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         if let Some(i) = c.instrument.filter(|i| !arrangement.instruments.contains(*i)) {
             return Err(format!("Clip {} uses instrument {i}, which isn't in the file.", c.id));
         }
+        let color = match &c.color {
+            Some(t) if h.version.unwrap_or(VERSION) >= 4 => Some(parse_hex(t)?),
+            _ => None,
+        };
         let mut clip = Clip::new(c.id, c.lane, c.start, c.len.max(1), c.name, c.notes);
         clip.instrument = c.instrument;
+        clip.color = color;
         // Hand-edited files: restore the invariants instead of failing.
         clip.notes.retain(|n| n.len > 0);
         for n in &mut clip.notes {
@@ -945,7 +990,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 3,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 4,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -955,9 +1000,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 3,", "\"version\": 4,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 4,", "\"version\": 5,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 4"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 5"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

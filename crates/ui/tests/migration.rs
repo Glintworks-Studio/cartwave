@@ -45,9 +45,9 @@ fn version_2_files_render_bit_identically_after_migration() {
         if (r, e) != (want_r, want_e) {
             bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
         }
-        // Saved again as version 3 and reloaded: still the same sound.
+        // Saved again in the current version and reloaded: still the same sound.
         let again = file::from_str(&file::to_string(&p)).unwrap();
-        assert!(file::to_string(&p).contains("\"version\": 3"));
+        assert!(file::to_string(&p).contains(&format!("\"version\": {}", file::VERSION)));
         assert_eq!(render::hash(&export::render(&again)), e, "{name}: v3 round trip");
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
@@ -68,4 +68,71 @@ fn migration_reports_what_it_changed_and_current_files_report_nothing() {
     assert!(p.load_report.iter().any(|l| l.contains("Upgraded")), "{:?}", p.load_report);
     let again = file::from_str(&file::to_string(&p)).unwrap();
     assert!(again.load_report.is_empty(), "a version 3 file needs no migration");
+}
+
+/// Format v3 files written by the build before Batch 3 (main @ fb2d632, with
+/// docs/songs/v3/v3corpus.rs.txt), and their hashes from that build
+/// (docs/songs/v3/HASHES.txt). Version 4 adds track names and colours and
+/// clip colours; a v3 file must open and sound exactly as before, with the
+/// default names (v3 names were informational) and no colours.
+const V3: &[(&str, u64, u64)] = &[
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7),
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64),
+    ("layout_0", 0xf32404eae4b93fa2, 0xc56c98aeea4a3098),
+    ("layout_1", 0x99fb04b277dac084, 0x57720d21669d5fd0),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd),
+    ("layout_3", 0xbbfece4fdee90c11, 0x3b7264132f74366f),
+    ("layout_4", 0x43621e26f83e83e3, 0x1297fa4fcc0f77b7),
+    ("raw_volumes", 0x9ce78c6f9d53c5d2, 0x2f45a89d297f00f8),
+    ("saw_rate_50_inexact", 0x1343b5eec2e8d720, 0xcad8f3a659155ded),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8),
+    ("volumes_mixed", 0xe1840708a7c60272, 0xd8359071fd0824f9),
+];
+
+#[test]
+fn version_3_files_render_bit_identically_in_version_4() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v3");
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e) in V3 {
+        let text = std::fs::read_to_string(dir.join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 3"), "{name} is a version 3 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.load_report.is_empty(), "{name}: v3 -> v4 changes nothing audible: {:?}", p.load_report);
+        assert_eq!(p.arrangement.lanes, ui::state::default_lanes(), "{name}: default names and colours");
+        assert!(p.arrangement.clips.iter().all(|c| c.color.is_none()));
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let e = render::hash(&export::render(&p));
+        if (r, e) != (want_r, want_e) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
+        }
+        // Saved as v4 (no colour fields for default colours) and reloaded.
+        let v4 = file::to_string(&p);
+        assert!(v4.contains("\"version\": 4") && !v4.contains("\"color\""), "{name}");
+        let again = file::from_str(&v4).unwrap();
+        assert_eq!(again.arrangement.lanes, p.arrangement.lanes);
+        assert_eq!(render::hash(&export::render(&again)), e, "{name}: v4 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("
+"));
+}
+
+/// A v3 file's lane names were informational: a hand-edited one is ignored
+/// (exact migration), while a v4 file's names and colours are kept.
+#[test]
+fn track_names_and_colours_are_saved_from_version_4() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v3");
+    let text = std::fs::read_to_string(dir.join("demo_band.chipdaw")).unwrap();
+    let edited = text.replacen("\"name\": \"Pulse 1\"", "\"name\": \"Lead\"", 1);
+    assert_ne!(edited, text);
+    let p = file::from_str(&edited).unwrap();
+    assert_eq!(p.arrangement.lanes[0].name, "Pulse 1", "v3: ignored");
+    let mut p = p;
+    p.arrangement.lanes[0].name = "Lead".into();
+    p.arrangement.lanes[3].color = ui::theme::tokens::Rgba::hex(0x4FA8E0);
+    let id = p.arrangement.clips[0].id;
+    p.arrangement.clip_mut(id).unwrap().color = Some(ui::theme::tokens::Rgba::hex(0xE0705A));
+    let again = file::from_str(&file::to_string(&p)).unwrap();
+    assert_eq!(again.arrangement.lanes[0].name, "Lead");
+    assert_eq!(ui::state::rgb_hex(again.arrangement.lanes[3].color), 0x4FA8E0);
+    assert_eq!(again.arrangement.clip(id).unwrap().color.map(ui::state::rgb_hex), Some(0xE0705A));
 }

@@ -866,26 +866,40 @@ impl View for SpectrumBox {
 // ─────────────────────────────── Context menu ───────────────────────────────
 
 /// Menu geometry (logical px).
-const MENU_W: f32 = 220.0;
+const MENU_W: f32 = 240.0;
 const MENU_ROW_H: f32 = 28.0;
+const MENU_SEP_H: f32 = 8.0;
 const MENU_PAD: f32 = 4.0;
 const MENU_TEXT_X: f32 = 12.0;
 const MENU_TEXT_PX: f32 = 12.0;
+/// The reason line under a menu with disabled rows (F-24): two lines of text.
+const MENU_REASON_H: f32 = 40.0;
+const MENU_REASON_PX: f32 = 11.0;
+/// Colour swatch size and the room the tick takes.
+const MENU_SWATCH: f32 = 12.0;
+const MENU_CHECK_W: f32 = 16.0;
 
-/// A menu's size for `n` items (logical px).
-pub fn menu_size(n: usize) -> (f32, f32) {
-    (MENU_W, MENU_PAD * 2.0 + MENU_ROW_H * n as f32)
+fn row_h(it: &crate::state::MenuItem) -> f32 {
+    if it.action == crate::state::MenuAction::Separator {
+        MENU_SEP_H
+    } else {
+        MENU_ROW_H
+    }
 }
 
-/// Where to open a menu of `n` items for a click at (x, y) (window logical
-/// px) so it stays inside the window: flipped left / up near the edges.
-pub fn menu_origin(cx: &EventContext, x: f32, y: f32, n: usize) -> (f32, f32) {
-    let (w, h) = menu_size(n);
-    let s = cx.scale_factor();
-    let win = cx.cache.get_bounds(Entity::root());
-    let (ww, wh) = (win.w / s, win.h / s);
-    let x = if x + w > ww - SP_1 { (x - w).max(0.0) } else { x };
-    let y = if y + h > wh - SP_1 { (y - h).max(0.0) } else { y };
+/// A menu's size (logical px).
+pub fn menu_size_of(items: &[crate::state::MenuItem]) -> (f32, f32) {
+    let rows: f32 = items.iter().map(row_h).sum();
+    let reason = if items.iter().any(|i| !i.enabled) { MENU_REASON_H } else { 0.0 };
+    (MENU_W, MENU_PAD * 2.0 + rows + reason)
+}
+
+/// Where to open a menu for a click at (x, y) so it stays inside a window of
+/// `win` (logical px): flipped left / up near the edges.
+pub fn menu_origin_in(win: (f32, f32), x: f32, y: f32, items: &[crate::state::MenuItem]) -> (f32, f32) {
+    let (w, h) = menu_size_of(items);
+    let x = if x + w > win.0 - SP_1 { (x - w).max(0.0) } else { x };
+    let y = if y + h > win.1 - SP_1 { (win.1 - SP_1 - h).max(0.0) } else { y };
     (x, y)
 }
 
@@ -910,34 +924,43 @@ impl View for MenuBackdrop {
 }
 
 /// A right-click menu in the capsule style: label left, shortcut right,
-/// the hovered row lit in the accent.
+/// the hovered row lit in the accent. Disabled rows are dimmed and say why
+/// in the line at the bottom; a row ending in ▸ opens its submenu.
 pub struct ContextMenu {
-    s: Signals,
-    items: Vec<crate::state::MenuAction>,
+    items: Vec<crate::state::MenuItem>,
     hover: Option<usize>,
+    /// This is a submenu (no submenus of its own).
+    nested: bool,
 }
 
 impl ContextMenu {
-    pub fn new(cx: &mut Context, s: Signals, m: crate::state::ContextMenuSpec) -> Handle<'_, Self> {
-        let (w, h) = menu_size(m.items.len());
+    pub fn new(cx: &mut Context, m: crate::state::ContextMenuSpec, nested: bool) -> Handle<'_, Self> {
+        let (w, h) = menu_size_of(&m.items);
         let (x, y) = (m.x, m.y);
-        Self {
-            s,
-            items: m.items,
-            hover: None,
-        }
-        .build(cx, |_| {})
-        .position_type(PositionType::Absolute)
-        .left(Pixels(x))
-        .top(Pixels(y))
-        .width(Pixels(w))
-        .height(Pixels(h))
+        Self { items: m.items, hover: None, nested }
+            .build(cx, |_| {})
+            .position_type(PositionType::Absolute)
+            .left(Pixels(x))
+            .top(Pixels(y))
+            .width(Pixels(w))
+            .height(Pixels(h))
     }
 
-    fn row_at(&self, cx: &EventContext) -> Option<usize> {
+    /// The row under the mouse and its top (logical px from the menu's top).
+    fn row_at(&self, cx: &EventContext) -> Option<(usize, f32)> {
+        if !mouse_inside(cx) {
+            return None;
+        }
         let (_, y) = local_mouse(cx);
-        let i = ((y - MENU_PAD) / MENU_ROW_H).floor();
-        (i >= 0.0 && (i as usize) < self.items.len() && mouse_inside(cx)).then_some(i as usize)
+        let mut top = MENU_PAD;
+        for (i, it) in self.items.iter().enumerate() {
+            let h = row_h(it);
+            if y >= top && y < top + h {
+                return (it.action != crate::state::MenuAction::Separator).then_some((i, top));
+            }
+            top += h;
+        }
+        None
     }
 }
 
@@ -947,12 +970,21 @@ impl View for ContextMenu {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        use crate::state::MenuAction;
         event.map(|we, meta| match we {
             WindowEvent::MouseMove(_, _) => {
                 let r = self.row_at(cx);
-                if r != self.hover {
-                    self.hover = r;
+                if r.map(|r| r.0) != self.hover {
+                    self.hover = r.map(|r| r.0);
                     cx.needs_redraw();
+                    // Hovering a submenu row opens it beside the row.
+                    if let (Some((i, top)), false) = (r, self.nested) {
+                        if let MenuAction::Sub(sub) = self.items[i].action {
+                            let b = cx.bounds();
+                            let s = cx.scale_factor();
+                            cx.emit(AppEvent::OpenSub(sub, b.right() / s - MENU_PAD, b.y / s + top - MENU_PAD));
+                        }
+                    }
                 }
             }
             WindowEvent::MouseLeave => {
@@ -961,8 +993,11 @@ impl View for ContextMenu {
             }
             WindowEvent::MouseDown(_) => meta.consume(),
             WindowEvent::MouseUp(MouseButton::Left) => {
-                if let Some(i) = self.row_at(cx) {
-                    cx.emit(AppEvent::Menu(self.items[i]));
+                if let Some((i, _)) = self.row_at(cx) {
+                    let it = &self.items[i];
+                    if it.enabled && !matches!(it.action, MenuAction::Sub(_)) {
+                        cx.emit(AppEvent::Menu(it.action));
+                    }
                 }
                 meta.consume();
             }
@@ -979,27 +1014,58 @@ impl View for ContextMenu {
         draw_box(canvas, &rr, s);
         gfx::top_sheen(canvas, &rr, gfx::hairline(s), STROKE, KEY_SHEEN.with_alpha(0.6));
         let f = gfx::font(Face::Medium, MENU_TEXT_PX * s);
+        let mut top = MENU_PAD;
         for (i, item) in self.items.iter().enumerate() {
-            let row = vg::Rect::from_xywh(
-                r.left + MENU_PAD * s,
-                r.top + (MENU_PAD + i as f32 * MENU_ROW_H) * s,
-                r.width() - 2.0 * MENU_PAD * s,
-                MENU_ROW_H * s,
-            );
-            let hot = self.hover == Some(i);
+            let h = row_h(item);
+            let row = vg::Rect::from_xywh(r.left + MENU_PAD * s, r.top + top * s, r.width() - 2.0 * MENU_PAD * s, h * s);
+            top += h;
+            if item.action == crate::state::MenuAction::Separator {
+                let y = row.center_y().round();
+                canvas.draw_rect(vg::Rect::from_xywh(row.left + 8.0 * s, y, row.width() - 16.0 * s, gfx::hairline(s)), &gfx::fill(LINE));
+                continue;
+            }
+            let hot = self.hover == Some(i) && item.enabled;
             if hot {
-                canvas.draw_rrect(
-                    gfx::rrect(row, RADIUS_KEY * s),
-                    &gfx::vgrad(row, ACCENT.lighten(0.05), ACCENT.darken(0.15)),
-                );
+                canvas.draw_rrect(gfx::rrect(row, RADIUS_KEY * s), &gfx::vgrad(row, ACCENT.lighten(0.05), ACCENT.darken(0.15)));
             }
             let base = gfx::baseline_for_center(&f, row.center_y()).round();
-            let ink = if hot { Rgba::hex(0x0A0A0A) } else { TEXT_HI };
-            gfx::draw_text(canvas, item.label(), (row.left + MENU_TEXT_X * s).round(), base, &f, ink);
-            let sc = item.shortcut(self.s.arrangement.with_untracked(|a| a.snap));
+            let ink = if hot {
+                Rgba::hex(0x0A0A0A)
+            } else if item.enabled {
+                TEXT_HI
+            } else {
+                TEXT_LO
+            };
+            let mut x = row.left + MENU_TEXT_X * s;
+            if item.checked {
+                gfx::draw_text(canvas, "\u{2713}", x.round(), base, &f, ink);
+            }
+            if self.items.iter().any(|i| i.checked) {
+                x += MENU_CHECK_W * s;
+            }
+            if let Some(c) = item.swatch {
+                let sw = vg::Rect::from_xywh(x, row.center_y() - MENU_SWATCH * 0.5 * s, MENU_SWATCH * s, MENU_SWATCH * s);
+                let srr = gfx::rrect(gfx::snap(sw), 3.0 * s);
+                canvas.draw_rrect(srr, &gfx::vgrad(sw, c.lighten(0.08), c.darken(0.12)));
+                gfx::ring(canvas, &srr, gfx::hairline(s), &gfx::fill(Rgba::black(0.4)));
+                x += (MENU_SWATCH + 8.0) * s;
+            }
+            gfx::draw_text(canvas, &item.label, x.round(), base, &f, ink);
+            let sc = if matches!(item.action, crate::state::MenuAction::Sub(_)) { "\u{25B8}".to_string() } else { item.shortcut.clone() };
             let sw = gfx::text_width(&f, &sc);
             let ink = if hot { Rgba::hex(0x0A0A0A).with_alpha(0.6) } else { TEXT_LO };
             gfx::draw_text(canvas, &sc, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
+        }
+        // The reason a hovered row is disabled (F-24).
+        if self.items.iter().any(|i| !i.enabled) {
+            let area = vg::Rect::from_ltrb(r.left + MENU_PAD * s, r.top + top * s, r.right - MENU_PAD * s, r.bottom - MENU_PAD * s);
+            canvas.draw_rect(vg::Rect::from_xywh(area.left + 8.0 * s, area.top.round(), area.width() - 16.0 * s, gfx::hairline(s)), &gfx::fill(LINE));
+            let text = match self.hover.map(|h| &self.items[h]) {
+                Some(it) if !it.enabled => it.reason.as_str(),
+                _ => "Dimmed items say why on hover.",
+            };
+            let fr = gfx::font(Face::Medium, MENU_REASON_PX * s);
+            gfx::draw_text_wrapped(canvas, text, area.left + MENU_TEXT_X * s, area.top + 6.0 * s, area.width() - 2.0 * MENU_TEXT_X * s, &fr, TEXT_MID, 2);
         }
     }
 }
@@ -1133,7 +1199,7 @@ const ROW_NAME_BASELINE: f32 = 20.0;
 const BADGE_Y: f32 = 32.0;
 const BADGE_W: f32 = 52.0;
 const BADGE_H: f32 = 16.0;
-const BADGE_PX: f32 = 9.0;
+const BADGE_PX: f32 = 11.0;
 /// Instrument name in the track row, and the room kept free for the M/S keys.
 const INST_PX: f32 = 11.0;
 const INST_RIGHT_RESERVE: f32 = 80.0;
@@ -1169,8 +1235,8 @@ impl TrackRow {
         .bind(s.arrangement, move |mut h| {
             let now = s.arrangement.with_untracked(|a| {
                 (
-                    a.first_selected().map(|c| c.lane) == Some(lane),
-                    a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(),
+                    a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
+                    format!("{}\u{1}{}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), a.lanes[lane].name, a.lanes[lane].color),
                 )
             });
             if *seen.borrow() != now {
@@ -1197,6 +1263,25 @@ impl View for TrackRow {
                     self.hover = false;
                     cx.needs_redraw();
                 }
+                // T1: a click selects the track (Shift / Ctrl / Cmd adds).
+                WindowEvent::MouseDown(MouseButton::Left) if !crate::state::lane_off(self.s.chip.get_untracked(), self.lane) => {
+                    let m = *cx.modifiers();
+                    cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
+                    cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
+                    meta.consume();
+                }
+                // T2: a double-click renames it.
+                WindowEvent::MouseDoubleClick(MouseButton::Left) if !crate::state::lane_off(self.s.chip.get_untracked(), self.lane) => {
+                    cx.emit(AppEvent::OpenRename(crate::edit::RenameTarget::Track(self.lane)));
+                    meta.consume();
+                }
+                // T3: its menu.
+                WindowEvent::MouseDown(MouseButton::Right) => {
+                    cx.emit(AppEvent::SelectTrack(self.lane, false));
+                    let s = cx.scale_factor();
+                    cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Track(self.lane), cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
+                    meta.consume();
+                }
                 _ => {}
             }
             // The header column scrolls with the lanes.
@@ -1222,11 +1307,11 @@ impl View for TrackRow {
         let selected = self
             .s
             .arrangement
-            .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(self.lane));
+            .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(self.lane) || a.track_sel.contains(&self.lane));
         let (color, name) = self
             .s
             .arrangement
-            .with_untracked(|a| (a.lanes[self.lane].color, a.lanes[self.lane].name));
+            .with_untracked(|a| (a.lanes[self.lane].color, a.lanes[self.lane].name.clone()));
         let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
 
         // Row surface and its top hairline.
@@ -1301,7 +1386,8 @@ impl View for TrackRow {
             r.top + ROW_NAME_BASELINE * s
         };
         let ink = if selected { TEXT_HI } else { TEXT_MID };
-        gfx::draw_text(canvas, name, x.round(), base.round(), &f, ink);
+        // Stop before the M/S keys (a long name is cut with an ellipsis).
+        gfx::draw_text_clipped(canvas, &name, x.round(), base.round(), r.right - INST_RIGHT_RESERVE * s - x, &f, ink);
 
         if !compact {
             let badge = vg::Rect::from_xywh(x, r.top + BADGE_Y * s, BADGE_W * s, BADGE_H * s);
@@ -1329,7 +1415,7 @@ impl View for TrackRow {
         if let Some((label, kit)) = inst {
             let fi = gfx::font(Face::Medium, INST_PX * s);
             let (ix, ib) = if compact {
-                (x + gfx::text_width(&f, name) + 12.0 * s, base)
+                (x + gfx::text_width(&f, &name) + 12.0 * s, base)
             } else {
                 (x + BADGE_W * s + 8.0 * s, gfx::baseline_for_center(&fi, r.top + (BADGE_Y + BADGE_H * 0.5) * s))
             };

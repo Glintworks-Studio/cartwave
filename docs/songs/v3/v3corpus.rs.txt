@@ -1,0 +1,35 @@
+//! Writes the format-v3 corpus for the v3 -> v4 migration test (BATCH3_PROMPT.md:
+//! file format changes ship an exact migration with hash tests). Run with the
+//! build that writes v3 (main @ fb2d632):
+//!   cargo test --release -p ui --test v3corpus -- --nocapture --ignored
+//! It re-saves every v2 corpus file and the scale test as version 3 into
+//! docs/songs/v3 and prints (name, render::render hash, export::render hash).
+
+use ui::{export, file, render};
+
+#[test]
+#[ignore]
+fn write_v3_corpus() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs");
+    let out = std::path::PathBuf::from(std::env::var("V3_OUT").expect("V3_OUT=dir"));
+    std::fs::create_dir_all(&out).unwrap();
+    let mut srcs: Vec<std::path::PathBuf> = std::fs::read_dir(root.join("v2"))
+        .unwrap()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "chipdaw"))
+        .collect();
+    srcs.push(root.join("scale_test.chipdaw"));
+    srcs.sort();
+    for src in srcs {
+        let name = src.file_stem().unwrap().to_string_lossy().to_string();
+        let p = file::load(&src).unwrap();
+        let text = file::to_string(&p);
+        assert!(text.contains("\"version\": 3"));
+        std::fs::write(out.join(format!("{name}.chipdaw")), &text).unwrap();
+        let again = file::from_str(&text).unwrap();
+        let secs = again.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / again.bpm as f64 + 1.0;
+        let r = render::hash(&render::render(&again, secs));
+        let e = render::hash(&export::render(&again));
+        println!("    (\"{name}\", {r:#018x}, {e:#018x}),");
+    }
+}

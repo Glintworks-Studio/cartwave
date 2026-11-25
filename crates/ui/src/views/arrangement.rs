@@ -21,6 +21,12 @@ thread_local! {
     static ARRANGEMENT_AT: Cell<Option<(f32, f32, f32)>> = const { Cell::new(None) };
 }
 
+/// The arrangement's left and right edges and scale as last drawn
+/// (physical px).
+pub fn arrangement_at() -> Option<(f32, f32, f32)> {
+    ARRANGEMENT_AT.with(|c| c.get())
+}
+
 /// The clip under a window position (physical px), on a lane the browser
 /// knows the row of; the newest (topmost) clip wins.
 pub fn clip_at(a: &state::Arrangement, x: f32, y: f32) -> Option<u32> {
@@ -74,6 +80,9 @@ struct Drag {
     moved: bool,
     /// Plain click on an already-selected clip collapses the selection on release.
     collapse_to: Option<u32>,
+    /// The snapped tick and the track under the press: a click without a
+    /// drag puts the insert marker there (A1, R38: Split acts on it).
+    press_at: (u32, usize),
 }
 
 pub struct Arrangement {
@@ -183,6 +192,7 @@ impl Arrangement {
         .bind(s.time_sel, |mut h| h.needs_redraw())
         .bind(s.drag_preset, |mut h| h.needs_redraw())
         .bind(s.chip, |mut h| h.needs_redraw())
+        .bind(s.guide, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -259,6 +269,21 @@ impl Arrangement {
         }
 
         let Some((id, zone)) = hit else {
+            if mods.shift() {
+                if let Some(ts) = self.s.time_sel.get_untracked() {
+                    let (tick, lane) = self.tick_lane_at(mx, my, !crate::input::bypass_snap(&mods));
+                    let g = self.s.arrangement.with_untracked(|a| a.grid().ticks);
+                    let sel = TimeSel {
+                        start: ts.start.min(tick),
+                        end: ts.end.max(if tick >= ts.end { tick + g } else { tick }).max(ts.start.min(tick) + 1),
+                        lane0: ts.lane0.min(lane),
+                        lane1: ts.lane1.max(lane),
+                    };
+                    self.s.time_sel.set(Some(sel));
+                    cx.focus();
+                    return;
+                }
+            }
             if !mods.shift() {
                 arr.update(|a| a.selection.clear());
             }
@@ -352,6 +377,7 @@ impl Arrangement {
         });
 
         cx.emit(crate::AppEvent::GestureBegin);
+        let press_at = self.tick_lane_at(mx, my, !crate::input::bypass_snap(&mods));
         self.drag = Some(Drag {
             mode,
             press: (mx, my),
@@ -359,6 +385,7 @@ impl Arrangement {
             origins,
             moved: false,
             collapse_to,
+            press_at,
         });
         cx.capture();
         cx.focus();
@@ -369,7 +396,7 @@ impl Arrangement {
         let lane_h = self.s.lane_h.get_untracked();
         self.s.arrangement.with_untracked(|a| {
             let t = a.view.x_to_tick(x as f64).max(0.0) as i64;
-            let t = if snap { a.snap.round(t) } else { t };
+            let t = if snap { a.grid().round(t) } else { t };
             let lane = ((y / lane_h).floor().max(0.0) as usize).min(a.lanes.len() - 1);
             (t.max(0) as u32, lane)
         })
@@ -386,7 +413,7 @@ impl Arrangement {
         let td = *td;
         let (tick, lane) = self.tick_lane_at(mx, my, snap);
         let (start, end) = (td.tick.min(tick), td.tick.max(tick));
-        let grid = self.s.arrangement.with_untracked(|a| a.snap.ticks());
+        let grid = self.s.arrangement.with_untracked(|a| a.grid().ticks);
         let sel = TimeSel {
             start,
             end: if end > start { end } else { start + grid },
@@ -410,7 +437,7 @@ impl Arrangement {
         let drag = drag.clone();
 
         self.s.arrangement.update(|a| {
-            let snap = a.snap;
+            let snap = a.grid();
             let d_ticks = a.view.px_to_ticks(dx as f64);
             let snap_t = |t: f64| -> i64 {
                 if no_snap {
@@ -494,8 +521,8 @@ impl Arrangement {
             cx.release();
             // A click (no drag) moves the insert marker; while stopped the
             // playhead goes there (playback starts from it).
-            if !td.moved && !self.s.transport.with_untracked(|t| t.playing) {
-                cx.emit(crate::AppEvent::SetPlayhead(td.tick as f64));
+            if !td.moved {
+                cx.emit(crate::AppEvent::SetInsert(td.tick, td.lane));
             }
             return;
         }
@@ -514,6 +541,7 @@ impl Arrangement {
                 if let Some(id) = drag.collapse_to {
                     self.s.arrangement.update(|a| a.selection = vec![id]);
                 }
+                cx.emit(crate::AppEvent::SetInsert(drag.press_at.0, drag.press_at.1));
             }
         }
     }
@@ -544,31 +572,24 @@ impl Arrangement {
         self.set_cursor(cx, icon);
     }
 
-    /// Right-click: a menu for the clip under the mouse, the time selection,
-    /// or (on empty space) a one-bar selection made where you clicked.
+    /// Right-click: a menu for the clip under the mouse (A18), or for the
+    /// time selection / empty space (A19; outside a selection a one-bar
+    /// selection is made where you clicked).
     fn on_context_menu(&mut self, cx: &mut EventContext) {
-        use crate::state::{ContextMenuSpec, MenuAction};
         let (mx, my) = self.local_mouse(cx);
         let lane_h = self.s.lane_h.get_untracked();
         if crate::state::lane_off(self.s.chip.get_untracked(), (my / lane_h).floor().max(0.0) as usize) {
             return;
         }
         let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
-        let items = if let Some((id, _)) = hit {
+        let site = if let Some((id, _)) = hit {
             self.s.arrangement.update(|a| {
                 if !a.is_selected(id) {
                     a.selection = vec![id];
                 }
             });
             self.s.time_sel.set(None);
-            vec![
-                MenuAction::Duplicate,
-                MenuAction::Delete,
-                MenuAction::LoopClips,
-                MenuAction::MakeUnique,
-                MenuAction::LaneInstrument,
-                MenuAction::SavePreset,
-            ]
+            crate::edit::MenuSite::Clip(id)
         } else {
             let tick = self.s.arrangement.with_untracked(|a| a.view.x_to_tick(mx as f64));
             let (_, lane) = self.tick_lane_at(mx, my, false);
@@ -578,24 +599,12 @@ impl Arrangement {
                 let start = (tick.max(0.0) as u32) / bar * bar;
                 self.s.time_sel.set(Some(TimeSel { start, end: start + bar, lane0: lane, lane1: lane }));
                 self.s.arrangement.update(|a| a.selection.clear());
+                cx.emit(crate::AppEvent::SetInsert(start, lane));
             }
-            // Grid: the arrangement's own (it left the top bar, UX.md decision 4).
-            vec![
-                MenuAction::LoopSelection,
-                MenuAction::InsertClip,
-                MenuAction::Grid(crate::state::Snap::Sixteenth),
-                MenuAction::Grid(crate::state::Snap::Quarter),
-                MenuAction::Grid(crate::state::Snap::Bar),
-            ]
+            crate::edit::MenuSite::Empty
         };
         let s = cx.scale_factor();
-        let (x, y) = super::chrome::menu_origin(
-            cx,
-            cx.mouse().cursor_x / s,
-            cx.mouse().cursor_y / s,
-            items.len(),
-        );
-        cx.emit(crate::AppEvent::OpenMenu(ContextMenuSpec { x, y, items }));
+        cx.emit(crate::AppEvent::ContextMenu(site, cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
     }
 
     /// Mouse position relative to the view, without the lane scroll.
@@ -804,6 +813,9 @@ impl View for Arrangement {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 cx.emit(crate::AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
+                if self.s.guide.get_untracked() {
+                    cx.emit(crate::AppEvent::CloseGuide);
+                }
                 if !self.bar_press(cx) {
                     self.on_press(cx);
                 }
@@ -839,7 +851,7 @@ impl View for Arrangement {
                         if lane >= 0.0 && (lane as usize) < lanes {
                             self.s.arrangement.update(|a| {
                                 let t = a.view.x_to_tick(mx as f64).max(0.0) as i64;
-                                let g = a.snap.ticks() as i64;
+                                let g = a.grid().ticks as i64;
                                 let start = if no_snap { t } else { t.div_euclid(g) * g };
                                 let id = a.add_clip(lane as usize, start as u32, TICKS_PER_BAR);
                                 a.selection = vec![id];
@@ -881,6 +893,12 @@ impl View for Arrangement {
                 }
                 self.on_release(cx);
                 self.update_hover(cx);
+            }
+            WindowEvent::GeometryChanged(_) => {
+                let w = cx.bounds().w / cx.scale_factor();
+                if self.s.arrangement.with_untracked(|a| a.view_w != w) {
+                    self.s.arrangement.update(|a| a.view_w = w);
+                }
             }
             WindowEvent::MouseLeave if self.drag.is_none() => {
                 self.hover = None;
@@ -925,8 +943,8 @@ impl View for Arrangement {
                 // Esc and the app-wide keys bubble up to the app (F-30).
                 match action {
                     Some(Action::Delete) => {
-                        self.s.arrangement.update(|a| a.delete_selected());
-                        cx.emit(crate::AppEvent::Commit);
+                        // The time selection's contents or the clips (A11).
+                        cx.emit(crate::AppEvent::Run(Action::Delete));
                         meta.consume();
                     }
                     Some(Action::OpenClip) => {
@@ -1026,7 +1044,7 @@ impl View for Arrangement {
                         live,
                         ClipPaint {
                             rect: r,
-                            color: a.lanes[c.lane].color,
+                            color: c.color.unwrap_or(a.lanes[c.lane].color),
                             name: &c.name,
                             inst: c
                                 .instrument
@@ -1070,7 +1088,9 @@ impl View for Arrangement {
                         ] {
                             v.to_bits().hash(&mut h);
                         }
-                        p.color.r.to_bits().hash(&mut h);
+                        for v in [p.color.r, p.color.g, p.color.b] {
+                            v.to_bits().hash(&mut h);
+                        }
                         p.name.hash(&mut h);
                         p.inst.hash(&mut h);
                         p.len_ticks.hash(&mut h);
@@ -1130,7 +1150,8 @@ impl View for Arrangement {
                         x1.round(),
                         (y + lane_h - 2.0 * CLIP_V_INSET * s).round(),
                     );
-                    clip::draw_ghost(canvas, r, a.lanes[o.lane].color, s);
+                    let col = a.clip(o.id).and_then(|c| c.color).unwrap_or(a.lanes[o.lane].color);
+                    clip::draw_ghost(canvas, r, col, s);
                 }
             }
 
@@ -1192,6 +1213,21 @@ impl View for Arrangement {
                     vg::Rect::from_xywh(px, rect.top, s, lanes_bottom - rect.top),
                     &gfx::fill(ink),
                 );
+            }
+
+            // The insert marker while playing (stopped, the playhead sits on it).
+            if playing {
+                let ix = x_of(a.insert.0 as f64).round();
+                if ix >= rect.left && ix <= rect.right {
+                    let y0 = lanes_top + a.insert.1 as f32 * lane_h;
+                    canvas.draw_rect(vg::Rect::from_xywh(ix, y0, s, lane_h), &gfx::fill(TEXT_HI.with_alpha(0.7)));
+                }
+            }
+
+            // Getting started (A22, F-14): until the first clip exists, or
+            // when Help > Getting Started asks for it.
+            if a.clips.is_empty() || self.s.guide.get_untracked() {
+                draw_guide(canvas, rect, s, !a.clips.is_empty());
             }
 
             // Time selection: an accent wash over the selected lanes and range.
@@ -1311,6 +1347,47 @@ impl View for Arrangement {
         canvas.restore();
     }
 }
+
+/// The getting-started card (A22, F-14) centred over the lanes. `dismiss`:
+/// it was opened from the Help menu and closes on a click.
+fn draw_guide(canvas: &Canvas, rect: vg::Rect, s: f32, dismiss: bool) {
+    use crate::shortcuts::{label, Action};
+    let lines: [String; 5] = [
+        "Double-click an empty lane to make a MIDI clip, then double-click the clip to write notes.".into(),
+        "Drag a preset from the browser onto a track to give it a sound.".into(),
+        "Drop a MIDI file on the window to start from it (File > New from MIDI File).".into(),
+        format!("Space plays from the insert marker · {} to undo.", label(Action::Undo)),
+        "Help > Keyboard Shortcuts lists every key.".into(),
+    ];
+    let w = GUIDE_W * s;
+    let h = (GUIDE_PAD * 2.0 + GUIDE_TITLE_H + lines.len() as f32 * GUIDE_LINE_H + if dismiss { GUIDE_LINE_H } else { 0.0 }) * s;
+    let card = gfx::snap(vg::Rect::from_xywh(rect.center_x() - w * 0.5, rect.top + (rect.height() - h) * 0.4, w, h));
+    let rr = gfx::rrect(card, RADIUS_BOX * s);
+    gfx::drop_shadow(canvas, &rr, 0.0, 6.0 * s, 18.0 * s, 0.0, Rgba::black(0.55));
+    canvas.draw_rrect(rr, &gfx::vgrad(card, BAND_TOP, BAND_BOTTOM));
+    gfx::ring_vgrad(canvas, &rr, gfx::hairline(s), STROKE, Rgba::black(0.5));
+    let ft = gfx::font(Face::SemiBold, GUIDE_TITLE_PX * s);
+    let f = gfx::font(Face::Medium, GUIDE_TEXT_PX * s);
+    let x = card.left + GUIDE_PAD * s;
+    let mut y = card.top + GUIDE_PAD * s;
+    gfx::draw_text(canvas, "GETTING STARTED", x.round(), (y + GUIDE_TITLE_PX * s).round(), &ft, ACCENT);
+    y += GUIDE_TITLE_H * s;
+    for l in &lines {
+        gfx::draw_text_clipped(canvas, l, x.round(), (y + GUIDE_TEXT_PX * s).round(), w - 2.0 * GUIDE_PAD * s, &f, TEXT_HI);
+        y += GUIDE_LINE_H * s;
+    }
+    if dismiss {
+        gfx::draw_text(canvas, "Click anywhere or press Esc to close.", x.round(), (y + GUIDE_TEXT_PX * s).round(), &f, TEXT_MID);
+    }
+}
+
+/// Guide card geometry (logical px).
+const GUIDE_W: f32 = 560.0;
+const GUIDE_PAD: f32 = 20.0;
+const GUIDE_TITLE_H: f32 = 28.0;
+const GUIDE_TITLE_PX: f32 = 13.0;
+const GUIDE_LINE_H: f32 = 24.0;
+const GUIDE_TEXT_PX: f32 = 13.0;
 
 /// Lane scroll per wheel notch (logical px).
 pub const LANE_SCROLL_PER_NOTCH: f32 = 60.0;

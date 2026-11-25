@@ -1,0 +1,12 @@
+Written by main @ fb2d632 (format v3) with v3corpus.rs.txt. (name, render::render hash, export::render hash):
+("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7)
+("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64)
+("layout_0", 0xf32404eae4b93fa2, 0xc56c98aeea4a3098)
+("layout_1", 0x99fb04b277dac084, 0x57720d21669d5fd0)
+("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd)
+("layout_3", 0xbbfece4fdee90c11, 0x3b7264132f74366f)
+("layout_4", 0x43621e26f83e83e3, 0x1297fa4fcc0f77b7)
+("raw_volumes", 0x9ce78c6f9d53c5d2, 0x2f45a89d297f00f8)
+("saw_rate_50_inexact", 0x1343b5eec2e8d720, 0xcad8f3a659155ded)
+("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8)
+("volumes_mixed", 0xe1840708a7c60272, 0xd8359071fd0824f9)

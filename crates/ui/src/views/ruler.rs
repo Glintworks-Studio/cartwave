@@ -82,7 +82,7 @@ impl Ruler {
         let Some((part, x0, s0, e0)) = self.brace else { return };
         let b = cx.bounds();
         let x = (cx.mouse().cursor_x - b.x) / cx.scale_factor();
-        let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.snap));
+        let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.grid()));
         let d = view.px_to_ticks((x - x0) as f64);
         let q = |t: f64| -> f64 {
             if crate::input::bypass_snap(cx.modifiers()) {
@@ -91,7 +91,7 @@ impl Ruler {
                 snap.round(t as i64).max(0) as f64
             }
         };
-        let g = snap.ticks() as f64;
+        let g = snap.ticks as f64;
         let (start, end) = match part {
             BracePart::Body => {
                 let ns = q(s0 + d);
@@ -107,7 +107,7 @@ impl Ruler {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let x = ((cx.mouse().cursor_x - b.x) / s) as f64;
-        let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.snap));
+        let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.grid()));
         let mut t = view.x_to_tick(x).max(0.0);
         if !crate::input::bypass_snap(cx.modifiers()) {
             t = snap.round(t as i64).max(0) as f64;
@@ -140,6 +140,8 @@ impl View for Ruler {
                         .transport
                         .with_untracked(|t| (t.loop_start_ticks, t.loop_end_ticks));
                     self.brace = Some((part, x, ls, le));
+                    // One brace drag is one undo step (F-33).
+                    cx.emit(AppEvent::GestureBegin);
                 } else {
                     self.scrubbing = true;
                     self.set_from_mouse(cx);
@@ -150,6 +152,18 @@ impl View for Ruler {
             WindowEvent::MouseDoubleClick(MouseButton::Left) if self.brace_at(cx).is_some() => {
                 // Double-click the brace to switch the loop on/off.
                 cx.emit(AppEvent::ToggleLoop);
+                meta.consume();
+            }
+            // A14, R32: a double-click on the ruler zooms to the time
+            // selection, or with none to the whole song.
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                cx.emit(AppEvent::Run(crate::shortcuts::Action::ZoomToFit));
+                meta.consume();
+            }
+            // A20: Set Loop to Selection, Zoom to Fit.
+            WindowEvent::MouseDown(MouseButton::Right) => {
+                let s = cx.scale_factor();
+                cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Ruler, cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) if self.scrubbing => self.set_from_mouse(cx),
@@ -166,8 +180,10 @@ impl View for Ruler {
                 cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.scrubbing || self.brace.is_some() => {
+                if self.brace.take().is_some() {
+                    cx.emit(AppEvent::GestureEnd);
+                }
                 self.scrubbing = false;
-                self.brace = None;
                 cx.release();
             }
             _ => {}

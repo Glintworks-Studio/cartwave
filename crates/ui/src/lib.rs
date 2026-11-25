@@ -2,6 +2,7 @@
 //! inside a plugin window (baseview) as well as the standalone app.
 
 pub mod dev;
+pub mod edit;
 pub mod file;
 pub mod dpcm;
 pub mod export;
@@ -132,6 +133,11 @@ pub struct Signals {
     pub filter_state: Signal<(FilterMode, bool)>,
     /// Why recovery is offered (crash, or an unsaved quit).
     pub recovery_msg: Signal<&'static str>,
+    /// The in-place rename field, while open (A13, T2, B5).
+    pub rename: Signal<Option<edit::RenameSpec>>,
+    /// The getting-started guide shown on demand (Help ▸ Getting Started)
+    /// even when the project has clips (A22, F-14).
+    pub guide: Signal<bool>,
 }
 
 /// Project fields outside undo that a save writes (F-01: changing them
@@ -246,6 +252,19 @@ pub struct AppState {
     menus_tried: bool,
     /// When the audio settings last changed (its gap is read a moment later).
     audio_switch: Option<Instant>,
+    /// Clips copied in the arrangement (A9; notes have `clipboard`).
+    clip_board: Option<state::ClipBoard>,
+    /// Earlier arrangement zooms, for X (R31).
+    zoom_back: Vec<Viewport>,
+    /// Where playback last stopped (Shift+Space continues there, R137).
+    stop_point: f64,
+    /// The rename field's text as typed.
+    rename_text: String,
+    /// Where a preset's context menu opened (its rename field goes there).
+    preset_rename_at: (f32, f32),
+    /// The window's scale factor and logical size, as of the last tick.
+    scale: f32,
+    window_logical: (f32, f32),
 }
 
 pub enum AppEvent {
@@ -269,7 +288,6 @@ pub enum AppEvent {
     SetLoop(f64, f64),
     /// Open / close a context menu, or run one of its commands (also bound
     /// to the usual DAW shortcuts).
-    OpenMenu(ContextMenuSpec),
     CloseMenu,
     Menu(MenuAction),
     ToggleStats,
@@ -362,6 +380,23 @@ pub enum AppEvent {
     EditorFocus(Ctx),
     /// Clear Open Recent / open entry n.
     OpenRecent(usize),
+    /// A right-click (Batch 3): where, at (x, y) window logical px.
+    ContextMenu(edit::MenuSite, f32, f32),
+    /// Open a context submenu next to its row.
+    OpenSub(SubMenu, f32, f32),
+    /// The rename field: typed text, Enter / Tab (true: next track), Esc.
+    RenameText(String),
+    RenameCommit(bool),
+    RenameSubmit(edit::RenameTarget, String),
+    RenameCancel,
+    OpenRename(edit::RenameTarget),
+    /// A track header was clicked (T1; `true`: Shift / Ctrl adds).
+    SelectTrack(usize, bool),
+    /// The insert marker (A1): tick, track.
+    SetInsert(u32, usize),
+    CloseGuide,
+    /// A short message in the notice capsule.
+    Status(String),
 }
 
 /// An edit command for the piano roll view, broadcast from the root (the
@@ -375,16 +410,32 @@ impl Model for AppState {
             AppEvent::TogglePlay => {
                 let t = self.s.transport.get_untracked();
                 if t.playing {
+                    // Stop: remember the stop point (Shift+Space continues
+                    // there, R137); the playhead goes back to the insert
+                    // marker, where Space starts next time.
                     self.send(Command::Stop);
+                    self.stop_point = t.playhead_ticks;
+                    let at = self.s.arrangement.with_untracked(|a| a.insert.0) as f64;
+                    self.send(Command::Seek(at));
+                    self.s.transport.update(|t| {
+                        t.playing = false;
+                        t.playhead_ticks = at;
+                    });
                 } else {
-                    // Start from where the UI shows the playhead.
+                    // Start from the insert marker (where the playhead sits
+                    // while stopped).
                     self.send(Command::Seek(t.playhead_ticks));
                     self.send(Command::Play);
+                    self.s.transport.update(|t| t.playing = true);
                 }
-                self.s.transport.update(|t| t.playing = !t.playing);
             }
             AppEvent::Stop => {
                 let was_playing = self.s.transport.with_untracked(|t| t.playing);
+                if was_playing {
+                    self.stop_point = self.s.transport.with_untracked(|t| t.playhead_ticks);
+                } else {
+                    self.s.arrangement.update(|a| a.insert.0 = 0);
+                }
                 self.send(Command::Stop);
                 if !was_playing {
                     self.send(Command::Seek(0.0));
@@ -408,6 +459,10 @@ impl Model for AppState {
             AppEvent::SetPlayhead(p) => {
                 let p = p.max(0.0);
                 self.send(Command::Seek(p));
+                // While stopped the playhead is the insert marker.
+                if !self.s.transport.with_untracked(|t| t.playing) {
+                    self.s.arrangement.update(|a| a.insert.0 = p as u32);
+                }
                 self.s.transport.update(|t| t.playhead_ticks = p);
             }
             AppEvent::SetDial(i, v) => {
@@ -503,7 +558,10 @@ impl Model for AppState {
                 self.send(Command::Mute(m));
             }
             AppEvent::ToggleSolo(i) => {
-                self.s.solo.update(|m| *m ^= 1 << *i);
+                // Exclusive solo; Ctrl / Cmd-click adds or removes (R143, T5).
+                let add = crate::input::command(cx.modifiers());
+                let bit = 1u8 << *i;
+                self.s.solo.update(|m| *m = if add || *m & bit != 0 { *m ^ bit } else { bit });
                 let m = self.s.solo.get_untracked();
                 self.send(Command::Solo(m));
             }
@@ -517,12 +575,32 @@ impl Model for AppState {
                 self.clamp_lane_scroll();
             }
             AppEvent::SetLoop(start, end) => self.set_song_loop(*start, *end, false),
-            AppEvent::OpenMenu(m) => self.s.menu.set(Some(m.clone())),
             AppEvent::CloseMenu => self.s.menu.set(None),
             AppEvent::Menu(action) => {
-                self.s.menu.set(None);
-                self.run_menu_action(*action);
+                if !matches!(action, MenuAction::Sub(_) | MenuAction::Separator) {
+                    self.s.menu.set(None);
+                    self.run_menu_action(cx, *action);
+                }
             }
+            AppEvent::ContextMenu(site, x, y) => self.open_context_menu(*site, *x, *y),
+            AppEvent::OpenSub(sub, x, y) => self.open_sub(*sub, *x, *y),
+            AppEvent::RenameText(t) => self.rename_text = t.clone(),
+            AppEvent::RenameCommit(next) => self.rename_commit(*next),
+            AppEvent::RenameSubmit(target, text) => {
+                if self.s.rename.with_untracked(|r| r.as_ref().is_some_and(|r| r.target == *target)) {
+                    self.rename_text = text.clone();
+                    self.rename_commit(false);
+                }
+            }
+            AppEvent::RenameCancel => self.s.rename.set(None),
+            AppEvent::OpenRename(t) => self.open_rename(*t),
+            AppEvent::SelectTrack(l, add) => self.select_track(*l, *add),
+            AppEvent::SetInsert(t, l) => {
+                self.set_insert(*t, *l);
+                self.s.arrangement.update(|a| a.track_sel.clear());
+            }
+            AppEvent::CloseGuide => self.s.guide.set(false),
+            AppEvent::Status(m) => self.set_status(m.clone()),
             AppEvent::ScrollLanes(dy) => {
                 let v = self.s.lane_scroll.get_untracked() + dy;
                 self.s.lane_scroll.set_if_changed(v);
@@ -536,6 +614,7 @@ impl Model for AppState {
                 self.s.loop_on.update(|l| *l = !*l);
                 let end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
                 self.send(Command::LoopEnd(self.engine_loop_end(end)));
+                self.commit();
             }
             AppEvent::ToggleStats => {
                 self.s.stats.update(|s| s.visible = !s.visible);
@@ -750,6 +829,8 @@ impl Model for AppState {
                     Ctx::Modal
                 } else if self.text_edit.is_some_and(|e| e == cx.focused()) {
                     Ctx::Text
+                } else if self.piano_active() {
+                    Ctx::PianoRoll
                 } else {
                     Ctx::Arrangement
                 };
@@ -783,6 +864,9 @@ impl AppState {
     /// vsync-spaced present interval, gives evenly spaced motion without the
     /// drift (and periodic dropped/doubled frame) of a free-running clock.
     fn tick(&mut self, cx: &mut EventContext) {
+        self.scale = cx.scale_factor();
+        let win = cx.cache.get_bounds(Entity::root());
+        self.window_logical = (win.w / self.scale, win.h / self.scale);
         self.tests.maybe_stall();
         self.idle_housekeeping();
         self.install_menus(cx);
@@ -957,7 +1041,7 @@ impl AppState {
         };
         self.load_preset_on(lane, pr.inst, pr.params);
         self.commit();
-        let name = state::default_lanes()[lane].name;
+        let name = self.s.arrangement.with_untracked(|a| a.lanes[lane].name.clone());
         self.set_status(format!("{} loaded on {name}", pr.name));
     }
 
@@ -1199,7 +1283,13 @@ impl AppState {
                 self.s.lane_sel.set(l);
             }
         }
-        let any = self.s.arrangement.with_untracked(|a| !a.selection.is_empty());
+        if let Some(l) = self.s.arrangement.with_untracked(|a| if a.selection.is_empty() { a.track_sel.first().copied() } else { None }) {
+            if l != self.s.lane_sel.get_untracked() {
+                self.s.dials.set(self.dial_values(l));
+                self.s.lane_sel.set(l);
+            }
+        }
+        let any = self.s.arrangement.with_untracked(|a| !a.selection.is_empty() || !a.track_sel.is_empty());
         self.s.inspector.set_if_changed(any);
         // Which dials an instrument overrides (cheap; set only on change).
         let lane = self.s.lane_sel.get_untracked();
@@ -1428,6 +1518,19 @@ const ANIMATION_PUMP: Duration = Duration::from_millis(4);
 /// Pump interval while nothing animates (meter decay etc. still settles).
 const IDLE_PUMP: Duration = Duration::from_millis(50);
 
+/// A tooltip (I4, F-34): every control says what it does on hover, and a
+/// disabled one says why.
+pub fn tip<'a>(cx: &'a mut Context, text: &str) -> Handle<'a, Tooltip> {
+    let text = text.to_string();
+    Tooltip::new(cx, move |cx| {
+        Label::new(cx, text.clone()).class("tip-text");
+    })
+    .class("tip")
+}
+
+/// How long the pointer rests before a tooltip shows.
+pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
+
 /// Registers the bundled fonts with vizia's text system (for stylesheet text).
 pub fn register_fonts(cx: &mut Context) {
     use views::gfx::*;
@@ -1460,6 +1563,7 @@ pub fn add_styles(cx: &mut Context) {
 pub fn build_ui(cx: &mut Context) {
     register_fonts(cx);
     add_styles(cx);
+    cx.emit(EnvironmentEvent::SetTooltipDelay(TOOLTIP_DELAY));
 
     // The default chip; the default output filter follows it.
     let chip = SoundChip::WithVrc6;
@@ -1524,6 +1628,8 @@ pub fn build_ui(cx: &mut Context) {
         audio_info: Signal::new(String::new()),
         filter_state: Signal::new((FilterMode::default_for(chip == SoundChip::WithVrc6), true)),
         recovery_msg: Signal::new(""),
+        rename: Signal::new(None),
+        guide: Signal::new(false),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1597,6 +1703,13 @@ pub fn build_ui(cx: &mut Context) {
         menus: None,
         menus_tried: false,
         audio_switch: None,
+        clip_board: None,
+        zoom_back: Vec::new(),
+        stop_point: 0.0,
+        rename_text: String::new(),
+        preset_rename_at: (0.0, 0.0),
+        scale: 1.0,
+        window_logical: (MIN_WINDOW_SIZE.0 as f32, MIN_WINDOW_SIZE.1 as f32),
     };
     match state.recovery.as_ref().and_then(|r| r.start_session()) {
         Some(file::LastSession::Crashed) => {
@@ -1614,6 +1727,9 @@ pub fn build_ui(cx: &mut Context) {
     state.start_engine();
     state.apply_test_project();
     state.mark_saved();
+    // The start state is the first undo state (nothing to undo yet).
+    let d = state.doc();
+    state.history.reset(d);
     state.build(cx);
 
     VStack::new(cx, |cx| {
@@ -1660,6 +1776,7 @@ pub fn build_ui(cx: &mut Context) {
         });
         notice(cx, s);
         context_menu(cx, s);
+        views::rename::build(cx, s);
         views::export_dialog::build(cx, s);
         views::modal::build(cx, s);
     })
@@ -1758,7 +1875,8 @@ const fn max_u32(a: u32, b: u32) -> u32 {
     }
 }
 
-/// The open context menu over a full-window backdrop that closes it.
+/// The open context menu (and its open submenu) over a full-window
+/// backdrop that closes it.
 fn context_menu(cx: &mut Context, s: Signals) {
     let open = Memo::new(move |_| s.menu.get().is_some());
     Binding::new(cx, open, move |cx| {
@@ -1769,8 +1887,14 @@ fn context_menu(cx: &mut Context, s: Signals) {
             .position_type(PositionType::Absolute)
             .width(Stretch(1.0))
             .height(Stretch(1.0));
-        let Some(m) = s.menu.get_untracked() else { return };
-        ContextMenu::new(cx, s, m);
+        Binding::new(cx, s.menu, move |cx| {
+            let Some(m) = s.menu.get() else { return };
+            let sub = m.sub.clone();
+            ContextMenu::new(cx, ContextMenuSpec { sub: None, ..m }, false);
+            if let Some(sb) = sub {
+                ContextMenu::new(cx, *sb, true);
+            }
+        });
     });
 }
 
@@ -1876,12 +2000,11 @@ fn device_panel(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
         // Dials
         VStack::new(cx, |cx| {
-            let title = s.lane_sel.map(move |&lane| {
-                let name = state::default_lanes()
-                    .get(lane)
-                    .map_or("", |l| l.name)
-                    .to_uppercase();
-                format!("DEVICE  ·  {name}")
+            let title = Memo::new(move |_| {
+                let lane = s.lane_sel.get();
+                let name = s.arrangement.with(|a| a.lanes.get(lane).map(|l| l.name.to_uppercase()).unwrap_or_default());
+                let hw = state::default_lanes().get(lane).map(|l| l.name.to_uppercase()).unwrap_or_default();
+                if name == hw { format!("CHANNEL  ·  {name}") } else { format!("CHANNEL  ·  {name}  ·  {hw}") }
             });
             Label::new(cx, title).class("section-title");
             // Only the controls the selected channel's hardware has.
@@ -1910,17 +2033,9 @@ fn device_panel(cx: &mut Context, s: Signals) {
         // Text fields
         VStack::new(cx, |cx| {
             Label::new(cx, "CLIP").class("section-title");
-            let name = s.arrangement.map(|a| {
-                a.first_selected()
-                    .map(|c| c.name.clone())
-                    .unwrap_or_default()
-            });
-            HStack::new(cx, |cx| {
-                Textbox::new(cx, name)
-                    .placeholder("No clip selected")
-                    .on_submit(|cx, text, _| cx.emit(AppEvent::RenameSelected(text)));
-            })
-            .class("field");
+            let name = s.arrangement.map(|a| a.first_selected().map(|c| c.name.clone()).unwrap_or_else(|| "No clip selected".into()));
+            Label::new(cx, name).class("clip-name");
+            Label::new(cx, format!("Rename it in place: {} or right-click > Rename.", shortcuts::label(Action::Rename))).class("field-label").class("clip-hint");
         })
         .class("device-section")
         .width(Stretch(1.0))
@@ -1961,8 +2076,8 @@ fn device_panel(cx: &mut Context, s: Signals) {
 fn piano_hint() -> String {
     let (copy, no_snap) = if shortcuts::MACOS { ("Option", "Cmd") } else { ("Ctrl", "Alt") };
     format!(
-        "Shift-drag select · {copy}-drag copy · {no_snap} no snap · {} quantize · Esc close",
-        shortcuts::label(Action::Quantize)
+        "Double-click add / delete · {} draw · {copy}-drag copy · {no_snap} no snap · Esc close",
+        shortcuts::label(Action::DrawMode)
     )
 }
 
@@ -1979,6 +2094,14 @@ fn piano_panel(cx: &mut Context, s: Signals) {
                 })
             });
             Label::new(cx, title).class("section-title");
+            // F-39: room between the title and the controls.
+            Element::new(cx).width(Pixels(16.0)).height(Pixels(1.0));
+            let draw = s.piano.map(|p| p.draw);
+            Button::new(cx, |cx| Label::new(cx, "Draw"))
+                .class("btn")
+                .toggle_class("checked", draw)
+                .on_press(|cx| cx.emit(AppEvent::Run(Action::DrawMode)))
+                .tooltip(|cx| tip(cx, &format!("Draw Mode ({}): a click draws a note, a click on a note erases it. Off: a click selects, a drag selects several, a double-click adds or deletes a note.", shortcuts::label(Action::DrawMode))));
             Label::new(cx, "GRID").class("field-label");
             let grid = s.piano.map(|p| p.grid.label());
             Button::new(cx, |cx| Label::new(cx, grid))
@@ -2014,7 +2137,13 @@ impl AppState {
     /// The undoable document as it is now.
     fn doc(&self) -> Doc {
         let bpm = self.s.transport.with_untracked(|t| t.bpm);
-        self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, self.params))
+        self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, self.params)).with_song(self.song_state())
+    }
+
+    /// The undoable song settings (F-33).
+    fn song_state(&self) -> history::SongState {
+        let x = self.extras();
+        history::SongState { chip: x.chip, loop_start: x.loop_start, loop_end: x.loop_end, loop_on: x.loop_on }
     }
 
     /// Records an undo step if the document changed (dropped while a gesture
@@ -2053,6 +2182,18 @@ impl AppState {
     /// snapshot path: the content key changes, `sync_engine` sends it).
     fn apply_doc(&mut self, d: &Doc) {
         self.s.arrangement.update(|a| d.apply_to(a));
+        let now = self.song_state();
+        if now.chip != d.song.chip {
+            self.set_chip(d.song.chip);
+        }
+        if (now.loop_start, now.loop_end) != (d.song.loop_start, d.song.loop_end) {
+            self.set_song_loop(d.song.loop_start as f64, d.song.loop_end as f64, false);
+        }
+        if now.loop_on != d.song.loop_on {
+            self.s.loop_on.set(d.song.loop_on);
+            let end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
+            self.send(Command::LoopEnd(self.engine_loop_end(end)));
+        }
         if self.s.transport.with_untracked(|t| t.bpm) != d.bpm {
             self.send(Command::Bpm(d.bpm as f64));
             self.s.transport.update(|t| t.bpm = d.bpm);
@@ -2496,52 +2637,6 @@ impl AppState {
         }
     }
 
-    /// Context-menu commands and their shortcuts.
-    fn run_menu_action(&mut self, action: MenuAction) {
-        let sel = self.s.time_sel.get_untracked();
-        let span = self.s.arrangement.with_untracked(|a| a.selection_span());
-        match action {
-            // Ctrl+L: the time selection, else the selected clips.
-            MenuAction::LoopSelection | MenuAction::LoopClips => {
-                let range = match (action, sel) {
-                    (MenuAction::LoopSelection, Some(ts)) => Some((ts.start, ts.end)),
-                    _ => span,
-                };
-                if let Some((a, b)) = range {
-                    self.set_song_loop(a as f64, b as f64, true);
-                }
-            }
-            MenuAction::InsertClip => {
-                let Some(ts) = sel else { return };
-                let chip = self.s.chip.get_untracked();
-                self.s.arrangement.update(|a| {
-                    let ids: Vec<u32> = (ts.lane0..=ts.lane1.min(a.lanes.len() - 1))
-                        .filter(|&lane| !state::lane_off(chip, lane))
-                        .map(|lane| a.add_clip(lane, ts.start, ts.end - ts.start))
-                        .collect();
-                    a.resolve_overlaps(&ids);
-                    a.selection = ids;
-                });
-                self.s.time_sel.set(None);
-                self.commit();
-            }
-            MenuAction::Duplicate => {
-                if span.is_some() {
-                    self.s.arrangement.update(|a| a.duplicate_selected());
-                    self.commit();
-                }
-            }
-            MenuAction::Delete => {
-                self.s.arrangement.update(|a| a.delete_selected());
-                self.commit();
-            }
-            MenuAction::MakeUnique => self.make_instrument_unique(),
-            MenuAction::LaneInstrument => self.use_lane_instrument(),
-            MenuAction::SavePreset => self.save_user_preset(),
-            MenuAction::Grid(g) => self.s.arrangement.update(|a| a.snap = g),
-        }
-    }
-
     fn sync_piano_lane_volume(&mut self) {
         let Some(id) = self.s.piano.with_untracked(|p| p.clip) else { return };
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) else { return };
@@ -2595,6 +2690,15 @@ impl AppState {
     /// Pages the piano roll along with the playhead while playing.
     fn follow_playhead(&mut self, playhead: f64) {
         let p = self.s.piano.get_untracked();
+        // The arrangement pages along too (F-32: one Follow for both editors).
+        if p.follow {
+            let (v, w) = self.s.arrangement.with_untracked(|a| (a.view, a.view_w as f64));
+            let x = v.tick_to_x(playhead);
+            if x < 0.0 || x > w * 0.95 {
+                let to = (playhead - v.px_to_ticks(w * 0.05)).max(0.0);
+                self.s.arrangement.update(|a| a.view.scroll_ticks = to);
+            }
+        }
         let (true, Some(id)) = (p.follow, p.clip) else { return };
         let Some((start, len)) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| (c.start_ticks, c.len_ticks))) else {
             return;
@@ -2894,7 +2998,7 @@ impl AppState {
             }
         }
         self.set_chip(chip);
-        self.update_dirty();
+        self.commit();
     }
 
     /// Project Settings: the output filter (`None`: follow the profile).
@@ -3030,7 +3134,10 @@ impl AppState {
     /// Runs an action from the keyboard (`menu: false`) or a menu (`true`).
     /// Returns whether it was handled (the key is then consumed).
     fn run_action(&mut self, cx: &mut EventContext, a: Action, menu: bool) -> bool {
-        let piano = self.s.piano_open.get_untracked() && self.editor == Ctx::PianoRoll;
+        let piano = self.piano_active();
+        if let Some(handled) = self.run_b3(cx, a) {
+            return handled;
+        }
         match a {
             Action::New => cx.emit(AppEvent::NewProject),
             Action::Open => cx.emit(AppEvent::OpenProject),
@@ -3051,33 +3158,51 @@ impl AppState {
             {
                 cx.emit_custom(Event::new(PianoCmd(a)).target(Entity::root()).propagate(Propagation::Subtree));
             }
-            Action::Cut | Action::Copy | Action::Paste | Action::Quantize => return false,
-            Action::Duplicate => self.run_menu_action(MenuAction::Duplicate),
+            Action::Cut | Action::Copy | Action::Paste | Action::Duplicate | Action::Delete | Action::Quantize => return false,
             // Keys: the focused editor handles these itself.
-            Action::Delete | Action::SelectAll | Action::OpenClip if !menu => return false,
-            Action::Delete => self.run_menu_action(MenuAction::Delete),
+            Action::SelectAll | Action::OpenClip if !menu => return false,
             Action::SelectAll => {
                 let chip = self.s.chip.get_untracked();
                 self.s.arrangement.update(|a| a.selection = a.clips.iter().filter(|c| !state::lane_off(chip, c.lane)).map(|c| c.id).collect());
             }
             Action::OpenClip => return false,
             Action::Settings => self.open_modal(Modal::Settings(SettingsTab::Audio)),
-            Action::InsertClip => self.run_menu_action(MenuAction::InsertClip),
-            Action::LoopSelection => self.run_menu_action(MenuAction::LoopSelection),
+            Action::InsertClip => self.insert_clips(),
+            Action::LoopSelection => self.run_menu_action(cx, MenuAction::Cmd(Action::LoopSelection)),
             Action::PlayStop => cx.emit(AppEvent::TogglePlay),
-            Action::Rewind => cx.emit(AppEvent::SetPlayhead(0.0)),
+            Action::Rewind => {
+                let lane = self.s.arrangement.with_untracked(|a| a.insert.1);
+                self.set_insert(0, lane);
+                if self.s.transport.with_untracked(|t| t.playing) {
+                    cx.emit(AppEvent::SetPlayhead(0.0));
+                }
+            }
             Action::ToggleBrowser => cx.emit(AppEvent::ToggleBrowser),
             Action::Follow => cx.emit(AppEvent::TogglePianoFollow),
             Action::Escape => {
                 if self.s.menu.with_untracked(|m| m.is_some()) {
                     self.s.menu.set(None);
+                } else if self.s.guide.get_untracked() {
+                    self.s.guide.set(false);
                 } else if self.s.piano_open.get_untracked() {
                     self.close_piano();
                 } else {
-                    self.s.arrangement.update(|a| a.selection.clear());
+                    self.s.arrangement.update(|a| {
+                        a.selection.clear();
+                        a.track_sel.clear();
+                    });
                     self.s.time_sel.set(None);
                 }
             }
+            // Enter in the export dialog exports (E2).
+            Action::ConfirmDialog => {
+                if self.s.modal.with_untracked(|m| m.is_none()) && self.s.export_dlg.with_untracked(|d| d.is_some()) {
+                    self.export_go();
+                } else {
+                    return false;
+                }
+            }
+            Action::Shorten | Action::Lengthen | Action::PrevNote | Action::NextNote => return false,
             Action::CloseDialog => {
                 if self.s.modal.with_untracked(|m| m.is_some()) {
                     self.s.modal.set(None);
@@ -3091,6 +3216,32 @@ impl AppState {
             | Action::OctaveDown
             | Action::NudgeLeft
             | Action::NudgeRight
+            | Action::CutTime
+            | Action::CopyTime
+            | Action::PasteTime
+            | Action::DuplicateTime
+            | Action::DeleteTime
+            | Action::InsertSilence
+            | Action::Split
+            | Action::Consolidate
+            | Action::Rename
+            | Action::Continue
+            | Action::ZoomIn
+            | Action::ZoomOut
+            | Action::ZoomToSelection
+            | Action::ZoomBack
+            | Action::ZoomToFit
+            | Action::DrawMode
+            | Action::GridNarrow
+            | Action::GridWiden
+            | Action::GridTriplet
+            | Action::GridSnap
+            | Action::GridAdaptive
+            | Action::MarkerLeft
+            | Action::MarkerRight
+            | Action::TrackUp
+            | Action::TrackDown
+            | Action::GettingStarted
             | Action::TextConfirm
             | Action::TextCancel
             | Action::TextNext
@@ -3138,12 +3289,19 @@ impl AppState {
             can_redo,
             piano,
             notes_selected,
-            can_paste: !self.clipboard.is_empty(),
+            can_paste: if piano { !self.clipboard.is_empty() } else { self.clip_board.is_some() },
             selection: if piano { notes_selected } else { clips },
             time_selection: self.s.time_sel.with_untracked(|t| t.is_some()),
             browser: self.s.browser_open.get_untracked(),
             follow: self.s.piano.with_untracked(|p| p.follow),
             clock_bars: self.s.clock_bars.get_untracked(),
+            can_paste_time: self.clip_board.is_some(),
+            range: self.time_range().is_some(),
+            can_rename: self.s.arrangement.with_untracked(|a| a.selection.len() == 1 || (a.selection.is_empty() && a.track_sel.len() == 1)),
+            can_split: if piano { notes_selected } else { self.time_range().is_some() || self.s.arrangement.with_untracked(|a| a.clips.iter().any(|c| c.lane == a.insert.1 && c.start_ticks < a.insert.0 && c.end_ticks() > a.insert.0)) },
+            can_consolidate: if piano { notes_selected } else { self.s.time_sel.with_untracked(|t| t.is_some()) || self.s.arrangement.with_untracked(|a| a.selection.len() > 1) },
+            can_zoom_back: if piano { true } else { !self.zoom_back.is_empty() },
+            draw: self.s.piano.with_untracked(|p| p.draw),
             recent: self
                 .settings
                 .recent

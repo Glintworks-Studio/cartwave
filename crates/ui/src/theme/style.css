@@ -156,7 +156,7 @@ label {
 }
 
 .field-label {
-    font-size: 10;
+    font-size: 11;
     font-weight: 600;
     color: var(--text-lo);
     width: auto;
@@ -237,7 +237,7 @@ label {
 }
 
 .btn label {
-    font-size: 10;
+    font-size: 11;
     font-weight: 700;
     color: var(--text-mid);
 }
@@ -519,4 +519,73 @@ modal-backdrop {
     font-family: "JetBrains Mono";
     font-size: 11;
     color: var(--text-mid);
+}
+
+/* ───────────── Batch 3 ───────────── */
+
+/* Tooltips (I4, F-34): the notice capsule's look. Text #D9D9D9 on #151515
+   is 13.6:1. */
+tooltip.tip {
+    width: auto;
+    height: auto;
+    max-width: 320px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    corner-radius: 4px;
+    background-color: #151515;
+    border-width: 1px;
+    border-color: #323232;
+    shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.6);
+}
+
+tooltip.tip arrow {
+    background-color: #151515;
+}
+
+.tip-text {
+    font-size: 11;
+    font-weight: 500;
+    color: var(--text-hi);
+    width: auto;
+    height: auto;
+    max-width: 304px;
+    text-wrap: true;
+}
+
+/* The in-place rename field (A13, T2). */
+rename-box {
+    corner-radius: 4px;
+    background-color: #0A0A0A;
+    border-width: 1px;
+    border-color: var(--accent);
+    shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.6);
+}
+
+.rename-field {
+    font-size: 12;
+    color: var(--text-hi);
+    background-color: transparent;
+    border-width: 0px;
+    padding-left: 8px;
+    padding-right: 8px;
+    child-top: 1s;
+    child-bottom: 1s;
+}
+
+/* The inspector's clip name: a label (renamed in place, UX.md §4). */
+.clip-name {
+    font-size: 13;
+    font-weight: 600;
+    color: var(--text-hi);
+    width: 1s;
+    height: 28px;
+    text-wrap: false;
+    text-overflow: ellipsis;
+}
+
+.clip-hint {
+    width: 1s;
+    text-wrap: true;
 }

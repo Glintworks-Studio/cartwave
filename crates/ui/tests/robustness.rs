@@ -301,7 +301,16 @@ fn project_seeds() -> Vec<Vec<u8>> {
         };
         a.clip_mut(id).unwrap().instrument = inst;
     }
-    [file::Project::new_empty(), demo, heavy, stress, overrides]
+    // Version 4: renamed and recoloured tracks, coloured clips.
+    let mut named = file::Project::new_empty();
+    named.arrangement = mock::demo_arrangement();
+    let a = &mut named.arrangement;
+    a.lanes[0].name = "Lead — ünïcode".into();
+    a.lanes[2].name = "Bass".into();
+    a.lanes[4].color = ui::theme::tokens::Rgba::hex(0x4FA8E0);
+    let first = a.clips[0].id;
+    a.clip_mut(first).unwrap().color = Some(ui::theme::tokens::Rgba::hex(0xE0705A));
+    [file::Project::new_empty(), demo, heavy, stress, overrides, named]
         .iter()
         .map(|p| file::to_string(p).into_bytes())
         .collect()
@@ -461,4 +470,26 @@ fn known_crashers_are_errors_now() {
     let (pcm, sr) = dpcm::read_wav(&long).unwrap();
     assert_eq!(pcm.len(), (sr * dpcm::MAX_IMPORT_SECONDS) as usize);
     assert!(dpcm::convert("long", &pcm, sr, chip::samples::USER_ROM).unwrap().1, "reports the cut");
+}
+
+/// Format v4 fields: bad colours are clear errors; odd names are cleaned up
+/// (control characters dropped, length capped, empty -> the default).
+#[test]
+fn version_4_names_and_colours_are_checked() {
+    let mut p = file::Project::new_empty();
+    p.arrangement.lanes[1].color = ui::theme::tokens::Rgba::hex(0x123456);
+    let text = file::to_string(&p);
+    assert!(text.contains(r##""color": "#123456""##));
+    for bad in ["#12345", "#12345G", "123456", "#1234567", ""] {
+        let t = text.replace("#123456", bad);
+        let e = file::from_str(&t).err().unwrap_or_default();
+        assert!(e.contains("colour"), "{bad:?}: {e}");
+    }
+    let long = "x".repeat(500);
+    let t = text.replacen(r#""name": "Pulse 1""#, &format!(r#""name": "\u0007{long}""#), 1);
+    let q = file::from_str(&t).unwrap();
+    assert_eq!(q.arrangement.lanes[0].name.chars().count(), ui::user_presets::MAX_NAME);
+    assert!(!q.arrangement.lanes[0].name.contains('\u{7}'));
+    let t = text.replacen(r#""name": "Pulse 1""#, r#""name": "   ""#, 1);
+    assert_eq!(file::from_str(&t).unwrap().arrangement.lanes[0].name, "Pulse 1");
 }

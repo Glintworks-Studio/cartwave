@@ -99,6 +99,71 @@ pub fn save_to(path: &std::path::Path, inst: &LaneInstrument, lane: usize) -> Re
     Ok(copy.name)
 }
 
+/// The user presets file (Show in Explorer / Finder).
+pub fn file_path() -> Option<std::path::PathBuf> {
+    path()
+}
+
+/// Renames user preset `i` (its index among the loaded user presets, B5).
+/// The name is made unique; returns it.
+pub fn rename(i: usize, name: &str) -> Result<String, String> {
+    rename_at(&path().ok_or("There is no app-data folder.")?, i, name)
+}
+
+/// Deletes user preset `i` (B5).
+pub fn delete(i: usize) -> Result<(), String> {
+    delete_at(&path().ok_or("There is no app-data folder.")?, i)
+}
+
+/// Reads the file, applies `f` to the `i`-th readable entry's index in the
+/// raw list (damaged entries are skipped by `load`, so indices are counted
+/// the same way), and writes it back atomically.
+fn edit_at<R>(path: &std::path::Path, i: usize, f: impl FnOnce(&mut PresetFile, usize) -> Result<R, String>) -> Result<R, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("Can't read your presets: {e}"))?;
+    let mut file: PresetFile = serde_json::from_str(&text).map_err(|e| format!("Your presets file is damaged: {e}"))?;
+    let raw = file
+        .presets
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| crate::file::instrument_from_json(e.instrument.clone()).is_ok())
+        .map(|(k, _)| k)
+        .nth(i)
+        .ok_or("That preset no longer exists.")?;
+    let r = f(&mut file, raw)?;
+    let text = serde_json::to_string_pretty(&file).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("Can't save your presets: {e}"))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("Can't save your presets: {e}"))?;
+    Ok(r)
+}
+
+pub fn rename_at(path: &std::path::Path, i: usize, name: &str) -> Result<String, String> {
+    edit_at(path, i, |file, raw| {
+        let others: Vec<UserPreset> = file
+            .presets
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k != raw)
+            .filter_map(|(_, e)| crate::file::instrument_from_json(e.instrument.clone()).ok().map(|i| UserPreset { name: i.name.clone(), kinds: e.kinds, inst: i }))
+            .collect();
+        let mut inst = crate::file::instrument_from_json(file.presets[raw].instrument.clone())?;
+        let wanted: String = name.trim().chars().take(MAX_NAME).collect();
+        inst.name = unique_name(&wanted, &others);
+        file.presets[raw].instrument = crate::file::instrument_json(&inst);
+        Ok(inst.name)
+    })
+}
+
+pub fn delete_at(path: &std::path::Path, i: usize) -> Result<(), String> {
+    edit_at(path, i, |file, raw| {
+        file.presets.remove(raw);
+        Ok(())
+    })
+}
+
+/// Longest preset or track name (characters).
+pub const MAX_NAME: usize = 48;
+
 /// A factory or user preset, by browser index.
 pub struct PresetView {
     pub name: String,

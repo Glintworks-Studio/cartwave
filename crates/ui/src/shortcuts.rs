@@ -44,6 +44,9 @@ const fn cmd_alt(code: Code) -> Chord {
 const fn shift(code: Code) -> Chord {
     Chord { code, cmd: false, shift: true, alt: false }
 }
+const fn alt(code: Code) -> Chord {
+    Chord { code, cmd: false, shift: false, alt: true }
+}
 const fn alt_shift(code: Code) -> Chord {
     Chord { code, cmd: false, shift: true, alt: true }
 }
@@ -90,16 +93,42 @@ pub enum Action {
     SelectAll,
     Quantize,
     Settings,
+    CutTime,
+    CopyTime,
+    PasteTime,
+    DuplicateTime,
+    DeleteTime,
+    InsertSilence,
+    Split,
+    Consolidate,
+    Rename,
     // Create
     InsertClip,
     // View / transport
     PlayStop,
+    Continue,
     Rewind,
     ToggleBrowser,
     Follow,
     Escape,
     OpenClip,
     LoopSelection,
+    ZoomIn,
+    ZoomOut,
+    ZoomToSelection,
+    ZoomBack,
+    ZoomToFit,
+    DrawMode,
+    GridNarrow,
+    GridWiden,
+    GridTriplet,
+    GridSnap,
+    GridAdaptive,
+    // Arrangement
+    MarkerLeft,
+    MarkerRight,
+    TrackUp,
+    TrackDown,
     // Piano roll
     TransposeUp,
     TransposeDown,
@@ -107,6 +136,10 @@ pub enum Action {
     OctaveDown,
     NudgeLeft,
     NudgeRight,
+    Shorten,
+    Lengthen,
+    PrevNote,
+    NextNote,
     // Text fields (handled by the field)
     TextConfirm,
     TextCancel,
@@ -117,6 +150,9 @@ pub enum Action {
     TextPaste,
     // Dialogs
     CloseDialog,
+    ConfirmDialog,
+    // Help
+    GettingStarted,
     // Dev mode only (F-02)
     DevStats,
     DevStress,
@@ -177,28 +213,62 @@ pub static TABLE: &[Shortcut] = &[
     },
     sc!(Undo, "edit.undo", "Undo", "Edit", &[cmd(Code::KeyZ)], &[cmd(Code::KeyZ)], APP),
     sc!(Redo, "edit.redo", "Redo", "Edit", &[cmd(Code::KeyY), cmd_shift(Code::KeyZ)], &[cmd_shift(Code::KeyZ), cmd(Code::KeyY)], APP),
-    sc!(Cut, "edit.cut", "Cut", "Edit", &[cmd(Code::KeyX)], &[cmd(Code::KeyX)], PIANO),
-    sc!(Copy, "edit.copy", "Copy", "Edit", &[cmd(Code::KeyC)], &[cmd(Code::KeyC)], PIANO),
-    sc!(Paste, "edit.paste", "Paste", "Edit", &[cmd(Code::KeyV)], &[cmd(Code::KeyV)], PIANO),
+    sc!(Cut, "edit.cut", "Cut", "Edit", &[cmd(Code::KeyX)], &[cmd(Code::KeyX)], EDITORS),
+    sc!(Copy, "edit.copy", "Copy", "Edit", &[cmd(Code::KeyC)], &[cmd(Code::KeyC)], EDITORS),
+    sc!(Paste, "edit.paste", "Paste", "Edit", &[cmd(Code::KeyV)], &[cmd(Code::KeyV)], EDITORS),
     sc!(Duplicate, "edit.duplicate", "Duplicate", "Edit", &[cmd(Code::KeyD)], &[cmd(Code::KeyD)], EDITORS),
     sc!(Delete, "edit.delete", "Delete", "Edit", &[k(Code::Delete), k(Code::Backspace)], &[k(Code::Backspace), k(Code::Delete)], EDITORS),
     sc!(SelectAll, "edit.select_all", "Select All", "Edit", &[cmd(Code::KeyA)], &[cmd(Code::KeyA)], EDITORS),
     sc!(Quantize, "edit.quantize", "Quantize", "Edit", &[cmd(Code::KeyU)], &[cmd(Code::KeyU)], PIANO),
     sc!(Settings, "edit.settings", "Settings…", "Edit", &[cmd(Code::Comma)], &[cmd(Code::Comma)], APP),
+    // Time commands act on every track (R46); Insert Silence at the time selection (R47).
+    sc!(CutTime, "edit.cut_time", "Cut Time", "Edit", &[cmd_shift(Code::KeyX)], &[cmd_shift(Code::KeyX)], ARR),
+    sc!(CopyTime, "edit.copy_time", "Copy Time", "Edit", &[cmd_shift(Code::KeyC)], &[cmd_shift(Code::KeyC)], ARR),
+    sc!(PasteTime, "edit.paste_time", "Paste Time", "Edit", &[cmd_shift(Code::KeyV)], &[cmd_shift(Code::KeyV)], ARR),
+    sc!(DuplicateTime, "edit.duplicate_time", "Duplicate Time", "Edit", &[cmd_shift(Code::KeyD)], &[cmd_shift(Code::KeyD)], ARR),
+    sc!(DeleteTime, "edit.delete_time", "Delete Time", "Edit", &[cmd_shift(Code::Delete)], &[cmd_shift(Code::Backspace), cmd_shift(Code::Delete)], ARR),
+    sc!(InsertSilence, "edit.insert_silence", "Insert Silence", "Edit", &[cmd(Code::KeyI)], &[cmd(Code::KeyI)], ARR),
+    // Split / chop (R38, R73) and consolidate / join (R39, R73).
+    sc!(Split, "edit.split", "Split", "Edit", &[cmd(Code::KeyE)], &[cmd(Code::KeyE)], EDITORS),
+    sc!(Consolidate, "edit.consolidate", "Consolidate", "Edit", &[cmd(Code::KeyJ)], &[cmd(Code::KeyJ)], EDITORS),
+    sc!(Rename, "edit.rename", "Rename", "Edit", &[cmd(Code::KeyR)], &[cmd(Code::KeyR)], EDITORS),
     sc!(InsertClip, "create.midi_clip", "Insert MIDI Clip", "Create", &[cmd_shift(Code::KeyM)], &[cmd_shift(Code::KeyM)], ARR),
     sc!(PlayStop, "transport.play", "Play / Stop", "Transport", &[k(Code::Space)], &[k(Code::Space)], APP),
+    sc!(Continue, "transport.continue", "Continue from the stop point", "Transport", &[shift(Code::Space)], &[shift(Code::Space)], APP),
     sc!(Rewind, "transport.rewind", "Back to the start", "Transport", &[k(Code::Home)], &[k(Code::Home)], APP),
     sc!(LoopSelection, "arrangement.loop_selection", "Loop Selection", "Arrangement", &[cmd(Code::KeyL)], &[cmd(Code::KeyL)], ARR),
     sc!(OpenClip, "arrangement.open_clip", "Open the clip in the piano roll", "Arrangement", &[k(Code::Enter), k(Code::NumpadEnter)], &[k(Code::Enter), k(Code::NumpadEnter)], ARR),
     sc!(ToggleBrowser, "view.browser", "Browser", "View", &[cmd_alt(Code::KeyB)], &[cmd_alt(Code::KeyB)], APP),
     sc!(Follow, "view.follow", "Follow", "View", &[cmd_shift(Code::KeyF)], &[alt_shift(Code::KeyF)], APP),
+    sc!(ZoomIn, "view.zoom_in", "Zoom In", "View", &[k(Code::Equal), shift(Code::Equal), k(Code::NumpadAdd)], &[k(Code::Equal), shift(Code::Equal), k(Code::NumpadAdd)], EDITORS),
+    sc!(ZoomOut, "view.zoom_out", "Zoom Out", "View", &[k(Code::Minus), k(Code::NumpadSubtract)], &[k(Code::Minus), k(Code::NumpadSubtract)], EDITORS),
+    sc!(ZoomToSelection, "view.zoom_selection", "Zoom to Selection", "View", &[k(Code::KeyZ)], &[k(Code::KeyZ)], EDITORS),
+    sc!(ZoomBack, "view.zoom_back", "Zoom Back", "View", &[k(Code::KeyX)], &[k(Code::KeyX)], EDITORS),
+    // No key: a double-click on the ruler (R32).
+    sc!(ZoomToFit, "view.zoom_fit", "Zoom to Fit", "View", &[], &[], ARR),
+    sc!(DrawMode, "view.draw_mode", "Draw Mode", "View", &[k(Code::KeyB)], &[k(Code::KeyB)], APP),
+    // The grid of the focused editor (R56–R59).
+    sc!(GridNarrow, "grid.narrow", "Narrow Grid", "Grid", &[cmd(Code::Digit1)], &[cmd(Code::Digit1)], EDITORS),
+    sc!(GridWiden, "grid.widen", "Widen Grid", "Grid", &[cmd(Code::Digit2)], &[cmd(Code::Digit2)], EDITORS),
+    sc!(GridTriplet, "grid.triplet", "Triplet Grid", "Grid", &[cmd(Code::Digit3)], &[cmd(Code::Digit3)], EDITORS),
+    sc!(GridSnap, "grid.snap", "Snap to Grid", "Grid", &[cmd(Code::Digit4)], &[cmd(Code::Digit4)], EDITORS),
+    sc!(GridAdaptive, "grid.adaptive", "Adaptive Grid", "Grid", &[cmd(Code::Digit5)], &[cmd(Code::Digit5)], EDITORS),
     sc!(Escape, "view.escape", "Close the menu or piano roll · clear the selection", "View", &[k(Code::Escape)], &[k(Code::Escape)], APP),
+    // R50, R51: the insert marker, or the selected clips by the grid; up / down change the selected track.
+    sc!(MarkerLeft, "arrangement.left", "Move the insert marker / selected clips left", "Arrangement", &[k(Code::ArrowLeft)], &[k(Code::ArrowLeft)], ARR),
+    sc!(MarkerRight, "arrangement.right", "Move the insert marker / selected clips right", "Arrangement", &[k(Code::ArrowRight)], &[k(Code::ArrowRight)], ARR),
+    sc!(TrackUp, "arrangement.track_up", "Select the track above", "Arrangement", &[k(Code::ArrowUp)], &[k(Code::ArrowUp)], ARR),
+    sc!(TrackDown, "arrangement.track_down", "Select the track below", "Arrangement", &[k(Code::ArrowDown)], &[k(Code::ArrowDown)], ARR),
     sc!(TransposeUp, "piano.up", "Transpose up a semitone", "Piano roll", &[k(Code::ArrowUp)], &[k(Code::ArrowUp)], PIANO),
     sc!(TransposeDown, "piano.down", "Transpose down a semitone", "Piano roll", &[k(Code::ArrowDown)], &[k(Code::ArrowDown)], PIANO),
     sc!(OctaveUp, "piano.octave_up", "Transpose up an octave", "Piano roll", &[shift(Code::ArrowUp)], &[shift(Code::ArrowUp)], PIANO),
     sc!(OctaveDown, "piano.octave_down", "Transpose down an octave", "Piano roll", &[shift(Code::ArrowDown)], &[shift(Code::ArrowDown)], PIANO),
     sc!(NudgeLeft, "piano.nudge_left", "Move left by the grid", "Piano roll", &[k(Code::ArrowLeft)], &[k(Code::ArrowLeft)], PIANO),
     sc!(NudgeRight, "piano.nudge_right", "Move right by the grid", "Piano roll", &[k(Code::ArrowRight)], &[k(Code::ArrowRight)], PIANO),
+    sc!(Shorten, "piano.shorten", "Shorten by the grid", "Piano roll", &[shift(Code::ArrowLeft)], &[shift(Code::ArrowLeft)], PIANO),
+    sc!(Lengthen, "piano.lengthen", "Lengthen by the grid", "Piano roll", &[shift(Code::ArrowRight)], &[shift(Code::ArrowRight)], PIANO),
+    sc!(PrevNote, "piano.prev_note", "Select the previous note", "Piano roll", &[alt(Code::ArrowLeft)], &[alt(Code::ArrowLeft)], PIANO),
+    sc!(NextNote, "piano.next_note", "Select the next note", "Piano roll", &[alt(Code::ArrowRight)], &[alt(Code::ArrowRight)], PIANO),
     sc!(TextConfirm, "text.confirm", "Confirm", "Text fields", &[k(Code::Enter)], &[k(Code::Enter)], TEXT),
     sc!(TextCancel, "text.cancel", "Stop editing", "Text fields", &[k(Code::Escape)], &[k(Code::Escape)], TEXT),
     sc!(TextNext, "text.next", "Next field", "Text fields", &[k(Code::Tab)], &[k(Code::Tab)], TEXT),
@@ -207,6 +277,8 @@ pub static TABLE: &[Shortcut] = &[
     sc!(TextCut, "text.cut", "Cut text", "Text fields", &[cmd(Code::KeyX)], &[cmd(Code::KeyX)], TEXT),
     sc!(TextPaste, "text.paste", "Paste text", "Text fields", &[cmd(Code::KeyV)], &[cmd(Code::KeyV)], TEXT),
     sc!(CloseDialog, "dialog.close", "Close the dialog", "Dialogs", &[k(Code::Escape)], &[k(Code::Escape)], MODAL),
+    sc!(ConfirmDialog, "dialog.confirm", "Confirm (Export)", "Dialogs", &[k(Code::Enter), k(Code::NumpadEnter)], &[k(Code::Enter), k(Code::NumpadEnter)], MODAL),
+    sc!(GettingStarted, "help.getting_started", "Getting Started", "Help", &[], &[], APP),
     Shortcut { action: Action::DevStats, id: "dev.stats", name: "Frame-time overlay", group: "Dev mode", win: &[k(Code::F3)], mac: &[k(Code::F3)], ctx: APP, system: false, dev: true },
     Shortcut { action: Action::DevStress, id: "dev.stress", name: "200-clip stress set (replaces the song)", group: "Dev mode", win: &[k(Code::F4)], mac: &[k(Code::F4)], ctx: APP, system: false, dev: true },
     Shortcut { action: Action::DevReloadStyles, id: "dev.styles", name: "Reload the stylesheet", group: "Dev mode", win: &[k(Code::F5)], mac: &[k(Code::F5)], ctx: APP, system: false, dev: true },
@@ -264,6 +336,10 @@ fn key_name(code: Code, mac: bool) -> String {
         Code::Backspace => if mac { "⌫" } else { "Backspace" },
         Code::Home => "Home",
         Code::Comma => ",",
+        Code::Equal => "+",
+        Code::Minus => "\u{2212}",
+        Code::NumpadAdd => if mac { "Keypad +" } else { "Num +" },
+        Code::NumpadSubtract => if mac { "Keypad \u{2212}" } else { "Num \u{2212}" },
         Code::ArrowUp => "↑",
         Code::ArrowDown => "↓",
         Code::ArrowLeft => "←",
@@ -358,7 +434,10 @@ pub fn sheet(mac: bool) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
 mod tests {
     use super::*;
 
-    const CTXS: [Ctx; 5] = [Ctx::App, Ctx::Arrangement, Ctx::PianoRoll, Ctx::Text, Ctx::Modal];
+    /// The contexts a key press is looked up in (`App` entries are live in
+    /// both editors, so they are checked there: the arrangement and the
+    /// piano roll may reuse each other's keys, e.g. the arrows).
+    const CTXS: [Ctx; 4] = [Ctx::Arrangement, Ctx::PianoRoll, Ctx::Text, Ctx::Modal];
 
     /// No two actions share a key within any context, on either platform.
     #[test]
@@ -392,14 +471,14 @@ mod tests {
     #[test]
     fn decision_3_keys() {
         // UX.md decision 3: Quantize Cmd+U (Q retired), Follow Ctrl+Shift+F,
-        // Cmd+I is no longer MIDI import (nothing uses it in this build).
+        // Cmd+I is no longer MIDI import: it is Insert Silence (Batch 3).
         assert_eq!(chord_text(&get(Action::Quantize).win[0], false), "Ctrl+U");
         assert_eq!(chord_text(&get(Action::Follow).win[0], false), "Ctrl+Shift+F");
         assert_eq!(chord_text(&get(Action::Follow).mac[0], true), "⌥⇧F");
         for s in TABLE {
             for c in s.win.iter().chain(s.mac) {
                 assert!(!(c.code == Code::KeyQ && !c.cmd), "Q is retired ({})", s.id);
-                assert!(!(c.code == Code::KeyI && c.cmd), "Cmd+I is reserved for Insert Silence ({})", s.id);
+                assert!(!(c.code == Code::KeyI && c.cmd) || s.action == Action::InsertSilence, "Cmd+I is Insert Silence ({})", s.id);
             }
         }
     }

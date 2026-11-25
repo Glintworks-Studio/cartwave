@@ -287,14 +287,26 @@ impl PianoRoll {
         }
 
         let hit = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| Self::hit_note(c, &m, x, y)));
+        // Draw Mode (R6): a click on a note erases it.
+        if let (Some((id, _)), true) = (hit, p.draw) {
+            self.edit(cid, |c| notes::delete(&mut c.notes, &[id]));
+            self.s.piano.update(|p| p.sel.retain(|s| *s != id));
+            cx.emit(AppEvent::Commit);
+            return;
+        }
         let Some((id, zone)) = hit else {
-            if mods.shift() {
-                // Shift-drag on empty space: marquee (adds to the selection).
-                self.drag = Some(Drag::Marquee { press: (x, y), cur: (x, y), base: p.sel.clone() });
+            if !p.draw || mods.shift() {
+                // P3 (R76): a click deselects and a drag selects (Shift adds
+                // to the selection).
+                let base = if mods.shift() { p.sel.clone() } else { Vec::new() };
+                if !mods.shift() {
+                    self.set_sel(Vec::new());
+                }
+                self.drag = Some(Drag::Marquee { press: (x, y), cur: (x, y), base });
                 cx.capture();
                 return;
             }
-            // Draw a note of the current grid length.
+            // Draw Mode (P4): draw a note of the current grid length.
             let Some(row) = m.row_at(y).filter(|r| m.kind.playable_row(*r)) else { return };
             let t = m.tick_at(x);
             let start = if input::bypass_snap(&mods) { t.floor() as i64 } else { p.grid.floor(t.floor() as i64) };
@@ -610,6 +622,95 @@ impl PianoRoll {
         }
     }
 
+    /// P1 / P2 (R1, R2): a double-click on a note deletes it; on empty grid
+    /// space it adds a note one grid step long, at the grid line before the
+    /// pointer (the length is ours: the manual doesn't say, R3).
+    fn double_click(&mut self, cx: &mut EventContext, cid: u32, lane: usize, m: &Map) {
+        let (x, y) = Self::local(cx);
+        let hit = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| Self::hit_note(c, m, x, y)));
+        if let Some((id, _)) = hit {
+            self.edit(cid, |c| notes::delete(&mut c.notes, &[id]));
+            self.s.piano.update(|p| p.sel.retain(|s| *s != id));
+            cx.emit(AppEvent::Commit);
+            return;
+        }
+        let Some((_, _, _, clip_len, p)) = self.open() else { return };
+        let Some(row) = m.row_at(y).filter(|r| m.kind.playable_row(*r)) else { return };
+        let t = m.tick_at(x).floor() as i64;
+        let start = if input::bypass_snap(cx.modifiers()) { t } else { p.grid.floor(t) };
+        if start < 0 || start >= clip_len as i64 {
+            return;
+        }
+        let start = start as u32;
+        let pitch = m.kind.pitch_of(row);
+        let len = p.grid.ticks().min(clip_len - start).max(1);
+        let id = self.edit(cid, |c| {
+            let mut next = c.next_note_id;
+            let id = notes::add(&mut c.notes, &mut next, start, len, pitch);
+            c.next_note_id = next;
+            id
+        });
+        if let Some(id) = id {
+            self.set_sel(vec![id]);
+            Self::audition(cx, lane, Some(pitch), None);
+            Self::audition(cx, lane, None, None);
+            cx.emit(AppEvent::Commit);
+        }
+    }
+
+    /// Right-click on a note selects it (if it isn't already). Returns
+    /// whether the click was on a note.
+    fn select_under(&mut self, cx: &mut EventContext) -> bool {
+        let Some((cid, lane, _, _, p)) = self.open() else { return false };
+        let (x, y) = Self::local(cx);
+        let m = self.map(cx, lane, &p);
+        let hit = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| Self::hit_note(c, &m, x, y)));
+        match hit {
+            Some((id, _)) => {
+                if !p.sel.contains(&id) {
+                    self.set_sel(vec![id]);
+                }
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Z / X / + / − (P11, R75). Z: the selected notes (or the whole clip);
+    /// X: back one zoom, then the whole clip.
+    fn zoom(&mut self, action: Action, clip_len: u32, sel_span: Option<(u32, u32)>) {
+        self.s.piano.update(|p| {
+            let w = p.width_px.max(64.0) as f64;
+            let fit = |p: &mut PianoState, a: u32, b: u32| {
+                let span = (b.max(a + 1) - a) as f64 * 1.08;
+                let ppb = (w / span * TICKS_PER_BAR as f64).clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
+                p.px_per_tick = ppb / TICKS_PER_BAR as f64;
+                p.scroll_ticks = (a as f64 - span * 0.04).max(0.0);
+            };
+            match action {
+                Action::ZoomIn | Action::ZoomOut => {
+                    let f = if action == Action::ZoomIn { 1.25 } else { 0.8 };
+                    let centre = p.scroll_ticks + w * 0.5 / p.px_per_tick;
+                    let ppb = (p.px_per_tick * TICKS_PER_BAR as f64 * f).clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
+                    p.px_per_tick = ppb / TICKS_PER_BAR as f64;
+                    p.scroll_ticks = (centre - w * 0.5 / p.px_per_tick).max(0.0);
+                }
+                Action::ZoomToSelection => {
+                    p.zoom_back.push((p.px_per_tick, p.scroll_ticks));
+                    let (a, b) = sel_span.unwrap_or((0, clip_len));
+                    fit(p, a, b);
+                }
+                _ => match p.zoom_back.pop() {
+                    Some((ppt, sc)) => {
+                        p.px_per_tick = ppt;
+                        p.scroll_ticks = sc;
+                    }
+                    None => fit(p, 0, clip_len),
+                },
+            }
+        });
+    }
+
     /// A key while the piano roll has focus, through the shortcut table
     /// (F-30). Esc and the app-wide keys bubble up to the app.
     fn on_key(&mut self, cx: &mut EventContext, code: Code, key: Option<&Key>) -> bool {
@@ -674,6 +775,58 @@ impl PianoRoll {
                     notes::transpose(&mut c.notes, &sel, dir * step, kind, &mut next);
                     c.next_note_id = next;
                 });
+            }
+            Action::Shorten | Action::Lengthen => {
+                let dt = p.grid.ticks() as i64 * if action == Action::Lengthen { 1 } else { -1 };
+                let min = p.grid.ticks().min(MIN_NOTE_TICKS.max(1));
+                self.edit(cid, |c| {
+                    let mut next = c.next_note_id;
+                    notes::resize(&mut c.notes, &sel, dt, min, &mut next);
+                    c.next_note_id = next;
+                });
+            }
+            Action::Split => {
+                if sel.is_empty() {
+                    cx.emit(AppEvent::Status(crate::edit::WHY_NO_NOTES.into()));
+                    return true;
+                }
+                let pieces = self.edit(cid, |c| {
+                    let mut next = c.next_note_id;
+                    let v = notes::chop(&mut c.notes, &sel, p.grid.ticks(), &mut next);
+                    c.next_note_id = next;
+                    v
+                });
+                self.set_sel(pieces.unwrap_or_default());
+            }
+            Action::Consolidate => {
+                let keep = self.edit(cid, |c| notes::join(&mut c.notes, &sel));
+                self.set_sel(keep.unwrap_or_default());
+            }
+            Action::PrevNote | Action::NextNote => {
+                let n = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| notes::neighbour(&c.notes, &sel, action == Action::NextNote, c.len_ticks)));
+                if let Some(id) = n {
+                    self.set_sel(vec![id]);
+                    if let Some(pitch) = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| c.notes.iter().find(|n| n.id == id).map(|n| n.pitch))) {
+                        Self::audition(cx, lane, Some(pitch), None);
+                        Self::audition(cx, lane, None, None);
+                    }
+                }
+                return true;
+            }
+            Action::ZoomIn | Action::ZoomOut | Action::ZoomToSelection | Action::ZoomBack => {
+                let span = self.s.arrangement.with_untracked(|a| a.clip(cid).and_then(|c| notes::span(&c.notes, &sel)));
+                self.zoom(action, clip_len, span);
+                return true;
+            }
+            Action::GridNarrow | Action::GridWiden | Action::GridTriplet => {
+                self.s.piano.update(|p| p.grid = p.grid.step(action));
+                cx.emit(AppEvent::Status(format!("Piano-roll grid: {}", self.s.piano.with_untracked(|p| p.grid.label()))));
+                return true;
+            }
+            Action::GridSnap | Action::GridAdaptive => {
+                let alt = if shortcuts::MACOS { "Cmd" } else { "Alt" };
+                cx.emit(AppEvent::Status(format!("The piano roll's grid is always on and fixed: hold {alt} while dragging to place freely.")));
+                return true;
             }
             Action::NudgeLeft | Action::NudgeRight => {
                 let dir: i64 = if action == Action::NudgeRight { 1 } else { -1 };
@@ -760,11 +913,22 @@ impl View for PianoRoll {
                             self.edit(cid, |c| notes::set_volume(&mut c.notes, &targets, None));
                             cx.emit(AppEvent::Commit);
                         }
-                    } else {
-                        // Elsewhere a double-click acts as a press.
+                    } else if p.draw || y < m.geo.grid_y0 || x < m.geo.grid_x0 {
+                        // Draw Mode, the ruler and the keys: a double-click
+                        // acts as a press.
                         self.on_press(cx);
+                    } else {
+                        self.double_click(cx, cid, lane, &m);
                     }
                 }
+                meta.consume();
+            }
+            WindowEvent::MouseDown(MouseButton::Right) => {
+                cx.emit(AppEvent::EditorFocus(Ctx::PianoRoll));
+                cx.focus();
+                let on_note = self.select_under(cx);
+                let s = cx.scale_factor();
+                cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Piano(on_note), cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
                 meta.consume();
             }
             WindowEvent::MouseMove(..) => {

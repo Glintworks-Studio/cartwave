@@ -62,6 +62,11 @@ pub fn lane_at(x: f32, y: f32) -> Option<usize> {
     })
 }
 
+/// A track row's bounds as last drawn (physical px).
+pub fn lane_row(lane: usize) -> Option<BoundingBox> {
+    LANE_ROWS.with(|r| r.borrow().get(lane).copied().flatten())
+}
+
 /// The vertical span of a lane's row (physical px), for the arrangement's dimming.
 pub fn lane_span(lane: usize) -> Option<(f32, f32)> {
     LANE_ROWS.with(|r| r.borrow().get(lane).copied().flatten().map(|b| (b.y, b.y + b.h)))

@@ -23,7 +23,24 @@ use std::sync::Arc;
 use engine::Params;
 
 use crate::notes::Note;
-use crate::state::{Arrangement, Clip};
+use crate::state::{Arrangement, Clip, Lane, SoundChip};
+
+/// Song settings that change what plays and exports, outside the clips:
+/// undoable since Batch 3 (F-33: the profile, the loop brace and the loop
+/// switch).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongState {
+    pub chip: SoundChip,
+    pub loop_start: u32,
+    pub loop_end: u32,
+    pub loop_on: bool,
+}
+
+impl Default for SongState {
+    fn default() -> Self {
+        Self { chip: SoundChip::WithVrc6, loop_start: 0, loop_end: 32 * crate::state::TICKS_PER_BAR, loop_on: true }
+    }
+}
 
 /// Most undo steps kept.
 pub const MAX_STEPS: usize = 1000;
@@ -39,11 +56,29 @@ pub struct Doc {
     pub params: Params,
     pub instruments: crate::instruments::InstrumentTable,
     pub samples: Vec<Option<crate::dpcm::UserSample>>,
+    /// Track names and colours (Batch 3: rename, Colour ▸).
+    pub lanes: Vec<Lane>,
+    pub song: SongState,
 }
 
 impl Doc {
     pub fn of(a: &Arrangement, bpm: f32, params: Params) -> Self {
-        Self { clips: a.clips.clone(), next_id: a.next_id, bpm, params, instruments: a.instruments.clone(), samples: a.samples.clone() }
+        Self {
+            clips: a.clips.clone(),
+            next_id: a.next_id,
+            bpm,
+            params,
+            instruments: a.instruments.clone(),
+            samples: a.samples.clone(),
+            lanes: a.lanes.clone(),
+            song: SongState::default(),
+        }
+    }
+
+    /// The document with its song settings.
+    pub fn with_song(mut self, song: SongState) -> Self {
+        self.song = song;
+        self
     }
 
     /// Writes the document into an arrangement; selection and view stay,
@@ -53,6 +88,7 @@ impl Doc {
         a.next_id = self.next_id;
         a.instruments = self.instruments.clone();
         a.samples = self.samples.clone();
+        a.lanes = self.lanes.clone();
         a.editing.clear();
         a.editing_notes = None;
         let ids: Vec<u32> = a.clips.iter().map(|c| c.id).collect();
@@ -70,6 +106,8 @@ impl Doc {
             && self.params == o.params
             && self.instruments == o.instruments
             && self.samples == o.samples
+            && self.lanes == o.lanes
+            && self.song == o.song
             && self.clips.len() == o.clips.len()
             && (self.clips.iter().zip(&o.clips).all(|(a, b)| same(a, b)) || {
                 let by_id = |v: &[Arc<Clip>]| {
@@ -230,7 +268,7 @@ mod tests {
             let fits: Vec<&chip::presets::Preset> = chip::presets::PRESETS.iter().filter(|p| p.fits(lane)).collect();
             crate::instruments::LaneInstrument::from_preset(fits[r.range(0, fits.len() as u32) as usize])
         };
-        match r.range(0, 19) {
+        match r.range(0, 27) {
             // Instrument operations (STABILIZE_PROMPT.md §B5).
             14 => {
                 let lane = r.range(0, 8) as usize;
@@ -279,6 +317,46 @@ mod tests {
                     a.clip_mut(id).unwrap().instrument = None;
                     let clips = a.clips.clone();
                     a.instruments.prune(&clips);
+                }
+            }
+            // Batch 3 operations: split, consolidate, time commands, paste,
+            // rename and colour.
+            19 => {
+                if let Some(id) = pick(a, r) {
+                    let c = a.clip(id).unwrap();
+                    let at = c.start_ticks + r.range(0, c.len_ticks.max(1));
+                    a.split_clip(id, at);
+                }
+            }
+            20 => {
+                let lane = r.range(0, 8) as usize;
+                let ids: Vec<u32> = a.clips.iter().filter(|c| c.lane == lane).map(|c| c.id).collect();
+                a.consolidate(&ids, None);
+            }
+            21 => {
+                let start = r.range(0, 16) * TICKS_PER_BAR;
+                let lane = r.range(0, 8) as usize;
+                a.clear_range(start, start + TICKS_PER_BAR * r.range(1, 4), lane..=(lane + r.range(0, 3) as usize).min(7));
+            }
+            22 => a.insert_time(r.range(0, 16) * TICKS_PER_BAR, TICKS_PER_BAR * r.range(1, 3)),
+            23 => {
+                let start = r.range(0, 16) * TICKS_PER_BAR;
+                a.delete_time(start, start + TICKS_PER_BAR * r.range(1, 3));
+            }
+            24 => {
+                let start = r.range(0, 16) * TICKS_PER_BAR;
+                let cb = a.copy_range(start, start + 2 * TICKS_PER_BAR, 0..=7, r.f32() < 0.5);
+                a.paste(&cb, r.range(0, 32) * TICKS_PER_BAR, r.range(0, 8) as usize, &|_| true);
+            }
+            25 => {
+                let lane = r.range(0, 8) as usize;
+                a.lanes[lane].name = format!("Track {}", r.range(0, 100));
+            }
+            26 => {
+                let lane = r.range(0, 8) as usize;
+                a.lanes[lane].color = crate::theme::tokens::Rgba::hex(crate::state::PALETTE[r.range(0, 12) as usize].1);
+                if let Some(id) = pick(a, r) {
+                    a.clip_mut(id).unwrap().color = Some(crate::theme::tokens::Rgba::hex(0x4FA8E0));
                 }
             }
             0 => {

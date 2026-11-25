@@ -135,6 +135,18 @@ impl Grid {
         Self::ALL[(i + 1) % Self::ALL.len()]
     }
 
+    /// Cmd+1 (finer), Cmd+2 (coarser), Cmd+3 (straight <-> triplet).
+    pub fn step(self, a: crate::shortcuts::Action) -> Self {
+        use crate::shortcuts::Action;
+        let i = Self::ALL.iter().position(|g| *g == self).unwrap_or(2);
+        let (row, col) = (i / 4, i % 4);
+        match a {
+            Action::GridNarrow => Self::ALL[row * 4 + (col + 1).min(3)],
+            Action::GridWiden => Self::ALL[row * 4 + col.saturating_sub(1)],
+            _ => Self::ALL[(1 - row) * 4 + col],
+        }
+    }
+
     /// Nearest grid line.
     pub fn round(self, t: i64) -> i64 {
         let g = self.ticks() as i64;
@@ -460,6 +472,99 @@ pub fn set_volume(notes: &mut [Note], ids: &[u32], v: Option<u8>) {
     }
 }
 
+/// Shift+← / Shift+→ (P7, R63): lengthens (`dt` > 0) or shortens the notes
+/// of `ids` by `dt` ticks; never shorter than `min`. Longer notes win what
+/// they now overlap.
+pub fn resize(notes: &mut Vec<Note>, ids: &[u32], dt: i64, min: u32, next_id: &mut u32) {
+    for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
+        n.len = (n.len as i64 + dt).max(min.max(1) as i64) as u32;
+    }
+    resolve_mono(notes, ids, next_id);
+}
+
+/// Cmd+E in the piano roll (P9, R73: chop on the grid): each note of `ids`
+/// longer than one grid step becomes notes of `grid` ticks (the last one
+/// keeps the rest). Returns the ids of all the pieces.
+pub fn chop(notes: &mut Vec<Note>, ids: &[u32], grid: u32, next_id: &mut u32) -> Vec<u32> {
+    let grid = grid.max(1);
+    let mut out = Vec::with_capacity(notes.len());
+    let mut pieces = Vec::new();
+    for n in notes.drain(..) {
+        if !ids.contains(&n.id) || n.len <= grid {
+            if ids.contains(&n.id) {
+                pieces.push(n.id);
+            }
+            out.push(n);
+            continue;
+        }
+        let mut t = 0;
+        while t < n.len {
+            let id = if t == 0 {
+                n.id
+            } else {
+                let id = *next_id;
+                *next_id += 1;
+                id
+            };
+            pieces.push(id);
+            out.push(Note { id, start: n.start + t, len: grid.min(n.len - t), ..n });
+            t += grid;
+        }
+    }
+    *notes = out;
+    pieces
+}
+
+/// Cmd+J in the piano roll (P9, R73: join): runs of notes of `ids` that
+/// follow each other in time on the same pitch become one note, from the
+/// first start to the last end. Returns the ids that remain.
+pub fn join(notes: &mut Vec<Note>, ids: &[u32]) -> Vec<u32> {
+    let mut sel: Vec<Note> = notes.iter().filter(|n| ids.contains(&n.id)).copied().collect();
+    sel.sort_by_key(|n| n.start);
+    let mut gone = Vec::new();
+    let mut grow: Vec<(u32, u32)> = Vec::new();
+    let mut i = 0;
+    while i < sel.len() {
+        let mut j = i;
+        while j + 1 < sel.len() && sel[j + 1].pitch == sel[i].pitch {
+            j += 1;
+        }
+        if j > i {
+            grow.push((sel[i].id, sel[j].end() - sel[i].start));
+            gone.extend(sel[i + 1..=j].iter().map(|n| n.id));
+        }
+        i = j + 1;
+    }
+    notes.retain(|n| !gone.contains(&n.id));
+    for (id, len) in grow {
+        if let Some(n) = notes.iter_mut().find(|n| n.id == id) {
+            n.len = len;
+        }
+    }
+    let mut next = notes.iter().map(|n| n.id + 1).max().unwrap_or(1);
+    let keep: Vec<u32> = ids.iter().copied().filter(|id| !gone.contains(id)).collect();
+    resolve_mono(notes, &keep, &mut next);
+    keep
+}
+
+/// Alt+← / Alt+→ (R74): the note before / after the selection (by start),
+/// among the notes starting before `len`.
+pub fn neighbour(notes: &[Note], ids: &[u32], forward: bool, len: u32) -> Option<u32> {
+    let audible = notes.iter().filter(|n| n.start < len);
+    let Some((lo, hi)) = span(notes, ids).map(|(_, _)| {
+        let starts = notes.iter().filter(|n| ids.contains(&n.id)).map(|n| n.start);
+        (starts.clone().min().unwrap_or(0), starts.max().unwrap_or(0))
+    }) else {
+        // Nothing selected: the first (or last) note.
+        return if forward { audible.min_by_key(|n| n.start) } else { audible.max_by_key(|n| n.start) }.map(|n| n.id);
+    };
+    if forward {
+        audible.filter(|n| n.start > hi).min_by_key(|n| n.start).map(|n| n.id)
+    } else {
+        audible.filter(|n| n.start < lo).max_by_key(|n| n.start).map(|n| n.id)
+    }
+}
+
 /// True when no two notes overlap and the list is sorted (the invariant).
 pub fn is_mono(notes: &[Note]) -> bool {
     notes.windows(2).all(|w| w[0].end() <= w[1].start && w[0].start < w[1].start)
@@ -468,6 +573,35 @@ pub fn is_mono(notes: &[Note]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// P7, P9 [unit]: shorten / lengthen, chop on the grid, join, neighbours.
+    #[test]
+    fn batch3_note_ops() {
+        let mut v = vec![Note::new(1, 0, PPQ * 4, 60), Note::new(2, PPQ * 4, PPQ, 62)];
+        let mut next = 3;
+        resize(&mut v, &[2], PPQ as i64, MIN_NOTE_TICKS, &mut next);
+        assert_eq!(v[1].len, PPQ * 2);
+        resize(&mut v, &[2], -(PPQ as i64) * 5, MIN_NOTE_TICKS, &mut next);
+        assert_eq!(v[1].len, MIN_NOTE_TICKS, "never shorter than the minimum");
+        // A lengthened note wins what it now covers.
+        resize(&mut v, &[1], PPQ as i64, MIN_NOTE_TICKS, &mut next);
+        assert!(is_mono(&v));
+        assert_eq!(v.len(), 1, "note 2 was covered");
+        let pieces = chop(&mut v, &[1], PPQ, &mut next);
+        assert_eq!(pieces.len(), 5);
+        assert!(is_mono(&v) && v.iter().all(|n| n.len == PPQ && n.pitch == 60));
+        let keep = join(&mut v, &pieces);
+        assert_eq!(keep, [1]);
+        assert_eq!(v.len(), 1);
+        assert_eq!((v[0].start, v[0].len), (0, PPQ * 5));
+        // Joining keeps different pitches apart.
+        let mut w = vec![Note::new(1, 0, PPQ, 60), Note::new(2, PPQ, PPQ, 60), Note::new(3, PPQ * 2, PPQ, 64)];
+        join(&mut w, &[1, 2, 3]);
+        assert_eq!(w.len(), 2);
+        assert_eq!(neighbour(&w, &[1], true, PPQ * 8), Some(3));
+        assert_eq!(neighbour(&w, &[3], false, PPQ * 8), Some(1));
+        assert_eq!(neighbour(&w, &[], true, PPQ * 8), Some(1));
+    }
 
     fn n(id: u32, start: u32, len: u32, pitch: u8) -> Note {
         Note::new(id, start, len, pitch)

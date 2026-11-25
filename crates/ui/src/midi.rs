@@ -349,7 +349,7 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
                 fx: NoteFx::default(),
             })
             .collect();
-        let lane_name = crate::state::default_lanes()[lane].name;
+        let lane_name = crate::state::default_lanes()[lane].name.clone();
         report.push(format!("{} → {} ({} notes)", name, lane_name, ns.len()));
         if folded > 0 {
             report.push(format!("{folded} notes moved by octaves into the {lane_name} range"));

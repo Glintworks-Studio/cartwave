@@ -356,3 +356,27 @@ options and the reason. The report is SHELL.md.
   - An Alt-drag doesn't leave the menu bar focused when Alt is released (checked).
 - **15:50 Gates:** all pass (SHELL.md summary). Merge follows.
 - **15:46 Merge.** Every gate passes, so `app-shell/batch-1-2` is fast-forwarded into `main` with this commit and pushed (branch pushed too).
+
+---
+
+## Batch 3 run (BATCH3_PROMPT.md), 2026-11-25
+
+Branch `app-shell/batch-3` from `main` @ fb2d632. Unattended; decisions are numbered B3-Dn.
+
+- **Setup.** The pre-run build (fb2d632) is in the worktree `../prerun-b3` (release built) for the
+  A/B benchmarks. It also wrote the format-v3 corpus `docs/songs/v3/` (the v2 corpus and the scale
+  test, re-saved as v3) and its render/export hashes (`docs/songs/v3/HASHES.txt`), for the v3 → v4
+  migration test.
+- **B3-D1 (fork branch).** The prompt names the fork's "existing `chipdaw` branch". The fork has no
+  `chipdaw` branch; the one the app pins is `chipdaw-perf`. Fork commits go there.
+- **B3-D2 (dark menus: report, not build).** Research result: no documented API darkens the stock
+  Win32 popup menus. `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)` only affects the title
+  bar; `SetPreferredAppMode` / `AllowDarkModeForWindow` / `FlushMenuThemes` (uxtheme ordinals) are
+  undocumented; muda 0.22 (the newest) has no popup theming and its maintainers left popups light
+  by choice (muda #97). The documented route is owner-drawn items (`MFT_OWNERDRAW` +
+  `WM_MEASUREITEM` / `WM_DRAWITEM`, ~200–300 lines, no new crate), which can't recolour the
+  system-drawn popup border, shadow or submenu arrow. Not implemented in this run (the brief: only
+  undocumented ones work fully → report the options). **Found while checking:** muda's dark menu
+  *bar* (`MenuTheme::Dark`, shipped in Batch 2) itself relies on the undocumented
+  `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` messages. Left as it is and flagged for the owner in
+  BATCH3.md (switching to `MenuTheme::Light` is a one-line change).

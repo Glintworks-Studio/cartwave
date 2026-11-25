@@ -134,7 +134,18 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         a(Action::Duplicate),
         a(Action::Delete),
         Separator,
+        a(Action::CutTime),
+        a(Action::CopyTime),
+        a(Action::PasteTime),
+        a(Action::DuplicateTime),
+        a(Action::DeleteTime),
+        a(Action::InsertSilence),
+        Separator,
+        a(Action::Split),
+        a(Action::Consolidate),
+        Separator,
         a(Action::SelectAll),
+        a(Action::Rename),
         Separator,
         a(Action::Quantize),
     ];
@@ -143,8 +154,21 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         edit.push(a(Action::Settings));
     }
     let create = vec![a(Action::InsertClip)];
-    let view = vec![Check(Cmd::Action(Action::ToggleBrowser)), Check(Cmd::Action(Action::Follow)), Separator, Check(Cmd::ClockBars)];
-    let mut help = vec![Item(Cmd::ShortcutSheet)];
+    let view = vec![
+        Check(Cmd::Action(Action::ToggleBrowser)),
+        Check(Cmd::Action(Action::Follow)),
+        Separator,
+        a(Action::ZoomIn),
+        a(Action::ZoomOut),
+        a(Action::ZoomToSelection),
+        a(Action::ZoomBack),
+        a(Action::ZoomToFit),
+        Separator,
+        Check(Cmd::Action(Action::DrawMode)),
+        Separator,
+        Check(Cmd::ClockBars),
+    ];
+    let mut help = vec![Item(Cmd::ShortcutSheet), a(Action::GettingStarted)];
     if !mac {
         help.push(Separator);
         help.push(Item(Cmd::About));
@@ -217,6 +241,16 @@ pub struct MenuState {
     pub clock_bars: bool,
     /// Open Recent, newest first (display text, path).
     pub recent: Vec<String>,
+    /// Batch 3: something to paste in the active editor, a time range (time
+    /// selection or clips), exactly one clip or a track to rename, a
+    /// selection Split / Consolidate can act on, an earlier zoom, Draw Mode.
+    pub can_paste_time: bool,
+    pub range: bool,
+    pub can_rename: bool,
+    pub can_split: bool,
+    pub can_consolidate: bool,
+    pub can_zoom_back: bool,
+    pub draw: bool,
 }
 
 impl MenuState {
@@ -225,10 +259,19 @@ impl MenuState {
         match c {
             Cmd::Action(Action::Undo) => self.can_undo,
             Cmd::Action(Action::Redo) => self.can_redo,
-            Cmd::Action(Action::Cut | Action::Copy | Action::Quantize) => self.piano && self.notes_selected,
-            Cmd::Action(Action::Paste) => self.piano && self.can_paste,
-            Cmd::Action(Action::Duplicate | Action::Delete) => self.selection,
-            Cmd::Action(Action::InsertClip) => self.time_selection,
+            Cmd::Action(Action::Quantize) => self.piano && self.notes_selected,
+            Cmd::Action(Action::Cut | Action::Copy) if self.piano => self.notes_selected,
+            Cmd::Action(Action::Cut | Action::Copy | Action::Duplicate | Action::Delete) => self.selection || (!self.piano && self.time_selection),
+            Cmd::Action(Action::Paste) => self.can_paste,
+            Cmd::Action(Action::InsertClip | Action::InsertSilence) => !self.piano && self.time_selection,
+            Cmd::Action(Action::CutTime | Action::CopyTime | Action::DuplicateTime | Action::DeleteTime) => !self.piano && self.range,
+            Cmd::Action(Action::PasteTime) => !self.piano && self.can_paste_time,
+            Cmd::Action(Action::Rename) => self.can_rename,
+            Cmd::Action(Action::Split) => self.can_split,
+            Cmd::Action(Action::Consolidate) => self.can_consolidate,
+            Cmd::Action(Action::ZoomBack) => self.can_zoom_back,
+            Cmd::Action(Action::ZoomToSelection) => self.range || (self.piano && self.notes_selected) || self.piano,
+            Cmd::Action(Action::ZoomToFit) => !self.piano,
             Cmd::ClearRecent => !self.recent.is_empty(),
             _ => true,
         }
@@ -238,6 +281,7 @@ impl MenuState {
         match c {
             Cmd::Action(Action::ToggleBrowser) => self.browser,
             Cmd::Action(Action::Follow) => self.follow,
+            Cmd::Action(Action::DrawMode) => self.draw,
             Cmd::ClockBars => self.clock_bars,
             _ => false,
         }
@@ -414,8 +458,14 @@ mod tests {
     #[test]
     fn no_placeholders() {
         let ids: Vec<String> = commands(&spec(false)).into_iter().map(|c| c.id()).collect();
-        for later in ["split", "consolidate", "zoom", "track", "rename", "silence", "draw"] {
+        // Batch 4 (the model change) and later: tracks, time signatures,
+        // automation, MIDI clip export.
+        for later in ["track", "time_signature", "automation", "export_midi"] {
             assert!(!ids.iter().any(|i| i.contains(later)), "{later} belongs to a later batch");
+        }
+        // Batch 3's commands are all there (F-07, F-08, F-11, F-12, F-22, F-23, F-14).
+        for b3 in ["edit.split", "edit.consolidate", "edit.rename", "edit.cut_time", "edit.copy_time", "edit.paste_time", "edit.duplicate_time", "edit.delete_time", "edit.insert_silence", "view.zoom_in", "view.zoom_out", "view.zoom_selection", "view.zoom_back", "view.zoom_fit", "view.draw_mode", "help.getting_started"] {
+            assert!(ids.iter().any(|i| i == b3), "{b3} is missing from the menus");
         }
         // The Windows conventions: Exit under File, Settings under Edit, About under Help.
         let win = spec(false);
