@@ -6,11 +6,12 @@
 //! - `CHIPDAW_UI_STALL=1`   test C: busy-wait 250 ms on the UI thread every 2 s.
 //! - `CHIPDAW_AUDIOLOG=path` one CSV line of engine stats per second, plus a
 //!   summary at exit.
-//! - `CHIPDAW_PILOT=1`      mix a 19 kHz pilot (`CHIPDAW_PILOT_HZ` to change) and watch it via WASAPI loopback
+//! - `CHIPDAW_PILOT=1`      mix a 23 kHz pilot (`CHIPDAW_PILOT_HZ` to change) and watch it via WASAPI loopback
 //!   (ground-truth dropout count).
 //! - `CHIPDAW_AVSYNC=1`     test G: 1-bar loop, music muted, a click at mid-bar;
 //!   loopback click times vs the presented playhead crossing.
 //! - `CHIPDAW_QUIT_AFTER=secs` exit (after the summary) when the time is up.
+//! - `CHIPDAW_SONG=heavy` start on the macro worst case (every lane runs all macros).
 //! - `CHIPDAW_STRESS=1` start on the 200-clip set; `CHIPDAW_AUTOPLAY=1` start playing.
 //! - `CHIPDAW_BUFFER=frames` requested buffer size; `CHIPDAW_FILTER=off|nes|440|fc`.
 
@@ -75,6 +76,8 @@ pub struct Tests {
     pub avsync: bool,
     pub pilot: bool,
     pub stress: bool,
+    /// `CHIPDAW_SONG=heavy`: start on the macro worst case (`mock::heavy_arrangement`).
+    pub heavy: bool,
     pub autoplay: bool,
     pub buffer: Option<u32>,
     pub filter: Option<engine::FilterMode>,
@@ -131,6 +134,7 @@ impl Tests {
             avsync: env_on("CHIPDAW_AVSYNC"),
             pilot: env_on("CHIPDAW_PILOT"),
             stress: env_on("CHIPDAW_STRESS"),
+            heavy: std::env::var("CHIPDAW_SONG").is_ok_and(|v| v == "heavy"),
             autoplay: env_on("CHIPDAW_AUTOPLAY"),
             buffer: std::env::var("CHIPDAW_BUFFER").ok().and_then(|v| v.parse().ok()),
             filter,

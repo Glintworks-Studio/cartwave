@@ -331,3 +331,36 @@ pub fn step_meters_engine(m: &mut Meters, levels: [f32; 8], note_on: [bool; 8], 
         }
     }
 }
+
+/// The macro worst case for benchmarks (`CHIPDAW_SONG=heavy`): the demo's
+/// clips with every note held for two beats, on every channel an instrument
+/// that runs all four macros (volume, arpeggio, pitch, duty) in loops plus
+/// vibrato, so the driver writes registers on every frame for every lane.
+pub fn heavy_arrangement() -> Arrangement {
+    use chip::instrument::{Instrument, Seq, Vibrato, NONE};
+    let mut a = demo_arrangement();
+    for c in a.clips.iter_mut() {
+        let c = Arc::make_mut(c);
+        let len = c.len_ticks;
+        let pitch = c.notes.first().map_or(60, |n| n.pitch);
+        let step = PPQ * 2;
+        c.notes = (0..len / step)
+            .map(|i| Note::new(i + 1, i * step, step, pitch.wrapping_add((i % 5) as u8)))
+            .collect();
+        c.next_note_id = c.notes.len() as u32 + 1;
+    }
+    let inst = Instrument {
+        volume: Seq::new(&[15, 14, 13, 12, 11, 12, 13, 14], 0, NONE),
+        arp: Seq::new(&[0, 4, 7, 12, 7, 4], 0, NONE),
+        pitch: Seq::new(&[3, 3, -3, -3, -3, -3, 3, 3], 0, NONE),
+        duty: Seq::new(&[2, 4, 8, 12, 8, 4], 0, NONE),
+        vibrato: Vibrato { depth: 30, period: 6, delay: 0 },
+        ..Instrument::PLAIN
+    };
+    for (lane, slot) in a.instruments.iter_mut().enumerate() {
+        if lane != 4 {
+            *slot = crate::instruments::LaneInstrument { name: "Heavy Macros".into(), inst, kit: Vec::new(), edited: true };
+        }
+    }
+    a
+}

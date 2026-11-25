@@ -1,4 +1,4 @@
-# usage: matrix.ps1 [-Repo <dir>] [-Work <dir>] [-Tests A,B,C,D,E,G] [-Buffers 128,256,512] [-LongSecs 600] [-Gain 0.3]
+# usage: matrix.ps1 [-Repo <dir>] [-Work <dir>] [-AppExe <exe>] [-Tests A,B,C,D,E,G,H] [-Buffers 128,256,512] [-LongSecs 600] [-Gain 0.3]
 # Runs the ENGINE.md §5 stress matrix against the release build. Each run
 # writes <Work>\<test>_<buffer>.csv (one line per second + a summary at the
 # end, see crates/ui/src/testing.rs). Ground truth for dropouts is WASAPI
@@ -9,14 +9,16 @@ param(
     [string[]]$Tests = @('A', 'B', 'C', 'D', 'G', 'E'),
     [string[]]$Buffers = @('128', '256', '512'),
     [int]$LongSecs = 600,
-    [double]$Gain = 0.3
+    [double]$Gain = 0.3,
+    # A frozen copy of the build, so the repo can be rebuilt while the matrix runs.
+    [string]$AppExe = ''
 )
 $ErrorActionPreference = 'Stop'
 # `pwsh -File` passes "A,B" as one string: split comma lists.
 $Tests = $Tests | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 $Buffers = $Buffers | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 New-Item -ItemType Directory -Force $Work | Out-Null
-$app = Join-Path $Repo 'target\release\app.exe'
+$app = if ($AppExe) { $AppExe } else { Join-Path $Repo 'target\release\app.exe' }
 
 Add-Type @"
 using System;
@@ -96,6 +98,8 @@ foreach ($t in $Tests) {
         'C' { foreach ($b in $Buffers) { Run-App "C_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AUTOPLAY = '1'; CHIPDAW_UI_STALL = '1' } 120 $null } }
         'D' { foreach ($b in $Buffers) { Run-App "D_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AVSYNC = '1' } 120 $churn } }
         'G' { foreach ($b in $Buffers) { Run-App "G_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AVSYNC = '1' } 120 $null } }
+        # H: the macro worst case (every lane runs all four macros + vibrato, long notes).
+        'H' { Run-App "H" @{ CHIPDAW_AUTOPLAY = '1'; CHIPDAW_SONG = 'heavy' } $LongSecs $null }
         'E' { Run-App "E" @{ CHIPDAW_AUTOPLAY = '1' } 50 $devSwitch }
     }
 }

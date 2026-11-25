@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use crate::notes::{Note, NoteFx};
-use crate::state::{Arrangement, Clip, PPQ, TICKS_PER_BAR};
+use crate::state::{Arrangement, Clip, MAX_SONG_BARS, MAX_SONG_TICKS, PPQ, TICKS_PER_BAR};
 
 /// A note in song ticks: (start, end, pitch, velocity).
 type Span = (u32, u32, u8, u8);
@@ -39,6 +39,8 @@ pub struct MidiSong {
     /// (track index, channel 0..16, notes in song ticks at 960 PPQ)
     parts: Vec<Part>,
     pub track_names: Vec<String>,
+    /// Tempo events in the file. Only the first is used (one song tempo).
+    pub tempo_events: usize,
 }
 
 pub struct Imported {
@@ -134,6 +136,10 @@ pub fn parse(bytes: &[u8]) -> Result<MidiSong, String> {
                     let len = r.var()? as usize;
                     let data = r.take(len)?;
                     match kind {
+                        0x51 if len == 3 => song.tempo_events += 1,
+                        _ => {}
+                    }
+                    match kind {
                         0x51 if len == 3 && song.bpm.is_none() => {
                             let us = ((data[0] as u32) << 16) | ((data[1] as u32) << 8) | data[2] as u32;
                             if us > 0 {
@@ -156,9 +162,9 @@ pub fn parse(bytes: &[u8]) -> Result<MidiSong, String> {
                             let pitch = r.u8()? & 0x7F;
                             let vel = r.u8()? & 0x7F;
                             if let Some((s, v)) = open.remove(&(ch, pitch)) {
-                                if tick > s {
-                                    by_ch[ch as usize].push(RawNote { start: s, end: tick, pitch, vel: v });
-                                }
+                                // A zero-length note (on and off on one tick, as drum
+                                // triggers often are) still plays: one tick, one frame.
+                                by_ch[ch as usize].push(RawNote { start: s, end: tick.max(s + 1), pitch, vel: v });
                             }
                             if b & 0xF0 == 0x90 && vel > 0 {
                                 open.insert((ch, pitch), (tick, vel));
@@ -176,9 +182,14 @@ pub fn parse(bytes: &[u8]) -> Result<MidiSong, String> {
                 _ => return Err("Unknown MIDI event.".into()),
             }
         }
+        // Notes still held when the track ends stop there (a missing
+        // note-off is a common export bug; dropping them would lose notes).
+        for ((ch, pitch), (s, v)) in open.drain() {
+            by_ch[ch as usize].push(RawNote { start: s, end: tick.max(s + 1), pitch, vel: v });
+        }
         r.i = end;
         song.track_names.push(name);
-        let scale = |t: u64| (t * PPQ as u64 / ppq).min(u32::MAX as u64) as u32;
+        let scale = |t: u64| (t.saturating_mul(PPQ as u64) / ppq).min(u32::MAX as u64) as u32;
         for (ch, notes) in by_ch.into_iter().enumerate() {
             if !notes.is_empty() {
                 let mut v: Vec<_> = notes.iter().map(|n| (scale(n.start), scale(n.end), n.pitch, n.vel)).collect();
@@ -287,12 +298,41 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
         report.push(format!("skipped {} ({} notes): no free channel", part_name(p.0, p.1), p.2.len()));
     }
 
+    if song.tempo_events > 1 {
+        report.push(format!("{} tempo changes ignored (the song keeps the first tempo)", song.tempo_events - 1));
+    }
     let mut a = Arrangement::empty();
     let mut end = 0u32;
+    for (_, notes, name) in lanes.iter_mut() {
+        let before = notes.len();
+        notes.retain(|n| n.1 <= MAX_SONG_TICKS);
+        if notes.len() < before {
+            report.push(format!("{name}: {} notes after bar {MAX_SONG_BARS} dropped", before - notes.len()));
+        }
+    }
     for (lane, notes, name) in lanes {
         if notes.is_empty() {
             continue;
         }
+        // Fold melodic notes the channel can't play into its range by
+        // octaves (the driver would skip them: silent notes).
+        let range = match crate::notes::RowKind::for_lane(lane) {
+            crate::notes::RowKind::Piano { play_lo, play_hi, .. } => Some((play_lo, play_hi)),
+            _ => None,
+        };
+        let mut folded = 0;
+        let fold = |p: u8, folded: &mut usize| -> u8 {
+            let Some((lo, hi)) = range else { return p };
+            let mut q = p;
+            while q < lo && q <= 127 - 12 {
+                q += 12;
+            }
+            while q > hi && q >= 12 {
+                q -= 12;
+            }
+            *folded += usize::from(q != p);
+            q
+        };
         let first = notes[0].0 / TICKS_PER_BAR * TICKS_PER_BAR;
         let last = notes.iter().map(|n| n.1).max().unwrap_or(first);
         let clip_end = last.div_ceil(TICKS_PER_BAR) * TICKS_PER_BAR;
@@ -304,12 +344,16 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
                 id: i as u32 + 1,
                 start: n.0 - first,
                 len: (n.1 - n.0).max(1),
-                pitch: n.2,
+                pitch: fold(n.2, &mut folded),
                 volume: Some(((n.3 as u32 * 15 + 63) / 127).clamp(1, 15) as u8),
                 fx: NoteFx::default(),
             })
             .collect();
-        report.push(format!("{} → {} ({} notes)", name, crate::state::default_lanes()[lane].name, ns.len()));
+        let lane_name = crate::state::default_lanes()[lane].name;
+        report.push(format!("{} → {} ({} notes)", name, lane_name, ns.len()));
+        if folded > 0 {
+            report.push(format!("{folded} notes moved by octaves into the {lane_name} range"));
+        }
         let id = a.next_id;
         a.next_id += 1;
         a.clips.push(Arc::new(Clip::new(id, lane, first, clip_end - first, name, ns)));

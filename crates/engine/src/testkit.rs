@@ -18,7 +18,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-pub const PILOT_HZ: f32 = 19_000.0;
+/// 23 kHz: above the band-limited passband (21.6 kHz), so no music can mask it.
+/// 19 kHz (the ENGINE.md default) is masked under the Famicom filter (docs/RUNLOG.md, A2).
+pub const PILOT_HZ: f32 = 23_000.0;
 
 /// The pilot frequency: `CHIPDAW_PILOT_HZ`, or `PILOT_HZ`. A pilot above the
 /// band-limited synthesis' passband (21.6 kHz at 48 kHz) can't be masked by

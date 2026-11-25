@@ -69,7 +69,7 @@ impl Note {
     }
 
     pub fn end(&self) -> u32 {
-        self.start + self.len
+        self.start.saturating_add(self.len)
     }
 }
 

@@ -14,6 +14,12 @@ pub const PPQ: u32 = 960;
 /// 4/4 time.
 pub const BEATS_PER_BAR: u32 = 4;
 pub const TICKS_PER_BAR: u32 = PPQ * BEATS_PER_BAR;
+/// The longest song: 9999 bars. Files and imports are checked against it, so
+/// tick arithmetic (start + length, ids + 1) can never overflow.
+pub const MAX_SONG_BARS: u32 = 9999;
+pub const MAX_SONG_TICKS: u32 = MAX_SONG_BARS * TICKS_PER_BAR;
+/// Largest clip / note id a file may use (leaves room to count up).
+pub const MAX_ID: u32 = 1 << 30;
 /// Minimum clip length when resizing.
 pub const MIN_CLIP_TICKS: u32 = PPQ / 4;
 
@@ -62,12 +68,12 @@ pub struct Clip {
 
 impl Clip {
     pub fn new(id: u32, lane: usize, start_ticks: u32, len_ticks: u32, name: String, notes: Vec<Note>) -> Self {
-        let next_note_id = notes.iter().map(|n| n.id + 1).max().unwrap_or(1);
+        let next_note_id = notes.iter().map(|n| n.id.saturating_add(1)).max().unwrap_or(1);
         Self { id, lane, start_ticks, len_ticks, name, notes, next_note_id, rev: Rev::next() }
     }
 
     pub fn end_ticks(&self) -> u32 {
-        self.start_ticks + self.len_ticks
+        self.start_ticks.saturating_add(self.len_ticks)
     }
 
     /// The notes that sound: those starting inside the clip (cut at its end

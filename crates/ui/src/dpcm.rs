@@ -33,6 +33,10 @@ impl UserSample {
     }
 }
 
+/// Peak level (after removing DC) below which a file counts as silent:
+/// -80 dBFS, under the 8-bit WAV noise floor.
+const SILENCE: f32 = 1e-4;
+
 pub fn rate_hz(rate: u8) -> f64 {
     CPU_HZ_NTSC / DMC_RATE_NTSC[rate.min(15) as usize] as f64
 }
@@ -42,9 +46,14 @@ fn footprint(len: usize) -> usize {
     len.div_ceil(64) * 64
 }
 
+/// ROM bytes the samples take.
+pub fn used_bytes(samples: &[Option<UserSample>]) -> usize {
+    samples.iter().flatten().map(|s| footprint(s.bytes.len())).sum()
+}
+
 /// ROM bytes still free for another sample.
 pub fn free_bytes(samples: &[Option<UserSample>]) -> usize {
-    USER_ROM - samples.iter().flatten().map(|s| footprint(s.bytes.len())).sum::<usize>()
+    USER_ROM.saturating_sub(samples.iter().flatten().map(|s| footprint(s.bytes.len())).sum::<usize>())
 }
 
 /// The first empty user slot.
@@ -78,8 +87,14 @@ pub fn bank(samples: &[Option<UserSample>]) -> Arc<DpcmBank> {
     Arc::new(b)
 }
 
+/// The most audio `read_wav` returns. The longest sound DPCM can hold is
+/// 4081 bytes at the lowest rate (4.2 kHz): 7.8 s. Reading more would only
+/// cost memory (a long 96 kHz file is hundreds of MB as floats).
+pub const MAX_IMPORT_SECONDS: u32 = 10;
+
 /// Reads a WAV file: PCM 8/16/24/32-bit or float 32, any rate and channel
-/// count. Returns mono samples (-1..1) and the sample rate.
+/// count. Returns mono samples (-1..1) and the sample rate. Only the first
+/// `MAX_IMPORT_SECONDS` are read; `convert` reports the cut.
 pub fn read_wav(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
     let bad = || "Not a WAV file this can read (PCM or float).".to_string();
     if bytes.len() < 12 || &bytes[..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
@@ -125,11 +140,14 @@ pub fn read_wav(bytes: &[u8]) -> Result<(Vec<f32>, u32), String> {
             _ => return None,
         })
     };
-    let mut out = Vec::with_capacity(data.len() / frame);
-    for f in data.chunks_exact(frame) {
+    let max_frames = (rate as usize).saturating_mul(MAX_IMPORT_SECONDS as usize);
+    let mut out = Vec::with_capacity((data.len() / frame).min(max_frames));
+    for f in data.chunks_exact(frame).take(max_frames) {
         let mut sum = 0.0;
         for c in 0..channels {
-            sum += sample(&f[c * width..]).ok_or_else(|| format!("WAV format {format} at {bits} bits isn't supported."))?;
+            let x = sample(&f[c * width..]).ok_or_else(|| format!("WAV format {format} at {bits} bits isn't supported."))?;
+            // NaN / infinity in a float file: silence, not a poisoned sample.
+            sum += if x.is_finite() { x.clamp(-1.0, 1.0) } else { 0.0 };
         }
         out.push(sum / channels as f32);
     }
@@ -154,7 +172,10 @@ pub fn convert(name: &str, pcm: &[f32], sr: u32, free: usize) -> Result<(UserSam
     let truncated = ((secs * rate_hz(rate)) / 8.0).ceil() as usize + 16 > limit;
     // Remove DC, normalise to the encoder's range.
     let mean = pcm.iter().sum::<f32>() / pcm.len() as f32;
-    let peak = pcm.iter().fold(0f32, |m, x| m.max((x - mean).abs())).max(1e-6);
+    let peak = pcm.iter().fold(0f32, |m, x| m.max((x - mean).abs()));
+    if peak < SILENCE {
+        return Err("The audio file is silent.".into());
+    }
     let gain = 0.95 / peak;
     let hz = rate_hz(rate);
     let n = ((secs * hz) as usize).min(limit * 8);
@@ -183,10 +204,9 @@ pub fn from_hex(s: &str) -> Result<Vec<u8>, String> {
     if !s.len().is_multiple_of(2) {
         return Err("Bad sample data in the project file.".into());
     }
-    (0..s.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| "Bad sample data in the project file.".to_string()))
-        .collect()
+    // Bytes, not `&s[i..i + 2]`: a non-ASCII character would split there (and panic).
+    let digit = |c: u8| (c as char).to_digit(16).ok_or_else(|| "Bad sample data in the project file.".to_string());
+    s.as_bytes().chunks(2).map(|p| Ok((digit(p[0])? * 16 + digit(p[1])?) as u8)).collect()
 }
 
 #[cfg(test)]

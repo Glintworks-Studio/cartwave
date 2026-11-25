@@ -10,7 +10,7 @@
 //!     --every S           seconds between injected stalls (default 3)
 //!     --loopback          ground truth: capture the output via WASAPI loopback
 //!                         (macOS: cpal's process tap) and detect dropouts of a
-//!                         19 kHz pilot tone
+//!                         23 kHz pilot tone (CHIPDAW_PILOT_HZ)
 //!     --gain G            output gain (default 1.0; the app's stress runs use 0.3)
 //!     --mute              mute all eight channels (pilot only)
 //!     --pilot             mix the pilot without in-process loopback (for an

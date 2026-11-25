@@ -1280,6 +1280,8 @@ impl AppState {
         if self.tests.stress {
             self.s.arrangement.set(mock::stress_arrangement());
             self.s.stress.set(true);
+        } else if self.tests.heavy {
+            self.s.arrangement.set(mock::heavy_arrangement());
         }
         let tr = self.s.transport.get_untracked();
         self.send(Command::Bpm(tr.bpm as f64));

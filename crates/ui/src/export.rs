@@ -15,8 +15,17 @@ pub const SAMPLE_RATE: u32 = 48_000;
 const TAIL_SECONDS: f64 = 2.0;
 const BLOCK: usize = 4096;
 
+/// The longest render (song plus tail), so a damaged or hand-edited loop end
+/// can't ask for hours of audio.
+pub const MAX_SECONDS: f64 = 60.0 * 60.0;
+
 /// Renders the song from the start to its loop end (plus the tail).
 pub fn render(p: &Project) -> Vec<f32> {
+    render_limited(p, MAX_SECONDS)
+}
+
+/// `render`, cut off after `max_seconds` (song and tail together).
+pub fn render_limited(p: &Project, max_seconds: f64) -> Vec<f32> {
     let mut player = Player::new(SAMPLE_RATE as f64);
     player.set_bpm(p.bpm as f64);
     player.set_vrc6(p.chip == SoundChip::WithVrc6);
@@ -33,7 +42,7 @@ pub fn render(p: &Project) -> Vec<f32> {
     player.driver.set_user_samples(snap.dpcm.refs);
     let song = snap.view();
     let seconds = end / (crate::state::PPQ as f64) * 60.0 / p.bpm as f64;
-    let frames = ((seconds + TAIL_SECONDS) * SAMPLE_RATE as f64) as usize;
+    let frames = ((seconds + TAIL_SECONDS).min(max_seconds) * SAMPLE_RATE as f64) as usize;
     let mut out = vec![0f32; frames];
     player.play();
     let song_frames = (seconds * SAMPLE_RATE as f64) as usize;

@@ -428,16 +428,27 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         if !seen.insert(c.id) {
             return Err(format!("Two clips have the id {}.", c.id));
         }
+        if c.id >= crate::state::MAX_ID {
+            return Err(format!("Clip id {} is out of range.", c.id));
+        }
+        let too_late = |end: u64| end > crate::state::MAX_SONG_TICKS as u64;
+        if too_late(c.start as u64 + c.len as u64) {
+            return Err(format!("Clip {} ends after bar {}, the end of a song.", c.id, crate::state::MAX_SONG_BARS));
+        }
+        if c.notes.iter().any(|n| too_late(c.start as u64 + n.start as u64 + n.len as u64)) {
+            return Err(format!("A note in clip {} ends after bar {}, the end of a song.", c.id, crate::state::MAX_SONG_BARS));
+        }
         let mut clip = Clip::new(c.id, c.lane, c.start, c.len.max(1), c.name, c.notes);
         // Hand-edited files: restore the invariants instead of failing.
-        let mut next = clip.next_note_id;
         clip.notes.retain(|n| n.len > 0);
         for n in &mut clip.notes {
             n.volume = n.volume.map(|v| v.min(notes::MAX_VOLUME));
         }
         let mut ids = std::collections::HashSet::new();
+        // Ids at or past MAX_ID are renumbered after the largest valid one.
+        let mut next = clip.notes.iter().map(|n| n.id).filter(|&i| i < crate::state::MAX_ID).max().map_or(1, |m| m + 1);
         for n in &mut clip.notes {
-            if !ids.insert(n.id) {
+            if n.id >= crate::state::MAX_ID || !ids.insert(n.id) {
                 n.id = next;
                 next += 1;
             }
@@ -459,6 +470,9 @@ pub fn from_str(text: &str) -> Result<Project, String> {
             bytes: crate::dpcm::from_hex(&s.data)?.into_iter().take(chip::samples::MAX_SAMPLE_BYTES).collect(),
         });
     }
+    if crate::dpcm::used_bytes(&arrangement.samples) > chip::samples::USER_ROM {
+        return Err("The project's DPCM samples don't fit in the sample memory.".into());
+    }
     if arrangement.samples.iter().all(|s| s.is_none()) {
         arrangement.samples.clear();
     }
@@ -468,7 +482,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         chip,
         filter,
         filter_auto,
-        loop_end_ticks: f.loop_end.max(crate::state::PPQ),
+        loop_end_ticks: f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS),
         mute,
         solo,
         params,
