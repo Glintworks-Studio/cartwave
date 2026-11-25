@@ -296,3 +296,43 @@ fn files_crash_recovery_round_trip() {
     std::env::remove_var("CHIPDAW_DATA_DIR");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn dpcm_all_four_user_slots_full_play_with_the_built_ins() {
+    use ui::notes::Note;
+    // Four samples that together fill the user ROM.
+    let mut samples = Vec::new();
+    for k in 0..4 {
+        let free = dpcm::free_bytes(&samples);
+        let share = free / (4 - k);
+        let t: Vec<f32> = (0..44_100).map(|i| ((i as f32) * (0.02 + 0.01 * k as f32)).sin()).collect();
+        let (s, _) = dpcm::convert(&format!("s{k}"), &t, 44_100, share).unwrap();
+        samples.push(Some(s));
+    }
+    assert!(dpcm::free_bytes(&samples) < 1024, "the ROM is (nearly) full: {} free", dpcm::free_bytes(&samples));
+    let mut p = project(4);
+    p.arrangement.clips.retain(|c| c.lane != 4);
+    p.arrangement.samples = samples;
+    // Each of the 8 DPCM rows (4 built-in, 4 user) on its own beat, twice.
+    let notes: Vec<Note> = (0..16).map(|i| Note::new(i + 1, i * PPQ, PPQ, 36 + (i % 8) as u8)).collect();
+    p.arrangement.clips.push(std::sync::Arc::new(ui::state::Clip::new(999, 4, 0, 16 * PPQ, "dpcm".into(), notes)));
+    p.solo = 1 << 4;
+    let t0 = std::time::Instant::now();
+    let audio = export::render(&p);
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    let beat = (60.0 / p.bpm as f64 * export::SAMPLE_RATE as f64) as usize;
+    for i in 0..8 {
+        let w = &audio[i * beat + beat / 8..(i + 1) * beat - beat / 8];
+        let swing = w.iter().fold(f32::MIN, |a, x| a.max(*x)) - w.iter().fold(f32::MAX, |a, x| a.min(*x));
+        assert!(swing > 0.01, "row {i} is silent (swing {swing})");
+    }
+    // The bank lays them out without overlap, inside the user area.
+    let b = dpcm::bank(&p.arrangement.samples);
+    let mut spans: Vec<(usize, usize)> = b.refs.iter().filter(|r| r.present).map(|r| (r.addr_reg as usize * 64, r.len_reg as usize * 16 + 1)).collect();
+    assert_eq!(spans.len(), 4);
+    spans.sort();
+    for w in spans.windows(2) {
+        assert!(w[0].0 + w[0].1 <= w[1].0, "overlap {w:?}");
+    }
+    println!("8 DPCM rows, 4 user slots full: {:.1} s rendered in {ms:.1} ms", audio.len() as f64 / export::SAMPLE_RATE as f64);
+}
