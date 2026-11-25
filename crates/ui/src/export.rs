@@ -28,6 +28,9 @@ pub fn render(p: &Project) -> Vec<f32> {
     // Render past the end without wrapping.
     player.set_loop_end(1.0e12);
     let snap = p.arrangement.song_snapshot(0);
+    // Imported samples into the ROM, as the engine does.
+    player.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&snap.dpcm.data);
+    player.driver.set_user_samples(snap.dpcm.refs);
     let song = snap.view();
     let seconds = end / (crate::state::PPQ as f64) * 60.0 / p.bpm as f64;
     let frames = ((seconds + TAIL_SECONDS) * SAMPLE_RATE as f64) as usize;
@@ -93,5 +96,27 @@ mod tests {
         assert_eq!(&bytes[..4], b"RIFF");
         assert_eq!(bytes.len(), 44 + 9600);
         let _ = std::fs::remove_file(dir);
+    }
+
+    #[test]
+    fn an_imported_sample_plays_on_its_dpcm_row() {
+        use crate::notes::{Note, NoteFx};
+        use crate::state::{Clip, PPQ};
+        let tone: Vec<f32> = (0..20_000).map(|i| (i as f32 * 0.03).sin()).collect();
+        let (smp, _) = crate::dpcm::convert("tone", &tone, 44_100, chip::samples::USER_ROM).unwrap();
+        let mut p = Project::new_empty();
+        p.arrangement.samples = vec![None, Some(smp)];
+        p.loop_end_ticks = crate::state::TICKS_PER_BAR;
+        let row = crate::notes::RowKind::for_lane(4).pitch_of(5); // "User 2"
+        let n = Note { id: 1, start: 0, len: PPQ, pitch: row, volume: None, fx: NoteFx::default() };
+        p.arrangement.clips.push(std::sync::Arc::new(Clip::new(1, 4, 0, PPQ * 4, "s".into(), vec![n])));
+        let out = render(&p);
+        let peak = out[..24_000].iter().fold(0f32, |m, x| m.max(x.abs()));
+        assert!(peak > 0.02, "peak {peak}");
+        // An empty slot stays silent.
+        p.arrangement.samples = vec![Some(p.arrangement.samples[1].clone().unwrap())];
+        let quiet = render(&p);
+        let peak = quiet[..24_000].iter().fold(0f32, |m, x| m.max(x.abs()));
+        assert!(peak < 0.02, "empty slot played: {peak}");
     }
 }

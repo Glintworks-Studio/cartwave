@@ -1,7 +1,26 @@
 //! Immutable song snapshots, built on the UI thread and handed to the engine.
 
 use chip::driver::{Note, Song, LANES};
+use std::sync::Arc;
+
 use chip::instrument::{Instrument, NONE};
+use chip::samples::{SampleRef, USER_ROM, USER_SLOTS};
+
+/// Imported DPCM samples: the user part of the sample ROM and where each
+/// sample is. Shared (`Arc`) so a snapshot costs a pointer; the engine copies
+/// it into the ROM only when `version` changes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DpcmBank {
+    pub data: Vec<u8>,
+    pub refs: [SampleRef; USER_SLOTS],
+    pub version: u64,
+}
+
+impl Default for DpcmBank {
+    fn default() -> Self {
+        Self { data: vec![0; USER_ROM], refs: [SampleRef::default(); USER_SLOTS], version: 0 }
+    }
+}
 
 /// The engine's own copy of the arrangement: per lane, notes in absolute
 /// ticks, sorted and non-overlapping.
@@ -14,6 +33,8 @@ pub struct SongSnapshot {
     pub lane_inst: [u8; LANES],
     /// Bank index for audition notes (`NONE`: the lane's instrument).
     pub preview_inst: u8,
+    /// Imported DPCM samples.
+    pub dpcm: Arc<DpcmBank>,
     /// Increases with every edit (for latency measurement and tests).
     pub version: u64,
     /// When the UI sent it (ns since the engine epoch; 0 if unknown).
@@ -90,9 +111,15 @@ impl SongSnapshot {
             instruments: Vec::new(),
             lane_inst: [NONE; LANES],
             preview_inst: NONE,
+            dpcm: Arc::new(DpcmBank::default()),
             version,
             sent_ns: 0,
         }
+    }
+
+    pub fn with_dpcm(mut self, dpcm: Arc<DpcmBank>) -> Self {
+        self.dpcm = dpcm;
+        self
     }
 
     /// Sets the instrument bank and the lanes' instruments.

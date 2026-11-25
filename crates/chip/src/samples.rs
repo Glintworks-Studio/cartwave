@@ -9,9 +9,59 @@ use crate::dmc::ROM_SIZE;
 use crate::math;
 use crate::tables::{CPU_HZ_NTSC, DMC_RATE_NTSC};
 
-pub const SAMPLE_COUNT: usize = 4;
+/// Built-in samples plus user slots.
+pub const SAMPLE_COUNT: usize = BUILTIN_COUNT + USER_SLOTS;
+pub const BUILTIN_COUNT: usize = 4;
+/// Imported (user) samples, after the built-ins.
+pub const USER_SLOTS: usize = 4;
 pub const START_LEVEL: u8 = 64;
-pub const NAMES: [&str; SAMPLE_COUNT] = ["Kick", "Snare", "Tom", "Crash"];
+pub const NAMES: [&str; SAMPLE_COUNT] = ["Kick", "Snare", "Tom", "Crash", "User 1", "User 2", "User 3", "User 4"];
+/// ROM offset where user samples start (the built-ins use ~5 KiB below it).
+pub const USER_BASE: usize = 0x1800;
+/// Bytes available for user samples.
+pub const USER_ROM: usize = crate::dmc::ROM_SIZE - USER_BASE;
+/// The longest sample the DMC can play: $4013 = 255 -> 16 * 255 + 1 bytes.
+pub const MAX_SAMPLE_BYTES: usize = 16 * 255 + 1;
+
+/// Which sample a note plays: pitches 36..44 pick one directly (the piano
+/// roll's DPCM rows), others cycle through the built-ins (pitch % 4).
+pub fn sample_for_pitch(pitch: u8) -> usize {
+    if (36..36 + SAMPLE_COUNT as u8).contains(&pitch) {
+        (pitch - 36) as usize
+    } else {
+        pitch as usize % BUILTIN_COUNT
+    }
+}
+
+/// Delta-encodes `pcm` (-1..1, already at the DMC rate) the way the built-ins
+/// are: a 1 bit if the target is above the counter, else 0, from
+/// `START_LEVEL`. Pads to a playable length (16 l + 1 bytes) with a
+/// return-to-centre tail. Returns the bytes; at most `MAX_SAMPLE_BYTES`.
+pub fn encode_pcm(pcm: &[f32], out: &mut [u8]) -> usize {
+    let amp = 60.0f32;
+    let mut level = START_LEVEL as i32;
+    let max = out.len().min(MAX_SAMPLE_BYTES);
+    let want = pcm.len().div_ceil(8);
+    let l = (want.saturating_sub(1).div_ceil(16)).clamp(0, 255);
+    let len = (16 * l + 1).min(max);
+    for (byte_i, byte) in out[..len].iter_mut().enumerate() {
+        let mut b = 0u8;
+        for bit in 0..8 {
+            let n = byte_i * 8 + bit;
+            let target = START_LEVEL as f32 + amp * pcm.get(n).copied().unwrap_or(0.0).clamp(-1.0, 1.0);
+            if (level as f32) < target {
+                b |= 1 << bit;
+                if level <= 125 {
+                    level += 2;
+                }
+            } else if level >= 2 {
+                level -= 2;
+            }
+        }
+        *byte = b;
+    }
+    len
+}
 /// The rate index each sample was synthesised for.
 pub const NATIVE_RATE: u8 = 15;
 
@@ -21,6 +71,11 @@ pub struct SampleRef {
     pub addr_reg: u8,
     /// $4013 value: length = 16 * l + 1 bytes.
     pub len_reg: u8,
+    /// The rate index the sample was encoded for (user samples); `None`:
+    /// the lane's Rate control.
+    pub rate: Option<u8>,
+    /// Slot holds a sample.
+    pub present: bool,
 }
 
 /// Fills `rom` with the sample set and returns where each one is.
@@ -28,7 +83,7 @@ pub fn build(rom: &mut [u8; ROM_SIZE]) -> [SampleRef; SAMPLE_COUNT] {
     let fs = CPU_HZ_NTSC / DMC_RATE_NTSC[NATIVE_RATE as usize] as f64;
     let mut refs = [SampleRef::default(); SAMPLE_COUNT];
     let mut offset = 0usize;
-    for (i, r) in refs.iter_mut().enumerate() {
+    for (i, r) in refs.iter_mut().take(BUILTIN_COUNT).enumerate() {
         let secs = [0.22, 0.16, 0.30, 0.55][i];
         // Bytes: 16 l + 1, enough for `secs` at 8 bits per byte.
         let bits = (secs * fs) as usize;
@@ -39,9 +94,12 @@ pub fn build(rom: &mut [u8; ROM_SIZE]) -> [SampleRef; SAMPLE_COUNT] {
         *r = SampleRef {
             addr_reg: (offset / 64) as u8,
             len_reg: l as u8,
+            rate: None,
+            present: true,
         };
         offset = (offset + len).div_ceil(64) * 64;
     }
+    assert!(offset <= USER_BASE, "built-in samples overflow into the user area");
     refs
 }
 
@@ -113,7 +171,7 @@ mod tests {
         let mut rom = Box::new([0u8; ROM_SIZE]);
         let refs = build(&mut rom);
         let mut end = 0;
-        for r in refs {
+        for r in refs.into_iter().filter(|r| r.present) {
             let addr = r.addr_reg as usize * 64;
             assert!(addr >= end, "no overlap");
             end = addr + 16 * r.len_reg as usize + 1;
@@ -126,7 +184,7 @@ mod tests {
         // Decoded through the real DMC, each sample decays back to ~64.
         let mut rom = Box::new([0u8; ROM_SIZE]);
         let refs = build(&mut rom);
-        for r in refs {
+        for r in refs.into_iter().filter(|r| r.present) {
             let mut d = Dmc::default();
             d.write(0, NATIVE_RATE);
             d.write(1, START_LEVEL);

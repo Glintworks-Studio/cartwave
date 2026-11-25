@@ -295,6 +295,9 @@ pub struct Arrangement {
     pub instruments: Vec<LaneInstrument>,
     /// A preset being auditioned from the browser (not part of the document).
     pub audition: Option<LaneInstrument>,
+    /// Imported DPCM samples (user slots, played from DPCM rows 5..8).
+    /// Index = user slot (DPCM row 5 + i); `None` = empty slot.
+    pub samples: Vec<Option<crate::dpcm::UserSample>>,
 }
 
 impl Arrangement {
@@ -311,6 +314,7 @@ impl Arrangement {
             editing_notes: None,
             instruments: default_instruments(),
             audition: None,
+            samples: Vec::new(),
         }
     }
 
@@ -460,6 +464,7 @@ impl Arrangement {
         self.editing_notes.hash(&mut h);
         self.instruments.hash(&mut h);
         self.audition.hash(&mut h);
+        self.samples.hash(&mut h);
         h.finish()
     }
 
@@ -481,6 +486,7 @@ impl Arrangement {
             version,
         )
         .with_instruments(bank, lane_inst, preview)
+        .with_dpcm(crate::dpcm::bank(&self.samples))
     }
 }
 

@@ -50,7 +50,7 @@ impl Project {
             loop_end_ticks: 32 * crate::state::TICKS_PER_BAR,
             mute: 0,
             solo: 0,
-            params: Params::default(),
+            params: crate::instruments::default_params(),
         }
     }
 }
@@ -70,6 +70,20 @@ struct FileV1 {
     loop_end: u32,
     lanes: Vec<LaneV1>,
     clips: Vec<ClipV1>,
+    /// Version 2: imported DPCM samples (hex-encoded delta bytes).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    samples: Vec<SampleV2>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SampleV2 {
+    /// User slot 0..4 (DPCM row 5 + slot).
+    slot: u8,
+    name: String,
+    /// DMC rate index 0..=15.
+    rate: u8,
+    data: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -289,6 +303,14 @@ pub fn to_string(p: &Project) -> String {
         loop_end: p.loop_end_ticks,
         lanes,
         clips,
+        samples: p
+            .arrangement
+            .samples
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
+            .map(|(i, s)| SampleV2 { slot: i as u8, name: s.name.clone(), rate: s.rate, data: crate::dpcm::to_hex(&s.bytes) })
+            .collect(),
     };
     compact_notes(&serde_json::to_string_pretty(&f).expect("project serialises"))
 }
@@ -425,6 +447,21 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         arrangement.clips.push(Arc::new(clip));
     }
     arrangement.next_id = arrangement.clips.iter().map(|c| c.id + 1).max().unwrap_or(1);
+    arrangement.samples = vec![None; chip::samples::USER_SLOTS];
+    for s in &f.samples {
+        let slot = arrangement
+            .samples
+            .get_mut(s.slot as usize)
+            .ok_or_else(|| format!("Sample slot {} doesn't exist.", s.slot))?;
+        *slot = Some(crate::dpcm::UserSample {
+            name: s.name.clone(),
+            rate: s.rate.min(15),
+            bytes: crate::dpcm::from_hex(&s.data)?.into_iter().take(chip::samples::MAX_SAMPLE_BYTES).collect(),
+        });
+    }
+    if arrangement.samples.iter().all(|s| s.is_none()) {
+        arrangement.samples.clear();
+    }
     Ok(Project {
         arrangement,
         bpm: f.bpm.clamp(crate::state::Transport::MIN_BPM, crate::state::Transport::MAX_BPM),

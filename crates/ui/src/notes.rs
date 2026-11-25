@@ -167,7 +167,7 @@ pub const PIANO_LO: u8 = 21; // A0
 pub const PIANO_HI: u8 = 108; // C8
 pub const NOISE_ROWS: u8 = 16;
 pub const DPCM_BASE_PITCH: u8 = 36;
-pub const DPCM_NAMES: [&str; 4] = ["Kick", "Snare", "Tom", "Crash"];
+pub const DPCM_NAMES: [&str; 8] = chip::samples::NAMES;
 
 impl RowKind {
     pub fn for_lane(lane: usize) -> Self {
@@ -199,7 +199,7 @@ impl RowKind {
         match self {
             RowKind::Piano { lo, hi, .. } => (pitch.clamp(lo, hi) - lo) as u32,
             RowKind::Noise => 15 - chip::pitch::noise_index_for(pitch) as u32,
-            RowKind::Dpcm => (pitch % DPCM_NAMES.len() as u8) as u32,
+            RowKind::Dpcm => chip::samples::sample_for_pitch(pitch) as u32,
         }
     }
 

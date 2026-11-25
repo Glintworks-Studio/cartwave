@@ -1,4 +1,6 @@
-# ChipDAW: Vizia GUI prototype
+# ChipDAW
+
+> **Start here:** [PRODUCT.md](PRODUCT.md) is the current rundown: features, screenshots, history and next steps.
 
 > **Prototype.** "ChipDAW" is a working title. This repository started as a GUI bake-off: it
 > tests whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom,

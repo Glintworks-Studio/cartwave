@@ -90,6 +90,20 @@ pub fn default_instruments() -> Vec<LaneInstrument> {
     presets::DEFAULT_LAYOUT.iter().map(|n| LaneInstrument::named(n)).collect()
 }
 
+/// Channel controls for a new song: the defaults, with each default
+/// preset's own settings applied (e.g. constant volume under a volume macro).
+pub fn default_params() -> engine::Params {
+    let mut p = engine::Params::default();
+    for (lane, name) in presets::DEFAULT_LAYOUT.iter().enumerate() {
+        if let Some(pr) = presets::find(name) {
+            for &(id, v) in pr.params {
+                p.set(lane, id, v as i32);
+            }
+        }
+    }
+    p
+}
+
 /// The engine's bank: (instruments, per-lane index, audition index).
 pub fn bank(lanes: &[LaneInstrument], audition: Option<&LaneInstrument>) -> (Vec<Instrument>, [u8; LANES], u8) {
     let mut bank = Vec::with_capacity(LANES * 2);

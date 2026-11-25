@@ -1,4 +1,4 @@
-//! Standalone host for the ChipDAW GUI prototype.
+//! Standalone host for ChipDAW.
 //!
 //! Optional: `--size WxH` sets the initial logical window size (useful for
 //! capturing at 150%/200% display scaling on a 1440p screen).
@@ -100,7 +100,7 @@ fn main() -> Result<(), ApplicationError> {
     Application::new(|cx| {
         ui::build_ui(cx);
     })
-    .title("ChipDAW — GUI prototype")
+    .title("ChipDAW")
     .inner_size(size)
     // Below this the top bar's sides and the lanes would be cut off.
     .min_inner_size(Some(ui::MIN_WINDOW_SIZE))

@@ -1,7 +1,8 @@
-//! ChipDAW GUI prototype. A library crate so the same UI can later be hosted
+//! ChipDAW's user interface. A library crate so the same UI can later be hosted
 //! inside a plugin window (baseview) as well as the standalone app.
 
 pub mod file;
+pub mod dpcm;
 pub mod export;
 pub mod history;
 pub mod midi;
@@ -237,6 +238,11 @@ pub enum AppEvent {
     ImportMidi,
     /// Render the song to a WAV file (Ctrl+Shift+R, as in Ableton).
     ExportWav,
+    /// Native open dialog for a WAV file, converted into a DPCM sample.
+    ImportAudio,
+    RemoveSample(usize),
+    /// Hear a user DPCM sample (`None` releases it).
+    PreviewSample(Option<usize>),
     /// Show / hide the browser sidebar.
     ToggleBrowser,
     /// Highlight a preset in the browser.
@@ -427,7 +433,35 @@ impl Model for AppState {
                 self.set_status("New project".into());
             }
             AppEvent::SaveProject => self.save_project(),
-            AppEvent::ImportMidi => self.import_midi(),
+            AppEvent::ImportMidi => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("MIDI file", &["mid", "midi"]).pick_file() {
+                    self.import_midi(&path);
+                }
+            }
+            AppEvent::ImportAudio => {
+                if let Some(path) = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).pick_file() {
+                    self.import_sample(&path);
+                }
+            }
+            AppEvent::RemoveSample(i) => {
+                let name = self.s.arrangement.with_untracked(|a| a.samples.get(*i).cloned().flatten().map(|s| s.name));
+                self.s.arrangement.update(|a| {
+                    if let Some(slot) = a.samples.get_mut(*i) {
+                        *slot = None;
+                    }
+                });
+                self.commit();
+                if let Some(n) = name {
+                    self.set_status(format!("Removed sample {n}"));
+                }
+            }
+            AppEvent::PreviewSample(slot) => {
+                let lane = chip::driver::LANE_DMC as u8;
+                let note = slot.map(|i| ((36 + chip::samples::BUILTIN_COUNT + i) as u8, None));
+                if !self.s.transport.with_untracked(|t| t.playing) || note.is_none() {
+                    self.send(Command::Preview { lane, note });
+                }
+            }
             AppEvent::ExportWav => self.export_wav(),
             AppEvent::SaveProjectAs => {
                 if let Some(path) = self.file_dialog().save_file() {
@@ -476,6 +510,10 @@ impl Model for AppState {
             ) {
                 self.last_activity = Instant::now();
                 self.set_pump(cx, true);
+            }
+            if let WindowEvent::Drop(DropData::File(path)) = we {
+                let path = path.clone();
+                self.open_dropped(&path);
             }
             if let WindowEvent::WindowClose = we {
                 // Clean quit: autosave once more and clear the session marker.
@@ -1141,7 +1179,7 @@ pub fn build_ui(cx: &mut Context) {
         cap: FrameCap::from_env(),
         applied: None,
         engine: None,
-        params: Params::default(),
+        params: instruments::default_params(),
         song_key: 0,
         song_version: 0,
         filter: tests
@@ -1155,7 +1193,7 @@ pub fn build_ui(cx: &mut Context) {
         device_notice: None,
         tests,
         clock_counts: (0, 0, Instant::now()),
-        history: History::new(Doc::of(&s.arrangement.get_untracked(), 150.0, Params::default())),
+        history: History::new(Doc::of(&s.arrangement.get_untracked(), 150.0, instruments::default_params())),
         gesture_depth: 0,
         clipboard: Vec::new(),
         recovery: Recovery::new(),
@@ -1252,6 +1290,7 @@ impl AppState {
         }
         let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
         self.send(Command::Vrc6(vrc6));
+        self.send_all_params();
         if self.tests.pilot || self.tests.avsync {
             match engine::testkit::Loopback::start(
                 self.tests.pilot.then_some(engine::testkit::pilot_hz()),
@@ -1730,11 +1769,59 @@ impl AppState {
     /// Native file dialog (rfd), filtered to projects, starting in the
     /// current project's folder. Modal: it blocks the UI thread while open
     /// (the audio thread keeps running).
-    fn import_midi(&mut self) {
-        let Some(path) = rfd::FileDialog::new().add_filter("MIDI file", &["mid", "midi"]).pick_file() else {
-            return;
+    /// Converts a WAV file into a DPCM sample in the first free user slot.
+    fn import_sample(&mut self, path: &std::path::Path) {
+        let (slot, free) = self.s.arrangement.with_untracked(|a| (dpcm::free_slot(&a.samples), dpcm::free_bytes(&a.samples)));
+        let Some(slot) = slot else {
+            return self.set_status("All four DPCM sample slots are used: remove one first.".into());
         };
-        let bytes = match std::fs::read(&path) {
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => return self.set_status(format!("Can't open {}: {e}", path.display())),
+        };
+        let name = path.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Sample".into());
+        let result = dpcm::read_wav(&bytes).and_then(|(pcm, sr)| dpcm::convert(&name, &pcm, sr, free));
+        match result {
+            Ok((sample, truncated)) => {
+                let msg = format!(
+                    "{name} → DPCM {}: {:.2} s at {:.1} kHz{}. Play it on the DPCM row \"{}\".",
+                    chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot],
+                    sample.seconds(),
+                    sample.hz() / 1000.0,
+                    if truncated { " (cut to fit the chip's memory)" } else { "" },
+                    chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot],
+                );
+                self.s.arrangement.update(|a| {
+                    a.samples.resize(chip::samples::USER_SLOTS, None);
+                    a.samples[slot] = Some(sample);
+                });
+                self.commit();
+                self.set_status(msg);
+            }
+            Err(e) => self.set_status(e),
+        }
+    }
+
+    /// A file dropped on the window: MIDI, audio or a project.
+    fn open_dropped(&mut self, path: &std::path::Path) {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+        match ext.as_str() {
+            "mid" | "midi" => self.import_midi(path),
+            "wav" => self.import_sample(path),
+            e if e == file::EXTENSION => match file::load(path) {
+                Ok(p) => {
+                    self.load_project(p);
+                    self.s.file_path.set(path.display().to_string());
+                    self.set_status(format!("Opened {}", path.display()));
+                }
+                Err(e) => self.set_status(e),
+            },
+            _ => self.set_status(format!("Drop a .mid, .wav or .{} file.", file::EXTENSION)),
+        }
+    }
+
+    fn import_midi(&mut self, path: &std::path::Path) {
+        let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => return self.set_status(format!("Can't open {}: {e}", path.display())),
         };
@@ -2110,6 +2197,14 @@ impl AppState {
     /// `CHIPDAW_PROJECT=path` opens a project at start (tests, benchmarks);
     /// `CHIPDAW_OPEN_CLIP=id` then opens that clip in the piano roll.
     fn apply_test_project(&mut self) {
+        // Files on the command line (Open With, or a double-clicked file):
+        // projects, MIDI and WAV files, in order.
+        for arg in std::env::args_os().skip(1) {
+            let path = std::path::PathBuf::from(arg);
+            if path.is_file() {
+                self.open_dropped(&path);
+            }
+        }
         if let Ok(path) = std::env::var("CHIPDAW_PROJECT") {
             match file::load(std::path::Path::new(&path)) {
                 Ok(p) => {

@@ -134,24 +134,16 @@ impl View for InstrumentView {
                 let range = format!("{} – {}", note_name(lo), note_name(k.top.min(127)));
                 gfx::draw_text(canvas, &range, b.x.round(), y.round(), &fm, TEXT_LO);
                 gfx::draw_text(canvas, &k.name, (b.x + 96.0 * s).round(), y.round(), &f, TEXT_HI);
-                let bar = vg::Rect::from_xywh(b.x + 200.0 * s, y - 8.0 * s, (b.w - 200.0 * s).max(0.0), 6.0 * s);
+                let bar = vg::Rect::from_xywh(b.x + 200.0 * s, y - 14.0 * s, (b.w - 200.0 * s).max(0.0), 16.0 * s);
                 let vol = k.inst.volume.values();
-                // A tiny envelope sparkline for the piece.
+                // The piece's volume envelope as tiny bars.
                 if !vol.is_empty() && bar.width() > 8.0 {
-                    let n = vol.len() as f32;
-                    let mut pb = vg::PathBuilder::new();
+                    let bw = (bar.width() / vol.len() as f32).min(8.0 * s);
                     for (j, v) in vol.iter().enumerate() {
-                        let px = bar.left + bar.width() * j as f32 / n;
-                        let py = bar.bottom - bar.height() * 1.6 * (*v as f32 / 15.0);
-                        if j == 0 {
-                            pb.move_to((px, py));
-                        } else {
-                            pb.line_to((px, py));
-                        }
+                        let h = bar.height() * (*v as f32 / 15.0);
+                        let r = vg::Rect::from_xywh(bar.left + bw * j as f32, bar.bottom - h, (bw - s).max(s), h);
+                        canvas.draw_rect(r, &gfx::vgrad(r, color.with_alpha(0.9), color.darken(0.3).with_alpha(0.7)));
                     }
-                    let mut p = gfx::stroke(color.with_alpha(0.8), 1.5 * s);
-                    p.set_anti_alias(true);
-                    canvas.draw_path(&pb.detach(), &p);
                 }
                 lo = k.top.saturating_add(1);
             }

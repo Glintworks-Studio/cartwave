@@ -38,6 +38,8 @@ pub struct Core {
     scratch: Box<[f32; SCRATCH_FRAMES]>,
     sample_rate: u32,
     gain: f32,
+    /// Version of the DPCM bank in the sample ROM.
+    dpcm_version: u64,
     // Underrun detection.
     last_cb_ns: Option<u64>,
     /// Last callback of any stream (not reset on a rebuild), so the largest
@@ -77,6 +79,7 @@ impl Core {
             scratch: Box::new([0.0; SCRATCH_FRAMES]),
             sample_rate,
             gain: 1.0,
+            dpcm_version: 0,
             last_cb_ns: None,
             prev_any_cb_ns: None,
             stream_callbacks: 0,
@@ -129,6 +132,16 @@ impl Core {
                             .fetch_max(now.saturating_sub(s.sent_ns), Ordering::Relaxed);
                     }
                     std::mem::swap(&mut self.song, &mut s);
+                    // New imported samples: copy them into the sample ROM (no
+                    // allocation; the old snapshot keeps its bank alive).
+                    if self.song.dpcm.version != self.dpcm_version {
+                        let d = &self.song.dpcm;
+                        if d.data.len() == chip::samples::USER_ROM {
+                            p.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&d.data);
+                            p.driver.set_user_samples(d.refs);
+                        }
+                        self.dpcm_version = d.version;
+                    }
                     // Cannot fail: checked above.
                     let _ = self.garbage.push(s);
                     // The driver reads the song on every frame tick: the edit

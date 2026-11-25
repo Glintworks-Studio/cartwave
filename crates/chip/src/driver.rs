@@ -10,7 +10,7 @@
 
 use crate::instrument::{duty_2a03, duty_vrc6, scale_volume, Frame, Instrument, MacroState, NONE};
 use crate::pitch::{self, Osc};
-use crate::samples::{SampleRef, SAMPLE_COUNT, START_LEVEL};
+use crate::samples::{sample_for_pitch, SampleRef, BUILTIN_COUNT, SAMPLE_COUNT, START_LEVEL, USER_SLOTS};
 
 pub const LANES: usize = 8;
 pub const LANE_P1: usize = 0;
@@ -428,7 +428,25 @@ impl Driver {
     }
 
     fn playable(&self, lane: usize, pitch: u8) -> bool {
+        if lane == LANE_DMC {
+            return self.samples[self.dmc_sample(pitch)].present;
+        }
         Self::osc(lane).is_none_or(|o| pitch::period_for(o, pitch).is_some())
+    }
+
+    /// The sample a DMC note plays: the Sample control, or the note's own.
+    fn dmc_sample(&self, pitch: u8) -> usize {
+        let sel = self.params.get(LANE_DMC, ParamId::Sample);
+        if sel < 0 {
+            sample_for_pitch(pitch)
+        } else {
+            sel as usize
+        }
+    }
+
+    /// Installs the imported samples (their bytes are already in the ROM).
+    pub fn set_user_samples(&mut self, refs: [SampleRef; USER_SLOTS]) {
+        self.samples[BUILTIN_COUNT..].copy_from_slice(&refs);
     }
 
     /// V for `lane`: the sounding note's volume, else the lane's parameter.
@@ -597,12 +615,11 @@ impl Driver {
                 }
             }
             LANE_DMC => {
-                let ctl = ((self.params.get(lane, ParamId::Loop) as u8) << 6)
-                    | self.params.get(lane, ParamId::Rate) as u8;
+                let s = self.samples[self.dmc_sample(st.play_pitch)];
+                // A user sample plays at the rate it was encoded for.
+                let rate = s.rate.unwrap_or(self.params.get(lane, ParamId::Rate) as u8);
+                let ctl = ((self.params.get(lane, ParamId::Loop) as u8) << 6) | rate;
                 if first {
-                    let sel = self.params.get(lane, ParamId::Sample);
-                    let idx = if sel < 0 { st.play_pitch as usize % SAMPLE_COUNT } else { sel as usize };
-                    let s = self.samples[idx];
                     w.push(0x4010, ctl);
                     w.push(0x4011, START_LEVEL);
                     w.push(0x4012, s.addr_reg);
@@ -674,7 +691,7 @@ mod tests {
     use std::vec::Vec;
 
     fn drv() -> Driver {
-        Driver::new([SampleRef::default(); SAMPLE_COUNT])
+        Driver::new([SampleRef { present: true, ..SampleRef::default() }; SAMPLE_COUNT])
     }
 
     fn writes_of(w: &Writes) -> Vec<(u16, u8)> {

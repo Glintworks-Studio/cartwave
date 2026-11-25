@@ -10,6 +10,7 @@
 //!   the rest fill Pulse 1, Pulse 2, then VRC6 Pulse 1, Pulse 2 and Saw.
 //! - Chords are reduced to their top note (the bass part keeps its lowest).
 //! - Velocity becomes per-note volume (0..15).
+//! - A track named "DPCM" or "Samples" goes to the DPCM lane (C2.. = rows).
 //!
 //! Parts that don't fit are reported, not silently dropped.
 
@@ -246,8 +247,18 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
         // Drum hits are short; keep the lowest (kick) on a shared start.
         lanes.push((3, monophonic(&drums, true), "Drums".into()));
     }
+    // A track named "DPCM" or "Samples" plays the DPCM lane: C2..G2 pick
+    // the sample rows (Kick, Snare, Tom, Crash, User 1..4).
+    let is_dpcm = |p: &Part| {
+        let n = song.track_names.get(p.0).map(|n| n.to_lowercase()).unwrap_or_default();
+        n.contains("dpcm") || n.contains("sample")
+    };
+    let dpcm: Vec<Span> = song.parts.iter().filter(|p| p.1 != 9 && is_dpcm(p)).flat_map(|p| p.2.iter().copied()).collect();
+    if !dpcm.is_empty() {
+        lanes.push((4, monophonic(&dpcm, true), "Samples".into()));
+    }
     // Melodic parts, biggest first.
-    let mut parts: Vec<&Part> = song.parts.iter().filter(|p| p.1 != 9).collect();
+    let mut parts: Vec<&Part> = song.parts.iter().filter(|p| p.1 != 9 && !is_dpcm(p)).collect();
     parts.sort_by_key(|p| std::cmp::Reverse(p.2.len()));
     let mut slots: Vec<usize> = vec![0, 1];
     if vrc6 {
@@ -264,7 +275,10 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
         lanes.push((2, monophonic(&b.2, true), part_name(b.0, b.1)));
     }
     let mut slot = slots.into_iter();
-    for p in main.iter().filter(|p| bass.is_none_or(|b| !std::ptr::eq(**p, b))) {
+    // The rest keep the file order (the lead usually comes first).
+    let mut rest = main.clone();
+    rest.sort_by_key(|p| (p.0, p.1));
+    for p in rest.iter().filter(|p| bass.is_none_or(|b| !std::ptr::eq(**p, b))) {
         if let Some(l) = slot.next() {
             lanes.push((l, monophonic(&p.2, false), part_name(p.0, p.1)));
         }

@@ -84,9 +84,12 @@ enum Item {
     Header(&'static str, usize),
     Layout(usize),
     Preset(usize),
+    /// A filled user DPCM slot.
+    Sample(usize),
+    ImportAudio,
 }
 
-fn items(query: &str) -> Vec<Item> {
+fn items(query: &str, samples: &[Option<String>]) -> Vec<Item> {
     let q = query.trim().to_lowercase();
     let hit = |name: &str, blurb: &str, cat: &str| {
         q.is_empty() || name.to_lowercase().contains(&q) || blurb.to_lowercase().contains(&q) || cat.to_lowercase().contains(&q)
@@ -98,6 +101,14 @@ fn items(query: &str) -> Vec<Item> {
     if !layouts.is_empty() {
         out.push(Item::Header("Channel Layouts", layouts.len()));
         out.extend(layouts.into_iter().map(Item::Layout));
+    }
+    let filled: Vec<usize> = (0..samples.len())
+        .filter(|&i| samples[i].as_ref().is_some_and(|n| hit(n, "", "dpcm sample audio")))
+        .collect();
+    if q.is_empty() || !filled.is_empty() || "dpcm samples audio import wav".contains(&q) {
+        out.push(Item::Header("DPCM Samples", filled.len()));
+        out.extend(filled.into_iter().map(Item::Sample));
+        out.push(Item::ImportAudio);
     }
     for cat in Category::ALL {
         let ps: Vec<usize> = (0..PRESETS.len())
@@ -130,19 +141,30 @@ pub struct PresetList {
 
 impl PresetList {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, items: items(""), scroll: 0.0, hover: None, press: None, dragging: false }
+        Self { s, items: Vec::new(), scroll: 0.0, hover: None, press: None, dragging: false }
             .build(cx, |_| {})
             .class("preset-list")
             .bind(s.browser_query, |h| {
                 h.modify(|v: &mut PresetList| {
-                    v.items = items(&v.s.browser_query.get_untracked());
+                    v.refresh();
                     v.scroll = 0.0;
                 })
                 .needs_redraw();
             })
+            .bind(s.arrangement, |h| {
+                h.modify(|v: &mut PresetList| v.refresh());
+            })
             .bind(s.browser_sel, |mut h| h.needs_redraw())
             .bind(s.lane_sel, |mut h| h.needs_redraw())
             .bind(s.arrangement, |mut h| h.needs_redraw())
+    }
+
+    fn refresh(&mut self) {
+        let names: Vec<Option<String>> = self
+            .s
+            .arrangement
+            .with_untracked(|a| a.samples.iter().map(|s| s.as_ref().map(|s| s.name.clone())).collect());
+        self.items = items(&self.s.browser_query.get_untracked(), &names);
     }
 
     fn content_h(&self) -> f32 {
@@ -198,6 +220,17 @@ impl View for PresetList {
                         cx.emit(AppEvent::Audition(Some(p)));
                     }
                     Item::Layout(l) => cx.emit(AppEvent::ApplyLayout(l)),
+                    Item::Sample(slot) => {
+                        let x = (cx.mouse().cursor_x - cx.bounds().x) / cx.scale_factor();
+                        if x > cx.bounds().w / cx.scale_factor() - REMOVE_ZONE {
+                            cx.emit(AppEvent::RemoveSample(slot));
+                        } else {
+                            self.press = Some((SAMPLE_PRESS, 0.0, 0.0));
+                            cx.capture();
+                            cx.emit(AppEvent::PreviewSample(Some(slot)));
+                        }
+                    }
+                    Item::ImportAudio => cx.emit(AppEvent::ImportAudio),
                     Item::Header(..) => {}
                 }
                 meta.consume();
@@ -209,7 +242,7 @@ impl View for PresetList {
                 meta.consume();
             }
             WindowEvent::MouseMove(x, y) => {
-                if let Some((i, px, py)) = self.press {
+                if let Some((i, px, py)) = self.press.filter(|p| p.0 != SAMPLE_PRESS) {
                     let s = cx.scale_factor();
                     if !self.dragging && ((x - px).abs() > DRAG_START_PX * s || (y - py).abs() > DRAG_START_PX * s) {
                         self.dragging = true;
@@ -228,6 +261,12 @@ impl View for PresetList {
                         cx.needs_redraw();
                     }
                 }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some_and(|p| p.0 == SAMPLE_PRESS) => {
+                cx.release();
+                cx.emit(AppEvent::PreviewSample(None));
+                self.press = None;
+                meta.consume();
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some() => {
                 cx.release();
@@ -289,6 +328,46 @@ impl View for PresetList {
                         vg::Rect::from_xywh(x, row.bottom - hl, row.width() - 2.0 * PAD_X * s, hl),
                         &gfx::fill(LINE),
                     );
+                }
+                Item::Sample(slot) => {
+                    let hovered = self.hover == Some(i);
+                    let card = vg::Rect::from_ltrb(row.left + 4.0 * s, row.top + 2.0 * s, row.right - 4.0 * s, row.bottom - 2.0 * s);
+                    if hovered {
+                        canvas.draw_rrect(gfx::rrect(card, RADIUS_KEY * s), &gfx::vgrad(card, Rgba::white(0.06), Rgba::white(0.025)));
+                    }
+                    let info = self.s.arrangement.with_untracked(|a| {
+                        a.samples.get(slot).and_then(|s| s.as_ref()).map(|s| (s.name.clone(), s.seconds(), s.hz()))
+                    });
+                    if let Some((name, secs, hz)) = info {
+                        // A tiny waveform glyph in the DPCM lane colour.
+                        let gy = row.center_y();
+                        for (k, h) in [3.0, 8.0, 5.0, 2.0].iter().enumerate() {
+                            let g = vg::Rect::from_xywh(x + k as f32 * 2.0 * s, gy - h * s * 0.5, s, h * s);
+                            canvas.draw_rect(g, &gfx::fill(LANE_DPCM));
+                        }
+                        let base = gfx::baseline_for_center(&fr, row.center_y());
+                        let row_name = chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot];
+                        let label = format!("{row_name}  {name}");
+                        gfx::draw_text_clipped(canvas, &label, (x + 16.0 * s).round(), base.round(), row.width() - 120.0 * s, &fr, TEXT_MID);
+                        let meta = if hovered { "remove ×".to_string() } else { format!("{secs:.2}s · {:.1}k", hz / 1000.0) };
+                        let mw = gfx::text_width(&fs, &meta);
+                        gfx::draw_text(canvas, &meta, (row.right - PAD_X * s - mw).round(), base.round(), &fs, if hovered { RECORD } else { TEXT_LO });
+                    }
+                }
+                Item::ImportAudio => {
+                    let hovered = self.hover == Some(i);
+                    let card = vg::Rect::from_ltrb(row.left + 8.0 * s, row.top + 3.0 * s, row.right - 8.0 * s, row.bottom - 3.0 * s);
+                    let rr = gfx::rrect(card, RADIUS_KEY * s);
+                    let mut dash = gfx::stroke(if hovered { ACCENT } else { STROKE }, gfx::hairline(s));
+                    if let Some(e) = vg::PathEffect::dash(&[4.0 * s, 3.0 * s], 0.0) {
+                        dash.set_path_effect(e);
+                    }
+                    canvas.draw_rrect(rr, &dash);
+                    let free = self.s.arrangement.with_untracked(|a| crate::dpcm::free_bytes(&a.samples));
+                    let t = format!("+  Import audio as DPCM  ·  {:.1} KB free", free as f32 / 1024.0);
+                    let tw = gfx::text_width(&fs, &t);
+                    let base = gfx::baseline_for_center(&fs, row.center_y());
+                    gfx::draw_text(canvas, &t, (card.center_x() - tw * 0.5).round(), base.round(), &fs, if hovered { ACCENT } else { TEXT_LO });
                 }
                 Item::Layout(l) | Item::Preset(l) => {
                     let is_preset = matches!(it, Item::Preset(_));
@@ -364,6 +443,11 @@ impl View for PresetList {
     }
 }
 
+/// Width of the "remove" zone at the right of a sample row (logical px).
+const REMOVE_ZONE: f32 = 64.0;
+/// `press` marker for a held sample audition (not a preset drag).
+const SAMPLE_PRESS: usize = usize::MAX;
+
 /// Info about the selected preset, under the list.
 fn info_text(sel: Option<usize>) -> String {
     match sel.and_then(|i| PRESETS.get(i)) {
@@ -406,7 +490,9 @@ pub fn browser(cx: &mut Context, s: Signals) {
         PresetList::new(cx, s).height(Stretch(1.0)).width(Stretch(1.0));
         Label::new(cx, s.browser_sel.map(|sel| info_text(*sel)))
             .class("browser-info")
-            .text_wrap(true);
+            .text_wrap(true)
+            // No room under the list while the piano roll takes the height.
+            .display(s.piano_open.map(|o| if *o { Display::None } else { Display::Flex }));
     })
     .class("browser")
     .width(Pixels(BROWSER_W))

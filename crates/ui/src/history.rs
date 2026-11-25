@@ -39,11 +39,12 @@ pub struct Doc {
     pub bpm: f32,
     pub params: Params,
     pub instruments: Vec<LaneInstrument>,
+    pub samples: Vec<Option<crate::dpcm::UserSample>>,
 }
 
 impl Doc {
     pub fn of(a: &Arrangement, bpm: f32, params: Params) -> Self {
-        Self { clips: a.clips.clone(), next_id: a.next_id, bpm, params, instruments: a.instruments.clone() }
+        Self { clips: a.clips.clone(), next_id: a.next_id, bpm, params, instruments: a.instruments.clone(), samples: a.samples.clone() }
     }
 
     /// Writes the document into an arrangement; selection and view stay,
@@ -52,6 +53,7 @@ impl Doc {
         a.clips = self.clips.clone();
         a.next_id = self.next_id;
         a.instruments = self.instruments.clone();
+        a.samples = self.samples.clone();
         a.editing.clear();
         a.editing_notes = None;
         let ids: Vec<u32> = a.clips.iter().map(|c| c.id).collect();
@@ -64,6 +66,7 @@ impl Doc {
             && self.bpm == o.bpm
             && self.params == o.params
             && self.instruments == o.instruments
+            && self.samples == o.samples
             && self.clips.len() == o.clips.len()
             && self.clips.iter().zip(&o.clips).all(|(a, b)| Arc::ptr_eq(a, b) || a == b)
     }

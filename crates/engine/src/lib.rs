@@ -22,7 +22,7 @@ pub use chip::filter::FilterMode;
 pub use command::Command;
 pub use host::EngineConfig;
 pub use shared::{device_error, PositionSnapshot, Shared};
-pub use song::{ClipInput, NoteInput, SongSnapshot};
+pub use song::{ClipInput, DpcmBank, NoteInput, SongSnapshot};
 
 use host::CoreCell;
 use rtrb::{Consumer, Producer, RingBuffer};
