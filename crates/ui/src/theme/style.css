@@ -1,15 +1,20 @@
-/* ChipDAW main stylesheet. Values mirror src/theme/tokens.rs.
+/* ChipDAW main stylesheet. Values mirror src/theme/tokens.rs, which holds
+   the palette sampled from the reference prototype (docs/design/reference.png).
+   Every layout distance is a multiple of 4 px; 1 px hairlines are the only
+   exception.
    Hot-reload: in debug builds the file is loaded from disk; press F5. */
 
 :root {
-    --bg-0: #0E0F13;
-    --bg-1: #16181F;
-    --bg-2: #1E2129;
-    --bg-inset: #0A0B0E;
-    --line: #2A2E38;
-    --text-hi: #E8EAF0;
-    --text-lo: #8A90A0;
-    --accent: #7C5CFF;
+    --bg-0: #0A0A0A;
+    --bg-1: #141414;
+    --bg-2: #151515;
+    --bg-inset: #0C0C0C;
+    --line: #1A1A1A;
+    --stroke: #323232;
+    --text-hi: #D9D9D9;
+    --text-mid: #888888;
+    --text-lo: #5C5C5C;
+    --accent: #C7D74E;
 
     background-color: var(--bg-0);
     font-family: "Inter";
@@ -24,39 +29,111 @@ label {
 
 .muted { color: var(--text-lo); }
 
-/* ───────────── Panels ───────────── */
+/* ───────────── Shell ───────────── */
+
+.shell {
+    gap: 0px;
+    padding: 0px;
+}
+
+/* Top bar: lit from the top edge (a 1 px #323232 line), falling to black. */
+.topbar {
+    height: 60px;
+    layout-type: row;
+    alignment: center;
+    background-image: linear-gradient(to bottom, #191919, #0A0A0A);
+    shadow: 0px 1px 0px 0px #323232 inset;
+}
+
+.bar-side {
+    height: 1s;
+    width: 1s;
+    gap: 8px;
+    layout-type: row;
+}
+
+.bar-side.left {
+    alignment: left;
+    padding-left: 8px;
+}
+
+.bar-side.right {
+    alignment: right;
+    padding-right: 8px;
+    gap: 4px;
+}
+
+.pill-stack {
+    width: auto;
+    height: auto;
+    gap: 4px;
+}
+
+.bar-gap {
+    width: 8px;
+    height: 4px;
+}
+
+.bar-status {
+    font-size: 11;
+    font-weight: 500;
+    color: var(--text-mid);
+    width: auto;
+    height: auto;
+    max-width: 320px;
+    text-overflow: ellipsis;
+    text-wrap: false;
+}
+
+.main {
+    layout-type: row;
+}
+
+.track-column {
+    width: 356px;
+    height: 1s;
+    background-color: var(--bg-0);
+}
+
+/* The empty cell beside the ruler: band gradient under a hairline. */
+.band-cell {
+    height: 40px;
+    background-image: linear-gradient(to bottom, #121212, #0A0A0A);
+    shadow: 0px 1px 0px 0px #1A1A1A inset;
+}
+
+.track-row {
+    layout-type: row;
+    alignment: right;
+    padding-right: 8px;
+    gap: 8px;
+}
+
+.key {
+    width: 24px;
+    height: 24px;
+}
+
+.col-divider {
+    width: 1px;
+    height: 1s;
+    background-image: linear-gradient(to bottom, #1A1A1A, #161616 50%, #0B0B0B);
+}
+
+/* ───────────── Panels (bottom inspector / piano roll) ─────────────
+   Edge to edge like the rest of the shell: a band under a hairline. */
 
 .panel {
-    background-image: linear-gradient(to bottom, #1A1C24, #15171D);
-    corner-radius: 10px;
-    shadow: 0px 1px 0px 0px rgba(255, 255, 255, 0.045) inset,
-            0px 0px 0px 1px rgba(0, 0, 0, 0.55),
-            0px 6px 18px 0px rgba(0, 0, 0, 0.35);
+    background-image: linear-gradient(to bottom, #121212, #0A0A0A);
+    shadow: 0px 1px 0px 0px #1A1A1A inset;
 }
 
 .section-title {
     font-size: 11;
     font-weight: 600;
-    color: var(--text-lo);
+    color: var(--text-mid);
     height: auto;
     width: auto;
-}
-
-/* ───────────── Transport ───────────── */
-
-.transport {
-    height: 56px;
-    padding-left: 12px;
-    padding-right: 12px;
-    gap: 10px;
-    alignment: left;
-    layout-type: row;
-}
-
-.divider-v {
-    width: 1px;
-    height: 26px;
-    background-color: var(--line);
 }
 
 .field-label {
@@ -67,82 +144,52 @@ label {
     height: auto;
 }
 
-/* ───────────── Buttons ───────────── */
+/* ───────────── Buttons ─────────────
+   Stylesheet twins of the procedural keys (views/chrome.rs): lit from
+   below, a #383838 stroke and a brighter top edge. CSS can't fade the top
+   edge towards the corners, so stock-button keys use a uniform top line. */
 
 .btn {
-    height: 32px;
+    height: 24px;
     width: auto;
-    min-width: 32px;
+    min-width: 24px;
     padding-left: 12px;
     padding-right: 12px;
-    corner-radius: 8px;
+    corner-radius: 4px;
     alignment: center;
     background-color: transparent;
-    background-image: linear-gradient(to bottom, #2A2E39, #20232C);
-    border-width: 0px;
-    shadow: 0px 1px 0px 0px rgba(255, 255, 255, 0.10) inset,
-            0px -1px 0px 0px rgba(0, 0, 0, 0.25) inset,
-            0px 0px 0px 1px rgba(0, 0, 0, 0.6),
-            0px 2px 4px 0px rgba(0, 0, 0, 0.30);
+    background-image: linear-gradient(to bottom, #191919, #424242);
+    border-width: 1px;
+    border-color: #383838;
+    shadow: 0px 1px 0px 0px rgba(153, 153, 153, 0.45) inset;
     transition: background-image 140ms ease-out, shadow 140ms ease-out, translate 90ms ease-out;
     cursor: hand;
 }
 
 .btn:hover {
-    background-image: linear-gradient(to bottom, #323745, #262A35);
+    background-image: linear-gradient(to bottom, #202020, #4A4A4A);
 }
 
 .btn:active {
-    background-image: linear-gradient(to bottom, #1A1D25, #1F222B);
-    shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.55) inset,
-            0px 1px 0px 0px rgba(255, 255, 255, 0.05) inset,
-            0px 0px 0px 1px rgba(0, 0, 0, 0.6),
-            0px 1px 0px 0px rgba(255, 255, 255, 0.04);
+    background-image: linear-gradient(to bottom, #121212, #2E2E2E);
+    shadow: 0px 1px 0px 0px rgba(153, 153, 153, 0.15) inset;
     translate: 0px 1px;
 }
 
 .btn label {
-    font-size: 12;
-    font-weight: 500;
-    color: var(--text-hi);
+    font-size: 10;
+    font-weight: 700;
+    color: var(--text-mid);
 }
 
-.btn.icon {
-    width: 40px;
-    padding-left: 0px;
-    padding-right: 0px;
+.btn.checked label {
+    color: var(--accent);
 }
 
 .btn.checked {
-    background-image: linear-gradient(to bottom, #3A3166, #2C2552);
-    shadow: 0px 1px 0px 0px rgba(255, 255, 255, 0.14) inset,
-            0px 0px 0px 1px rgba(124, 92, 255, 0.55),
-            0px 0px 14px 0px rgba(124, 92, 255, 0.35);
+    shadow: 0px 1px 0px 0px rgba(199, 215, 78, 0.55) inset,
+            0px 0px 8px 0px rgba(199, 215, 78, 0.18);
 }
-
-.btn.record.checked {
-    background-image: linear-gradient(to bottom, #4A1F28, #36161D);
-    shadow: 0px 1px 0px 0px rgba(255, 255, 255, 0.12) inset,
-            0px 0px 0px 1px rgba(255, 77, 94, 0.65),
-            0px 0px 18px 2px rgba(255, 77, 94, 0.45);
-}
-
-.btn.small {
-    height: 22px;
-    min-width: 22px;
-    padding-left: 0px;
-    padding-right: 0px;
-    width: 22px;
-    corner-radius: 6px;
-}
-
-.btn.small label {
-    font-size: 10;
-    font-weight: 600;
-    color: var(--text-lo);
-}
-
-.btn.small.checked label { color: #FFFFFF; }
 
 /* ───────────── Inset text fields ─────────────
    Textbox draws its shadows *before* its background in vizia 0.4, which hides
@@ -150,118 +197,73 @@ label {
    inside it is transparent. Note: `inset` must be the LAST token. */
 
 .field {
-    height: 30px;
-    corner-radius: 6px;
+    height: 28px;
+    corner-radius: 4px;
     border-width: 0px;
     background-color: transparent;
-    background-image: linear-gradient(to bottom, #101217, #171920);
-    shadow: 2px 3px 5px 0px rgba(0, 0, 0, 0.90) inset,
-            0px 0px 0px 1px rgba(0, 0, 0, 0.55) inset,
-            0px 1px 0px 0px rgba(255, 255, 255, 0.075);
+    background-image: linear-gradient(to bottom, #080808, #101010);
+    shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.90) inset,
+            0px 0px 0px 1px rgba(50, 50, 50, 0.55) inset,
+            0px 1px 0px 0px rgba(255, 255, 255, 0.05);
     transition: shadow 160ms ease-out;
 }
 
 .field:active, .field:focus-within {
-    shadow: 2px 3px 5px 0px rgba(0, 0, 0, 0.90) inset,
-            0px 0px 0px 1px rgba(124, 92, 255, 0.85),
-            0px 0px 14px 2px rgba(124, 92, 255, 0.38),
-            0px 1px 0px 0px rgba(255, 255, 255, 0.075);
+    shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.90) inset,
+            0px 0px 0px 1px rgba(199, 215, 78, 0.70),
+            0px 0px 12px 0px rgba(199, 215, 78, 0.25),
+            0px 1px 0px 0px rgba(255, 255, 255, 0.05);
 }
 
 .field textbox {
     width: 1s;
     height: 1s;
-    corner-radius: 6px;
+    corner-radius: 4px;
     border-width: 0px;
     background-color: transparent;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
     font-size: 12;
     alignment: left;
     color: var(--text-hi);
-    selection-color: rgba(124, 92, 255, 0.40);
+    selection-color: rgba(199, 215, 78, 0.30);
 }
 
 .field textbox:placeholder-shown {
-    color: #5D6372;
+    color: #4A4A4A;
 }
 
 /* Gently pulsing caret: vizia toggles `.caret` on its blink timer; we ease
    between a bright and a faint caret instead of a hard on/off. */
 .field textbox:focus {
-    caret-color: rgba(199, 184, 255, 0.18);
+    caret-color: rgba(199, 215, 78, 0.18);
     transition: caret-color 450ms ease-in-out;
 }
 
 .field textbox:focus.caret {
-    caret-color: #C7B8FF;
+    caret-color: #C7D74E;
     transition: caret-color 450ms ease-in-out;
 }
 
-/* ───────────── Track headers ───────────── */
-
-.track-headers {
-    width: 208px;
-    layout-type: column;
-}
-
-.ruler-spacer {
-    height: 30px;
-    padding-left: 12px;
-    alignment: left;
-}
-
-.track-header {
-    height: 64px;
-    padding-left: 10px;
-    padding-right: 8px;
-    gap: 8px;
-    alignment: left;
-    layout-type: row;
-    background-color: transparent;
-    transition: background-color 140ms ease-out;
-}
-
-.track-header:hover {
-    background-color: rgba(255, 255, 255, 0.025);
-}
-
-.track-header.selected {
-    background-color: rgba(124, 92, 255, 0.10);
-    shadow: 2px 0px 0px 0px rgba(124, 92, 255, 0.9) inset;
-}
-
-.track-header .name {
-    font-size: 12;
-    font-weight: 500;
-    width: 1s;
-    height: auto;
-    text-overflow: ellipsis;
-    text-wrap: false;
-}
-
-.track-header .chipname {
-    font-size: 10;
-    color: var(--text-lo);
-    height: auto;
-}
-
-/* ───────────── Device panel ───────────── */
+/* ───────────── Device inspector ───────────── */
 
 .device {
-    height: 236px;
-    padding: 14px;
-    gap: 14px;
+    height: 232px;
+    padding: 16px;
+    gap: 16px;
     layout-type: row;
 }
 
+/* Sections are boxes like the transport capsule: flat #151515 inside a
+   flat #323232 stroke. */
 .device-section {
     layout-type: column;
-    gap: 10px;
+    gap: 8px;
     padding: 12px;
     corner-radius: 8px;
-    background-image: linear-gradient(to bottom, rgba(255,255,255,0.018), rgba(0,0,0,0.06));
-    shadow: 0px 0px 0px 1px rgba(255, 255, 255, 0.035) inset;
+    background-color: #151515;
+    border-width: 1px;
+    border-color: #323232;
 }
 
 .dial {
@@ -270,17 +272,17 @@ label {
     cursor: ns-resize;
 }
 
-/* ───────────── Piano roll (plain, functional: a redesign is under way) ───────────── */
+/* ───────────── Piano roll ───────────── */
 
 .piano-panel {
     height: 1s;
     padding: 8px;
-    gap: 6px;
+    gap: 8px;
     layout-type: column;
 }
 
 .piano-header {
-    height: 30px;
+    height: 28px;
     gap: 8px;
     alignment: left;
     layout-type: row;
@@ -290,15 +292,4 @@ label {
     font-family: "JetBrains Mono";
     font-size: 11;
     color: var(--text-hi);
-}
-
-.status-msg {
-    color: var(--text-hi);
-    max-width: 260px;
-    text-overflow: ellipsis;
-    text-wrap: false;
-}
-
-.track-header.compact .chipname {
-    display: none;
 }

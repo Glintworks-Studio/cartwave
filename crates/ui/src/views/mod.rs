@@ -1,4 +1,5 @@
 pub mod arrangement;
+pub mod chrome;
 pub mod clip;
 pub mod dial;
 pub mod gfx;

@@ -423,6 +423,7 @@ pub struct Transport {
 }
 
 impl Transport {
+    pub const DEFAULT_BPM: f32 = 150.0;
     pub const MIN_BPM: f32 = 40.0;
     pub const MAX_BPM: f32 = 300.0;
 
@@ -843,5 +844,5 @@ impl PianoState {
 
 /// Lane height in the arrangement: normal, and compact while the piano roll
 /// is open (so the piano roll gets the room; PIANOROLL.md §2).
-pub const LANE_H_NORMAL: f32 = 64.0;
+pub const LANE_H_NORMAL: f32 = 60.0;
 pub const LANE_H_COMPACT: f32 = 36.0;

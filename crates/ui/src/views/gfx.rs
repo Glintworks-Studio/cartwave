@@ -15,6 +15,9 @@ pub const INTER_SEMIBOLD: &[u8] = include_bytes!("../../../../assets/fonts/Inter
 pub const MONO_REGULAR: &[u8] =
     include_bytes!("../../../../assets/fonts/JetBrainsMono-Regular.ttf");
 pub const MONO_MEDIUM: &[u8] = include_bytes!("../../../../assets/fonts/JetBrainsMono-Medium.ttf");
+pub const INTER_BOLD: &[u8] = include_bytes!("../../../../assets/fonts/Inter-Bold.ttf");
+pub const INTER_XBOLD_ITALIC: &[u8] =
+    include_bytes!("../../../../assets/fonts/Inter-ExtraBoldItalic.ttf");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Face {
@@ -23,10 +26,13 @@ pub enum Face {
     SemiBold,
     Mono,
     MonoMedium,
+    Bold,
+    /// Watermark numerals in the track rows.
+    HeavyItalic,
 }
 
 struct Faces {
-    faces: [vg::Typeface; 5],
+    faces: [vg::Typeface; 7],
 }
 
 thread_local! {
@@ -46,6 +52,8 @@ fn typeface(face: Face) -> vg::Typeface {
                     load(INTER_SEMIBOLD),
                     load(MONO_REGULAR),
                     load(MONO_MEDIUM),
+                    load(INTER_BOLD),
+                    load(INTER_XBOLD_ITALIC),
                 ],
             }
         });
@@ -385,6 +393,85 @@ pub fn inner_border(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, color: Rgba
     let mut r = *rr;
     r.inset((width * 0.5, width * 0.5));
     canvas.draw_rrect(r, &stroke(color, width));
+}
+
+// ───────────────────────── Gradient strokes ─────────────────────────
+//
+// The prototype's surfaces are defined by their 1 px strokes more than by
+// their fills: keys and pills carry a sheen along the top edge that is
+// brightest in the middle and fades into the plain stroke at the corners;
+// colour strips have a bright left edge and a dark right edge. All strokes
+// are drawn *inside* the shape as a ring (`draw_drrect`), so they stay crisp
+// on whole device pixels at every scale.
+
+/// The `width`-wide ring just inside `rr`.
+fn ring_inner(rr: &vg::RRect, width: f32) -> vg::RRect {
+    let mut inner = *rr;
+    inner.inset((width, width));
+    inner
+}
+
+/// A 1 px (×`width`) stroke inside `rr`, painted with `paint` (any shader).
+pub fn ring(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, paint: &vg::Paint) {
+    canvas.draw_drrect(*rr, ring_inner(rr, width), paint);
+}
+
+/// A stroke inside `rr` whose colour runs from `top` to `bottom`.
+pub fn ring_vgrad(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, top: Rgba, bottom: Rgba) {
+    let r = rr.rect();
+    ring(canvas, rr, width, &vgrad(*r, top, bottom));
+}
+
+/// A stroke inside `rr` whose colour runs from `left` to `right`.
+pub fn ring_hgrad(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, left: Rgba, right: Rgba) {
+    let r = rr.rect();
+    let mut p = vg::Paint::default();
+    p.set_anti_alias(true);
+    p.set_shader(linear((r.left, r.top), (r.right, r.top), &[left, right], None));
+    ring(canvas, rr, width, &p);
+}
+
+/// The top-edge sheen of keys and pills: a `width` line along the straight
+/// top edge of `rr`, `peak` in the middle and fading to `edge` towards both
+/// corners. Drawn over the plain stroke.
+pub fn top_sheen(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, edge: Rgba, peak: Rgba) {
+    let r = *rr.rect();
+    let rad = rr.radii(vg::rrect::Corner::UpperLeft).x;
+    let mut p = vg::Paint::default();
+    p.set_anti_alias(true);
+    p.set_shader(linear(
+        (r.left + rad * 0.5, r.top),
+        (r.right - rad * 0.5, r.top),
+        &[edge, peak, edge],
+        Some(&[0.0, 0.5, 1.0]),
+    ));
+    canvas.save();
+    canvas.clip_rect(
+        vg::Rect::from_ltrb(r.left, r.top, r.right, r.top + width),
+        vg::ClipOp::Intersect,
+        true,
+    );
+    ring(canvas, rr, width, &p);
+    canvas.restore();
+}
+
+/// Text painted with a vertical gradient between `top` and `bottom`
+/// (spanning the font's cap height above `baseline`).
+pub fn draw_text_vgrad(
+    canvas: &vg::Canvas,
+    s: &str,
+    x: f32,
+    baseline: f32,
+    font: &vg::Font,
+    top: Rgba,
+    bottom: Rgba,
+) {
+    let (_, m) = font.metrics();
+    let cap = if m.cap_height > 0.0 { m.cap_height } else { -m.ascent * 0.7 };
+    let mut p = vg::Paint::default();
+    p.set_anti_alias(true);
+    p.set_shader(linear((x, baseline - cap), (x, baseline), &[top, bottom], None));
+    canvas.draw_str(s, (x, baseline), font, &p);
 }
 
 pub fn draw_text(

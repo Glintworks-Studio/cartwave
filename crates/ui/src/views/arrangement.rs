@@ -13,7 +13,7 @@ use vizia::vg;
 
 use super::clip::{self, ClipAnim, ClipPaint};
 use super::gfx::{self, Face};
-use super::visualizer::draw_light;
+use super::chrome::TrackRow;
 use crate::notes::Note;
 use crate::state::{self, Clip, MIN_CLIP_TICKS, TICKS_PER_BAR};
 use crate::theme::tokens::*;
@@ -95,6 +95,7 @@ impl Arrangement {
         .bind(s.arrangement, |mut h| h.needs_redraw())
         .bind(s.transport, |mut h| h.needs_redraw())
         .bind(s.lane_h, |mut h| h.needs_redraw())
+        .bind(s.loop_on, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -393,35 +394,22 @@ impl Arrangement {
         let view = a.view;
         let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
         let lane_h = self.s.lane_h.get_untracked() * s;
-        // Lane backgrounds: subtle alternation plus a hairline.
-        for (i, lane) in a.lanes.iter().enumerate() {
-            let y = rect.top + i as f32 * lane_h;
-            let lr = vg::Rect::from_xywh(rect.left, y, rect.width(), lane_h);
-            let base = if i % 2 == 0 {
-                Rgba::hex(0x14161C)
-            } else {
-                Rgba::hex(0x121419)
-            };
-            canvas.draw_rect(lr, &gfx::fill(base.mix(lane.color, 0.012)));
-            canvas.draw_rect(
-                vg::Rect::from_xywh(rect.left, (y + lane_h - s).round(), rect.width(), s),
-                &gfx::fill(Rgba::black(0.35)),
-            );
-        }
-        if lanes_bottom < rect.bottom {
-            canvas.draw_rect(
-                vg::Rect::from_ltrb(rect.left, lanes_bottom, rect.right, rect.bottom),
-                &gfx::fill(Rgba::hex(0x101217)),
-            );
+        // The canvas: one gradient, lit from the top and falling to black,
+        // as in the prototype. Lanes are only hairlines on it.
+        canvas.draw_rect(rect, &gfx::vgrad(rect, CANVAS_TOP, CANVAS_BOTTOM));
+        let lane_line = gfx::fill(Rgba::white(0.035));
+        for i in 1..=a.lanes.len() {
+            let y = (rect.top + i as f32 * lane_h).round();
+            canvas.draw_rect(vg::Rect::from_xywh(rect.left, y - s, rect.width(), s), &lane_line);
         }
 
         // Grid: bars, beats, and sixteenths when zoomed in.
         let ppb = view.px_per_bar() as f32;
         let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
         let nbars = (rect.width() / s / ppb).ceil() as i64 + 2;
-        let bar_line = gfx::fill(Rgba::white(0.065));
-        let beat_line = gfx::fill(Rgba::white(0.03));
-        let six_line = gfx::fill(Rgba::white(0.014));
+        let bar_line = gfx::fill(Rgba::white(0.05));
+        let beat_line = gfx::fill(Rgba::white(0.022));
+        let six_line = gfx::fill(Rgba::white(0.01));
         let grid_h = lanes_bottom - rect.top;
         for bar in first_bar.max(0)..first_bar + nbars {
             let bx = x_of((bar as u32 * TICKS_PER_BAR) as f64);
@@ -442,12 +430,12 @@ impl Arrangement {
             }
         }
 
-        // Loop end marker.
+        // Past the loop end: dimmed (only while the loop light is on).
         let lex = x_of(loop_end);
-        if lex > rect.left && lex < rect.right {
+        if self.s.loop_on.get_untracked() && lex > rect.left && lex < rect.right {
             canvas.draw_rect(
                 vg::Rect::from_ltrb(lex, rect.top, rect.right, lanes_bottom),
-                &gfx::fill(Rgba::black(0.22)),
+                &gfx::fill(Rgba::black(0.28)),
             );
         }
     }
@@ -621,10 +609,11 @@ impl View for Arrangement {
                     }
                     let y = rect.top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
                     // Snap edges to device pixels for crisp borders.
+                    // A 1 px gutter on the right keeps abutting clips apart.
                     let r = vg::Rect::from_ltrb(
                         x0.round(),
                         y.round(),
-                        x1.round(),
+                        (x1.round() - s).max(x0.round() + s),
                         (y + lane_h - 2.0 * CLIP_V_INSET * s).round(),
                     );
                     // Lift dragged clips by a pixel as they "float".
@@ -658,6 +647,7 @@ impl View for Arrangement {
                 view.px_per_tick.to_bits().hash(&mut h);
                 view.scroll_ticks.to_bits().hash(&mut h);
                 loop_end.to_bits().hash(&mut h);
+                self.s.loop_on.get_untracked().hash(&mut h);
                 for (live, p) in &paints {
                     if !live {
                         for v in [
@@ -754,40 +744,41 @@ impl View for Arrangement {
                     let gx = x_of(t as f64).round();
                     canvas.draw_rect(
                         vg::Rect::from_xywh(gx, rect.top, s, lanes_bottom - rect.top),
-                        &gfx::fill(ACCENT.with_alpha(0.55)),
+                        &gfx::fill(ACCENT.with_alpha(0.6)),
                     );
                     let f = gfx::font(Face::MonoMedium, 10.0 * s);
                     let label = crate::state::Transport::position_string(t as f64);
                     let w = gfx::text_width(&f, &label) + 12.0 * s;
-                    let pill = vg::Rect::from_xywh(gx + 6.0 * s, rect.top + 6.0 * s, w, 18.0 * s);
-                    let rr = gfx::rrect(pill, 9.0 * s);
+                    let pill = vg::Rect::from_xywh(gx + 4.0 * s, rect.top + 4.0 * s, w, 16.0 * s);
+                    let rr = gfx::rrect(pill, 8.0 * s);
                     gfx::drop_shadow(canvas, &rr, 0.0, 2.0 * s, 6.0 * s, 0.0, Rgba::black(0.4));
-                    canvas.draw_rrect(rr, &gfx::fill(ACCENT.darken(0.35)));
-                    gfx::inner_border(canvas, &rr, s, ACCENT.lighten(0.2).with_alpha(0.7));
+                    canvas.draw_rrect(rr, &gfx::vgrad(pill, ACCENT.lighten(0.05), ACCENT.darken(0.15)));
+                    gfx::top_sheen(canvas, &rr, s, ACCENT, Rgba::white(0.8));
                     gfx::draw_text(
                         canvas,
                         &label,
                         pill.left + 6.0 * s,
-                        pill.top + 13.0 * s,
+                        gfx::baseline_for_center(&f, pill.center_y()).round(),
                         &f,
-                        Rgba::white(0.95),
+                        Rgba::hex(0x0A0A0A),
                     );
                 }
             }
 
-            // Playhead.
+            // Playhead: the accent lime, glowing while playing.
             let px = x_of(playhead).round();
             if px >= rect.left && px <= rect.right {
-                let glow_a = if playing { 0.45 } else { 0.25 };
+                let glow_a = if playing { 0.5 } else { 0.22 };
                 let mut glow = gfx::fill(ACCENT.with_alpha(glow_a));
                 glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 3.0 * s, false));
                 canvas.draw_rect(
                     vg::Rect::from_xywh(px - s, rect.top, 3.0 * s, lanes_bottom - rect.top),
                     &glow,
                 );
+                let ink = if playing { ACCENT.lighten(0.2) } else { ACCENT.mix(TEXT_HI, 0.4) };
                 canvas.draw_rect(
                     vg::Rect::from_xywh(px, rect.top, s, lanes_bottom - rect.top),
-                    &gfx::fill(Rgba::hex(0xD9D0FF)),
+                    &gfx::fill(ink),
                 );
             }
         });
@@ -800,7 +791,7 @@ impl View for Arrangement {
                 p.set_shader(gfx::linear(
                     (rect.left, rect.top),
                     (rect.left, rect.top + 8.0 * s),
-                    &[Rgba::black(0.35), Rgba::black(0.0)],
+                    &[Rgba::black(0.3), Rgba::black(0.0)],
                     None,
                 ));
                 p
@@ -812,96 +803,15 @@ impl View for Arrangement {
 
 // ───────────────────────────── Track headers ─────────────────────────────
 
-/// Lane colour pill with a pulse light; redraws every animation frame.
-pub struct LaneBadge {
-    s: Signals,
-    lane: usize,
-}
-
-impl LaneBadge {
-    pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
-        Self { s, lane }
-            .build(cx, |_| {})
-            .width(Pixels(14.0))
-            .height(s.lane_h.map(|h| Pixels((h - 26.0).max(10.0))))
-            .hoverable(false)
-            .bind(s.meters, |mut h| h.needs_redraw())
-    }
-}
-
-impl View for LaneBadge {
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Badges);
-        let b = cx.bounds();
-        let s = cx.scale_factor();
-        let color = self
-            .s
-            .arrangement
-            .with_untracked(|a| a.lanes[self.lane].color);
-        let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
-        let pill = vg::Rect::from_xywh(
-            b.x + b.w * 0.5 - 2.0 * s,
-            b.y + 14.0 * s,
-            4.0 * s,
-            b.h - 14.0 * s,
-        );
-        let rr = gfx::rrect(pill, 2.0 * s);
-        canvas.draw_rrect(
-            rr,
-            &gfx::vgrad(pill, color.lighten(0.1), color.darken(0.35)),
-        );
-        draw_light(
-            canvas,
-            b.x + b.w * 0.5,
-            b.y + 5.0 * s,
-            3.5 * s,
-            color,
-            light,
-            s,
-        );
-    }
-}
-
-/// Builds the track header column (composed from stock views + stylesheet).
+/// Builds the track header column: the empty band cell beside the ruler,
+/// then one [`TrackRow`] per lane.
 pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
     VStack::new(cx, |cx| {
-        HStack::new(cx, |cx| {
-            Label::new(cx, "TRACKS").class("section-title");
-        })
-        .class("ruler-spacer");
-        let lanes = s.arrangement.with_untracked(|a| a.lanes.clone());
-        for (i, lane) in lanes.iter().enumerate() {
-            let selected_lane = s
-                .arrangement
-                .map(move |a| a.first_selected().map(|c| c.lane) == Some(i));
-            HStack::new(cx, |cx| {
-                LaneBadge::new(cx, s, i);
-                VStack::new(cx, |cx| {
-                    Label::new(cx, lane.name).class("name");
-                    let chip = if i >= 5 { "VRC6" } else { "2A03" };
-                    Label::new(cx, chip).class("chipname");
-                })
-                .gap(Pixels(3.0))
-                .height(Auto)
-                .width(Stretch(1.0));
-                let mute = s.mute.map(move |m| m & (1 << i) != 0);
-                let solo = s.solo.map(move |m| m & (1 << i) != 0);
-                Button::new(cx, |cx| Label::new(cx, "M"))
-                    .class("btn")
-                    .class("small")
-                    .toggle_class("checked", mute)
-                    .on_press(move |cx| cx.emit(crate::AppEvent::ToggleMute(i)));
-                Button::new(cx, |cx| Label::new(cx, "S"))
-                    .class("btn")
-                    .class("small")
-                    .toggle_class("checked", solo)
-                    .on_press(move |cx| cx.emit(crate::AppEvent::ToggleSolo(i)));
-            })
-            .class("track-header")
-            .height(s.lane_h.map(|h| Pixels(*h)))
-            .toggle_class("compact", s.lane_h.map(|h| *h < state::LANE_H_NORMAL))
-            .toggle_class("selected", selected_lane);
+        Element::new(cx).class("band-cell");
+        let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
+        for i in 0..lanes {
+            TrackRow::new(cx, s, i).height(s.lane_h.map(|h| Pixels(*h)));
         }
     })
-    .class("track-headers")
+    .class("track-column")
 }

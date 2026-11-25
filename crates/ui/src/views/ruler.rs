@@ -35,6 +35,7 @@ impl Ruler {
         .cursor(CursorIcon::Hand)
         .bind(s.transport, |mut h| h.needs_redraw())
         .bind(s.arrangement, |mut h| h.needs_redraw())
+        .bind(s.loop_on, |mut h| h.needs_redraw())
     }
 
     fn set_from_mouse(&self, cx: &mut EventContext) {
@@ -90,6 +91,7 @@ impl View for Ruler {
             self.s.transport.with_untracked(|t| t.loop_end_ticks),
         );
         let ph = self.s.transport.with_untracked(|t| t.playhead_ticks);
+        let loop_on = self.s.loop_on.get_untracked();
 
         canvas.save();
         canvas.clip_rect(rect, None, None);
@@ -104,6 +106,7 @@ impl View for Ruler {
             view.px_per_tick.to_bits().hash(&mut h);
             view.scroll_ticks.to_bits().hash(&mut h);
             loop_end.to_bits().hash(&mut h);
+            loop_on.hash(&mut h);
             h.finish()
         };
         let mut layer = self.layer.borrow_mut();
@@ -114,7 +117,7 @@ impl View for Ruler {
                 .map(|mut surface| {
                     let lc = surface.canvas();
                     lc.translate((-rect.left, -rect.top));
-                    draw_static(lc, rect, s, &view, loop_end);
+                    draw_static(lc, rect, s, &view, loop_end, loop_on);
                     (key, surface.image_snapshot())
                 });
         }
@@ -122,7 +125,7 @@ impl View for Ruler {
             Some((_, img)) => {
                 canvas.draw_image(img, (rect.left, rect.top), None);
             }
-            None => draw_static(canvas, rect, s, &view, loop_end),
+            None => draw_static(canvas, rect, s, &view, loop_end, loop_on),
         }
         drop(layer);
 
@@ -144,43 +147,61 @@ impl View for Ruler {
     }
 }
 
-/// Background, loop band, bar/beat ticks, labels and bottom divider.
-fn draw_static(canvas: &Canvas, rect: vg::Rect, s: f32, view: &Viewport, loop_end: f64) {
-    canvas.draw_rect(
-        rect,
-        &gfx::vgrad(rect, Rgba::hex(0x1B1E26), Rgba::hex(0x15171D)),
-    );
+/// Bar label size and baseline (logical px).
+const LABEL_PX: f32 = 10.0;
+const LABEL_BASELINE: f32 = 20.0;
+/// Tick heights from the bottom edge (logical px).
+const TICK_MAJOR: f32 = 8.0;
+const TICK_MINOR: f32 = 4.0;
 
-    // Loop region band.
+/// Background, loop band, bar/beat ticks, labels and bottom divider.
+fn draw_static(
+    canvas: &Canvas,
+    rect: vg::Rect,
+    s: f32,
+    view: &Viewport,
+    loop_end: f64,
+    loop_on: bool,
+) {
+    // The band: same gradient and top hairline as the cell beside it.
+    canvas.draw_rect(rect, &gfx::vgrad(rect, BAND_TOP, BAND_BOTTOM));
+    canvas.draw_rect(vg::Rect::from_xywh(rect.left, rect.top, rect.width(), s), &gfx::fill(LINE));
+
+    // Loop region: a thin lit rail along the top.
     let lx0 = rect.left + view.tick_to_x(0.0) as f32 * s;
     let lx1 = rect.left + view.tick_to_x(loop_end) as f32 * s;
     let band = vg::Rect::from_ltrb(
         lx0.max(rect.left),
-        rect.top + 3.0 * s,
+        rect.top + 4.0 * s,
         lx1.min(rect.right),
-        rect.top + 7.0 * s,
+        rect.top + 6.0 * s,
     );
     if band.width() > 0.0 {
-        canvas.draw_rrect(
-            gfx::rrect(band, 2.0 * s),
-            &gfx::fill(ACCENT.with_alpha(0.35)),
-        );
+        let c = if loop_on { ACCENT.with_alpha(0.35) } else { Rgba::white(0.06) };
+        canvas.draw_rrect(gfx::rrect(band, 1.0 * s), &gfx::fill(c));
+        if loop_on && lx1 < rect.right {
+            // End cap.
+            canvas.draw_rect(
+                vg::Rect::from_xywh(lx1.round() - s, rect.top + 4.0 * s, s, 8.0 * s),
+                &gfx::fill(ACCENT.with_alpha(0.8)),
+            );
+        }
     }
 
     let ppb = view.px_per_bar();
     let step = label_step(ppb);
     let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
     let bars_visible = (rect.width() as f64 / s as f64 / ppb).ceil() as i64 + 2;
-    let f = gfx::font(Face::Mono, 10.0 * s);
-    let tick = gfx::fill(TEXT_LO.with_alpha(0.5));
-    let tick_minor = gfx::fill(TEXT_LO.with_alpha(0.25));
+    let f = gfx::font(Face::Medium, LABEL_PX * s);
+    let tick = gfx::fill(Rgba::hex(0x3A3A3A));
+    let tick_minor = gfx::fill(Rgba::hex(0x262626));
     for bar in first_bar.max(0)..first_bar + bars_visible {
         let x =
             (rect.left + view.tick_to_x((bar as u32 * TICKS_PER_BAR) as f64) as f32 * s).round();
         let major = (bar as u32).is_multiple_of(step);
-        let h = if major { 10.0 } else { 6.0 } * s;
+        let h = if major { TICK_MAJOR } else { TICK_MINOR } * s;
         canvas.draw_rect(
-            vg::Rect::from_xywh(x, rect.bottom - h, s, h),
+            vg::Rect::from_xywh(x, rect.bottom - s - h, s, h),
             if major { &tick } else { &tick_minor },
         );
         if major {
@@ -188,8 +209,8 @@ fn draw_static(canvas: &Canvas, rect: vg::Rect, s: f32, view: &Viewport, loop_en
             gfx::draw_text(
                 canvas,
                 &label,
-                x + 4.0 * s,
-                rect.top + 19.0 * s,
+                (x + 4.0 * s).round(),
+                (rect.top + LABEL_BASELINE * s).round(),
                 &f,
                 TEXT_LO,
             );
@@ -199,17 +220,17 @@ fn draw_static(canvas: &Canvas, rect: vg::Rect, s: f32, view: &Viewport, loop_en
             for beat in 1..BEATS_PER_BAR {
                 let bx = (x + (beat * PPQ) as f32 * view.px_per_tick as f32 * s).round();
                 canvas.draw_rect(
-                    vg::Rect::from_xywh(bx, rect.bottom - 3.0 * s, s, 3.0 * s),
+                    vg::Rect::from_xywh(bx, rect.bottom - s - TICK_MINOR * s * 0.5, s, TICK_MINOR * s * 0.5),
                     &tick_minor,
                 );
             }
         }
     }
 
-    // Bottom divider.
+    // Bottom edge: the dark line above the first track row's hairline.
     canvas.draw_rect(
         vg::Rect::from_xywh(rect.left, rect.bottom - s, rect.width(), s),
-        &gfx::fill(Rgba::black(0.5)),
+        &gfx::fill(Rgba::hex(0x090909)),
     );
 }
 
@@ -232,10 +253,14 @@ fn render_handle(s: f32) -> Option<vg::Image> {
     pb.line_to((cx - w, bottom - 6.0 * s));
     pb.close();
     let path = pb.detach();
-    let mut glow = gfx::fill(ACCENT.with_alpha(0.6));
+    let mut glow = gfx::fill(ACCENT.with_alpha(0.5));
     glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 3.0 * s, false));
     c.draw_path(&path, &glow);
-    let mut p = gfx::fill(Rgba::hex(0xD9D0FF));
+    let mut p = gfx::vgrad(
+        vg::Rect::from_xywh(cx - w, bottom - h, 2.0 * w, h),
+        ACCENT.lighten(0.25),
+        ACCENT.darken(0.1),
+    );
     p.set_path_effect(vg::PathEffect::corner_path(1.5 * s));
     c.draw_path(&path, &p);
     Some(surface.image_snapshot())

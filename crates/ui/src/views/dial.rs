@@ -201,7 +201,7 @@ impl View for Dial {
         canvas.draw_arc(bevel, START_DEG, SWEEP_DEG, false, &track);
         track.set_color4f(BG_INSET.c4f(), None);
         canvas.draw_arc(oval, START_DEG, SWEEP_DEG, false, &track);
-        let mut track_in = gfx::stroke(Rgba::hex(0x15171C), ARC_W * 0.4 * s);
+        let mut track_in = gfx::stroke(Rgba::hex(0x171717), ARC_W * 0.4 * s);
         track_in.set_stroke_cap(vg::PaintCap::Round);
         canvas.draw_arc(
             oval.with_offset((0.0, 0.6 * s)),
@@ -252,9 +252,9 @@ impl View for Dial {
             (cxp - r * 0.35, cyp - r * 0.45),
             r * 1.7,
             &[
-                Rgba::hex(0x4A505E).lighten(lift),
-                Rgba::hex(0x2B2F39).lighten(lift),
-                Rgba::hex(0x1A1C23),
+                Rgba::hex(0x505050).lighten(lift),
+                Rgba::hex(0x2F2F2F).lighten(lift),
+                Rgba::hex(0x1C1C1C),
             ],
             Some(&[0.0, 0.5, 1.0]),
         ));
@@ -317,7 +317,7 @@ impl View for Dial {
         pglow.set_stroke_cap(vg::PaintCap::Round);
         pglow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 2.0 * s, false));
         canvas.draw_line(p0, p1, &pglow);
-        let mut ptr = gfx::stroke(Rgba::hex(0xF2F3F7), 2.0 * s);
+        let mut ptr = gfx::stroke(Rgba::hex(0xEDEDED), 2.0 * s);
         ptr.set_stroke_cap(vg::PaintCap::Round);
         canvas.draw_line(p0, p1, &ptr);
 

@@ -64,7 +64,7 @@ impl View for StatsOverlay {
         let rect: vg::Rect = b.into();
         let rr = gfx::rrect(rect, 8.0 * s);
         gfx::drop_shadow(canvas, &rr, 0.0, 4.0 * s, 14.0 * s, 0.0, Rgba::black(0.5));
-        canvas.draw_rrect(rr, &gfx::fill(Rgba::hex(0x0B0C10).with_alpha(0.94)));
+        canvas.draw_rrect(rr, &gfx::fill(Rgba::hex(0x0C0C0C).with_alpha(0.94)));
         gfx::inner_border(canvas, &rr, s, ACCENT.with_alpha(0.45));
 
         let f = gfx::font(Face::MonoMedium, 11.0 * s);

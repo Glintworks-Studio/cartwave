@@ -59,7 +59,7 @@ impl View for MeterBank {
             canvas.draw_rrect(hl, &gfx::fill(Rgba::white(0.06)));
             canvas.draw_rrect(
                 rr,
-                &gfx::vgrad(well, Rgba::hex(0x06070A), Rgba::hex(0x0C0D11)),
+                &gfx::vgrad(well, Rgba::hex(0x070707), Rgba::hex(0x0D0D0D)),
             );
 
             let lvl = m.level[i].clamp(0.0, 1.0);
@@ -110,7 +110,7 @@ impl View for MeterBank {
             // row every SEG px, counted up from the bottom) instead of ~50 rects.
             let period = SEG * s;
             let gap_h = s.max(1.0);
-            let gap_col = Rgba::hex(0x07080B).with_alpha(0.8);
+            let gap_col = Rgba::hex(0x080808).with_alpha(0.8);
             let clear = gap_col.with_alpha(0.0);
             let edge = 1.0 - gap_h / period;
             let base = inner.bottom.round();

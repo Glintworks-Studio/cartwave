@@ -25,14 +25,12 @@ use crate::notes::{Note, RowKind};
 use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
+    chrome::{Key, KeyAction, PillKind, SpectrumBox, StatPill, TimeCapsule},
     dial::Dial,
     piano_roll::PianoRoll,
     meter::MeterBank,
     overlay::StatsOverlay,
     ruler::Ruler,
-    text_field::{FieldKind, ScrubField},
-    transport::{GlyphKind, TransportGlyph},
-    visualizer::ChannelLights,
 };
 
 /// All reactive application state. Signals are cheap `Copy` handles.
@@ -68,7 +66,19 @@ pub struct Signals {
     pub status: Signal<String>,
     /// The last session crashed and left a recovery file.
     pub recovery_offer: Signal<bool>,
+    /// (audio callback load %, output sample rate Hz) for the CPU / kHz pills.
+    /// Refreshed at most once a second so an idle app stays idle.
+    pub audio_load: Signal<(u32, u32)>,
+    /// The output filter's name, for the FILTER pill.
+    pub filter_label: Signal<&'static str>,
+    /// The song loops at its loop end (the capsule's loop light).
+    pub loop_on: Signal<bool>,
+    /// The bottom inspector (device panel) is open: a clip is selected.
+    pub inspector: Signal<bool>,
 }
+
+/// Loop end sent to the engine while looping is off: far past any song.
+pub const NO_LOOP_TICKS: f64 = 1.0e12;
 
 pub struct AppState {
     pub s: Signals,
@@ -126,6 +136,8 @@ pub struct AppState {
     loop_end_saved: f64,
     /// The engine is looping over the open clip.
     clip_looping: bool,
+    /// When the CPU / kHz pills were last refreshed.
+    last_load: Option<Instant>,
 }
 
 pub enum AppEvent {
@@ -139,6 +151,8 @@ pub enum AppEvent {
     SetDial(usize, f32),
     CycleChip,
     CycleSnap,
+    /// The capsule's loop light: loop the song at its loop end, or play on.
+    ToggleLoop,
     ToggleStats,
     ToggleStress,
     CycleFrameCap,
@@ -233,6 +247,7 @@ impl Model for AppState {
                 if !self.filter_manual {
                     self.filter = FilterMode::default_for(on);
                     self.send(Command::Filter(self.filter));
+                    self.s.filter_label.set(self.filter.label());
                     self.last_audio_stats = None;
                 }
             }
@@ -252,9 +267,15 @@ impl Model for AppState {
                 self.filter = all[(i + 1) % all.len()];
                 self.filter_manual = true;
                 self.send(Command::Filter(self.filter));
+                self.s.filter_label.set(self.filter.label());
                 self.last_audio_stats = None;
             }
             AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
+            AppEvent::ToggleLoop => {
+                self.s.loop_on.update(|l| *l = !*l);
+                let end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
+                self.send(Command::LoopEnd(self.engine_loop_end(end)));
+            }
             AppEvent::ToggleStats => self.s.stats.update(|s| s.visible = !s.visible),
             AppEvent::CycleFrameCap => {
                 self.cap = self.cap.next();
@@ -489,7 +510,7 @@ impl AppState {
                     tr.playhead_ticks = engine::chip::player::wrap_loop(
                         tr.playhead_ticks,
                         tr.loop_start_ticks,
-                        tr.loop_end_ticks,
+                        self.engine_loop_end(tr.loop_end_ticks),
                     );
                 }
             }
@@ -538,6 +559,16 @@ impl AppState {
 }
 
 impl AppState {
+    /// The loop end the engine should use: the song's, or none while the
+    /// loop light is off (a clip loop in the piano roll always loops).
+    fn engine_loop_end(&self, end: f64) -> f64 {
+        if self.s.loop_on.get_untracked() || self.clip_looping {
+            end
+        } else {
+            NO_LOOP_TICKS
+        }
+    }
+
     fn send(&mut self, c: Command) {
         if let Some(e) = self.engine.as_mut() {
             e.send(c);
@@ -584,6 +615,8 @@ impl AppState {
                 self.s.lane_sel.set(l);
             }
         }
+        let any = self.s.arrangement.with_untracked(|a| !a.selection.is_empty());
+        self.s.inspector.set_if_changed(any);
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -627,6 +660,16 @@ impl AppState {
             use std::sync::atomic::Ordering::Relaxed;
             let sh = e.shared();
             let (_, mean, p99, max) = sh.callback_cost();
+            // CPU pill: mean callback time, % of the buffer period.
+            if self
+                .last_load
+                .is_none_or(|t| now - t >= Duration::from_secs(1))
+            {
+                self.last_load = Some(now);
+                // At least 1% once audio runs, so the pill never reads "0%".
+                let pct = (mean.round() as u32).clamp(1, 999);
+                self.s.audio_load.set_if_changed((pct, e.sample_rate()));
+            }
             let running = sh.stream_running.load(Relaxed);
             let stats = AudioStats {
                 device: e.device_info(),
@@ -800,6 +843,7 @@ pub fn register_fonts(cx: &mut Context) {
         INTER_REGULAR,
         INTER_MEDIUM,
         INTER_SEMIBOLD,
+        INTER_BOLD,
         MONO_REGULAR,
         MONO_MEDIUM,
     ] {
@@ -828,11 +872,15 @@ pub fn build_ui(cx: &mut Context) {
     // The default chip; the default output filter follows it.
     let chip = SoundChip::WithVrc6;
     let s = Signals {
-        arrangement: Signal::new(mock::demo_arrangement()),
+        // Opens with nothing selected: the full-height arrangement of the prototype.
+        arrangement: Signal::new(state::Arrangement {
+            selection: Vec::new(),
+            ..mock::demo_arrangement()
+        }),
         transport: Signal::new(Transport {
             playing: false,
             record_armed: false,
-            bpm: 150.0,
+            bpm: Transport::DEFAULT_BPM,
             playhead_ticks: 0.0,
             loop_end_ticks: (32 * TICKS_PER_BAR) as f64,
             loop_start_ticks: 0.0,
@@ -854,6 +902,10 @@ pub fn build_ui(cx: &mut Context) {
         file_path: Signal::new(String::new()),
         status: Signal::new(String::new()),
         recovery_offer: Signal::new(false),
+        audio_load: Signal::new((0, 0)),
+        filter_label: Signal::new(""),
+        loop_on: Signal::new(true),
+        inspector: Signal::new(false),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -903,18 +955,21 @@ pub fn build_ui(cx: &mut Context) {
         status_until: None,
         loop_end_saved: (32 * TICKS_PER_BAR) as f64,
         clip_looping: false,
+        last_load: None,
     };
     if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
         state.s.recovery_offer.set(true);
     }
+    state.s.filter_label.set(state.filter.label());
     state.start_engine();
     state.apply_test_project();
     state.build(cx);
 
     VStack::new(cx, |cx| {
-        transport_bar(cx, s);
+        top_bar(cx, s);
         HStack::new(cx, |cx| {
             track_headers(cx, s);
+            Element::new(cx).class("col-divider");
             VStack::new(cx, |cx| {
                 Ruler::new(cx, s).height(Pixels(theme::tokens::RULER_HEIGHT));
                 ArrangementView::new(cx, s);
@@ -922,7 +977,7 @@ pub fn build_ui(cx: &mut Context) {
             .width(Stretch(1.0))
             .overflow(Overflow::Hidden);
         })
-        .class("panel")
+        .class("main")
         .height(s.lane_h.map(|h| {
             if *h < LANE_H_NORMAL {
                 // Compact lanes: the arrangement takes what it needs and the
@@ -933,16 +988,22 @@ pub fn build_ui(cx: &mut Context) {
             }
         }))
         .overflow(Overflow::Hidden);
+        // Bottom panel: the piano roll while a clip is open, else the device
+        // inspector while a clip is selected, else nothing (the prototype's
+        // full-height arrangement).
         Binding::new(cx, s.piano_open, move |cx| {
             if s.piano_open.get() {
                 piano_panel(cx, s);
             } else {
-                device_panel(cx, s);
+                Binding::new(cx, s.inspector, move |cx| {
+                    if s.inspector.get() {
+                        device_panel(cx, s);
+                    }
+                });
             }
         });
     })
-    .padding(Pixels(10.0))
-    .gap(Pixels(10.0));
+    .class("shell");
 
     StatsOverlay::new(cx, s);
 }
@@ -964,7 +1025,7 @@ impl AppState {
         }
         let tr = self.s.transport.get_untracked();
         self.send(Command::Bpm(tr.bpm as f64));
-        self.send(Command::LoopEnd(tr.loop_end_ticks));
+        self.send(Command::LoopEnd(self.engine_loop_end(tr.loop_end_ticks)));
         self.send(Command::Filter(self.filter));
         if let Some(g) = self.tests.gain {
             self.send(Command::Gain(g));
@@ -999,112 +1060,93 @@ impl AppState {
     }
 }
 
-fn transport_bar(cx: &mut Context, s: Signals) {
+/// Split-pill widths (logical px): label segment and whole pill, per column.
+const PILL_TEMPO_LABEL_W: f32 = 44.0;
+const PILL_TEMPO_W: f32 = 92.0;
+const PILL_CHIP_LABEL_W: f32 = 52.0;
+const PILL_CHIP_W: f32 = 132.0;
+const PILL_STAT_LABEL_W: f32 = 32.0;
+/// Word keys in the top bar (logical px).
+const WORD_KEY_W: f32 = 44.0;
+
+/// The top bar: file keys and project pills on the left, the transport
+/// capsule centred, the spectrum and CPU / kHz pills on the right.
+fn top_bar(cx: &mut Context, s: Signals) {
+    use theme::tokens::{BOX_H, BOX_W, KEY_SIZE, PILL_H, PILL_W};
     HStack::new(cx, |cx| {
-        let play_checked = s.transport.map(|t| t.playing);
-        Button::new(cx, |cx| TransportGlyph::new(cx, GlyphKind::Play, s))
-            .class("btn")
-            .class("icon")
-            .toggle_class("checked", play_checked)
-            .on_press(|cx| cx.emit(AppEvent::TogglePlay));
-        Button::new(cx, |cx| TransportGlyph::new(cx, GlyphKind::Stop, s))
-            .class("btn")
-            .class("icon")
-            .on_press(|cx| cx.emit(AppEvent::Stop));
-        let rec = s.transport.map(|t| t.record_armed);
-        Button::new(cx, |cx| TransportGlyph::new(cx, GlyphKind::Record, s))
-            .class("btn")
-            .class("icon")
-            .class("record")
-            .toggle_class("checked", rec)
-            .on_press(|cx| cx.emit(AppEvent::ToggleRecord));
-
-        Element::new(cx).class("divider-v");
-
-        Label::new(cx, "BPM").class("field-label");
-        ScrubField::new(cx, s, FieldKind::Bpm).width(Pixels(84.0));
-
-        Label::new(cx, "POS").class("field-label");
-        ScrubField::new(cx, s, FieldKind::Position).width(Pixels(112.0));
-
-        Element::new(cx).class("divider-v");
-
-        Label::new(cx, "SNAP").class("field-label");
-        let snap = s.arrangement.map(|a| a.snap.label());
-        Button::new(cx, |cx| Label::new(cx, snap))
-            .class("btn")
-            .width(Pixels(60.0))
-            .on_press(|cx| cx.emit(AppEvent::CycleSnap));
-
-        Element::new(cx).class("divider-v");
-
-        // File: a path field (no native dialogs yet; PIANOROLL.md §5).
-        Label::new(cx, "FILE").class("field-label");
+        // Left
         HStack::new(cx, |cx| {
-            Textbox::new(cx, s.file_path)
-                .placeholder("path\\to\\song.chipdaw")
-                .on_edit(|cx, t| cx.emit(AppEvent::SetFilePath(t)))
-                .on_submit(|cx, t, enter| {
-                    cx.emit(AppEvent::SetFilePath(t));
-                    if enter {
-                        cx.emit(AppEvent::SaveProject);
-                    }
-                })
-                .class("path-field");
-        })
-        .class("field")
-        .width(Pixels(140.0));
-        for (label, ev) in [("New", 0u8), ("Open", 1), ("Save", 2), ("Save As", 3)] {
-            Button::new(cx, move |cx| Label::new(cx, label))
-                .class("btn")
-                .width(Pixels(46.0))
-                .on_press(move |cx| {
-                    cx.emit(match ev {
-                        0 => AppEvent::NewProject,
-                        1 => AppEvent::OpenProject,
-                        2 => AppEvent::SaveProject,
-                        _ => AppEvent::SaveProjectAs,
-                    })
-                });
-        }
-        Label::new(cx, s.status).class("field-label").class("status-msg");
-        Binding::new(cx, s.recovery_offer, move |cx| {
-            if s.recovery_offer.get() {
-                Label::new(cx, "Last session didn't close cleanly:").class("field-label");
-                Button::new(cx, |cx| Label::new(cx, "Recover"))
-                    .class("btn")
-                    .on_press(|cx| cx.emit(AppEvent::RecoverAccept));
-                Button::new(cx, |cx| Label::new(cx, "Discard"))
-                    .class("btn")
-                    .on_press(|cx| cx.emit(AppEvent::RecoverDiscard));
+            for (label, action) in [("NEW", KeyAction::New), ("OPEN", KeyAction::Open), ("SAVE", KeyAction::Save)] {
+                Key::new(cx, s, label, action)
+                    .width(Pixels(WORD_KEY_W))
+                    .height(Pixels(KEY_SIZE));
             }
-        });
+            Element::new(cx).class("bar-gap");
+            VStack::new(cx, |cx| {
+                StatPill::new(cx, s, PillKind::Bpm, PILL_TEMPO_LABEL_W)
+                    .width(Pixels(PILL_TEMPO_W))
+                    .height(Pixels(PILL_H));
+                StatPill::new(cx, s, PillKind::Snap, PILL_TEMPO_LABEL_W)
+                    .width(Pixels(PILL_TEMPO_W))
+                    .height(Pixels(PILL_H));
+            })
+            .class("pill-stack");
+            VStack::new(cx, |cx| {
+                StatPill::new(cx, s, PillKind::Chip, PILL_CHIP_LABEL_W)
+                    .width(Pixels(PILL_CHIP_W))
+                    .height(Pixels(PILL_H));
+                StatPill::new(cx, s, PillKind::Filter, PILL_CHIP_LABEL_W)
+                    .width(Pixels(PILL_CHIP_W))
+                    .height(Pixels(PILL_H));
+            })
+            .class("pill-stack");
+            Element::new(cx).class("bar-gap");
+            Label::new(cx, s.status).class("bar-status");
+            Binding::new(cx, s.recovery_offer, move |cx| {
+                if s.recovery_offer.get() {
+                    Label::new(cx, "Last session didn't close cleanly").class("bar-status");
+                    Key::new(cx, s, "RECOVER", KeyAction::Recover)
+                        .width(Pixels(64.0))
+                        .height(Pixels(KEY_SIZE));
+                    Key::new(cx, s, "DISCARD", KeyAction::Discard)
+                        .width(Pixels(64.0))
+                        .height(Pixels(KEY_SIZE));
+                }
+            });
+        })
+        .class("bar-side")
+        .class("left");
 
-        Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
+        TimeCapsule::new(cx, s)
+            .width(Pixels(BOX_W))
+            .height(Pixels(BOX_H));
 
-        ChannelLights::new(cx, s)
-            .width(Pixels(200.0))
-            .height(Pixels(32.0));
-
-        Element::new(cx).class("divider-v");
-
-        // Only shows text when the audio device has a problem.
-        Label::new(cx, s.audio_msg).class("field-label").class("audio-msg");
-
-        Label::new(cx, "CHIP").class("field-label");
-        let chip = s.chip.map(|c| format!("{}  \u{25BE}", c.label()));
-        Button::new(cx, |cx| Label::new(cx, chip))
-            .class("btn")
-            .width(Pixels(128.0))
-            .on_press(|cx| cx.emit(AppEvent::CycleChip));
+        // Right
+        HStack::new(cx, |cx| {
+            // Only shows text when the audio device has a problem.
+            Label::new(cx, s.audio_msg).class("bar-status");
+            SpectrumBox::new(cx, s)
+                .width(Pixels(BOX_W))
+                .height(Pixels(BOX_H));
+            VStack::new(cx, |cx| {
+                StatPill::new(cx, s, PillKind::Cpu, PILL_STAT_LABEL_W)
+                    .width(Pixels(PILL_W))
+                    .height(Pixels(PILL_H));
+                StatPill::new(cx, s, PillKind::Khz, PILL_STAT_LABEL_W)
+                    .width(Pixels(PILL_W))
+                    .height(Pixels(PILL_H));
+            })
+            .class("pill-stack");
+        })
+        .class("bar-side")
+        .class("right");
     })
-    .class("panel")
-    .class("transport");
+    .class("topbar");
 }
 
 /// Dial cell width and spacing (logical px); must match `.dial` in style.css.
 const DIAL_W: f32 = 84.0;
-const DIAL_GAP: f32 = 6.0;
+const DIAL_GAP: f32 = 8.0;
 
 fn device_panel(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
@@ -1336,7 +1378,7 @@ impl AppState {
         self.clip_looping = false;
         self.send(Command::Bpm(p.bpm as f64));
         self.send(Command::LoopStart(0.0));
-        self.send(Command::LoopEnd(p.loop_end_ticks as f64));
+        self.send(Command::LoopEnd(self.engine_loop_end(p.loop_end_ticks as f64)));
         self.s.chip.set(p.chip);
         self.send(Command::Vrc6(p.chip == SoundChip::WithVrc6));
         self.filter = p.filter;
@@ -1480,7 +1522,7 @@ impl AppState {
         let (start, end) = want.unwrap_or((0.0, self.loop_end_saved));
         if (tr.loop_start_ticks, tr.loop_end_ticks) != (start, end) {
             self.send(Command::LoopStart(start));
-            self.send(Command::LoopEnd(end));
+            self.send(Command::LoopEnd(self.engine_loop_end(end)));
             let outside = tr.playhead_ticks < start || tr.playhead_ticks >= end;
             self.s.transport.update(|t| {
                 t.loop_start_ticks = start;

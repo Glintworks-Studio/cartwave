@@ -51,6 +51,13 @@ fn luminance(c: Rgba) -> f32 {
     0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 }
 
+/// Clip body tints: the lane colour sunk into the neutral canvas greys, so
+/// colour reads from the header and the notes, as on the prototype's strips.
+const BODY_TOP: Rgba = Rgba::hex(0x222222);
+const BODY_BOTTOM: Rgba = Rgba::hex(0x0E0E0E);
+const BODY_TINT_TOP: f32 = 0.30;
+const BODY_TINT_BOTTOM: f32 = 0.22;
+
 /// Shared shadow pass, drawn for all clips before any bodies so neighbouring
 /// shadows never overlap a body.
 pub fn draw_clip_shadow(canvas: &Canvas, p: &ClipPaint) {
@@ -59,8 +66,8 @@ pub fn draw_clip_shadow(canvas: &Canvas, p: &ClipPaint) {
     let a = p.anim;
     // 1. Soft outer drop shadow, raised while dragging.
     let dy = (2.0 + 6.0 * a.drag) * s;
-    let blur = (8.0 + 12.0 * a.drag) * s;
-    let alpha = 0.32 + 0.18 * a.drag;
+    let blur = (6.0 + 12.0 * a.drag) * s;
+    let alpha = 0.45 + 0.15 * a.drag;
     gfx::drop_shadow(canvas, &rr, 0.0, dy, blur, 0.0, Rgba::black(alpha));
     // Selection glow in the lane colour.
     if a.selected > 0.01 {
@@ -69,9 +76,9 @@ pub fn draw_clip_shadow(canvas: &Canvas, p: &ClipPaint) {
             &rr,
             0.0,
             0.0,
-            14.0 * s,
-            1.5 * s,
-            p.color.lighten(0.15).with_alpha(0.75 * a.selected),
+            12.0 * s,
+            1.0 * s,
+            p.color.with_alpha(0.55 * a.selected),
         );
     }
 }
@@ -88,50 +95,49 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
         canvas.save_layer_alpha_f(r.with_outset((2.0 * s, 2.0 * s)), dragging_alpha);
     }
 
-    // Hover lifts brightness slightly.
-    let base = p.color.lighten(0.07 * a.hover + 0.04 * a.selected);
+    // Hover and selection lift the colour slightly.
+    let lane = p.color.lighten(0.06 * a.hover + 0.04 * a.selected);
 
-    // 2. Base gradient: a deep tint of the lane colour, lighter at the top
-    // (about ±10% lightness so it reads as lit, not as a 2008 button).
-    let body = base.mix(BG_1, 0.5);
-    let top = body.lighten(0.04);
-    let bottom = body.darken(0.16);
-    canvas.draw_rrect(rr, &gfx::vgrad(r, top, bottom));
+    // 2. Body: lit from the top, sinking into the canvas.
+    let lift = 0.04 * a.hover + 0.03 * a.selected;
+    canvas.draw_rrect(
+        rr,
+        &gfx::vgrad(
+            r,
+            BODY_TOP.mix(lane, BODY_TINT_TOP).lighten(lift),
+            BODY_BOTTOM.mix(lane, BODY_TINT_BOTTOM),
+        ),
+    );
 
-    // Header strip: a lighter band holding the name.
+    // Header band in the full lane colour (lit from the top like the strips).
     let header_h = (CLIP_HEADER_HEIGHT * s).min(r.height());
     canvas.save();
     canvas.clip_rrect(rr, vg::ClipOp::Intersect, true);
     let header = vg::Rect::from_xywh(r.left, r.top, r.width(), header_h);
-    canvas.draw_rect(
-        header,
-        &gfx::vgrad(header, base.lighten(0.02), base.darken(0.10)),
-    );
+    canvas.draw_rect(header, &gfx::vgrad(header, lane.darken(0.02), lane.darken(0.22)));
     // Hairline under the header.
     canvas.draw_rect(
         vg::Rect::from_xywh(r.left, r.top + header_h - s, r.width(), s),
-        &gfx::fill(Rgba::black(0.14)),
+        &gfx::fill(Rgba::black(0.35)),
     );
 
-    // Header ink adapts to the lane colour; the body is always dark.
-    let dark_ink = luminance(base) > 0.42;
+    let dark_ink = luminance(lane) > 0.42;
     let ink = if dark_ink {
-        Rgba::hex(0x0B0C10).with_alpha(0.88)
+        Rgba::hex(0x0A0A0A).with_alpha(0.9)
     } else {
         Rgba::white(0.96)
     };
 
-    // Mini note preview.
+    // Mini note preview in the lane colour.
     if !p.notes.is_empty() && r.height() > header_h + 8.0 * s {
         let (lo, hi) = p.notes.iter().fold((u8::MAX, 0u8), |(lo, hi), n| {
             (lo.min(n.pitch), hi.max(n.pitch))
         });
         let span = (hi.saturating_sub(lo)).max(6) as f32;
         let area_top = r.top + header_h + 4.0 * s;
-        let area_bot = r.bottom - 5.0 * s;
-        let bar_h = (2.5 * s).max(((area_bot - area_top) / (span + 1.0)).min(3.5 * s));
-        let note_ink = base.lighten(0.25).with_alpha(0.85);
-        let paint = gfx::fill(note_ink);
+        let area_bot = r.bottom - 4.0 * s;
+        let bar_h = (2.0 * s).max(((area_bot - area_top) / (span + 1.0)).min(3.0 * s));
+        let paint = gfx::fill(lane.lighten(0.12).with_alpha(0.92));
         for n in p.notes {
             let x0 = r.left + n.start as f32 * p.px_per_tick;
             let x1 = r.left + (n.start + n.len).min(p.len_ticks) as f32 * p.px_per_tick;
@@ -149,23 +155,40 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
     }
 
     // Name.
-    if r.width() > 18.0 * s {
-        let f = gfx::font(Face::SemiBold, 10.5 * s);
-        let base_y = gfx::baseline_for_center(&f, r.top + header_h * 0.5);
-        let x = r.left.max(p.visible.0) + 7.0 * s;
-        gfx::draw_text_clipped(canvas, p.name, x, base_y, r.right - x - 5.0 * s, &f, ink);
+    if r.width() > 16.0 * s {
+        let f = gfx::font(Face::SemiBold, 10.0 * s);
+        let base_y = gfx::baseline_for_center(&f, r.top + header_h * 0.5).round();
+        let x = (r.left.max(p.visible.0) + 8.0 * s).round();
+        gfx::draw_text_clipped(canvas, p.name, x, base_y, r.right - x - 4.0 * s, &f, ink);
     }
 
     // 5. Subtle inner shadow at the bottom edge.
     canvas.restore();
-    gfx::inner_shadow(canvas, &rr, 0.0, -2.0 * s, 4.0 * s, Rgba::black(0.22));
+    gfx::inner_shadow(canvas, &rr, 0.0, -2.0 * s, 4.0 * s, Rgba::black(0.3));
 
-    // 3. 1px inner top highlight: "lit from above".
-    gfx::top_highlight(canvas, &rr, s, Rgba::white(0.16 + 0.08 * a.hover));
-
-    // 4. 1px inner border, darker than the base; brightens when selected.
-    let border = Rgba::black(0.38).mix(p.color.lighten(0.65).with_alpha(0.95), a.selected);
-    gfx::inner_border(canvas, &rr, s, border);
+    // 3 + 4. The gradient stroke: lane colour lit at the top, falling to a
+    // dark edge at the bottom; a centre-bright sheen along the top edge (the
+    // prototype's key stroke). Selection brightens the whole ring.
+    let sel = a.selected;
+    let top = lane.lighten(0.25 + 0.35 * sel).with_alpha(0.85 + 0.15 * sel);
+    let mid = lane.darken(0.35 - 0.25 * sel).with_alpha(0.75 + 0.2 * sel);
+    let bottom = Rgba::black(0.55).mix(lane.with_alpha(0.9), sel);
+    let mut ring = vg::Paint::default();
+    ring.set_anti_alias(true);
+    ring.set_shader(gfx::linear(
+        (r.left, r.top),
+        (r.left, r.bottom),
+        &[top, mid, bottom],
+        Some(&[0.0, header_h / r.height().max(1.0), 1.0]),
+    ));
+    gfx::ring(canvas, &rr, s, &ring);
+    gfx::top_sheen(
+        canvas,
+        &rr,
+        s,
+        top,
+        Rgba::white(0.55 + 0.25 * a.hover + 0.2 * sel),
+    );
 
     if layered {
         canvas.restore();

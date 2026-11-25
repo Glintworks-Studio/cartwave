@@ -885,7 +885,7 @@ impl View for PianoRoll {
                     let alpha = if playing { 0.95 } else { 0.6 };
                     canvas.draw_rect(
                         vg::Rect::from_xywh(x, rect.top, s, rect.height()),
-                        &gfx::fill(Rgba::hex(0xD9D0FF).with_alpha(alpha)),
+                        &gfx::fill(Rgba::hex(0xD8E47A).with_alpha(alpha)),
                     );
                 }
             }
@@ -918,9 +918,9 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         let black = matches!(kind, RowKind::Piano { .. }) && is_black_key(kind.pitch_of(row));
         let playable = kind.playable_row(row);
         let base = match (playable, black) {
-            (false, _) => Rgba::hex(0x0B0C0F),
-            (true, true) => Rgba::hex(0x15171D),
-            (true, false) => Rgba::hex(0x1B1E25),
+            (false, _) => Rgba::hex(0x0C0C0C),
+            (true, true) => Rgba::hex(0x171717),
+            (true, false) => Rgba::hex(0x1E1E1E),
         };
         canvas.draw_rect(vg::Rect::from_xywh(gx0, y, w - gx0, rh), &gfx::fill(base));
         // Row separators; stronger between octaves (B|C) on piano rows.
@@ -930,11 +930,11 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         // Keys / labels.
         let piano = matches!(kind, RowKind::Piano { .. });
         let key_col = match (playable, black) {
-            (false, _) => Rgba::hex(0x0E0F13),
-            (true, true) => Rgba::hex(0x202330),
+            (false, _) => Rgba::hex(0x0F0F0F),
+            (true, true) => Rgba::hex(0x242424),
             // Noise / DPCM rows are labels, not keys: dark, light text.
-            (true, false) if !piano => Rgba::hex(0x22252E),
-            (true, false) => Rgba::hex(0xC9CCD6),
+            (true, false) if !piano => Rgba::hex(0x252525),
+            (true, false) => Rgba::hex(0xCCCCCC),
         };
         let kx1 = if black { gx0 * 0.62 } else { gx0 - s };
         canvas.draw_rect(vg::Rect::from_ltrb(0.0, y, kx1, y + rh - s), &gfx::fill(key_col));
@@ -946,7 +946,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         if let (Some(l), true) = (label, rh >= 8.0 * s) {
             let ink = match (playable, black) {
                 (false, _) => TEXT_LO.with_alpha(0.5),
-                (true, false) if piano => Rgba::hex(0x30333D),
+                (true, false) if piano => Rgba::hex(0x333333),
                 _ => TEXT_HI,
             };
             let lx = if piano { gx0 - px(30.0) } else { px(6.0) };
@@ -1043,7 +1043,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         }
         let selected = p.sel.contains(&n.id);
         let vol = n.volume.unwrap_or(lane_vol) as f32 / notes::MAX_VOLUME as f32;
-        let body = if selected { color.lighten(0.35) } else { color.mix(Rgba::hex(0x1B1E25), 0.45 * (1.0 - vol)) };
+        let body = if selected { color.lighten(0.35) } else { color.mix(Rgba::hex(0x1E1E1E), 0.45 * (1.0 - vol)) };
         let r = vg::Rect::from_ltrb(x0.round(), (y + s).round(), (x1.round() - s).max(x0.round() + s), (y + px(m.row_h) - s).round());
         canvas.draw_rect(r, &gfx::fill(body));
         canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.top, r.left + s, r.bottom), &gfx::fill(Rgba::black(0.35)));
