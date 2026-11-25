@@ -161,11 +161,12 @@ the existing Inter faces).
   keep their full 60 px height and scroll vertically together when they don't fit:
   - the wheel scrolls them over the lanes or the headers;
   - Shift-wheel scrolls in time;
-  - a thin indicator shows the position;
+  - a thin draggable scrollbar on the right shows the position;
   - opening a clip scrolls its lane into view.
 
   The split is remembered, and a double-click on the handle restores the default
   (four lanes).
+- **Time scrollbar** along the bottom of the arrangement (always shown). It covers the song (clips and loop end) plus 4 bars. Drag the thumb, or click the track to jump. Both scrollbars are 4 px overlay pills that brighten on hover and while dragged.
 - Already broken before the redesign (the pre-redesign binary crashes too): resizing
   the window from another process with `SetWindowPos` panics in the vizia fork
   (`WinState::resize`, `new_surface_with_dimensions` returns `None`). Dragging the

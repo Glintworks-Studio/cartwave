@@ -66,7 +66,50 @@ pub struct Arrangement {
     /// Retained layer: lanes, grid and all settled clips, re-rendered only
     /// when its content hash changes (see `draw`).
     layer: RefCell<StaticLayer>,
+    /// Scrollbar thumb being dragged, and the scrollbar under the mouse.
+    sb_drag: Option<BarDrag>,
+    sb_hover: Option<Axis>,
 }
+
+/// Which scrollbar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Axis {
+    /// Time (bottom edge).
+    H,
+    /// Lanes (right edge), only while they overflow.
+    V,
+}
+
+/// A scrollbar's geometry along its axis, in logical px relative to the view.
+#[derive(Clone, Copy, Debug)]
+struct Bar {
+    axis: Axis,
+    track_start: f32,
+    track_len: f32,
+    thumb_start: f32,
+    thumb_len: f32,
+    /// The bar's position across its axis (its top or left edge).
+    cross: f32,
+    /// Scroll units (ticks or lane px) per px of thumb travel.
+    units_per_px: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BarDrag {
+    axis: Axis,
+    /// Mouse position along the axis at press, and the scroll value then.
+    press: f32,
+    start: f64,
+    units_per_px: f64,
+}
+
+/// Scrollbar thickness, inset from the edges, the hit band, and the shortest
+/// thumb (logical px); extra bars of room after the song's end.
+const BAR_THICK: f32 = 4.0;
+const BAR_INSET: f32 = 4.0;
+const BAR_HIT: f32 = 12.0;
+const BAR_MIN_THUMB: f32 = 24.0;
+const SONG_TAIL_BARS: u32 = 4;
 
 #[derive(Default)]
 struct StaticLayer {
@@ -87,6 +130,8 @@ impl Arrangement {
             last_draw: Cell::new(None),
             animating: animating.clone(),
             layer: RefCell::new(StaticLayer::default()),
+            sb_drag: None,
+            sb_hover: None,
         }
         .build(cx, |_| {})
         .navigable(true)
@@ -97,6 +142,7 @@ impl Arrangement {
         .bind(s.lane_h, |mut h| h.needs_redraw())
         .bind(s.loop_on, |mut h| h.needs_redraw())
         .bind(s.lane_scroll, |mut h| h.needs_redraw())
+        .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -384,6 +430,138 @@ impl Arrangement {
         self.set_cursor(cx, icon);
     }
 
+    /// Mouse position relative to the view, without the lane scroll.
+    fn view_mouse(cx: &EventContext) -> (f32, f32) {
+        let b = cx.bounds();
+        let s = cx.scale_factor();
+        ((cx.mouse().cursor_x - b.x) / s, (cx.mouse().cursor_y - b.y) / s)
+    }
+
+    /// The time scrollbar along the bottom (always shown) and the lane
+    /// scrollbar along the right (only while lanes overflow), for a view of
+    /// `w` x `h` logical px.
+    fn bars(&self, a: &state::Arrangement, w: f32, h: f32) -> (Bar, Option<Bar>) {
+        let v_max = self.s.lane_scroll_max.get_untracked();
+        let has_v = v_max > 0.0;
+        let corner = if has_v { BAR_INSET + BAR_THICK } else { 0.0 };
+
+        // Time: the song (clips and loop end) plus a tail, or as far as the
+        // view already reaches.
+        let ppt = a.view.px_per_tick;
+        let view_ticks = w as f64 / ppt;
+        let song_end = a
+            .clips
+            .iter()
+            .map(|c| c.end_ticks() as f64)
+            .fold(self.s.transport.with_untracked(|t| t.loop_end_ticks), f64::max);
+        let total = (song_end + (SONG_TAIL_BARS * TICKS_PER_BAR) as f64)
+            .max(a.view.scroll_ticks + view_ticks);
+        let len = (w - 2.0 * BAR_INSET - corner).max(1.0);
+        let thumb = (len * (view_ticks / total) as f32).clamp(BAR_MIN_THUMB.min(len), len);
+        let range = (total - view_ticks).max(0.0);
+        let t = if range > 0.0 { (a.view.scroll_ticks / range).clamp(0.0, 1.0) as f32 } else { 0.0 };
+        let hbar = Bar {
+            axis: Axis::H,
+            track_start: BAR_INSET,
+            track_len: len,
+            thumb_start: BAR_INSET + t * (len - thumb),
+            thumb_len: thumb,
+            cross: h - BAR_INSET - BAR_THICK,
+            units_per_px: if len > thumb { range / (len - thumb) as f64 } else { 0.0 },
+        };
+
+        let vbar = has_v.then(|| {
+            let content = a.lanes.len() as f32 * self.s.lane_h.get_untracked();
+            let len = (h - 2.0 * BAR_INSET - BAR_INSET - BAR_THICK).max(1.0);
+            let thumb = (len * h / content).clamp(BAR_MIN_THUMB.min(len), len);
+            let t = (self.s.lane_scroll.get_untracked() / v_max).clamp(0.0, 1.0);
+            Bar {
+                axis: Axis::V,
+                track_start: BAR_INSET,
+                track_len: len,
+                thumb_start: BAR_INSET + t * (len - thumb),
+                thumb_len: thumb,
+                cross: w - BAR_INSET - BAR_THICK,
+                units_per_px: if len > thumb { (v_max / (len - thumb)) as f64 } else { 0.0 },
+            }
+        });
+        (hbar, vbar)
+    }
+
+    /// The scrollbar under view-relative point (x, y), if any.
+    fn bar_at(&self, cx: &EventContext, x: f32, y: f32) -> Option<Bar> {
+        let s = cx.scale_factor();
+        let (w, h) = (cx.bounds().w / s, cx.bounds().h / s);
+        let (hb, vb) = self.s.arrangement.with_untracked(|a| self.bars(a, w, h));
+        if let Some(vb) = vb {
+            if x >= w - BAR_HIT && y >= vb.track_start && y <= vb.track_start + vb.track_len {
+                return Some(vb);
+            }
+        }
+        (y >= h - BAR_HIT && x >= hb.track_start && x <= hb.track_start + hb.track_len)
+            .then_some(hb)
+    }
+
+    fn scroll_value(&self, axis: Axis) -> f64 {
+        match axis {
+            Axis::H => self.s.arrangement.with_untracked(|a| a.view.scroll_ticks),
+            Axis::V => self.s.lane_scroll.get_untracked() as f64,
+        }
+    }
+
+    fn set_scroll(&self, cx: &mut EventContext, axis: Axis, v: f64) {
+        match axis {
+            Axis::H => self.s.arrangement.update(|a| a.view.scroll_ticks = v.max(0.0)),
+            Axis::V => {
+                let cur = self.s.lane_scroll.get_untracked();
+                cx.emit(crate::AppEvent::ScrollLanes(v as f32 - cur));
+            }
+        }
+    }
+
+    /// Mouse down on a scrollbar: grab the thumb, or jump so the thumb is
+    /// centred on the click and grab it there. Returns false if no bar was hit.
+    fn bar_press(&mut self, cx: &mut EventContext) -> bool {
+        let (x, y) = Self::view_mouse(cx);
+        let Some(bar) = self.bar_at(cx, x, y) else { return false };
+        let pos = if bar.axis == Axis::H { x } else { y };
+        let mut start = self.scroll_value(bar.axis);
+        let on_thumb = pos >= bar.thumb_start && pos <= bar.thumb_start + bar.thumb_len;
+        if !on_thumb {
+            let centre = bar.thumb_start + bar.thumb_len * 0.5;
+            start = (start + (pos - centre) as f64 * bar.units_per_px).max(0.0);
+            self.set_scroll(cx, bar.axis, start);
+        }
+        self.sb_drag = Some(BarDrag {
+            axis: bar.axis,
+            press: pos,
+            start,
+            units_per_px: bar.units_per_px,
+        });
+        cx.capture();
+        cx.needs_redraw();
+        true
+    }
+
+    fn bar_drag(&mut self, cx: &mut EventContext) {
+        let Some(d) = self.sb_drag else { return };
+        let (x, y) = Self::view_mouse(cx);
+        let pos = if d.axis == Axis::H { x } else { y };
+        let v = (d.start + (pos - d.press) as f64 * d.units_per_px).max(0.0);
+        self.set_scroll(cx, d.axis, v);
+    }
+
+    /// Hover over a scrollbar; returns true while the mouse is on one.
+    fn bar_hover(&mut self, cx: &mut EventContext) -> bool {
+        let (x, y) = Self::view_mouse(cx);
+        let axis = self.bar_at(cx, x, y).map(|b| b.axis);
+        if axis != self.sb_hover {
+            self.sb_hover = axis;
+            cx.needs_redraw();
+        }
+        axis.is_some()
+    }
+
     /// Lanes, grid and loop shading (the bottom of the retained layer).
     fn draw_background(
         &self,
@@ -453,7 +631,17 @@ impl View for Arrangement {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(MouseButton::Left) => {
-                self.on_press(cx);
+                if !self.bar_press(cx) {
+                    self.on_press(cx);
+                }
+                meta.consume();
+            }
+            WindowEvent::MouseDoubleClick(MouseButton::Left)
+                if {
+                    let (x, y) = Self::view_mouse(cx);
+                    self.bar_at(cx, x, y).is_some()
+                } =>
+            {
                 meta.consume();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
@@ -483,7 +671,15 @@ impl View for Arrangement {
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) => {
-                if self.drag.is_some() {
+                if self.sb_drag.is_some() {
+                    self.bar_drag(cx);
+                } else if self.drag.is_none() && self.bar_hover(cx) {
+                    // Over a scrollbar: no clip hover.
+                    if self.hover.take().is_some() {
+                        cx.needs_redraw();
+                    }
+                    self.set_cursor(cx, CursorIcon::Default);
+                } else if self.drag.is_some() {
                     self.on_drag(cx);
                     let icon = match self.drag.as_ref().map(|d| d.mode) {
                         Some(DragMode::Move) => CursorIcon::Grabbing,
@@ -495,11 +691,20 @@ impl View for Arrangement {
                 }
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
+                if self.sb_drag.take().is_some() {
+                    cx.release();
+                    cx.needs_redraw();
+                    self.bar_hover(cx);
+                    return;
+                }
                 self.on_release(cx);
                 self.update_hover(cx);
             }
             WindowEvent::MouseLeave if self.drag.is_none() => {
                 self.hover = None;
+                if self.sb_drag.is_none() {
+                    self.sb_hover = None;
+                }
                 cx.needs_redraw();
                 self.set_cursor(cx, CursorIcon::Default);
             }
@@ -797,20 +1002,35 @@ impl View for Arrangement {
                 );
             }
 
-            // Vertical scroll indicator while the lanes overflow.
-            let content_h = lanes_bottom - lanes_top;
-            if content_h > rect.height() + 0.5 {
-                let view_h = rect.height();
-                let thumb_h = (view_h * view_h / content_h).max(24.0 * s);
-                let t = (rect.top - lanes_top) / (content_h - view_h);
-                let ty = rect.top + t * (view_h - thumb_h);
-                let thumb = gfx::snap(vg::Rect::from_xywh(
-                    rect.right - SCROLLBAR_INSET * s - SCROLLBAR_W * s,
-                    ty,
-                    SCROLLBAR_W * s,
-                    thumb_h,
-                ));
-                canvas.draw_rrect(gfx::rrect(thumb, thumb.width() * 0.5), &gfx::fill(Rgba::white(0.2)));
+            // Scrollbars: time along the bottom, lanes along the right while
+            // they overflow. Thin pills that brighten on hover and drag.
+            let (hb, vb) = self.bars(a, rect.width() / s, rect.height() / s);
+            for bar in std::iter::once(hb).chain(vb) {
+                let (track, thumb) = match bar.axis {
+                    Axis::H => (
+                        vg::Rect::from_xywh(bar.track_start, bar.cross, bar.track_len, BAR_THICK),
+                        vg::Rect::from_xywh(bar.thumb_start, bar.cross, bar.thumb_len, BAR_THICK),
+                    ),
+                    Axis::V => (
+                        vg::Rect::from_xywh(bar.cross, bar.track_start, BAR_THICK, bar.track_len),
+                        vg::Rect::from_xywh(bar.cross, bar.thumb_start, BAR_THICK, bar.thumb_len),
+                    ),
+                };
+                let to_px = |r: vg::Rect| {
+                    gfx::snap(vg::Rect::from_xywh(
+                        rect.left + r.left * s,
+                        rect.top + r.top * s,
+                        r.width() * s,
+                        r.height() * s,
+                    ))
+                };
+                let (track, thumb) = (to_px(track), to_px(thumb));
+                let active = self.sb_drag.is_some_and(|d| d.axis == bar.axis);
+                let hot = self.sb_hover == Some(bar.axis);
+                let rad = BAR_THICK * 0.5 * s;
+                canvas.draw_rrect(gfx::rrect(track, rad), &gfx::fill(Rgba::white(0.04)));
+                let alpha = if active { 0.45 } else if hot { 0.32 } else { 0.18 };
+                canvas.draw_rrect(gfx::rrect(thumb, rad), &gfx::fill(Rgba::white(alpha)));
             }
         });
 
@@ -832,10 +1052,8 @@ impl View for Arrangement {
     }
 }
 
-/// Lane scroll per wheel notch, scroll indicator width and inset (logical px).
+/// Lane scroll per wheel notch (logical px).
 pub const LANE_SCROLL_PER_NOTCH: f32 = 60.0;
-const SCROLLBAR_W: f32 = 4.0;
-const SCROLLBAR_INSET: f32 = 4.0;
 
 // ───────────────────────────── Track headers ─────────────────────────────
 
