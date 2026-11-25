@@ -160,12 +160,12 @@ pub enum AppEvent {
     Undo,
     Redo,
     NewProject,
-    /// Save to the path in the file field (Ctrl+S).
+    /// Save to the current path (Ctrl+S); asks for one if there is none.
     SaveProject,
-    /// Load the project at the path in the file field.
+    /// Save under a new name: native save dialog (Ctrl+Shift+S).
+    SaveProjectAs,
+    /// Native open dialog (Ctrl+O).
     OpenProject,
-    /// Ctrl+Shift+S / Ctrl+O: put the cursor in the file field.
-    FocusFileField,
     SetFilePath(String),
     CopyNotes { cut: bool },
     PasteNotes,
@@ -316,8 +316,14 @@ impl Model for AppState {
                 self.set_status("New project".into());
             }
             AppEvent::SaveProject => self.save_project(),
+            AppEvent::SaveProjectAs => {
+                if let Some(path) = self.file_dialog().save_file() {
+                    self.s.file_path.set(path.display().to_string());
+                    self.save_project();
+                }
+            }
             AppEvent::OpenProject => {
-                let path = file::with_extension(&self.s.file_path.get_untracked());
+                let Some(path) = self.file_dialog().pick_file() else { return };
                 match file::load(&path) {
                     Ok(p) => {
                         self.load_project(p);
@@ -326,9 +332,6 @@ impl Model for AppState {
                     }
                     Err(e) => self.set_status(e),
                 }
-            }
-            AppEvent::FocusFileField => {
-                self.set_status("Type a path in FILE, then press Enter (save) or Open".into());
             }
             // Only on a real change: the field is bound to this signal, and setting
             // it unchanged re-fires the field's edit event (an endless loop).
@@ -376,9 +379,9 @@ impl Model for AppState {
                         Code::KeyZ if mods.shift() => Some(AppEvent::Redo),
                         Code::KeyZ => Some(AppEvent::Undo),
                         Code::KeyY => Some(AppEvent::Redo),
-                        Code::KeyS if mods.shift() => Some(AppEvent::FocusFileField),
+                        Code::KeyS if mods.shift() => Some(AppEvent::SaveProjectAs),
                         Code::KeyS => Some(AppEvent::SaveProject),
-                        Code::KeyO => Some(AppEvent::FocusFileField),
+                        Code::KeyO => Some(AppEvent::OpenProject),
                         Code::KeyN => Some(AppEvent::NewProject),
                         _ => None,
                     };
@@ -1048,8 +1051,8 @@ fn transport_bar(cx: &mut Context, s: Signals) {
                 .class("path-field");
         })
         .class("field")
-        .width(Pixels(170.0));
-        for (label, ev) in [("New", 0u8), ("Open", 1), ("Save", 2)] {
+        .width(Pixels(140.0));
+        for (label, ev) in [("New", 0u8), ("Open", 1), ("Save", 2), ("Save As", 3)] {
             Button::new(cx, move |cx| Label::new(cx, label))
                 .class("btn")
                 .width(Pixels(46.0))
@@ -1057,7 +1060,8 @@ fn transport_bar(cx: &mut Context, s: Signals) {
                     cx.emit(match ev {
                         0 => AppEvent::NewProject,
                         1 => AppEvent::OpenProject,
-                        _ => AppEvent::SaveProject,
+                        2 => AppEvent::SaveProject,
+                        _ => AppEvent::SaveProjectAs,
                     })
                 });
         }
@@ -1351,12 +1355,29 @@ impl AppState {
         self.last_audio_stats = None;
     }
 
-    fn save_project(&mut self) {
-        let text = self.s.file_path.get_untracked();
-        if text.trim().is_empty() {
-            self.set_status("Type a path in FILE first (e.g. C:\\songs\\demo.chipdaw)".into());
-            return;
+    /// Native file dialog (rfd), filtered to projects, starting in the
+    /// current project's folder. Modal: it blocks the UI thread while open
+    /// (the audio thread keeps running).
+    fn file_dialog(&self) -> rfd::FileDialog {
+        let mut d = rfd::FileDialog::new().add_filter("ChipDAW project", &[file::EXTENSION]);
+        let cur = file::with_extension(&self.s.file_path.get_untracked());
+        if let Some(dir) = cur.parent().filter(|d| d.is_dir()) {
+            d = d.set_directory(dir);
         }
+        if let Some(name) = cur.file_name().and_then(|n| n.to_str()).filter(|n| !n.is_empty()) {
+            d = d.set_file_name(name);
+        }
+        d
+    }
+
+    fn save_project(&mut self) {
+        if self.s.file_path.get_untracked().trim().is_empty() {
+            match self.file_dialog().save_file() {
+                Some(path) => self.s.file_path.set(path.display().to_string()),
+                None => return,
+            }
+        }
+        let text = self.s.file_path.get_untracked();
         let path = file::with_extension(&text);
         match file::save(&self.project(), &path) {
             Ok(()) => {
