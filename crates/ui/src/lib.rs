@@ -356,6 +356,12 @@ impl Model for AppState {
                             2 => &mut i.inst.pitch,
                             _ => &mut i.inst.duty,
                         };
+                        // Drawing on an unused macro starts one: 16 neutral steps.
+                        if q.len == 0 {
+                            let neutral = views::instrument::NEUTRAL[*which.min(&3)];
+                            *q = chip::instrument::Seq::new(&[neutral; views::instrument::NEW_SEQ_LEN], chip::instrument::NONE, chip::instrument::NONE);
+                            i.edited = true;
+                        }
                         if *step < q.len as usize && q.data[*step] != *value {
                             q.data[*step] = *value;
                             i.edited = true;
@@ -1575,7 +1581,8 @@ const DIALS_SECTION_W: f32 = MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 
 const CLIP_SECTION_MIN_W: u32 = 240;
 /// The INSTRUMENT section's smallest width (its four graphs stay readable).
 const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
-const CLIP_SECTION_MAX_W: f32 = 480.0;
+// 320, not 480: the room the CHANNELS meters left goes to the instrument editor.
+const CLIP_SECTION_MAX_W: f32 = 320.0;
 /// The narrowest window the top bar's fixed controls fit (DESIGN.md §8).
 const TOPBAR_MIN_W: u32 = 1140;
 
@@ -2101,7 +2108,14 @@ impl AppState {
         if let Some(dir) = cur.parent().filter(|d| d.is_dir()) {
             d = d.set_directory(dir);
         }
-        let Some(path) = d.save_file() else { return };
+        // `CHIPDAW_EXPORT_TO=path.wav` (scripted UI tests): no native dialog.
+        let path = match std::env::var_os("CHIPDAW_EXPORT_TO") {
+            Some(p) => std::path::PathBuf::from(p),
+            None => match d.save_file() {
+                Some(p) => p,
+                None => return,
+            },
+        };
         let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
         let base = path.file_stem().and_then(|n| n.to_str()).unwrap_or("song").to_string();
         let project = self.project();

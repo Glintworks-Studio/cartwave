@@ -14,6 +14,11 @@ use super::gfx::{self, Face};
 use crate::theme::tokens::*;
 use crate::{AppEvent, Signals};
 
+/// Steps of a macro started by drawing on an unused graph.
+pub const NEW_SEQ_LEN: usize = 16;
+/// The value a new macro starts at (full volume, no arpeggio, no pitch, 50%).
+pub const NEUTRAL: [i8; 4] = [15, 0, 0, 8];
+
 /// The four macros, in display order: (label, value range shown).
 pub const MACROS: [(&str, i32, i32); 4] = [("VOLUME", 0, 15), ("ARPEGGIO", -12, 12), ("PITCH", -32, 32), ("DUTY", 0, 16)];
 const GAP: f32 = 8.0;
@@ -142,9 +147,8 @@ impl InstrumentView {
         let Some((inst, len)) = self.current().filter(|(_, i)| !i.is_kit()).map(|(id, i)| (id, Self::seq_of(&i.inst, m).len)) else {
             return;
         };
-        if len == 0 {
-            return;
-        }
+        // An unused macro: the first stroke starts a NEW_SEQ_LEN-step one.
+        let len = if len == 0 { NEW_SEQ_LEN as u8 } else { len };
         let r = Self::graphs(cx.bounds(), cx.scale_factor())[m];
         let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
         let step = (((x - r.left) / r.width()) * len as f32).floor().clamp(0.0, len as f32 - 1.0) as usize;
@@ -332,7 +336,7 @@ impl View for InstrumentView {
             gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(STROKE.with_alpha(0.5)));
             if q.is_empty() {
                 let f = gfx::font(Face::Regular, 10.0 * s);
-                let t = "not used";
+                let t = "not used · draw to add";
                 let tw = gfx::text_width(&f, t);
                 gfx::draw_text(canvas, t, (r.center_x() - tw * 0.5).round(), gfx::baseline_for_center(&f, r.center_y()).round(), &f, TEXT_LO);
                 continue;

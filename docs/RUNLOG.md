@@ -213,3 +213,23 @@ Times are local (CST). Each decision taken without the user lists the options an
     *other* notes and reused; dragged notes and their volume bars are drawn live on top.
     After: **dragging 7.3/8.1/7.8%**, pacing 8.8–9.0% with **0 > 20 ms, 0 missed vblanks** (×2);
     playing 5.9–6.6%.
+- **A3 UI scenarios and A4.4 contrast (09:45–10:05).**
+  - `docs/stabilize/tools/scenario_v11.ps1` + `check_v11.py` (synthetic input, a v2 file opened
+    and saved as v3 at each stage): draw on all four macro graphs, undo ×4 / redo ×4, drag the
+    release marker, wheel the vibrato, browser search, drag onto a clip / an invalid lane / a lane
+    header, double-click load, apply a layout. **16/16 checks PASS.**
+  - Found on the way and fixed: an unused macro graph could not be drawn on, so the brief's "draw on
+    every macro graph" was impossible. **Decision D17:** drawing on an unused graph starts a 16-step
+    macro. Also: the inspector title went stale when only the selected lane changed; "SET BY
+    INSTRUMENT" was wider than its dial and left a stray letter on partial repaints (now two lines,
+    clipped); the CLIP section now caps at 320 px so the instrument editor gets the meters' room;
+    the export dialog's group chips overflowed (two rows, short names).
+  - **Contrast measured from a screenshot** (informative texts: track preset names, chip badges,
+    browser hints and headers, dial labels and reasons, macro labels and step counts, vibrato labels,
+    pill labels): every one is **4.62:1 or better** (worst: TEXT_LO on #151515 panels).
+  - `screens_v11.ps1`: docs/screens/v1.1 (clock in both formats, knobs and macros, a clip with its
+    own instrument, the export dialog, the main window), and **one export driven through the dialog**
+    (44.1 kHz / 24-bit / 8 channel stems: 28 files, `smpl` present, PASS). A test-only
+    `CHIPDAW_EXPORT_TO` stands in for the native save dialog. The "export done" capture was dropped
+    because it showed a local user path.
+  - Final suite: **153 tests pass**, clippy clean, release build 0 warnings.

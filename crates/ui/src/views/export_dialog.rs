@@ -41,6 +41,8 @@ pub struct ExportDialog {
 }
 
 pub const GROUP_NAMES: [&str; 4] = ["melody", "bass", "drums", "—"];
+/// Lane names short enough for the group chips (click a chip to move it on).
+const SHORT_LANE: [&str; 8] = ["Pulse 1", "Pulse 2", "Triangle", "Noise", "DPCM", "VRC6 P1", "VRC6 P2", "Saw"];
 
 impl ExportDialog {
     pub fn new(has_selection: bool) -> Self {
@@ -174,15 +176,18 @@ pub fn build(cx: &mut Context, s: Signals) {
                     choice(cx, &d, "Groups", Pick::StemsGroups, !busy);
                 });
                 if matches!(d.opts.stems, Stems::Groups(_)) {
-                    row(cx, "Groups", |cx| {
-                        for (lane, l) in crate::state::default_lanes().iter().enumerate() {
-                            let t = format!("{} · {}", l.name, GROUP_NAMES[d.group_of[lane] as usize]);
-                            Button::new(cx, move |cx| Label::new(cx, t.clone()))
-                                .class("btn")
-                                .disabled(busy)
-                                .on_press(move |cx| cx.emit(AppEvent::ExportGroup(lane)));
-                        }
-                    });
+                    // Two rows of four, short lane names: eight chips don't fit in one.
+                    for (label, lanes) in [("Groups", 0..4), ("", 4..8)] {
+                        row(cx, label, |cx| {
+                            for lane in lanes {
+                                let t = format!("{} · {}", SHORT_LANE[lane], GROUP_NAMES[d.group_of[lane] as usize]);
+                                Button::new(cx, move |cx| Label::new(cx, t.clone()))
+                                    .class("btn")
+                                    .disabled(busy)
+                                    .on_press(move |cx| cx.emit(AppEvent::ExportGroup(lane)));
+                            }
+                        });
+                    }
                 }
                 row(cx, "Loudness", |cx| {
                     choice(cx, &d, "Authentic chip level", Pick::LoudAuthentic, !busy);
