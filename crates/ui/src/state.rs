@@ -163,12 +163,11 @@ impl Snap {
         }
     }
 
-    pub fn next(self) -> Self {
-        match self {
-            Snap::Sixteenth => Snap::Quarter,
-            Snap::Quarter => Snap::Bar,
-            Snap::Bar => Snap::Sixteenth,
-        }
+    pub const ALL: [Snap; 3] = [Snap::Sixteenth, Snap::Quarter, Snap::Bar];
+
+    /// The grid a label names (settings.json); unknown labels give 1/16.
+    pub fn from_label(s: &str) -> Self {
+        Self::ALL.into_iter().find(|g| g.label() == s).unwrap_or(Snap::Sixteenth)
     }
 
     /// Snap a tick position to the nearest grid line.
@@ -257,6 +256,8 @@ pub enum MenuAction {
     LaneInstrument,
     /// Save the clip's instrument as a user preset.
     SavePreset,
+    /// The arrangement grid (right-click on empty space: Grid).
+    Grid(Snap),
 }
 
 impl MenuAction {
@@ -270,16 +271,23 @@ impl MenuAction {
             MenuAction::MakeUnique => "Make Instrument Unique",
             MenuAction::LaneInstrument => "Use Lane Instrument",
             MenuAction::SavePreset => "Save Instrument as Preset",
+            MenuAction::Grid(Snap::Sixteenth) => "Grid: 1/16",
+            MenuAction::Grid(Snap::Quarter) => "Grid: 1/4",
+            MenuAction::Grid(Snap::Bar) => "Grid: Bar",
         }
     }
 
-    pub fn shortcut(self) -> &'static str {
+    /// The shortcut text, from the one shortcut table (F-30). `current` is
+    /// the arrangement's grid: its item is ticked.
+    pub fn shortcut(self, current: Snap) -> String {
+        use crate::shortcuts::{label, Action};
         match self {
-            MenuAction::LoopSelection | MenuAction::LoopClips => "Ctrl+L",
-            MenuAction::InsertClip => "Ctrl+Shift+M",
-            MenuAction::Duplicate => "Ctrl+D",
-            MenuAction::Delete => "Del",
-            MenuAction::MakeUnique | MenuAction::LaneInstrument | MenuAction::SavePreset => "",
+            MenuAction::LoopSelection | MenuAction::LoopClips => label(Action::LoopSelection),
+            MenuAction::InsertClip => label(Action::InsertClip),
+            MenuAction::Duplicate => label(Action::Duplicate),
+            MenuAction::Delete => label(Action::Delete),
+            MenuAction::Grid(g) if g == current => "\u{2713}".into(),
+            MenuAction::MakeUnique | MenuAction::LaneInstrument | MenuAction::SavePreset | MenuAction::Grid(_) => String::new(),
         }
     }
 }
@@ -822,7 +830,20 @@ pub enum FrameCap {
 
 impl FrameCap {
     pub fn from_env() -> Self {
-        Self::parse(std::env::var("CHIPDAW_FPS_CAP").ok().as_deref())
+        Self::parse(crate::dev::var("CHIPDAW_FPS_CAP").as_deref())
+    }
+
+    /// From Settings > Display (60, 120; 0 = off, dev mode only). In dev
+    /// mode `CHIPDAW_FPS_CAP` overrides it (the benchmarks set it).
+    pub fn from_setting(fps: u32) -> Self {
+        if crate::dev::var("CHIPDAW_FPS_CAP").is_some() {
+            return Self::from_env();
+        }
+        match fps {
+            120 => Self::Fps120,
+            0 if crate::dev::enabled() => Self::Off,
+            _ => Self::Fps60,
+        }
     }
 
     fn parse(v: Option<&str>) -> Self {

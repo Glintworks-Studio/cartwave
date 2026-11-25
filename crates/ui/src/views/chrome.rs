@@ -44,13 +44,8 @@ fn glow_paint(color: Rgba, blur: f32) -> vg::Paint {
 pub enum KeyAction {
     Mute(usize),
     Solo(usize),
-    New,
-    Open,
-    Save,
     Recover,
     Discard,
-    ImportMidi,
-    ExportWav,
 }
 
 impl KeyAction {
@@ -58,13 +53,8 @@ impl KeyAction {
         match self {
             KeyAction::Mute(i) => AppEvent::ToggleMute(i),
             KeyAction::Solo(i) => AppEvent::ToggleSolo(i),
-            KeyAction::New => AppEvent::NewProject,
-            KeyAction::Open => AppEvent::OpenProject,
-            KeyAction::Save => AppEvent::SaveProject,
             KeyAction::Recover => AppEvent::RecoverAccept,
             KeyAction::Discard => AppEvent::RecoverDiscard,
-            KeyAction::ImportMidi => AppEvent::ImportMidi,
-            KeyAction::ExportWav => AppEvent::ExportWav,
         }
     }
 }
@@ -221,12 +211,6 @@ pub enum PillKind {
     Khz,
     /// Tempo: drag vertically or use the wheel to change it.
     Bpm,
-    /// Grid snap: click to cycle.
-    Snap,
-    /// Sound chip: click to cycle.
-    Chip,
-    /// Output filter: click to cycle.
-    Filter,
 }
 
 /// BPM change per logical pixel of vertical drag (Shift: 10x finer).
@@ -250,7 +234,6 @@ pub struct StatPill {
 
 impl StatPill {
     pub fn new(cx: &mut Context, s: Signals, kind: PillKind, label_w: f32) -> Handle<'_, Self> {
-        let interactive = !matches!(kind, PillKind::Cpu | PillKind::Khz);
         let h = Self {
             s,
             kind,
@@ -264,7 +247,6 @@ impl StatPill {
         .class("pill")
         .cursor(match kind {
             PillKind::Bpm => CursorIcon::NsResize,
-            _ if interactive => CursorIcon::Hand,
             _ => CursorIcon::Default,
         });
         // Redraw only when the shown text changes.
@@ -279,9 +261,6 @@ impl StatPill {
         match kind {
             PillKind::Cpu | PillKind::Khz => h.bind(s.audio_load, redraw_on_change),
             PillKind::Bpm => h.bind(s.transport, redraw_on_change),
-            PillKind::Snap => h.bind(s.arrangement, redraw_on_change),
-            PillKind::Chip => h.bind(s.chip, redraw_on_change),
-            PillKind::Filter => h.bind(s.filter_label, redraw_on_change),
         }
     }
 
@@ -290,9 +269,6 @@ impl StatPill {
             PillKind::Cpu => "CPU",
             PillKind::Khz => "kHz",
             PillKind::Bpm => "BPM",
-            PillKind::Snap => "SNAP",
-            PillKind::Chip => "CHIP",
-            PillKind::Filter => "FILTER",
         }
     }
 
@@ -311,22 +287,6 @@ impl StatPill {
                 }
             }
             PillKind::Bpm => format!("{:.1}", s.transport.with_untracked(|t| t.bpm)),
-            PillKind::Snap => s.arrangement.with_untracked(|a| a.snap.label().to_string()),
-            PillKind::Chip => s.chip.get_untracked().label().to_string(),
-            PillKind::Filter => match s.filter_label.get_untracked() {
-                "off" => "RAW".into(),
-                "FC" => "FAMICOM".into(),
-                other => other.to_uppercase(),
-            },
-        }
-    }
-
-    fn click(&self) -> Option<AppEvent> {
-        match self.kind {
-            PillKind::Snap => Some(AppEvent::CycleSnap),
-            PillKind::Chip => Some(AppEvent::CycleChip),
-            PillKind::Filter => Some(AppEvent::CycleFilter),
-            _ => None,
         }
     }
 }
@@ -345,7 +305,6 @@ impl View for StatPill {
                         self.scrub = Some((local_mouse(cx).1, bpm));
                         cx.emit(AppEvent::GestureBegin);
                     }
-                    _ if self.click().is_some() => self.pressed = true,
                     _ => return,
                 }
                 cx.capture();
@@ -365,14 +324,6 @@ impl View for StatPill {
                 if self.scrub.take().is_some() {
                     cx.emit(AppEvent::GestureEnd);
                     cx.release();
-                } else if self.pressed {
-                    self.pressed = false;
-                    cx.release();
-                    if mouse_inside(cx) {
-                        if let Some(ev) = self.click() {
-                            cx.emit(ev);
-                        }
-                    }
                 }
                 cx.needs_redraw();
             }
@@ -465,15 +416,11 @@ enum CapsuleZone {
 
 /// The centre capsule: play light, the time read-out (m:ss.cc, or
 /// bars.beats.sixteenths), loop light. Click the play light to play/pause,
-/// the loop light to toggle looping; click the time to switch its format,
-/// drag it to scrub, double-click it to return to the start.
+/// the loop light to toggle looping; drag the time to scrub. The format is
+/// in View > Clock Shows Bars and Settings; Home rewinds (UX.md §4).
 pub struct TimeCapsule {
     s: Signals,
     scrub: Option<(f32, f64)>,
-    /// The press on the time moved (a scrub, not a click).
-    scrubbed: bool,
-    /// Inside a double-click: its second release doesn't switch the format.
-    in_double: bool,
     pressed: Option<CapsuleZone>,
     hover: Option<CapsuleZone>,
 }
@@ -484,8 +431,6 @@ impl TimeCapsule {
         Self {
             s,
             scrub: None,
-            scrubbed: false,
-            in_double: false,
             pressed: None,
             hover: None,
         }
@@ -541,7 +486,6 @@ impl View for TimeCapsule {
                 if zone == CapsuleZone::Time {
                     let ph = self.s.transport.with_untracked(|t| t.playhead_ticks);
                     self.scrub = Some((x, ph));
-                    self.scrubbed = false;
                 }
                 self.pressed = Some(zone);
                 cx.capture();
@@ -553,9 +497,6 @@ impl View for TimeCapsule {
                 if let Some((x0, t0)) = self.scrub {
                     let sixteenth = PPQ as f64 / 4.0;
                     let steps = ((x - x0) / PX_PER_SIXTEENTH).round() as f64;
-                    if steps != 0.0 {
-                        self.scrubbed = true;
-                    }
                     cx.emit(AppEvent::SetPlayhead((t0 + steps * sixteenth).max(0.0)));
                 } else if self.pressed.is_none() {
                     let w = cx.bounds().w / cx.scale_factor();
@@ -572,34 +513,20 @@ impl View for TimeCapsule {
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
                 self.scrub = None;
-                let in_double = std::mem::take(&mut self.in_double);
                 if let Some(zone) = self.pressed.take() {
                     cx.release();
                     if mouse_inside(cx) {
                         match zone {
                             CapsuleZone::Play => cx.emit(AppEvent::TogglePlay),
                             CapsuleZone::Loop => cx.emit(AppEvent::ToggleLoop),
-                            // A click (not a scrub) switches the format.
-                            CapsuleZone::Time if !self.scrubbed && !in_double => {
-                                cx.emit(AppEvent::ToggleClockFormat)
-                            }
                             CapsuleZone::Time => {}
                         }
                     }
                 }
                 cx.needs_redraw();
             }
-            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                let (x, _) = local_mouse(cx);
-                let w = cx.bounds().w / cx.scale_factor();
-                if self.zone_at(x, w) == CapsuleZone::Time {
-                    // Back to the start; undo the first click's format switch.
-                    cx.emit(AppEvent::Stop);
-                    cx.emit(AppEvent::ToggleClockFormat);
-                    self.in_double = true;
-                }
-                meta.consume();
-            }
+            // No hidden double-click: Home rewinds (F-38).
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => meta.consume(),
             WindowEvent::MouseLeave => {
                 self.hover = None;
                 cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
@@ -985,15 +912,17 @@ impl View for MenuBackdrop {
 /// A right-click menu in the capsule style: label left, shortcut right,
 /// the hovered row lit in the accent.
 pub struct ContextMenu {
+    s: Signals,
     items: Vec<crate::state::MenuAction>,
     hover: Option<usize>,
 }
 
 impl ContextMenu {
-    pub fn new(cx: &mut Context, _s: Signals, m: crate::state::ContextMenuSpec) -> Handle<'_, Self> {
+    pub fn new(cx: &mut Context, s: Signals, m: crate::state::ContextMenuSpec) -> Handle<'_, Self> {
         let (w, h) = menu_size(m.items.len());
         let (x, y) = (m.x, m.y);
         Self {
+            s,
             items: m.items,
             hover: None,
         }
@@ -1067,10 +996,10 @@ impl View for ContextMenu {
             let base = gfx::baseline_for_center(&f, row.center_y()).round();
             let ink = if hot { Rgba::hex(0x0A0A0A) } else { TEXT_HI };
             gfx::draw_text(canvas, item.label(), (row.left + MENU_TEXT_X * s).round(), base, &f, ink);
-            let sc = item.shortcut();
-            let sw = gfx::text_width(&f, sc);
+            let sc = item.shortcut(self.s.arrangement.with_untracked(|a| a.snap));
+            let sw = gfx::text_width(&f, &sc);
             let ink = if hot { Rgba::hex(0x0A0A0A).with_alpha(0.6) } else { TEXT_LO };
-            gfx::draw_text(canvas, sc, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
+            gfx::draw_text(canvas, &sc, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
         }
     }
 }

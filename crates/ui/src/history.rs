@@ -112,6 +112,11 @@ impl History {
         *self = Self::new(doc);
     }
 
+    /// The last committed document.
+    pub fn current(&self) -> &Doc {
+        &self.current
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }

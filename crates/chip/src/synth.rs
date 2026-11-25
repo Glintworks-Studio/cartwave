@@ -120,6 +120,22 @@ impl Synth {
         self.blep.sample_rate
     }
 
+    /// A new output sample rate (the audio device changed). The chip's state
+    /// is kept: only the band-limited step buffer and the output filter are
+    /// rebuilt, at the current level, so a held note keeps sounding. Called
+    /// with no stream running (the host's rebuild path), never per sample.
+    pub fn set_sample_rate(&mut self, sample_rate: f64) {
+        if sample_rate == self.blep.sample_rate {
+            return;
+        }
+        let amp = mixer::mix(&self.outputs, self.vrc6_step);
+        self.blep = Blep::new(CPU_HZ_NTSC, sample_rate);
+        self.blep.rebase_at(self.cycle);
+        self.blep.preset(Self::fixed(amp));
+        self.filter = OutputFilter::new(self.filter.mode, sample_rate);
+        self.filter.settle(Self::quantized(amp));
+    }
+
     pub fn set_filter(&mut self, mode: FilterMode) {
         if mode != self.filter.mode {
             self.filter = OutputFilter::new(mode, self.blep.sample_rate);
@@ -450,6 +466,35 @@ mod tests {
     use std::boxed::Box;
     use std::vec;
     use std::vec::Vec;
+
+    /// Settings > Audio switches the sample rate on a running engine: the
+    /// level carries over (no jump while nothing changes), time keeps moving,
+    /// and the new rate's samples-per-second hold.
+    #[test]
+    fn sample_rate_switch_keeps_level_and_time() {
+        let mut s = Box::new(Synth::new(48_000.0));
+        // A held DC level: the triangle parked mid-ramp is silent, so use the
+        // DMC's direct load (a constant output).
+        s.write(0x4011, 0x40);
+        let mut out = vec![0f32; 4096];
+        for _ in 0..4 {
+            s.render(&mut out);
+        }
+        let before = out[4095];
+        let cycle = s.cycle;
+        s.set_sample_rate(96_000.0);
+        assert_eq!(s.sample_rate(), 96_000.0);
+        let mut out2 = vec![0f32; 960];
+        s.render(&mut out2);
+        assert!((out2[0] - before).abs() < 1e-4, "level jumped: {before} -> {}", out2[0]);
+        assert!((out2[959] - before).abs() < 1e-4);
+        // 960 samples at 96 kHz are 10 ms of CPU cycles.
+        let ms = (s.cycle - cycle) as f64 / CPU_HZ_NTSC * 1000.0;
+        assert!((ms - 10.0).abs() < 0.05, "{ms} ms");
+        // Same rate again: a no-op.
+        s.set_sample_rate(96_000.0);
+        assert_eq!(s.sample_rate(), 96_000.0);
+    }
 
     fn setup(s: &mut Synth) {
         s.write(0x4015, 0x1F);

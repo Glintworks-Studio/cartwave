@@ -99,6 +99,14 @@ impl Core {
         self.sample_rate
     }
 
+    /// A new output sample rate (host only, with no stream running).
+    pub fn set_sample_rate(&mut self, sample_rate: u32) {
+        if sample_rate != self.sample_rate {
+            self.player.synth.set_sample_rate(sample_rate as f64);
+            self.sample_rate = sample_rate;
+        }
+    }
+
     /// Called by the host after a stream (re)build, before the first callback.
     pub fn stream_started(&mut self) {
         self.last_cb_ns = None;

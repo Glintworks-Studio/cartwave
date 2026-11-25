@@ -675,13 +675,94 @@ pub fn with_extension(path: &str) -> PathBuf {
 // ───────────────────────────── Settings ─────────────────────────────
 
 /// App preferences (not part of a project), in `settings.json` next to the
-/// recovery file. Unknown or missing fields fall back to defaults, so an
-/// older or newer build never fails on it.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// recovery file (UX.md §2). Unknown or missing fields fall back to defaults,
+/// so an older or newer build never fails on it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     /// The transport clock shows bars.beats.sixteenths instead of m:ss.cc.
     pub clock_bars: bool,
+    // ── Audio ──
+    /// Output device name (`None`: follow the system default).
+    pub audio_device: Option<String>,
+    /// Requested buffer size in frames (`None`: the device's default).
+    pub buffer_frames: Option<u32>,
+    /// Output sample rate, Hz (44 100, 48 000 or 96 000).
+    pub sample_rate: u32,
+    // ── Display ──
+    /// Frame-rate cap: 60 or 120 (0 = off, dev mode only).
+    pub frame_cap: u32,
+    // ── Editing ──
+    /// Default arrangement grid: "1/16", "1/4" or "Bar".
+    pub arrangement_grid: String,
+    /// Default piano-roll grid: "1/4", "1/8", "1/16", "1/32" (or a triplet).
+    pub piano_grid: String,
+    /// The piano roll follows the playhead.
+    pub follow_playhead: bool,
+    // ── Files ──
+    /// Autosave to the recovery file every this many seconds (0 = off).
+    pub autosave_secs: u32,
+    /// Keep the recovery file when the user quits with Don't Save.
+    pub offer_recovery: bool,
+    /// Open the most recent project at start.
+    pub open_last: bool,
+    // ── Warnings ──
+    /// Ids of the warnings the user turned off with "Don't ask again".
+    pub silenced: Vec<String>,
+    // ── Not shown ──
+    /// Open Recent, newest first (at most `MAX_RECENT`).
+    pub recent: Vec<String>,
+    pub browser_open: bool,
+}
+
+/// Open Recent keeps this many projects.
+pub const MAX_RECENT: usize = 10;
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            clock_bars: false,
+            audio_device: None,
+            buffer_frames: None,
+            sample_rate: 48_000,
+            frame_cap: 60,
+            arrangement_grid: "1/16".into(),
+            piano_grid: "1/16".into(),
+            follow_playhead: true,
+            autosave_secs: AUTOSAVE_INTERVAL.as_secs() as u32,
+            offer_recovery: true,
+            open_last: false,
+            silenced: Vec::new(),
+            recent: Vec::new(),
+            browser_open: true,
+        }
+    }
+}
+
+impl Settings {
+    /// Puts `path` first in Open Recent (no duplicates, at most `MAX_RECENT`).
+    pub fn add_recent(&mut self, path: &str) {
+        self.recent.retain(|p| !same_path(p, path));
+        self.recent.insert(0, path.to_string());
+        self.recent.truncate(MAX_RECENT);
+    }
+
+    /// Drops entries whose file no longer exists; returns them.
+    pub fn prune_recent(&mut self) -> Vec<String> {
+        let (keep, gone): (Vec<String>, Vec<String>) = self.recent.drain(..).partition(|p| Path::new(p).is_file());
+        self.recent = keep;
+        gone
+    }
+}
+
+/// Paths compare case-insensitively on Windows and macOS (their usual file
+/// systems), exactly elsewhere.
+fn same_path(a: &str, b: &str) -> bool {
+    if cfg!(any(target_os = "windows", target_os = "macos")) {
+        a.eq_ignore_ascii_case(b)
+    } else {
+        a == b
+    }
 }
 
 pub fn load_settings() -> Settings {
@@ -733,6 +814,16 @@ pub struct Recovery {
 
 pub const AUTOSAVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(120);
 
+/// The session marker's content after an unsaved quit (else the process id).
+const UNSAVED_QUIT: &str = "unsaved-quit";
+
+/// Why the recovery file is offered at start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LastSession {
+    Crashed,
+    UnsavedQuit,
+}
+
 impl Recovery {
     pub fn new() -> Option<Self> {
         let dir = data_dir()?;
@@ -748,12 +839,27 @@ impl Recovery {
         self.dir.join("session.lock")
     }
 
-    /// Call at start: whether the previous session crashed with a recovery
-    /// file left, then marks this session as running.
-    pub fn start_session(&self) -> bool {
-        let crashed = self.marker().exists() && self.file().exists();
+    /// Call at start: whether the previous session left a recovery file to
+    /// offer (it crashed, or quit with Don't Save while "Offer recovery after
+    /// an unsaved quit" was on), then marks this session as running.
+    pub fn start_session(&self) -> Option<LastSession> {
+        let marker = std::fs::read_to_string(self.marker()).ok();
+        let offer = match marker {
+            Some(m) if self.file().exists() => Some(if m.trim() == UNSAVED_QUIT { LastSession::UnsavedQuit } else { LastSession::Crashed }),
+            _ => None,
+        };
         let _ = std::fs::write(self.marker(), std::process::id().to_string());
-        crashed
+        offer
+    }
+
+    /// Quit with Don't Save, recovery offered: save the unsaved work to the
+    /// recovery file and leave a marker that says so.
+    pub fn end_session_unsaved(&self, p: &Project) {
+        if self.autosave(p).is_ok() {
+            let _ = std::fs::write(self.marker(), UNSAVED_QUIT);
+        } else {
+            let _ = std::fs::remove_file(self.marker());
+        }
     }
 
     pub fn autosave(&self, p: &Project) -> Result<(), String> {
@@ -926,12 +1032,46 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("chipdaw-rec-{}", std::process::id()));
         let r = Recovery { dir: dir.clone() };
         std::fs::create_dir_all(&dir).unwrap();
-        assert!(!r.start_session(), "first run");
+        assert!(r.start_session().is_none(), "first run");
         r.autosave(&Project::new_empty()).unwrap();
         // Simulated crash: the marker is still there.
-        assert!(r.start_session());
+        assert_eq!(r.start_session(), Some(LastSession::Crashed));
         r.end_session(&Project::new_empty());
-        assert!(!r.start_session(), "clean quit");
+        assert!(r.start_session().is_none(), "clean quit");
+        // Quit with Don't Save, recovery offered: offered next time, as such.
+        r.end_session_unsaved(&Project::new_empty());
+        assert_eq!(r.start_session(), Some(LastSession::UnsavedQuit));
+        r.end_session(&Project::new_empty());
+        assert!(r.start_session().is_none());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn settings_defaults_and_tolerant_reading() {
+        let d = Settings::default();
+        assert_eq!((d.frame_cap, d.sample_rate, d.autosave_secs), (60, 48_000, 120));
+        assert!(d.offer_recovery && d.follow_playhead && !d.open_last);
+        // An old file (only the clock) keeps every other default.
+        let old: Settings = serde_json::from_str(r#"{"clock_bars": true}"#).unwrap();
+        assert_eq!(old, Settings { clock_bars: true, ..Settings::default() });
+        // Unknown fields from a newer build are ignored.
+        let newer: Settings = serde_json::from_str(r#"{"frame_cap": 120, "future": [1, 2]}"#).unwrap();
+        assert_eq!(newer.frame_cap, 120);
+    }
+
+    #[test]
+    fn open_recent_keeps_ten_newest_first() {
+        let mut s = Settings::default();
+        for i in 0..12 {
+            s.add_recent(&format!("C:/songs/{i}.chipdaw"));
+        }
+        s.add_recent("C:/songs/5.chipdaw");
+        assert_eq!(s.recent.len(), MAX_RECENT);
+        assert_eq!(s.recent[0], "C:/songs/5.chipdaw");
+        assert_eq!(s.recent[1], "C:/songs/11.chipdaw");
+        assert_eq!(s.recent.iter().filter(|p| p.ends_with("/5.chipdaw")).count(), 1);
+        // None of these exist: all pruned.
+        assert_eq!(s.prune_recent().len(), MAX_RECENT);
+        assert!(s.recent.is_empty());
     }
 }

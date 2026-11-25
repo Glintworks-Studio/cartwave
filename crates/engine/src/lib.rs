@@ -42,6 +42,8 @@ const GARBAGE_QUEUE: usize = 64;
 
 pub struct Engine {
     tx: Producer<Command>,
+    reconfig: Arc<host::Reconfig>,
+    cfg: EngineConfig,
     garbage: Consumer<Box<SongSnapshot>>,
     shared: Arc<Shared>,
     epoch: Instant,
@@ -63,15 +65,22 @@ impl Engine {
         let cell = Arc::new(CoreCell::new(core));
         let stop = Arc::new(AtomicBool::new(false));
         let info = Arc::new(Mutex::new(String::from("starting")));
+        let reconfig = Arc::new(host::Reconfig {
+            cfg: Mutex::new(None),
+            err: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+        });
+        let sample_rate = cfg.sample_rate;
         let host = {
-            let (shared, stop, info) = (shared.clone(), stop.clone(), info.clone());
+            let (shared, stop, info, reconfig, cfg) = (shared.clone(), stop.clone(), info.clone(), reconfig.clone(), cfg.clone());
             std::thread::Builder::new()
                 .name("chipdaw-audio-host".into())
-                .spawn(move || host::run(cell, shared, cfg, stop, info))
+                .spawn(move || host::run(cell, shared, cfg, stop, info, reconfig))
                 .expect("spawn audio host thread")
         };
         Self {
             tx,
+            reconfig,
+            cfg,
             garbage: grx,
             shared,
             epoch,
@@ -80,8 +89,38 @@ impl Engine {
             info,
             sent: 0,
             dropped: 0,
-            sample_rate: cfg.sample_rate,
+            sample_rate,
         }
+    }
+
+    /// Switches the output device, buffer size or sample rate while running
+    /// (Settings > Audio). The host drops the stream and rebuilds it through
+    /// the same path as a device change; the song, transport and chip state
+    /// carry over. Returns false when nothing changed.
+    pub fn reconfigure(&mut self, cfg: EngineConfig) -> bool {
+        if cfg == self.cfg {
+            return false;
+        }
+        self.sample_rate = cfg.sample_rate;
+        self.cfg = cfg.clone();
+        if let Ok(mut c) = self.reconfig.cfg.lock() {
+            *c = Some(cfg);
+        }
+        self.reconfig.err.store(host::ERR_RECONFIG, Ordering::Release);
+        if let Some(h) = &self.host {
+            h.thread().unpark();
+        }
+        true
+    }
+
+    /// The configuration last asked for.
+    pub fn config(&self) -> &EngineConfig {
+        &self.cfg
+    }
+
+    /// The names of the output devices (Settings > Audio).
+    pub fn output_devices() -> Vec<String> {
+        host::output_devices()
     }
 
     pub fn now_ns(&self) -> u64 {

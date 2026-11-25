@@ -160,6 +160,13 @@ impl Blep {
         }
     }
 
+    /// Restarts the step buffer at CPU cycle `cycle` (the synth's current
+    /// cycle) after a sample-rate change: the next output sample is `cycle`.
+    pub fn rebase_at(&mut self, cycle: u64) {
+        self.base_cycle = cycle;
+        self.base_pos = 0;
+    }
+
     /// The first CPU cycle whose position is at or past output sample `n`.
     /// Running the chip up to (excluding) this cycle completes `n` samples.
     pub fn cycle_for(&self, n: usize) -> u64 {

@@ -282,17 +282,17 @@ fn files_crash_recovery_round_trip() {
     let _ = std::fs::remove_dir_all(&dir);
     std::env::set_var("CHIPDAW_DATA_DIR", &dir);
     let r = file::Recovery::new().unwrap();
-    assert!(!r.start_session(), "first start: nothing to recover");
+    assert!(r.start_session().is_none(), "first start: nothing to recover");
     let mut p = project(4);
     p.bpm = 123.0;
     r.autosave(&p).unwrap();
     // "Crash": no end_session. The next start finds the marker and the file.
     let r2 = file::Recovery::new().unwrap();
-    assert!(r2.start_session());
+    assert_eq!(r2.start_session(), Some(file::LastSession::Crashed));
     let back = file::load(&r2.file()).unwrap();
     assert_eq!(file::to_string(&back), file::to_string(&p));
     r2.end_session(&back);
-    assert!(!file::Recovery::new().unwrap().start_session(), "clean quit: no prompt");
+    assert!(file::Recovery::new().unwrap().start_session().is_none(), "clean quit: no prompt");
     std::env::remove_var("CHIPDAW_DATA_DIR");
     let _ = std::fs::remove_dir_all(&dir);
 }

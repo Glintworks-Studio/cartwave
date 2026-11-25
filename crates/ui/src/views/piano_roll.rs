@@ -18,6 +18,7 @@ use vizia::vg;
 use super::gfx::{self, Face};
 use crate::input;
 use crate::notes::{self, Note, RowKind, MIN_NOTE_TICKS};
+use crate::shortcuts::{self, Action, Ctx};
 use crate::state::{Clip, PianoState, PPQ, TICKS_PER_BAR};
 use crate::theme::tokens::*;
 use crate::{AppEvent, Signals};
@@ -609,20 +610,31 @@ impl PianoRoll {
         }
     }
 
+    /// A key while the piano roll has focus, through the shortcut table
+    /// (F-30). Esc and the app-wide keys bubble up to the app.
     fn on_key(&mut self, cx: &mut EventContext, code: Code, key: Option<&Key>) -> bool {
-        let Some((cid, lane, clip_start, clip_len, p)) = self.open() else { return false };
         let mods = *cx.modifiers();
-        let cmd = input::command(&mods);
+        // The logical key too: the physical code can be unidentified
+        // (remote desktop, injected input).
+        let logical_delete = matches!(key, Some(Key::Delete | Key::Backspace)) && !input::command(&mods);
+        let action = if logical_delete { Some(Action::Delete) } else { shortcuts::lookup(code, &mods, Ctx::PianoRoll) };
+        match action {
+            Some(a) => self.run(cx, a),
+            None => false,
+        }
+    }
+
+    /// Runs a piano-roll edit command (a key, or the Edit menu).
+    fn run(&mut self, cx: &mut EventContext, action: Action) -> bool {
+        let Some((cid, lane, clip_start, clip_len, p)) = self.open() else { return false };
         let kind = RowKind::for_lane(lane);
         let sel = p.sel.clone();
-        let is_delete = matches!(key, Some(Key::Delete | Key::Backspace)) || matches!(code, Code::Delete | Code::Backspace);
-        match code {
-            _ if is_delete => {
+        match action {
+            Action::Delete => {
                 self.edit(cid, |c| notes::delete(&mut c.notes, &sel));
                 self.set_sel(Vec::new());
             }
-            Code::Escape => cx.emit(AppEvent::ClosePiano),
-            Code::KeyA if cmd => {
+            Action::SelectAll => {
                 let all = self
                     .s
                     .arrangement
@@ -631,7 +643,7 @@ impl PianoRoll {
                 self.set_sel(all);
                 return true;
             }
-            Code::KeyD if cmd => {
+            Action::Duplicate => {
                 let new = self.edit(cid, |c| {
                     let mut next = c.next_note_id;
                     let ids = notes::duplicate_right(&mut c.notes, &mut next, &sel, kind);
@@ -640,30 +652,31 @@ impl PianoRoll {
                 });
                 self.set_sel(new.unwrap_or_default());
             }
-            Code::KeyC if cmd => {
+            Action::Copy => {
                 cx.emit(AppEvent::CopyNotes { cut: false });
                 return true;
             }
-            Code::KeyX if cmd => cx.emit(AppEvent::CopyNotes { cut: true }),
-            Code::KeyV if cmd => cx.emit(AppEvent::PasteNotes),
-            Code::KeyQ if !cmd => {
+            Action::Cut => cx.emit(AppEvent::CopyNotes { cut: true }),
+            Action::Paste => cx.emit(AppEvent::PasteNotes),
+            // Cmd+U (UX.md decision 3; Q is retired).
+            Action::Quantize => {
                 self.edit(cid, |c| {
                     let mut next = c.next_note_id;
                     notes::quantize(&mut c.notes, &sel, p.grid, &mut next);
                     c.next_note_id = next;
                 });
             }
-            Code::ArrowUp | Code::ArrowDown => {
-                let dir = if code == Code::ArrowUp { 1 } else { -1 };
-                let step = if mods.shift() { kind.octave_rows() } else { 1 };
+            Action::TransposeUp | Action::TransposeDown | Action::OctaveUp | Action::OctaveDown => {
+                let dir = if matches!(action, Action::TransposeUp | Action::OctaveUp) { 1 } else { -1 };
+                let step = if matches!(action, Action::OctaveUp | Action::OctaveDown) { kind.octave_rows() } else { 1 };
                 self.edit(cid, |c| {
                     let mut next = c.next_note_id;
                     notes::transpose(&mut c.notes, &sel, dir * step, kind, &mut next);
                     c.next_note_id = next;
                 });
             }
-            Code::ArrowLeft | Code::ArrowRight => {
-                let dir: i64 = if code == Code::ArrowRight { 1 } else { -1 };
+            Action::NudgeLeft | Action::NudgeRight => {
+                let dir: i64 = if action == Action::NudgeRight { 1 } else { -1 };
                 self.edit(cid, |c| {
                     let mut next = c.next_note_id;
                     let max = c.notes.iter().filter(|n| sel.contains(&n.id)).map(|n| n.start).max().unwrap_or(0) as i64;
@@ -726,6 +739,7 @@ impl View for PianoRoll {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(MouseButton::Left) => {
+                cx.emit(AppEvent::EditorFocus(Ctx::PianoRoll));
                 self.on_press(cx);
                 meta.consume();
             }
@@ -806,6 +820,10 @@ impl View for PianoRoll {
                     meta.consume();
                 }
             _ => {}
+        });
+        // The Edit menu, while the piano roll is the active editor.
+        event.map(|c: &crate::PianoCmd, _| {
+            self.run(cx, c.0);
         });
     }
 

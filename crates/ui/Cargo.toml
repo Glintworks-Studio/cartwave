@@ -13,3 +13,13 @@ serde_json = "1"
 rfd = "0.18"
 # EBU R128 loudness for the export's loudness option (MIT; pre-approved, STABILIZE_PROMPT.md).
 ebur128 = "0.1.11"
+# Native menu bar for the standalone app (MIT OR Apache-2.0; FEASIBILITY.md §1).
+# Optional so a plugin build can leave it out.
+muda = { version = "0.22", default-features = false, optional = true }
+# The main window's native handle for the menu bar (already in the tree via
+# winit, rfd and muda; MIT OR Apache-2.0 OR Zlib).
+raw-window-handle = "0.6"
+
+[features]
+default = ["menus"]
+menus = ["dep:muda"]

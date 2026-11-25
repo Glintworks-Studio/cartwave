@@ -47,14 +47,14 @@ impl Drop for CoreCell {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EngineConfig {
     pub sample_rate: u32,
     /// Requested buffer size in frames (`None` = device default). WASAPI
     /// shared mode treats it as a hint; see ENGINE.md.
     pub buffer_frames: Option<u32>,
     /// Use this output device name instead of following the default.
-    pub device_name: Option<&'static str>,
+    pub device_name: Option<String>,
 }
 
 impl Default for EngineConfig {
@@ -73,17 +73,34 @@ const ERR_NONE: u32 = 0;
 const ERR_DEVICE_GONE: u32 = 1;
 const ERR_INVALIDATED: u32 = 2;
 const ERR_REROUTED: u32 = 3;
+/// Not an error: the UI asked for another device, buffer size or sample rate
+/// (Settings > Audio). Rebuilt at once through the same path.
+pub(crate) const ERR_RECONFIG: u32 = 4;
+
+/// What the UI thread hands the host: a new configuration to switch to, and
+/// the wake-up reason it sets with it.
+pub(crate) struct Reconfig {
+    pub cfg: std::sync::Mutex<Option<EngineConfig>>,
+    pub err: Arc<AtomicU32>,
+}
 
 pub(crate) fn run(
     cell: Arc<CoreCell>,
     shared: Arc<Shared>,
-    cfg: EngineConfig,
+    mut cfg: EngineConfig,
     stop: Arc<AtomicBool>,
     info: Arc<std::sync::Mutex<String>>,
+    reconfig: Arc<Reconfig>,
 ) {
     let me = thread::current();
-    let err = Arc::new(AtomicU32::new(ERR_NONE));
+    let err = reconfig.err.clone();
     while !stop.load(Ordering::Acquire) {
+        // A new configuration from the UI. The core follows the sample rate
+        // here, with no stream running (it was dropped below, or never built).
+        if let Some(new) = reconfig.cfg.lock().ok().and_then(|mut c| c.take()) {
+            cell.with(|c| c.set_sample_rate(new.sample_rate));
+            cfg = new;
+        }
         match build(&cell, &shared, &cfg, &err, &me) {
             Ok((stream, desc)) => {
                 if let Ok(mut i) = info.lock() {
@@ -115,8 +132,9 @@ pub(crate) fn run(
                         Ordering::Relaxed,
                     );
                     // Let Windows settle the new default before rebuilding. A
-                    // CoreAudio reroute has already settled: rebuild now.
-                    if kind != ERR_REROUTED {
+                    // CoreAudio reroute has already settled, and a requested
+                    // change needs no settling: rebuild now.
+                    if kind != ERR_REROUTED && kind != ERR_RECONFIG {
                         thread::park_timeout(Duration::from_millis(250));
                     }
                 }
@@ -133,10 +151,21 @@ pub(crate) fn run(
                     },
                     Ordering::Relaxed,
                 );
-                thread::park_timeout(Duration::from_secs(1));
+                // A requested change retries at once (it may fix the error).
+                if err.swap(ERR_NONE, Ordering::AcqRel) != ERR_RECONFIG {
+                    thread::park_timeout(Duration::from_secs(1));
+                }
             }
         }
     }
+}
+
+/// The names of the output devices on the default host.
+pub(crate) fn output_devices() -> Vec<String> {
+    let host = cpal::default_host();
+    host.output_devices()
+        .map(|it| it.filter_map(|d| d.description().ok().map(|x| x.name().to_string())).collect())
+        .unwrap_or_default()
 }
 
 fn build(
@@ -147,7 +176,7 @@ fn build(
     host_thread: &Thread,
 ) -> Result<(cpal::Stream, String), String> {
     let host = cpal::default_host();
-    let dev = match cfg.device_name {
+    let dev = match cfg.device_name.as_deref() {
         Some(name) => host
             .output_devices()
             .map_err(|e| e.to_string())?

@@ -195,7 +195,7 @@ pub struct FrameLog {
 
 impl FrameLog {
     pub fn from_env() -> Self {
-        let out = std::env::var_os("CHIPDAW_FRAMELOG").and_then(|p| std::fs::File::create(p).ok()).map(|f| {
+        let out = crate::dev::var_os("CHIPDAW_FRAMELOG").and_then(|p| std::fs::File::create(p).ok()).map(|f| {
             let mut w = std::io::BufWriter::new(f);
             let _ = writeln!(
                 w,

@@ -1,11 +1,13 @@
 //! ChipDAW's user interface. A library crate so the same UI can later be hosted
 //! inside a plugin window (baseview) as well as the standalone app.
 
+pub mod dev;
 pub mod file;
 pub mod dpcm;
 pub mod export;
 pub mod game_export;
 pub mod history;
+pub mod menus;
 pub mod midi;
 pub mod instruments;
 pub mod user_presets;
@@ -14,6 +16,7 @@ pub mod mock;
 pub mod notes;
 pub mod perf;
 pub mod render;
+pub mod shortcuts;
 pub mod songs;
 pub mod state;
 pub mod testing;
@@ -25,6 +28,8 @@ use vizia::prelude::*;
 use engine::{Command, Engine, EngineConfig, FilterMode, ParamId, Params};
 
 use crate::file::{Project, Recovery};
+use crate::shortcuts::{Action, Ctx};
+use crate::views::modal::{FilterPick, Modal, Set, SettingsTab};
 use crate::history::{Doc, History};
 use crate::mock::Rng;
 use crate::notes::{Note, RowKind};
@@ -113,6 +118,45 @@ pub struct Signals {
     pub export_dlg: Signal<Option<views::export_dialog::ExportDialog>>,
     /// The user's saved presets (browser indices after the factory presets).
     pub user_presets: Signal<Vec<user_presets::UserPreset>>,
+    /// Unsaved changes since the last New, Open or Save (F-01).
+    pub dirty: Signal<bool>,
+    /// The open modal panel: Settings, Project Settings, About, shortcuts.
+    pub modal: Signal<Option<Modal>>,
+    /// App settings (settings.json) as the Settings panel shows them.
+    pub settings: Signal<file::Settings>,
+    /// Output device names, listed when Settings > Audio opens.
+    pub audio_devices: Signal<Vec<String>>,
+    /// The running device and the last switch's gap (Settings > Audio).
+    pub audio_info: Signal<String>,
+    /// The output filter and whether it follows the profile (Project Settings).
+    pub filter_state: Signal<(FilterMode, bool)>,
+    /// Why recovery is offered (crash, or an unsaved quit).
+    pub recovery_msg: Signal<&'static str>,
+}
+
+/// Project fields outside undo that a save writes (F-01: changing them
+/// leaves unsaved changes too).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Extras {
+    chip: SoundChip,
+    filter: FilterMode,
+    filter_auto: bool,
+    loop_start: u32,
+    loop_end: u32,
+    loop_on: bool,
+    mute: u8,
+    solo: u8,
+}
+
+/// What the user chose in a "Save changes?" prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Proceed {
+    /// Nothing unsaved, or saved: go ahead.
+    Clean,
+    /// Don't Save: go ahead and drop the changes.
+    Discard,
+    /// Cancel (or the save failed / its dialog was cancelled): stop.
+    Stop,
 }
 
 /// Loop end sent to the engine while looping is off: far past any song.
@@ -185,6 +229,23 @@ pub struct AppState {
     audition_lane: Option<usize>,
     /// A running export: its progress / cancel flags and worker thread.
     export_job: Option<ExportJob>,
+    /// The text field being edited (F-03: shortcuts don't fire while typing).
+    text_edit: Option<Entity>,
+    /// The editor that last had the mouse: Edit-menu commands act on it.
+    editor: Ctx,
+    /// The document and extras as last saved / opened / created (F-01).
+    saved: (Doc, Extras),
+    /// The window is closing (the user already answered the save prompt).
+    quitting: bool,
+    /// The window title last set.
+    title: String,
+    /// settings.json (the `settings` signal mirrors it).
+    settings: file::Settings,
+    #[cfg(feature = "menus")]
+    menus: Option<menus::NativeMenus>,
+    menus_tried: bool,
+    /// When the audio settings last changed (its gap is read a moment later).
+    audio_switch: Option<Instant>,
 }
 
 pub enum AppEvent {
@@ -196,8 +257,6 @@ pub enum AppEvent {
     SetBpm(f32),
     SetPlayhead(f64),
     SetDial(usize, f32),
-    CycleChip,
-    CycleSnap,
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
     /// Click on the clock: m:ss.cc <-> bars.beats.sixteenths (remembered).
@@ -289,7 +348,25 @@ pub enum AppEvent {
     SaveUserPreset,
     /// Load a whole channel layout (chip + every lane's instrument).
     ApplyLayout(usize),
+    /// A native menu item.
+    MenuCmd(menus::Cmd),
+    /// A keyboard action (keys and menu items run the same code).
+    Run(Action),
+    OpenModal(Modal),
+    CloseModal,
+    SetSetting(Set),
+    /// Project Settings: the hardware profile (asks first if VRC6 clips would go silent).
+    SetProfile(SoundChip),
+    SetFilter(FilterPick),
+    /// An editor got the mouse (Edit-menu commands act on it).
+    EditorFocus(Ctx),
+    /// Clear Open Recent / open entry n.
+    OpenRecent(usize),
 }
+
+/// An edit command for the piano roll view, broadcast from the root (the
+/// Edit menu while the piano roll is the active editor).
+pub struct PianoCmd(pub Action);
 
 impl Model for AppState {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
@@ -339,13 +416,6 @@ impl Model for AppState {
                 if self.s.dial_state.with_untracked(|d| d.get(*i).is_some_and(|d| d.locked.is_none())) {
                     self.set_param(lane, *i, *v);
                 }
-            }
-            AppEvent::CycleChip => {
-                let next = match self.s.chip.get_untracked() {
-                    SoundChip::Base2A03 => SoundChip::WithVrc6,
-                    SoundChip::WithVrc6 => SoundChip::Base2A03,
-                };
-                self.set_chip(next);
             }
             AppEvent::EditMacro { inst, which, step, value } => {
                 self.s.arrangement.update(|a| {
@@ -403,7 +473,11 @@ impl Model for AppState {
                     }
                 });
             }
-            AppEvent::ToggleBrowser => self.s.browser_open.update(|o| *o = !*o),
+            AppEvent::ToggleBrowser => {
+                self.s.browser_open.update(|o| *o = !*o);
+                self.settings.browser_open = self.s.browser_open.get_untracked();
+                self.save_settings();
+            }
             AppEvent::BrowserSelect(p) => self.s.browser_sel.set(*p),
             AppEvent::Audition(p) => self.audition(*p),
             AppEvent::AssignPreset { lane, preset } => self.assign_preset(*lane, *preset),
@@ -411,7 +485,18 @@ impl Model for AppState {
             AppEvent::MakeInstrumentUnique => self.make_instrument_unique(),
             AppEvent::UseLaneInstrument => self.use_lane_instrument(),
             AppEvent::SaveUserPreset => self.save_user_preset(),
-            AppEvent::ApplyLayout(i) => self.apply_layout(*i),
+            AppEvent::ApplyLayout(i) => self.apply_layout(cx, *i),
+            AppEvent::MenuCmd(c) => self.run_menu_cmd(cx, *c),
+            AppEvent::Run(a) => {
+                self.run_action(cx, *a, true);
+            }
+            AppEvent::OpenModal(m) => self.open_modal(*m),
+            AppEvent::CloseModal => self.s.modal.set(None),
+            AppEvent::SetSetting(v) => self.set_setting(cx, v.clone()),
+            AppEvent::SetProfile(chip) => self.set_profile(cx, *chip),
+            AppEvent::SetFilter(p) => self.set_filter(p.0),
+            AppEvent::EditorFocus(c) => self.editor = *c,
+            AppEvent::OpenRecent(i) => self.open_recent(cx, *i),
             AppEvent::ToggleMute(i) => {
                 self.s.mute.update(|m| *m ^= 1 << *i);
                 let m = self.s.mute.get_untracked();
@@ -425,13 +510,8 @@ impl Model for AppState {
             AppEvent::CycleFilter => {
                 let all = FilterMode::ALL;
                 let i = all.iter().position(|m| *m == self.filter).unwrap_or(0);
-                self.filter = all[(i + 1) % all.len()];
-                self.filter_manual = true;
-                self.send(Command::Filter(self.filter));
-                self.s.filter_label.set(self.filter.label());
-                self.last_audio_stats = None;
+                self.set_filter(Some(all[(i + 1) % all.len()]));
             }
-            AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
             AppEvent::SetPianoPaneHeight(h) => {
                 self.s.piano_pane_h.set_if_changed(*h);
                 self.clamp_lane_scroll();
@@ -450,8 +530,7 @@ impl Model for AppState {
             }
             AppEvent::ToggleClockFormat => {
                 let bars = !self.s.clock_bars.get_untracked();
-                self.s.clock_bars.set(bars);
-                file::save_settings(&file::Settings { clock_bars: bars });
+                self.set_setting(cx, Set::ClockBars(bars));
             }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
@@ -516,12 +595,23 @@ impl Model for AppState {
             AppEvent::Undo => self.undo(false),
             AppEvent::Redo => self.undo(true),
             AppEvent::NewProject => {
+                if self.ask_save(cx, "starting a new project") == Proceed::Stop {
+                    return;
+                }
                 self.load_project(Project::new_empty());
                 self.s.file_path.set(String::new());
+                self.mark_saved();
                 self.set_status("New project".into());
             }
-            AppEvent::SaveProject => self.save_project(),
+            AppEvent::SaveProject => {
+                self.save_project();
+            }
+            // File > New from MIDI File: replaces the song (until the model
+            // change adds tracks instead), so it asks to save first.
             AppEvent::ImportMidi => {
+                if self.ask_save(cx, "replacing the song with a MIDI file") == Proceed::Stop {
+                    return;
+                }
                 if let Some(path) = rfd::FileDialog::new().add_filter("MIDI file", &["mid", "midi"]).pick_file() {
                     self.import_midi(&path);
                 }
@@ -581,21 +671,14 @@ impl Model for AppState {
                 }
             }
             AppEvent::SaveProjectAs => {
-                if let Some(path) = self.file_dialog().save_file() {
-                    self.s.file_path.set(path.display().to_string());
-                    self.save_project();
-                }
+                self.save_project_as();
             }
             AppEvent::OpenProject => {
-                let Some(path) = self.file_dialog().pick_file() else { return };
-                match file::load(&path) {
-                    Ok(p) => {
-                        self.load_project(p);
-                        self.s.file_path.set(path.display().to_string());
-                        self.set_status(format!("Opened {}", path.display()));
-                    }
-                    Err(e) => self.set_status(e),
+                if self.ask_save(cx, "opening another project") == Proceed::Stop {
+                    return;
                 }
+                let Some(path) = self.file_dialog().pick_file() else { return };
+                self.open_project_file(&path);
             }
             // Only on a real change: the field is bound to this signal, and setting
             // it unchanged re-fires the field's edit event (an endless loop).
@@ -608,6 +691,8 @@ impl Model for AppState {
                     match file::load(&path) {
                         Ok(p) => {
                             self.load_project(p);
+                            // Recovered work isn't saved anywhere yet.
+                            self.mark_unsaved();
                             self.set_status("Recovered the last session (unsaved: use Save)".into());
                         }
                         Err(e) => self.set_status(e),
@@ -630,60 +715,57 @@ impl Model for AppState {
             }
             if let WindowEvent::Drop(DropData::File(path)) = we {
                 let path = path.clone();
+                // A project or MIDI file replaces the song: ask first.
+                let replaces = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| ["mid", "midi", file::EXTENSION].contains(&e.to_ascii_lowercase().as_str()));
+                if replaces && self.ask_save(cx, "opening the dropped file") == Proceed::Stop {
+                    return;
+                }
                 self.open_dropped(&path);
             }
             if let WindowEvent::WindowClose = we {
-                // Clean quit: autosave once more and clear the session marker.
-                if let Some(r) = self.recovery.as_ref() {
-                    if !self.s.recovery_offer.get_untracked() {
-                        r.end_session(&self.project());
+                if !self.quitting {
+                    let choice = self.ask_save(cx, "closing");
+                    if choice == Proceed::Stop {
+                        // Cancel: the window stays (models see the event
+                        // before the window view that would close it).
+                        meta.consume();
+                        return;
                     }
+                    self.quitting = true;
+                    self.end_session(choice == Proceed::Discard);
                 }
             }
             if let WindowEvent::KeyDown(code, _) = we {
                 let mods = *cx.modifiers();
-                if input::command(&mods) {
-                    let ev = match code {
-                        Code::KeyZ if mods.shift() => Some(AppEvent::Redo),
-                        Code::KeyZ => Some(AppEvent::Undo),
-                        Code::KeyY => Some(AppEvent::Redo),
-                        Code::KeyS if mods.shift() => Some(AppEvent::SaveProjectAs),
-                        Code::KeyR if mods.shift() => Some(AppEvent::ExportWav),
-                        Code::KeyI => Some(AppEvent::ImportMidi),
-                        Code::KeyS => Some(AppEvent::SaveProject),
-                        Code::KeyO => Some(AppEvent::OpenProject),
-                        Code::KeyN => Some(AppEvent::NewProject),
-                        // Loop selection, duplicate, insert MIDI clip.
-                        Code::KeyL => Some(AppEvent::Menu(MenuAction::LoopSelection)),
-                        Code::KeyD => Some(AppEvent::Menu(MenuAction::Duplicate)),
-                        Code::KeyM if mods.shift() => Some(AppEvent::Menu(MenuAction::InsertClip)),
-                        // Ctrl+Alt+B shows / hides the browser.
-                        Code::KeyB if mods.alt() => Some(AppEvent::ToggleBrowser),
-                        _ => None,
-                    };
-                    if let Some(ev) = ev {
-                        cx.emit(ev);
+                // F-03 / dialogs: while a dialog is open, or a text field is
+                // being edited, no shortcut reaches the document.
+                let ctx = if self.s.modal.with_untracked(|m| m.is_some()) || self.s.export_dlg.with_untracked(|d| d.is_some()) {
+                    Ctx::Modal
+                } else if self.text_edit.is_some_and(|e| e == cx.focused()) {
+                    Ctx::Text
+                } else {
+                    Ctx::Arrangement
+                };
+                if let Some(a) = shortcuts::lookup(*code, &mods, ctx) {
+                    if self.run_action(cx, a, false) {
                         meta.consume();
-                        return;
                     }
                 }
-                match code {
-                    Code::Space => {
-                        cx.emit(AppEvent::TogglePlay);
-                        meta.consume();
-                    }
-                    Code::Escape if self.s.menu.with_untracked(|m| m.is_some()) => {
-                        self.s.menu.set(None);
-                    }
-                    Code::Escape if self.s.piano_open.get_untracked() => cx.emit(AppEvent::ClosePiano),
-                    Code::F3 => cx.emit(AppEvent::ToggleStats),
-                    Code::F4 => cx.emit(AppEvent::ToggleStress),
-                    Code::F5 => cx.emit(WindowEvent::ReloadStyles),
-                    Code::F6 => cx.emit(AppEvent::CycleFrameCap),
-                    Code::F7 => cx.emit(AppEvent::CycleFilter),
-                    _ => {}
+                if ctx == Ctx::Modal {
+                    meta.consume();
                 }
             }
+        });
+
+        // F-03: which text field is being edited (vizia's Textbox announces
+        // it; the events bubble up to here).
+        event.map(|te: &TextEvent, meta| match te {
+            TextEvent::StartEdit => self.text_edit = Some(meta.origin),
+            TextEvent::EndEdit if self.text_edit == Some(meta.origin) => self.text_edit = None,
+            _ => {}
         });
     }
 }
@@ -699,6 +781,8 @@ impl AppState {
     fn tick(&mut self, cx: &mut EventContext) {
         self.tests.maybe_stall();
         self.idle_housekeeping();
+        self.install_menus(cx);
+        self.sync_shell(cx);
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -991,11 +1075,33 @@ impl AppState {
         }
     }
 
-    fn apply_layout(&mut self, i: usize) {
+    /// A channel layout is a template (UX.md decision 5): it loads the
+    /// lanes' instruments, and asks before it changes the hardware profile.
+    fn apply_layout(&mut self, cx: &mut EventContext, i: usize) {
         let Some(l) = chip::presets::LAYOUTS.get(i) else { return };
         let want = if l.vrc6 { SoundChip::WithVrc6 } else { SoundChip::Base2A03 };
-        if self.s.chip.get_untracked() != want {
-            self.set_chip(want);
+        let cur = self.s.chip.get_untracked();
+        if cur != want {
+            let silent = if want == SoundChip::Base2A03 { self.vrc6_clip_count() } else { 0 };
+            let extra = if silent > 0 {
+                format!("\n\nWith 2A03 alone, the {silent} clip(s) on the VRC6 lanes are dimmed and silent until you switch back.")
+            } else {
+                String::new()
+            };
+            let text = format!(
+                "The layout \"{}\" is made for {}. This project uses {}.\n\nSwitch the hardware profile to {}?{extra}",
+                l.name,
+                want.label(),
+                cur.label(),
+                want.label()
+            );
+            let switch = format!("Switch to {}", want.label());
+            let keep = format!("Keep {}", cur.label());
+            match self.ask(cx, &text, &switch, Some(&keep)) {
+                Some(true) => self.set_chip(want),
+                Some(false) => {}
+                None => return,
+            }
         }
         for (lane, name) in l.lanes.iter().enumerate() {
             if let Some(pr) = chip::presets::find(name) {
@@ -1014,6 +1120,7 @@ impl AppState {
             self.filter = FilterMode::default_for(on);
             self.send(Command::Filter(self.filter));
             self.s.filter_label.set(self.filter.label());
+            self.s.filter_state.set((self.filter, true));
             self.last_audio_stats = None;
         }
     }
@@ -1339,10 +1446,12 @@ pub fn build_ui(cx: &mut Context) {
 
     // The default chip; the default output filter follows it.
     let chip = SoundChip::WithVrc6;
+    let settings = file::load_settings();
     let s = Signals {
         // Opens with nothing selected: the full-height arrangement of the prototype.
         arrangement: Signal::new(state::Arrangement {
             selection: Vec::new(),
+            snap: Snap::from_label(&settings.arrangement_grid),
             ..mock::demo_arrangement()
         }),
         transport: Signal::new(Transport {
@@ -1365,7 +1474,11 @@ pub fn build_ui(cx: &mut Context) {
         stats: Signal::new(FrameStats::default()),
         frame: Signal::new(0),
         stress: Signal::new(false),
-        piano: Signal::new(PianoState::default()),
+        piano: Signal::new(PianoState {
+            grid: notes::Grid::from_label(&settings.piano_grid),
+            follow: settings.follow_playhead,
+            ..PianoState::default()
+        }),
         piano_open: Signal::new(false),
         lane_h: Signal::new(LANE_H_NORMAL),
         piano_pane_h: Signal::new(PIANO_PANE_DEFAULT),
@@ -1379,14 +1492,21 @@ pub fn build_ui(cx: &mut Context) {
         audio_load: Signal::new((0, 0)),
         filter_label: Signal::new(""),
         loop_on: Signal::new(true),
-        clock_bars: Signal::new(file::load_settings().clock_bars),
+        clock_bars: Signal::new(settings.clock_bars),
         inspector: Signal::new(false),
-        browser_open: Signal::new(true),
+        browser_open: Signal::new(settings.browser_open),
         browser_query: Signal::new(String::new()),
         browser_sel: Signal::new(None),
         drag_preset: Signal::new(None),
         user_presets: Signal::new(user_presets::load()),
         export_dlg: Signal::new(None),
+        dirty: Signal::new(false),
+        modal: Signal::new(None),
+        settings: Signal::new(settings.clone()),
+        audio_devices: Signal::new(Vec::new()),
+        audio_info: Signal::new(String::new()),
+        filter_state: Signal::new((FilterMode::default_for(chip == SoundChip::WithVrc6), true)),
+        recovery_msg: Signal::new(""),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1410,7 +1530,7 @@ pub fn build_ui(cx: &mut Context) {
         last_frame_seen: 0,
         cpu: perf::CpuMeter::default(),
         frame_log: perf::FrameLog::from_env(),
-        cap: FrameCap::from_env(),
+        cap: FrameCap::from_setting(settings.frame_cap),
         applied: None,
         engine: None,
         params: instruments::default_params(),
@@ -1441,13 +1561,42 @@ pub fn build_ui(cx: &mut Context) {
         pending_audition: None,
         export_job: None,
         audition_lane: None,
+        text_edit: None,
+        editor: Ctx::Arrangement,
+        saved: (Doc::of(&s.arrangement.get_untracked(), 150.0, instruments::default_params()), Extras {
+            chip,
+            filter: FilterMode::default_for(true),
+            filter_auto: true,
+            loop_start: 0,
+            loop_end: 0,
+            loop_on: true,
+            mute: 0,
+            solo: 0,
+        }),
+        quitting: false,
+        title: String::new(),
+        settings,
+        #[cfg(feature = "menus")]
+        menus: None,
+        menus_tried: false,
+        audio_switch: None,
     };
-    if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
-        state.s.recovery_offer.set(true);
+    match state.recovery.as_ref().and_then(|r| r.start_session()) {
+        Some(file::LastSession::Crashed) => {
+            state.s.recovery_msg.set("Last session didn't close cleanly");
+            state.s.recovery_offer.set(true);
+        }
+        Some(file::LastSession::UnsavedQuit) => {
+            state.s.recovery_msg.set("Unsaved changes from your last session");
+            state.s.recovery_offer.set(true);
+        }
+        None => {}
     }
     state.s.filter_label.set(state.filter.label());
+    state.s.filter_state.set((state.filter, !state.filter_manual));
     state.start_engine();
     state.apply_test_project();
+    state.mark_saved();
     state.build(cx);
 
     VStack::new(cx, |cx| {
@@ -1495,6 +1644,7 @@ pub fn build_ui(cx: &mut Context) {
         notice(cx, s);
         context_menu(cx, s);
         views::export_dialog::build(cx, s);
+        views::modal::build(cx, s);
     })
     .class("shell");
 
@@ -1508,10 +1658,7 @@ impl AppState {
         if std::env::var("CHIPDAW_AUDIO").is_ok_and(|v| v == "0") {
             return;
         }
-        let e = Engine::start(EngineConfig {
-            buffer_frames: self.tests.buffer,
-            ..Default::default()
-        });
+        let e = Engine::start(self.engine_config());
         self.engine = Some(e);
         if self.tests.stress {
             self.s.arrangement.set(mock::stress_arrangement());
@@ -1633,7 +1780,7 @@ fn notice(cx: &mut Context, s: Signals) {
                 .toggle_class("hidden", s.status.map(|m| m.is_empty()));
             Binding::new(cx, s.recovery_offer, move |cx| {
                 if s.recovery_offer.get() {
-                    Label::new(cx, "Last session didn't close cleanly").class("notice-text");
+                    Label::new(cx, s.recovery_msg).class("notice-text");
                     Key::new(cx, s, "RECOVER", KeyAction::Recover)
                         .width(Pixels(NOTICE_KEY_W))
                         .height(Pixels(theme::tokens::KEY_SIZE));
@@ -1654,48 +1801,20 @@ fn notice(cx: &mut Context, s: Signals) {
 /// Split-pill widths (logical px): label segment and whole pill, per column.
 const PILL_TEMPO_LABEL_W: f32 = 44.0;
 const PILL_TEMPO_W: f32 = 92.0;
-const PILL_CHIP_LABEL_W: f32 = 52.0;
-const PILL_CHIP_W: f32 = 132.0;
 const PILL_STAT_LABEL_W: f32 = 32.0;
-/// Word keys in the top bar (logical px).
-const WORD_KEY_W: f32 = 44.0;
-/// The import / export keys (longer labels).
-const WIDE_KEY_W: f32 = 56.0;
 
-/// The top bar: file keys and project pills on the left, the transport
-/// capsule centred, the spectrum and CPU / kHz pills on the right.
+/// The top bar: tempo on the left, the transport capsule centred, the
+/// spectrum and CPU / kHz pills on the right.
 fn top_bar(cx: &mut Context, s: Signals) {
-    use theme::tokens::{BOX_H, BOX_W, KEY_SIZE, PILL_H, PILL_W};
+    use theme::tokens::{BOX_H, BOX_W, PILL_H, PILL_W};
     HStack::new(cx, |cx| {
-        // Left
+        // Left: tempo only (UX.md decision 1). File commands live in the
+        // menus; the grid in the arrangement; chip and filter in Project
+        // Settings (decision 4).
         HStack::new(cx, |cx| {
-            for (label, action) in [("NEW", KeyAction::New), ("OPEN", KeyAction::Open), ("SAVE", KeyAction::Save)] {
-                Key::new(cx, s, label, action)
-                    .width(Pixels(WORD_KEY_W))
-                    .height(Pixels(KEY_SIZE));
-            }
-            Element::new(cx).class("bar-gap");
-            for (label, action) in [("MIDI IN", KeyAction::ImportMidi), ("EXPORT", KeyAction::ExportWav)] {
-                Key::new(cx, s, label, action)
-                    .width(Pixels(WIDE_KEY_W))
-                    .height(Pixels(KEY_SIZE));
-            }
-            Element::new(cx).class("bar-gap");
             VStack::new(cx, |cx| {
                 StatPill::new(cx, s, PillKind::Bpm, PILL_TEMPO_LABEL_W)
                     .width(Pixels(PILL_TEMPO_W))
-                    .height(Pixels(PILL_H));
-                StatPill::new(cx, s, PillKind::Snap, PILL_TEMPO_LABEL_W)
-                    .width(Pixels(PILL_TEMPO_W))
-                    .height(Pixels(PILL_H));
-            })
-            .class("pill-stack");
-            VStack::new(cx, |cx| {
-                StatPill::new(cx, s, PillKind::Chip, PILL_CHIP_LABEL_W)
-                    .width(Pixels(PILL_CHIP_W))
-                    .height(Pixels(PILL_H));
-                StatPill::new(cx, s, PillKind::Filter, PILL_CHIP_LABEL_W)
-                    .width(Pixels(PILL_CHIP_W))
                     .height(Pixels(PILL_H));
             })
             .class("pill-stack");
@@ -1820,6 +1939,16 @@ fn device_panel(cx: &mut Context, s: Signals) {
     .class("device");
 }
 
+/// The piano roll's key hint, from the shortcut table and the platform's
+/// drag modifiers (F-25: never hard-coded key names).
+fn piano_hint() -> String {
+    let (copy, no_snap) = if shortcuts::MACOS { ("Option", "Cmd") } else { ("Ctrl", "Alt") };
+    format!(
+        "Shift-drag select · {copy}-drag copy · {no_snap} no snap · {} quantize · Esc close",
+        shortcuts::label(Action::Quantize)
+    )
+}
+
 /// The bottom panel while a clip is open: a header row and the piano roll.
 fn piano_panel(cx: &mut Context, s: Signals) {
     VStack::new(cx, |cx| {
@@ -1852,8 +1981,7 @@ fn piano_panel(cx: &mut Context, s: Signals) {
             let hover = s.piano.map(|p| p.hover.clone());
             Label::new(cx, hover).class("field-label").class("mono-info");
             Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
-            Label::new(cx, "Shift-drag select · Ctrl-drag copy · Alt no snap · Q quantize · Esc close")
-                .class("field-label");
+            Label::new(cx, piano_hint()).class("field-label");
             Button::new(cx, |cx| Label::new(cx, "Close"))
                 .class("btn")
                 .on_press(|cx| cx.emit(AppEvent::ClosePiano));
@@ -1887,6 +2015,7 @@ impl AppState {
             }
             let d = self.doc();
             self.history.commit(d);
+            self.update_dirty();
         }
     }
 
@@ -1900,6 +2029,7 @@ impl AppState {
             Some(d) => self.apply_doc(&d),
             None => self.set_status(if redo { "Nothing to redo" } else { "Nothing to undo" }.into()),
         }
+        self.update_dirty();
     }
 
     /// Puts a document into the model and the engine (through the usual
@@ -1998,6 +2128,8 @@ impl AppState {
         self.filter = p.filter;
         self.filter_manual = !p.filter_auto;
         self.send(Command::Filter(self.filter));
+        self.s.filter_label.set(self.filter.label());
+        self.s.filter_state.set((self.filter, p.filter_auto));
         self.s.mute.set(p.mute);
         self.s.solo.set(p.solo);
         self.send(Command::Mute(p.mute));
@@ -2054,14 +2186,7 @@ impl AppState {
         match ext.as_str() {
             "mid" | "midi" => self.import_midi(path),
             "wav" => self.import_sample(path),
-            e if e == file::EXTENSION => match file::load(path) {
-                Ok(p) => {
-                    self.load_project(p);
-                    self.s.file_path.set(path.display().to_string());
-                    self.set_status(format!("Opened {}", path.display()));
-                }
-                Err(e) => self.set_status(e),
-            },
+            e if e == file::EXTENSION => self.open_project_file(path),
             _ => self.set_status(format!("Drop a .mid, .wav or .{} file.", file::EXTENSION)),
         }
     }
@@ -2091,6 +2216,8 @@ impl AppState {
         p.solo = 0;
         self.load_project(p);
         self.s.file_path.set(String::new());
+        // A new song nobody has saved yet.
+        self.mark_unsaved();
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         self.set_status(format!("Imported {name}: {}", imp.report));
     }
@@ -2109,7 +2236,7 @@ impl AppState {
             d = d.set_directory(dir);
         }
         // `CHIPDAW_EXPORT_TO=path.wav` (scripted UI tests): no native dialog.
-        let path = match std::env::var_os("CHIPDAW_EXPORT_TO") {
+        let path = match crate::dev::var_os("CHIPDAW_EXPORT_TO") {
             Some(p) => std::path::PathBuf::from(p),
             None => match d.save_file() {
                 Some(p) => p,
@@ -2185,19 +2312,55 @@ impl AppState {
         d
     }
 
-    fn save_project(&mut self) {
+    /// Saves to the current path (asks for one if there is none). Returns
+    /// whether the project was saved.
+    fn save_project(&mut self) -> bool {
         if self.s.file_path.get_untracked().trim().is_empty() {
             match self.file_dialog().save_file() {
                 Some(path) => self.s.file_path.set(path.display().to_string()),
-                None => return,
+                None => return false,
             }
         }
         let text = self.s.file_path.get_untracked();
         let path = file::with_extension(&text);
+        self.commit();
         match file::save(&self.project(), &path) {
             Ok(()) => {
+                let shown = path.display().to_string();
+                self.s.file_path.set(shown.clone());
+                self.mark_saved();
+                self.add_recent(&shown);
+                self.set_status(format!("Saved {shown}"));
+                true
+            }
+            Err(e) => {
+                self.set_status(e);
+                false
+            }
+        }
+    }
+
+    /// Save As: a native save dialog, then save there.
+    fn save_project_as(&mut self) -> bool {
+        match self.file_dialog().save_file() {
+            Some(path) => {
                 self.s.file_path.set(path.display().to_string());
-                self.set_status(format!("Saved {}", path.display()));
+                self.save_project()
+            }
+            None => false,
+        }
+    }
+
+    /// Opens a project file (the caller already asked to save).
+    fn open_project_file(&mut self, path: &std::path::Path) {
+        match file::load(path) {
+            Ok(p) => {
+                self.load_project(p);
+                let shown = path.display().to_string();
+                self.s.file_path.set(shown.clone());
+                self.mark_saved();
+                self.add_recent(&shown);
+                self.set_status(format!("Opened {shown}"));
             }
             Err(e) => self.set_status(e),
         }
@@ -2241,6 +2404,7 @@ impl AppState {
             p.top = ((kind.rows() - 1 - mid) as f32 - ROWS_SHOWN_GUESS / 2.0).max(0.0);
         });
         self.s.piano_open.set(true);
+        self.editor = Ctx::PianoRoll;
         // Bring the clip's lane into view if it's scrolled out.
         if let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) {
             let (top, bottom) = (lane as f32 * LANE_H_NORMAL, (lane + 1) as f32 * LANE_H_NORMAL);
@@ -2268,6 +2432,7 @@ impl AppState {
         });
         self.sync_loop();
         self.s.piano_open.set(false);
+        self.editor = Ctx::Arrangement;
         self.clamp_lane_scroll();
     }
 
@@ -2350,6 +2515,7 @@ impl AppState {
             MenuAction::MakeUnique => self.make_instrument_unique(),
             MenuAction::LaneInstrument => self.use_lane_instrument(),
             MenuAction::SavePreset => self.save_user_preset(),
+            MenuAction::Grid(g) => self.s.arrangement.update(|a| a.snap = g),
         }
     }
 
@@ -2489,7 +2655,8 @@ impl AppState {
             self.status_until = None;
             self.s.status.set(String::new());
         }
-        if now - self.last_autosave >= file::AUTOSAVE_INTERVAL && !self.s.recovery_offer.get_untracked() {
+        let every = Duration::from_secs(self.settings.autosave_secs as u64);
+        if self.settings.autosave_secs > 0 && now - self.last_autosave >= every && !self.s.recovery_offer.get_untracked() {
             self.last_autosave = now;
             let d = self.doc();
             if self.autosaved.as_ref().is_none_or(|a| !a.same_as(&d)) {
@@ -2516,23 +2683,545 @@ impl AppState {
                 self.open_dropped(&path);
             }
         }
-        if let Ok(path) = std::env::var("CHIPDAW_PROJECT") {
+        let opened_arg = std::env::args_os().skip(1).any(|a| std::path::Path::new(&a).is_file());
+        if self.settings.open_last && !opened_arg && crate::dev::var("CHIPDAW_PROJECT").is_none() {
+            if let Some(last) = self.settings.recent.first().cloned().filter(|p| std::path::Path::new(p).is_file()) {
+                self.open_project_file(std::path::Path::new(&last));
+            }
+        }
+        if let Some(path) = crate::dev::var("CHIPDAW_PROJECT") {
             match file::load(std::path::Path::new(&path)) {
                 Ok(p) => {
                     self.load_project(p);
                     self.s.file_path.set(path);
+                    self.mark_saved();
                 }
                 Err(e) => eprintln!("CHIPDAW_PROJECT: {e}"),
             }
         }
-        if let Some(id) = std::env::var("CHIPDAW_OPEN_CLIP").ok().and_then(|v| v.parse().ok()) {
+        if let Some(id) = crate::dev::var("CHIPDAW_OPEN_CLIP").and_then(|v| v.parse().ok()) {
             self.open_piano(id);
         }
         // `CHIPDAW_PIANO_ZOOM=px per bar` (the piano-roll benchmark shows
         // all 2,000 notes at 32).
-        if let Some(ppb) = std::env::var("CHIPDAW_PIANO_ZOOM").ok().and_then(|v| v.parse::<f64>().ok()) {
+        if let Some(ppb) = crate::dev::var("CHIPDAW_PIANO_ZOOM").and_then(|v| v.parse::<f64>().ok()) {
             let ppb = ppb.clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
             self.s.piano.update(|p| p.px_per_tick = ppb / TICKS_PER_BAR as f64);
+        }
+    }
+}
+
+// ───────────────────────────── App shell (Batches 1 and 2) ─────────────────────────────
+
+impl AppState {
+    /// The audio configuration from Settings (a dev-mode `CHIPDAW_BUFFER`
+    /// overrides the buffer for the benchmarks).
+    fn engine_config(&self) -> EngineConfig {
+        EngineConfig {
+            sample_rate: self.settings.sample_rate,
+            buffer_frames: self.tests.buffer.or(self.settings.buffer_frames),
+            device_name: self.settings.audio_device.clone(),
+        }
+    }
+
+    fn extras(&self) -> Extras {
+        let tr = self.s.transport.get_untracked();
+        let (loop_start, loop_end) = if self.clip_looping {
+            (self.loop_start_saved, self.loop_end_saved)
+        } else {
+            (tr.loop_start_ticks, tr.loop_end_ticks)
+        };
+        Extras {
+            chip: self.s.chip.get_untracked(),
+            filter: self.filter,
+            filter_auto: !self.filter_manual,
+            loop_start: loop_start as u32,
+            loop_end: loop_end as u32,
+            loop_on: self.s.loop_on.get_untracked(),
+            mute: self.s.mute.get_untracked(),
+            solo: self.s.solo.get_untracked(),
+        }
+    }
+
+    /// The document as it is now is the saved one (New, Open, Save).
+    fn mark_saved(&mut self) {
+        let d = self.doc();
+        self.history.commit(d.clone());
+        self.saved = (d, self.extras());
+        self.update_dirty();
+    }
+
+    /// Nothing on disk matches the document (a recovered session, a song
+    /// made from a MIDI file).
+    fn mark_unsaved(&mut self) {
+        // No real document has a negative tempo.
+        self.saved.0 = Doc::of(&state::Arrangement::empty(), -1.0, instruments::default_params());
+        self.update_dirty();
+    }
+
+    /// F-01: dirty when the last committed document or the saved extras
+    /// differ from the saved ones. Undoing back to the saved state is clean
+    /// again (snapshots compare by content).
+    fn update_dirty(&mut self) {
+        let dirty = !self.history.current().same_as(&self.saved.0) || self.extras() != self.saved.1;
+        self.s.dirty.set_if_changed(dirty);
+    }
+
+    /// The project's name for the title bar and prompts.
+    fn project_name(&self) -> String {
+        let p = self.s.file_path.get_untracked();
+        std::path::Path::new(p.trim())
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .filter(|n| !n.is_empty())
+            .unwrap_or("Untitled")
+            .to_string()
+    }
+
+    /// A native question with two or three buttons (rfd; Windows task
+    /// dialog). `Some(true)`: the first button; `Some(false)`: the second
+    /// (only when `second` is given); `None`: Cancel or closed.
+    fn ask(&mut self, cx: &mut EventContext, text: &str, first: &str, second: Option<&str>) -> Option<bool> {
+        use rfd::{MessageButtons, MessageDialogResult as R};
+        let buttons = match second {
+            Some(s) => MessageButtons::YesNoCancelCustom(first.into(), s.into(), "Cancel".into()),
+            None => MessageButtons::OkCancelCustom(first.into(), "Cancel".into()),
+        };
+        let mut d = rfd::MessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title("ChipDAW")
+            .set_description(text)
+            .set_buttons(buttons);
+        if let Some(w) = cx.window() {
+            d = d.set_parent(&*w);
+        }
+        // The dialog's own loop runs on this thread; the audio keeps going.
+        let r = d.show();
+        self.last_activity = Instant::now();
+        match r {
+            R::Yes | R::Ok => Some(true),
+            R::No => second.map(|_| false),
+            R::Custom(c) if c == first => Some(true),
+            R::Custom(c) if second == Some(c.as_str()) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// F-01: before something replaces or closes the document, ask "Save /
+    /// Don't Save / Cancel" if it has unsaved changes. No prompt when clean.
+    fn ask_save(&mut self, cx: &mut EventContext, doing: &str) -> Proceed {
+        // An edit still in flight counts.
+        self.commit();
+        self.update_dirty();
+        if !self.s.dirty.get_untracked() {
+            return Proceed::Clean;
+        }
+        let name = self.project_name();
+        let text = format!("Do you want to save the changes to \"{name}\" before {doing}?\n\nIf you don't save, your changes will be lost.");
+        match self.ask(cx, &text, "Save", Some("Don't Save")) {
+            Some(true) => {
+                if self.save_project() {
+                    Proceed::Clean
+                } else {
+                    Proceed::Stop
+                }
+            }
+            Some(false) => Proceed::Discard,
+            None => Proceed::Stop,
+        }
+    }
+
+    /// The window is closing: autosave once more and end the session. After
+    /// Don't Save with "Offer recovery after an unsaved quit" on, the
+    /// recovery file stays and is offered at the next start.
+    fn end_session(&mut self, discarded: bool) {
+        let Some(r) = self.recovery.as_ref() else { return };
+        // A recovery still on offer (never answered) is kept as it is.
+        if self.s.recovery_offer.get_untracked() {
+            return;
+        }
+        if discarded && self.settings.offer_recovery {
+            r.end_session_unsaved(&self.project());
+        } else {
+            r.end_session(&self.project());
+        }
+    }
+
+    /// Clips on the VRC6 lanes (silent under the 2A03 profile).
+    fn vrc6_clip_count(&self) -> usize {
+        self.s.arrangement.with_untracked(|a| a.clips.iter().filter(|c| c.lane >= chip::driver::LANE_V1).count())
+    }
+
+    /// Project Settings: the hardware profile. Switching VRC6 off while its
+    /// lanes have clips asks first (F-04, principle 5).
+    fn set_profile(&mut self, cx: &mut EventContext, chip: SoundChip) {
+        if chip == self.s.chip.get_untracked() {
+            return;
+        }
+        let n = self.vrc6_clip_count();
+        if chip == SoundChip::Base2A03 && n > 0 {
+            let text = format!(
+                "Switch the hardware profile to 2A03?\n\nThe VRC6 lanes have {n} clip(s). They stay in the project, dimmed and silent, until you switch back to 2A03 + VRC6."
+            );
+            if self.ask(cx, &text, "Switch to 2A03", None) != Some(true) {
+                return;
+            }
+        }
+        self.set_chip(chip);
+        self.update_dirty();
+    }
+
+    /// Project Settings: the output filter (`None`: follow the profile).
+    fn set_filter(&mut self, m: Option<FilterMode>) {
+        match m {
+            None => {
+                self.filter_manual = false;
+                self.filter = FilterMode::default_for(self.s.chip.get_untracked() == SoundChip::WithVrc6);
+            }
+            Some(m) => {
+                self.filter_manual = true;
+                self.filter = m;
+            }
+        }
+        self.send(Command::Filter(self.filter));
+        self.s.filter_label.set(self.filter.label());
+        self.s.filter_state.set((self.filter, !self.filter_manual));
+        self.last_audio_stats = None;
+        self.update_dirty();
+    }
+
+    fn save_settings(&mut self) {
+        file::save_settings(&self.settings);
+        self.s.settings.set(self.settings.clone());
+    }
+
+    fn add_recent(&mut self, path: &str) {
+        self.settings.add_recent(path);
+        self.save_settings();
+    }
+
+    /// File > Open Recent > n. A file that has gone is removed, with a notice.
+    fn open_recent(&mut self, cx: &mut EventContext, i: usize) {
+        let Some(path) = self.settings.recent.get(i).cloned() else { return };
+        if !std::path::Path::new(&path).is_file() {
+            self.settings.recent.remove(i);
+            self.save_settings();
+            self.set_status(format!("{path} was moved or deleted, so it was removed from Open Recent."));
+            return;
+        }
+        if self.ask_save(cx, "opening another project") == Proceed::Stop {
+            return;
+        }
+        self.open_project_file(std::path::Path::new(&path));
+    }
+
+    fn open_modal(&mut self, m: Modal) {
+        self.s.menu.set(None);
+        if m == Modal::Settings(SettingsTab::Audio) {
+            self.s.audio_devices.set(Engine::output_devices());
+            self.refresh_audio_info(None);
+        }
+        self.s.modal.set(Some(m));
+    }
+
+    fn refresh_audio_info(&mut self, gap_ms: Option<f64>) {
+        let info = match self.engine.as_ref() {
+            Some(e) => format!("Now playing on {}", e.device_info()),
+            None => "Audio is off in this session.".to_string(),
+        };
+        let info = match gap_ms {
+            Some(g) => format!("{info}  ·  last change: {g:.0} ms between callbacks"),
+            None => info,
+        };
+        self.s.audio_info.set(info);
+    }
+
+    /// One change from the Settings panel: applied at once and saved.
+    fn set_setting(&mut self, cx: &mut EventContext, v: Set) {
+        let st = &mut self.settings;
+        let mut audio = false;
+        match v {
+            Set::Device(d) => {
+                st.audio_device = d;
+                audio = true;
+            }
+            Set::Buffer(b) => {
+                st.buffer_frames = b;
+                audio = true;
+            }
+            Set::Rate(r) => {
+                st.sample_rate = r;
+                audio = true;
+            }
+            Set::FrameCap(c) => {
+                st.frame_cap = c;
+                self.cap = FrameCap::from_setting(c);
+                self.apply_frame_cap(cx);
+            }
+            Set::ClockBars(b) => {
+                st.clock_bars = b;
+                self.s.clock_bars.set(b);
+            }
+            Set::ArrangementGrid(g) => {
+                let snap = Snap::from_label(&g);
+                st.arrangement_grid = g;
+                self.s.arrangement.update(|a| a.snap = snap);
+            }
+            Set::PianoGrid(g) => {
+                let grid = notes::Grid::from_label(&g);
+                st.piano_grid = g;
+                self.s.piano.update(|p| p.grid = grid);
+            }
+            Set::Follow(f) => {
+                st.follow_playhead = f;
+                self.s.piano.update(|p| p.follow = f);
+            }
+            Set::Autosave(secs) => st.autosave_secs = secs,
+            Set::OfferRecovery(b) => st.offer_recovery = b,
+            Set::OpenLast(b) => st.open_last = b,
+            Set::Unsilence(id) => st.silenced.retain(|x| *x != id),
+            Set::UnsilenceAll => st.silenced.clear(),
+        }
+        self.save_settings();
+        if audio {
+            self.apply_audio();
+        }
+    }
+
+    /// Settings > Audio changed: switch the running engine through its
+    /// rebuild path, and measure the gap a moment later.
+    fn apply_audio(&mut self) {
+        let cfg = self.engine_config();
+        let Some(e) = self.engine.as_mut() else { return };
+        e.shared().max_gap_ns.store(0, std::sync::atomic::Ordering::Relaxed);
+        if e.reconfigure(cfg) {
+            self.audio_switch = Some(Instant::now());
+            self.s.audio_load.set((0, 0));
+            self.last_load = None;
+        }
+    }
+
+    /// Runs an action from the keyboard (`menu: false`) or a menu (`true`).
+    /// Returns whether it was handled (the key is then consumed).
+    fn run_action(&mut self, cx: &mut EventContext, a: Action, menu: bool) -> bool {
+        let piano = self.s.piano_open.get_untracked() && self.editor == Ctx::PianoRoll;
+        match a {
+            Action::New => cx.emit(AppEvent::NewProject),
+            Action::Open => cx.emit(AppEvent::OpenProject),
+            Action::Save => {
+                self.save_project();
+            }
+            Action::SaveAs => {
+                self.save_project_as();
+            }
+            Action::ExportAudio => cx.emit(AppEvent::ExportWav),
+            Action::Quit => cx.emit(WindowEvent::WindowClose),
+            Action::Undo => self.undo(false),
+            Action::Redo => self.undo(true),
+            // The Edit menu while the piano roll is the active editor: the
+            // piano roll does it (its keys reach it directly when focused).
+            Action::Cut | Action::Copy | Action::Paste | Action::Duplicate | Action::Delete | Action::SelectAll | Action::Quantize
+                if menu && piano =>
+            {
+                cx.emit_custom(Event::new(PianoCmd(a)).target(Entity::root()).propagate(Propagation::Subtree));
+            }
+            Action::Cut | Action::Copy | Action::Paste | Action::Quantize => return false,
+            Action::Duplicate => self.run_menu_action(MenuAction::Duplicate),
+            // Keys: the focused editor handles these itself.
+            Action::Delete | Action::SelectAll | Action::OpenClip if !menu => return false,
+            Action::Delete => self.run_menu_action(MenuAction::Delete),
+            Action::SelectAll => self.s.arrangement.update(|a| a.selection = a.clips.iter().map(|c| c.id).collect()),
+            Action::OpenClip => return false,
+            Action::Settings => self.open_modal(Modal::Settings(SettingsTab::Audio)),
+            Action::InsertClip => self.run_menu_action(MenuAction::InsertClip),
+            Action::LoopSelection => self.run_menu_action(MenuAction::LoopSelection),
+            Action::PlayStop => cx.emit(AppEvent::TogglePlay),
+            Action::Rewind => cx.emit(AppEvent::SetPlayhead(0.0)),
+            Action::ToggleBrowser => cx.emit(AppEvent::ToggleBrowser),
+            Action::Follow => cx.emit(AppEvent::TogglePianoFollow),
+            Action::Escape => {
+                if self.s.menu.with_untracked(|m| m.is_some()) {
+                    self.s.menu.set(None);
+                } else if self.s.piano_open.get_untracked() {
+                    self.close_piano();
+                } else {
+                    self.s.arrangement.update(|a| a.selection.clear());
+                    self.s.time_sel.set(None);
+                }
+            }
+            Action::CloseDialog => {
+                if self.s.modal.with_untracked(|m| m.is_some()) {
+                    self.s.modal.set(None);
+                } else if self.export_job.is_none() {
+                    self.s.export_dlg.set(None);
+                }
+            }
+            Action::TransposeUp
+            | Action::TransposeDown
+            | Action::OctaveUp
+            | Action::OctaveDown
+            | Action::NudgeLeft
+            | Action::NudgeRight
+            | Action::TextConfirm
+            | Action::TextCancel
+            | Action::TextNext
+            | Action::TextSelectAll
+            | Action::TextCopy
+            | Action::TextCut
+            | Action::TextPaste => return false,
+            Action::DevStats => cx.emit(AppEvent::ToggleStats),
+            Action::DevStress => cx.emit(AppEvent::ToggleStress),
+            Action::DevReloadStyles => cx.emit(WindowEvent::ReloadStyles),
+            Action::DevFrameCap => cx.emit(AppEvent::CycleFrameCap),
+            Action::DevFilter => cx.emit(AppEvent::CycleFilter),
+        }
+        true
+    }
+
+    fn run_menu_cmd(&mut self, cx: &mut EventContext, c: menus::Cmd) {
+        use menus::Cmd;
+        match c {
+            Cmd::Action(a) => {
+                self.run_action(cx, a, true);
+            }
+            Cmd::NewFromMidi => cx.emit(AppEvent::ImportMidi),
+            Cmd::ImportAudio => cx.emit(AppEvent::ImportAudio),
+            Cmd::ProjectSettings => self.open_modal(Modal::ProjectSettings),
+            Cmd::OpenRecent(i) => self.open_recent(cx, i),
+            Cmd::ClearRecent => {
+                self.settings.recent.clear();
+                self.save_settings();
+            }
+            Cmd::ClockBars => cx.emit(AppEvent::ToggleClockFormat),
+            Cmd::About => self.open_modal(Modal::About),
+            Cmd::ShortcutSheet => self.open_modal(Modal::Shortcuts),
+        }
+    }
+
+    /// What the menu bar shows (enabled items, check marks, Open Recent).
+    fn menu_state(&self) -> menus::MenuState {
+        let (can_undo, can_redo) = (self.history.can_undo(), self.history.can_redo());
+        let piano = self.s.piano_open.get_untracked() && self.editor == Ctx::PianoRoll;
+        let notes_selected = self.s.piano.with_untracked(|p| !p.sel.is_empty());
+        let clips = self.s.arrangement.with_untracked(|a| !a.selection.is_empty());
+        menus::MenuState {
+            can_undo,
+            can_redo,
+            piano,
+            notes_selected,
+            can_paste: !self.clipboard.is_empty(),
+            selection: if piano { notes_selected } else { clips },
+            time_selection: self.s.time_sel.with_untracked(|t| t.is_some()),
+            browser: self.s.browser_open.get_untracked(),
+            follow: self.s.piano.with_untracked(|p| p.follow),
+            clock_bars: self.s.clock_bars.get_untracked(),
+            recent: self
+                .settings
+                .recent
+                .iter()
+                .map(|p| {
+                    let path = std::path::Path::new(p);
+                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or(p);
+                    let dir = path.parent().map(|d| d.display().to_string()).unwrap_or_default();
+                    if shortcuts::MACOS {
+                        format!("{name} — {dir}")
+                    } else {
+                        format!("{name}\t{dir}")
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    /// Once, on the first tick with a window: the native menu bar.
+    #[cfg(feature = "menus")]
+    fn install_menus(&mut self, cx: &mut EventContext) {
+        if self.menus_tried {
+            return;
+        }
+        let Some(win) = cx.window() else { return };
+        self.menus_tried = true;
+        // Missing files leave Open Recent, with a notice.
+        let gone = self.settings.prune_recent();
+        if !gone.is_empty() {
+            self.save_settings();
+            self.set_status(format!("Removed {} missing project(s) from Open Recent.", gone.len()));
+        }
+        let m = menus::NativeMenus::build(&self.menu_state());
+        // Menu commands arrive on the UI thread (muda's window subclass) and
+        // go through the usual event path.
+        let proxy = std::sync::Mutex::new(cx.get_proxy());
+        muda::MenuEvent::set_event_handler(Some(std::sync::Arc::new(move |e: muda::MenuEvent| {
+            if let Some(c) = menus::Cmd::from_id(&e.id.0) {
+                if let Ok(mut p) = proxy.lock() {
+                    let _ = p.emit(AppEvent::MenuCmd(c));
+                }
+            }
+        })));
+        #[cfg(target_os = "windows")]
+        {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            let hwnd = win.window_handle().ok().and_then(|h| match h.as_raw() {
+                RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
+                _ => None,
+            });
+            if let Some(hwnd) = hwnd {
+                // The bar takes its height from the client area: grow the
+                // window by it so the content keeps its size.
+                let before = win.inner_size();
+                match m.attach_hwnd(hwnd) {
+                    Ok(()) => {
+                        let _ = win.request_inner_size(before);
+                    }
+                    Err(e) => eprintln!("menu bar: {e}"),
+                }
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let _ = &win;
+            m.attach_nsapp();
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let _ = &win;
+        self.menus = Some(m);
+    }
+
+    #[cfg(not(feature = "menus"))]
+    fn install_menus(&mut self, _cx: &mut EventContext) {}
+
+    /// Per tick: the window title (name, unsaved mark), the menu bar's
+    /// state, and the audio switch measurement.
+    fn sync_shell(&mut self, cx: &mut EventContext) {
+        let mark = if self.s.dirty.get_untracked() { "*" } else { "" };
+        let title = format!("{mark}{} — ChipDAW", self.project_name());
+        if title != self.title {
+            self.title = title.clone();
+            cx.emit(WindowEvent::SetTitle(title));
+        }
+        #[cfg(feature = "menus")]
+        if self.menus.is_some() {
+            let st = self.menu_state();
+            if let Some(m) = self.menus.as_mut() {
+                m.update(&st);
+            }
+        }
+        // The gap a switch caused: the largest interval between callbacks
+        // since the switch (it includes the silence while rebuilding).
+        if let Some(t) = self.audio_switch {
+            let running = self.engine.as_ref().is_some_and(|e| e.shared().stream_running.load(std::sync::atomic::Ordering::Relaxed));
+            if running && t.elapsed() > Duration::from_millis(1500) {
+                self.audio_switch = None;
+                let gap = self.engine.as_ref().map_or(0, |e| e.shared().max_gap_ns.load(std::sync::atomic::Ordering::Relaxed));
+                let ms = gap as f64 / 1e6;
+                eprintln!("audio-switch: gap_ms={ms:.1} config={:?}", self.engine.as_ref().map(|e| e.config().clone()));
+                self.refresh_audio_info(Some(ms));
+                let dev = self.engine.as_ref().map(|e| e.device_info()).unwrap_or_default();
+                self.set_status(format!("Audio: {dev} · switched with a {ms:.0} ms gap"));
+            } else if t.elapsed() > Duration::from_secs(10) {
+                self.audio_switch = None;
+                self.refresh_audio_info(None);
+            }
         }
     }
 }

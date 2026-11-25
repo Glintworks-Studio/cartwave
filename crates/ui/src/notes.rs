@@ -112,6 +112,11 @@ impl Grid {
         }
     }
 
+    /// The grid a label names (settings.json); unknown labels give 1/16.
+    pub fn from_label(s: &str) -> Self {
+        Self::ALL.into_iter().find(|g| g.label() == s).unwrap_or(Grid::Sixteenth)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Grid::Quarter => "1/4",

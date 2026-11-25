@@ -1,4 +1,5 @@
-//! Stress-test hooks (ENGINE.md §5). All off unless their env var is set.
+//! Stress-test hooks (ENGINE.md §5). All off unless their env var is set,
+//! and only in dev mode (`CHIPDAW_DEV=1` or a debug build; see `dev.rs`).
 //!
 //! - `CHIPDAW_AUTO_EDIT=1`  test B: continuous random edits through the same
 //!   model paths as the mouse (drag with live overlap resolution, drop,
@@ -63,7 +64,7 @@ fn per(c: u64, n: u64) -> f64 {
 }
 
 fn env_on(k: &str) -> bool {
-    std::env::var(k).is_ok_and(|v| v != "0" && !v.is_empty())
+    crate::dev::var(k).is_some_and(|v| v != "0" && !v.is_empty())
 }
 
 /// Marker for the A/V sync test: mid-bar of a one-bar loop.
@@ -119,9 +120,9 @@ pub struct Tests {
 
 impl Tests {
     pub fn from_env() -> Self {
-        let log_path = std::env::var("CHIPDAW_AUDIOLOG").ok();
+        let log_path = crate::dev::var("CHIPDAW_AUDIOLOG");
         let log = log_path.as_ref().and_then(|p| File::create(p).ok());
-        let filter = std::env::var("CHIPDAW_FILTER").ok().and_then(|v| match v.as_str() {
+        let filter = crate::dev::var("CHIPDAW_FILTER").and_then(|v| match v.as_str() {
             "off" => Some(engine::FilterMode::Off),
             "nes" => Some(engine::FilterMode::Nes),
             "440" => Some(engine::FilterMode::NesWith440),
@@ -134,13 +135,13 @@ impl Tests {
             avsync: env_on("CHIPDAW_AVSYNC"),
             pilot: env_on("CHIPDAW_PILOT"),
             stress: env_on("CHIPDAW_STRESS"),
-            heavy: std::env::var("CHIPDAW_SONG").is_ok_and(|v| v == "heavy"),
+            heavy: crate::dev::var("CHIPDAW_SONG").is_some_and(|v| v == "heavy"),
             autoplay: env_on("CHIPDAW_AUTOPLAY"),
-            buffer: std::env::var("CHIPDAW_BUFFER").ok().and_then(|v| v.parse().ok()),
+            buffer: crate::dev::var("CHIPDAW_BUFFER").and_then(|v| v.parse().ok()),
             filter,
             log,
             log_path,
-            quit_after: std::env::var("CHIPDAW_QUIT_AFTER").ok().and_then(|v| v.parse().ok()),
+            quit_after: crate::dev::var("CHIPDAW_QUIT_AFTER").and_then(|v| v.parse().ok()),
             start: Instant::now(),
             next_stall: 2.0,
             next_log: 1.0,
@@ -151,7 +152,7 @@ impl Tests {
             pending_shown: None,
             edits: 0,
             stalls: 0,
-            gain: std::env::var("CHIPDAW_GAIN").ok().and_then(|v| v.parse().ok()),
+            gain: crate::dev::var("CHIPDAW_GAIN").and_then(|v| v.parse().ok()),
             audio_clock: None,
             last_audio: None,
             last_ui: None,

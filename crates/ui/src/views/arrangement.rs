@@ -552,7 +552,14 @@ impl Arrangement {
                 self.s.time_sel.set(Some(TimeSel { start, end: start + bar, lane0: lane, lane1: lane }));
                 self.s.arrangement.update(|a| a.selection.clear());
             }
-            vec![MenuAction::LoopSelection, MenuAction::InsertClip]
+            // Grid: the arrangement's own (it left the top bar, UX.md decision 4).
+            vec![
+                MenuAction::LoopSelection,
+                MenuAction::InsertClip,
+                MenuAction::Grid(crate::state::Snap::Sixteenth),
+                MenuAction::Grid(crate::state::Snap::Quarter),
+                MenuAction::Grid(crate::state::Snap::Bar),
+            ]
         };
         let s = cx.scale_factor();
         let (x, y) = super::chrome::menu_origin(
@@ -769,12 +776,14 @@ impl View for Arrangement {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(MouseButton::Left) => {
+                cx.emit(crate::AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                 if !self.bar_press(cx) {
                     self.on_press(cx);
                 }
                 meta.consume();
             }
             WindowEvent::MouseDown(MouseButton::Right) => {
+                cx.emit(crate::AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                 self.on_context_menu(cx);
                 meta.consume();
             }
@@ -877,40 +886,38 @@ impl View for Arrangement {
                 });
                 meta.consume();
             }
-            WindowEvent::KeyDown(code, key) => match code {
+            WindowEvent::KeyDown(code, key) => {
+                use crate::shortcuts::{lookup, Action, Ctx};
+                let mods = *cx.modifiers();
                 // Match the logical key too: the physical code can be
                 // unidentified (e.g. remote desktop, injected input).
-                _ if matches!(key, Some(Key::Delete | Key::Backspace)) => {
-                    self.s.arrangement.update(|a| a.delete_selected());
-                    cx.emit(crate::AppEvent::Commit);
-                    meta.consume();
-                }
-                Code::Delete | Code::Backspace => {
-                    self.s.arrangement.update(|a| a.delete_selected());
-                    cx.emit(crate::AppEvent::Commit);
-                    meta.consume();
-                }
-                Code::Enter | Code::NumpadEnter => {
-                    let one = self.s.arrangement.with_untracked(|a| {
-                        (a.selection.len() == 1).then(|| a.selection[0])
-                    });
-                    if let Some(id) = one {
-                        cx.emit(crate::AppEvent::OpenPiano(id));
+                let logical_delete = matches!(key, Some(Key::Delete | Key::Backspace)) && !crate::input::command(&mods);
+                let action = if logical_delete { Some(Action::Delete) } else { lookup(*code, &mods, Ctx::Arrangement) };
+                // Esc and the app-wide keys bubble up to the app (F-30).
+                match action {
+                    Some(Action::Delete) => {
+                        self.s.arrangement.update(|a| a.delete_selected());
+                        cx.emit(crate::AppEvent::Commit);
                         meta.consume();
                     }
+                    Some(Action::OpenClip) => {
+                        let one = self.s.arrangement.with_untracked(|a| {
+                            (a.selection.len() == 1).then(|| a.selection[0])
+                        });
+                        if let Some(id) = one {
+                            cx.emit(crate::AppEvent::OpenPiano(id));
+                            meta.consume();
+                        }
+                    }
+                    Some(Action::SelectAll) => {
+                        self.s
+                            .arrangement
+                            .update(|a| a.selection = a.clips.iter().map(|c| c.id).collect());
+                        meta.consume();
+                    }
+                    _ => {}
                 }
-                Code::Escape => {
-                    self.s.arrangement.update(|a| a.selection.clear());
-                    self.s.time_sel.set(None);
-                }
-                Code::KeyA if crate::input::command(cx.modifiers()) => {
-                    self.s
-                        .arrangement
-                        .update(|a| a.selection = a.clips.iter().map(|c| c.id).collect());
-                    meta.consume();
-                }
-                _ => {}
-            },
+            }
             _ => {}
         });
     }
