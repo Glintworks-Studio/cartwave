@@ -114,6 +114,77 @@ impl ExportDialog {
         }
     }
 
+    /// The choices as settings.json keeps them (E4).
+    pub fn remembered(&self) -> Vec<String> {
+        let o = &self.opts;
+        let range = match o.range {
+            Range::Song => "song",
+            Range::Loop => "loop",
+            Range::Selection { .. } => "selection",
+        };
+        let stems = match o.stems {
+            Stems::None => "none",
+            Stems::Channels => "channels",
+            Stems::Groups(_) => "groups",
+        };
+        let loud = match o.loudness {
+            Loudness::Authentic => "authentic",
+            Loudness::Peak { .. } => "peak",
+            Loudness::Lufs { .. } => "lufs",
+        };
+        vec![
+            format!("range:{range}"),
+            format!("rate:{}", o.rate),
+            format!("bits:{}", o.bits),
+            format!("single:{}", o.single as u8),
+            format!("split:{}", o.split as u8),
+            format!("json:{}", o.json as u8),
+            format!("stems:{stems}"),
+            format!("loud:{loud}"),
+            format!("groups:{}", self.group_of.iter().map(|g| char::from(b'0' + g.min(&3))).collect::<String>()),
+        ]
+    }
+
+    /// Applies remembered choices; unknown or unavailable ones are skipped
+    /// (a Selection range needs a selection now).
+    pub fn restore(&mut self, keys: &[String], sel: Option<(u32, u32)>) {
+        for k in keys {
+            let Some((key, v)) = k.split_once(':') else { continue };
+            let pick = match (key, v) {
+                ("range", "song") => Some(Pick::RangeSong),
+                ("range", "loop") => Some(Pick::RangeLoop),
+                ("range", "selection") if sel.is_some() => Some(Pick::RangeSelection),
+                ("rate", r) => r.parse().ok().filter(|r| [44_100, 48_000].contains(r)).map(Pick::Rate),
+                ("bits", b) => b.parse().ok().filter(|b| [16, 24].contains(b)).map(Pick::Bits),
+                ("stems", "none") => Some(Pick::StemsNone),
+                ("stems", "channels") => Some(Pick::StemsChannels),
+                ("stems", "groups") => Some(Pick::StemsGroups),
+                ("loud", "authentic") => Some(Pick::LoudAuthentic),
+                ("loud", "peak") => Some(Pick::LoudPeak),
+                ("loud", "lufs") => Some(Pick::LoudLufs),
+                _ => None,
+            };
+            if let Some(p) = pick {
+                self.pick(p, sel);
+            }
+            match (key, v) {
+                ("single", b) => self.opts.single = b == "1",
+                ("split", b) => self.opts.split = b == "1",
+                ("json", b) => self.opts.json = b == "1",
+                ("groups", g) if g.len() == 8 => {
+                    for (lane, c) in g.bytes().enumerate() {
+                        self.group_of[lane] = c.saturating_sub(b'0').min(3);
+                    }
+                }
+                _ => {}
+            }
+        }
+        // At least one loop file kind stays on.
+        if !self.opts.single && !self.opts.split {
+            self.opts.single = true;
+        }
+    }
+
     /// The options to run, with the group stems filled in.
     pub fn options(&self) -> crate::game_export::Options {
         let mut o = self.opts.clone();
@@ -132,14 +203,33 @@ fn row(cx: &mut Context, label: &str, content: impl FnOnce(&mut Context)) {
     .class("export-row");
 }
 
+/// A choice; a disabled one says why on hover (E3).
 fn choice(cx: &mut Context, d: &ExportDialog, text: &str, p: Pick, enabled: bool) {
     let on = d.picked(p);
     let text = text.to_string();
-    Button::new(cx, move |cx| Label::new(cx, text.clone()))
-        .class("btn")
-        .toggle_class("checked", on)
-        .disabled(!enabled)
-        .on_press(move |cx| cx.emit(AppEvent::ExportPick(p)));
+    let why: Option<&'static str> = if d.running.is_some() {
+        Some("Wait for the export to finish (or cancel it).")
+    } else if !enabled && p == Pick::RangeSelection {
+        Some("Make a time selection first: drag across empty lane space in the arrangement.")
+    } else if !enabled {
+        Some("Loop files are made only for the Loop region range.")
+    } else {
+        None
+    };
+    let button = move |cx: &mut Context| {
+        Button::new(cx, move |cx| Label::new(cx, text.clone()))
+            .class("btn")
+            .toggle_class("checked", on)
+            .disabled(!enabled)
+            .on_press(move |cx| cx.emit(AppEvent::ExportPick(p)));
+    };
+    match why {
+        // On a wrapper: a disabled button is never hovered.
+        Some(why) => {
+            crate::tip_wrap(cx, button).tooltip(move |cx| crate::tip(cx, why));
+        }
+        None => button(cx),
+    }
 }
 
 pub fn build(cx: &mut Context, s: Signals) {
@@ -148,6 +238,11 @@ pub fn build(cx: &mut Context, s: Signals) {
         if !open.get() {
             return;
         }
+        super::modal::Backdrop::new(cx, AppEvent::ExportClose)
+            .class("modal-backdrop")
+            .position_type(PositionType::Absolute)
+            .width(Stretch(1.0))
+            .height(Stretch(1.0));
         Binding::new(cx, s.export_dlg, move |cx| {
             let Some(d) = s.export_dlg.get() else { return };
             let busy = d.running.is_some();
@@ -203,8 +298,15 @@ pub fn build(cx: &mut Context, s: Signals) {
                     if busy {
                         Button::new(cx, |cx| Label::new(cx, "Cancel")).class("btn").on_press(|cx| cx.emit(AppEvent::ExportCancel));
                     } else {
-                        Button::new(cx, |cx| Label::new(cx, "Export…")).class("btn").class("checked").on_press(|cx| cx.emit(AppEvent::ExportGo));
-                        Button::new(cx, |cx| Label::new(cx, "Close")).class("btn").on_press(|cx| cx.emit(AppEvent::ExportClose));
+                        Button::new(cx, |cx| Label::new(cx, "Export…"))
+                            .class("btn")
+                            .class("checked")
+                            .on_press(|cx| cx.emit(AppEvent::ExportGo))
+                            .tooltip(|cx| crate::tip(cx, "Choose where to save, then render (Enter)."));
+                        Button::new(cx, |cx| Label::new(cx, "Close"))
+                            .class("btn")
+                            .on_press(|cx| cx.emit(AppEvent::ExportClose))
+                            .tooltip(|cx| crate::tip(cx, "Close (Esc). Your choices are kept for next time."));
                     }
                 })
                 .gap(Pixels(8.0))

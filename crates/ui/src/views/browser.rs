@@ -150,11 +150,14 @@ pub struct PresetList {
     /// Pressed item and the press position (physical).
     press: Option<(usize, f32, f32)>,
     dragging: bool,
+    /// The layout a click selected (B4: a click selects, a double-click or
+    /// a drag onto the tracks loads it).
+    layout_sel: Option<usize>,
 }
 
 impl PresetList {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, items: Vec::new(), scroll: 0.0, hover: None, press: None, dragging: false }
+        Self { s, items: Vec::new(), scroll: 0.0, hover: None, press: None, dragging: false, layout_sel: None }
             .build(cx, |_| {})
             .class("preset-list")
             .bind(s.browser_query, |h| {
@@ -235,7 +238,13 @@ impl View for PresetList {
                         cx.emit(AppEvent::BrowserSelect(Some(p)));
                         cx.emit(AppEvent::Audition(Some(p)));
                     }
-                    Item::Layout(l) => cx.emit(AppEvent::ApplyLayout(l)),
+                    Item::Layout(l) => {
+                        self.layout_sel = Some(l);
+                        self.press = Some((i, cx.mouse().cursor_x, cx.mouse().cursor_y));
+                        self.dragging = false;
+                        cx.capture();
+                        cx.needs_redraw();
+                    }
                     Item::Sample(slot) => {
                         let x = (cx.mouse().cursor_x - cx.bounds().x) / cx.scale_factor();
                         if x > cx.bounds().w / cx.scale_factor() - REMOVE_ZONE {
@@ -252,8 +261,21 @@ impl View for PresetList {
                 meta.consume();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                match self.item_at(Self::local_y(cx)).map(|i| self.items[i]) {
+                    Some(Item::Preset(p)) => cx.emit(AppEvent::AssignPreset { lane: None, preset: p }),
+                    Some(Item::Layout(l)) => cx.emit(AppEvent::ApplyLayout(l)),
+                    _ => {}
+                }
+                meta.consume();
+            }
+            // B5: a user preset's menu (Rename, Delete, Show in Explorer).
+            WindowEvent::MouseDown(MouseButton::Right) => {
                 if let Some(Item::Preset(p)) = self.item_at(Self::local_y(cx)).map(|i| self.items[i]) {
-                    cx.emit(AppEvent::AssignPreset { lane: None, preset: p });
+                    if p >= chip::presets::PRESETS.len() {
+                        cx.emit(AppEvent::BrowserSelect(Some(p)));
+                        let s = cx.scale_factor();
+                        cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Preset(p), cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
+                    }
                 }
                 meta.consume();
             }
@@ -264,7 +286,9 @@ impl View for PresetList {
                         self.dragging = true;
                         cx.emit(AppEvent::Audition(None));
                     }
-                    if self.dragging {
+                    if self.dragging && matches!(self.items[i], Item::Layout(_)) {
+                        cx.emit(WindowEvent::SetCursor(if Self::inside(cx) { CursorIcon::Default } else { CursorIcon::Grabbing }));
+                    } else if self.dragging {
                         if let Item::Preset(p) = self.items[i] {
                             let target = lane_at(*x, *y).filter(|_| !Self::inside(cx));
                             let kinds = self.s.user_presets.with_untracked(|u| crate::user_presets::view(p, u).map_or(0, |v| v.kinds));
@@ -287,6 +311,19 @@ impl View for PresetList {
                 cx.release();
                 cx.emit(AppEvent::PreviewSample(None));
                 self.press = None;
+                meta.consume();
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some_and(|p| matches!(self.items.get(p.0), Some(Item::Layout(_)))) => {
+                cx.release();
+                // A layout dropped on the tracks loads (B4).
+                if let (true, Some(Item::Layout(l))) = (self.dragging, self.press.and_then(|p| self.items.get(p.0).copied())) {
+                    if !Self::inside(cx) && lane_at(cx.mouse().cursor_x, cx.mouse().cursor_y).is_some() {
+                        cx.emit(AppEvent::ApplyLayout(l));
+                    }
+                    cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
+                }
+                self.press = None;
+                self.dragging = false;
                 meta.consume();
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some() => {
@@ -394,7 +431,7 @@ impl View for PresetList {
                 }
                 Item::Layout(l) | Item::Preset(l) => {
                     let is_preset = matches!(it, Item::Preset(_));
-                    let selected = is_preset && sel == Some(l);
+                    let selected = if is_preset { sel == Some(l) } else { self.layout_sel == Some(l) };
                     let hovered = self.hover == Some(i);
                     let card = vg::Rect::from_ltrb(row.left + 4.0 * s, row.top + 2.0 * s, row.right - 4.0 * s, row.bottom - 2.0 * s);
                     let rr = gfx::rrect(card, RADIUS_KEY * s);
@@ -507,6 +544,11 @@ pub fn browser(cx: &mut Context, s: Signals) {
             Textbox::new(cx, s.browser_query)
                 .placeholder("Search instruments, sounds…")
                 .on_edit(move |_cx, t| s.browser_query.set(t))
+                // B1: Esc clears the search and leaves the field.
+                .on_cancel(move |cx| {
+                    s.browser_query.set(String::new());
+                    cx.emit(TextEvent::EndEdit);
+                })
                 .width(Stretch(1.0));
         })
         .class("field")

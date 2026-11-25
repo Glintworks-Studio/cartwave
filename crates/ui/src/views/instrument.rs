@@ -22,6 +22,28 @@ pub const NEUTRAL: [i8; 4] = [15, 0, 0, 8];
 /// The four macros, in display order: (label, value range shown).
 pub const MACROS: [(&str, i32, i32); 4] = [("VOLUME", 0, 15), ("ARPEGGIO", -12, 12), ("PITCH", -32, 32), ("DUTY", 0, 16)];
 const GAP: f32 = 8.0;
+
+/// I2 (F-05): why a channel can't use a macro (the driver ignores it there);
+/// `None` when it can. The triangle's Volume does work, as a gate (a step of
+/// 0 silences it, any other value plays at its fixed level: `driver.rs`), so
+/// it stays, renamed; its Duty and both of DPCM's do nothing.
+pub fn macro_off(lane: usize, m: usize) -> Option<&'static str> {
+    match (lane, m) {
+        (chip::driver::LANE_TRI, 3) => Some("The triangle has no duty cycle."),
+        (chip::driver::LANE_DMC, 0) => Some("DPCM samples play at their recorded level: no volume envelope."),
+        (chip::driver::LANE_DMC, 3) => Some("DPCM samples have no duty cycle."),
+        _ => None,
+    }
+}
+
+/// A macro's label on a channel (the triangle's Volume is a gate).
+pub fn macro_label(lane: usize, m: usize) -> &'static str {
+    if lane == chip::driver::LANE_TRI && m == 0 {
+        "GATE (0 = SILENT)"
+    } else {
+        MACROS[m].0
+    }
+}
 const LABEL_H: f32 = 16.0;
 /// The vibrato row under the graphs.
 const VIB_H: f32 = 20.0;
@@ -221,7 +243,8 @@ impl View for InstrumentView {
                         return;
                     }
                 }
-                if let Some(m) = gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+                let lane = self.s.lane_sel.get_untracked();
+                if let Some(m) = gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom).filter(|m| macro_off(lane, *m).is_none()) {
                     cx.capture();
                     cx.emit(AppEvent::GestureBegin);
                     self.drawing = None;
@@ -294,8 +317,9 @@ impl View for InstrumentView {
             .s
             .arrangement
             .with_untracked(|a| a.lanes.get(lane).map_or(ACCENT, |l| l.color));
-        let fl = gfx::font(Face::SemiBold, 9.0 * s);
-        let fm = gfx::font(Face::Mono, 9.0 * s);
+        // F-39: informative text is at least 11 px.
+        let fl = gfx::font(Face::SemiBold, 11.0 * s);
+        let fm = gfx::font(Face::Mono, 11.0 * s);
 
         if inst.is_kit() {
             // Drum map: one row per piece.
@@ -324,8 +348,15 @@ impl View for InstrumentView {
 
         for (m, r) in Self::graphs(b, s).into_iter().enumerate() {
             let q = Self::seq_of(&inst.inst, m);
-            let (label, lo, hi) = MACROS[m];
+            let (_, lo, hi) = MACROS[m];
+            let label = macro_label(lane, m);
             gfx::draw_text(canvas, label, r.left.round(), (r.top - 5.0 * s).round(), &fl, TEXT_LO);
+            if let Some(why) = macro_off(lane, m) {
+                // I2: hidden, with the reason in its place.
+                let f = gfx::font(Face::Medium, 11.0 * s);
+                gfx::draw_text_clipped(canvas, why, r.left.round(), gfx::baseline_for_center(&f, r.center_y()).round(), r.width(), &f, TEXT_LO);
+                continue;
+            }
             let summary = if q.is_empty() { "—".to_string() } else { format!("{} steps", q.len) };
             let sw = gfx::text_width(&fm, &summary);
             gfx::draw_text(canvas, &summary, (r.right - sw).round(), (r.top - 5.0 * s).round(), &fm, TEXT_LO);

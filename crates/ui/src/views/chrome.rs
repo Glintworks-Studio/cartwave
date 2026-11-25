@@ -275,8 +275,13 @@ impl StatPill {
     fn value(s: Signals, kind: PillKind) -> String {
         match kind {
             PillKind::Cpu => {
-                let (pct, _) = s.audio_load.get_untracked();
-                format!("{pct}%")
+                // F-38: no running output says so instead of "0%".
+                let (pct, hz) = s.audio_load.get_untracked();
+                if hz == 0 {
+                    "OFF".into()
+                } else {
+                    format!("{pct}%")
+                }
             }
             PillKind::Khz => {
                 let (_, hz) = s.audio_load.get_untracked();
@@ -1051,10 +1056,20 @@ impl View for ContextMenu {
                 x += (MENU_SWATCH + 8.0) * s;
             }
             gfx::draw_text(canvas, &item.label, x.round(), base, &f, ink);
-            let sc = if matches!(item.action, crate::state::MenuAction::Sub(_)) { "\u{25B8}".to_string() } else { item.shortcut.clone() };
-            let sw = gfx::text_width(&f, &sc);
             let ink = if hot { Rgba::hex(0x0A0A0A).with_alpha(0.6) } else { TEXT_LO };
-            gfx::draw_text(canvas, &sc, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
+            if matches!(item.action, crate::state::MenuAction::Sub(_)) {
+                // A small right-pointing triangle: the submenu opens on hover.
+                let (tx, ty) = (row.right - MENU_TEXT_X * s - 3.0 * s, row.center_y());
+                let mut pb = vg::PathBuilder::new();
+                pb.move_to((tx - 3.0 * s, ty - 4.0 * s));
+                pb.line_to((tx + 3.0 * s, ty));
+                pb.line_to((tx - 3.0 * s, ty + 4.0 * s));
+                pb.close();
+                canvas.draw_path(&pb.detach(), &gfx::fill(ink));
+            } else {
+                let sw = gfx::text_width(&f, &item.shortcut);
+                gfx::draw_text(canvas, &item.shortcut, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
+            }
         }
         // The reason a hovered row is disabled (F-24).
         if self.items.iter().any(|i| !i.enabled) {
@@ -1224,8 +1239,9 @@ impl TrackRow {
         let seen = RefCell::new((false, String::new()));
         Self { s, lane, hover: false }
         .build(cx, move |cx| {
-            Key::new(cx, s, "M", KeyAction::Mute(lane));
-            Key::new(cx, s, "S", KeyAction::Solo(lane));
+            let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
+            Key::new(cx, s, "M", KeyAction::Mute(lane)).tooltip(|cx| crate::tip(cx, "Mute this track."));
+            Key::new(cx, s, "S", KeyAction::Solo(lane)).tooltip(move |cx| crate::tip(cx, &format!("Solo this track only. {ctrl}-click to solo several.")));
         })
         .class("track-row")
         .bind(s.meters, |mut h| h.needs_redraw())

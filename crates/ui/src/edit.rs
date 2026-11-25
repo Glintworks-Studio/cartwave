@@ -370,7 +370,12 @@ impl AppState {
                 self.s.arrangement.update(|a| a.view.zoom_at(anchor, f));
             }
             Action::ZoomBack => match self.zoom_back.pop() {
-                Some(v) => self.s.arrangement.update(|a| a.view = v),
+                Some(v) => {
+                    self.s.arrangement.update(|a| a.view = v);
+                    if crate::dev::enabled() {
+                        eprintln!("dev: zoom ZoomBack px_per_bar {:.2} scroll {:.0}", v.px_per_bar(), v.scroll_ticks);
+                    }
+                }
                 None => self.set_status("No earlier zoom to go back to.".into()),
             },
             _ => {
@@ -652,6 +657,11 @@ impl AppState {
                 ]
             }
         };
+        if crate::dev::enabled() {
+            // The harness checks the items (UX.md §5); "-" marks a disabled one.
+            let list: Vec<String> = items.iter().filter(|i| i.action != MenuAction::Separator).map(|i| format!("{}{}", if i.enabled { "" } else { "-" }, i.label)).collect();
+            eprintln!("dev: menu {site:?}: {}", list.join("|"));
+        }
         let (x, y) = crate::views::chrome::menu_origin_in(self.window_logical, x, y, &items);
         self.s.menu.set(Some(ContextMenuSpec { x, y, items, sub: None }));
     }
@@ -703,7 +713,14 @@ impl AppState {
                 v
             }
         };
+        // Beside the menu: on its right, or on its left when there's no room.
+        let (w, _) = crate::views::chrome::menu_size_of(&items);
+        let main_x = self.s.menu.with_untracked(|m| m.as_ref().map_or(x, |m| m.x));
+        let x = if x + w > self.window_logical.0 - 4.0 { (main_x - w + 4.0).max(0.0) } else { x };
         let (x, y) = crate::views::chrome::menu_origin_in(self.window_logical, x, y, &items);
+        if crate::dev::enabled() {
+            eprintln!("dev: submenu {sub:?} at {x:.0} {y:.0}");
+        }
         let sub = Some(Box::new(ContextMenuSpec { x, y, items, sub: None }));
         // Only on a change: the menu is rebuilt when its spec changes.
         if self.s.menu.with_untracked(|m| m.as_ref().is_some_and(|m| m.sub != sub)) {

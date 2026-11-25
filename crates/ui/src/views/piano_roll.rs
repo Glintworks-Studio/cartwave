@@ -954,6 +954,10 @@ impl View for PianoRoll {
                 let b = cx.bounds();
                 let w = b.w / cx.scale_factor() - KEYS_W;
                 self.s.piano.update(|p| p.width_px = w);
+                // The scenario harness finds the piano roll by this line.
+                if crate::dev::enabled() {
+                    eprintln!("dev: piano roll bounds {:.0} {:.0} {:.0} {:.0} scale {:.2}", b.x, b.y, b.w, b.h, cx.scale_factor());
+                }
             }
             WindowEvent::MouseScroll(sx, sy) => {
                 let (x, _) = Self::local(cx);

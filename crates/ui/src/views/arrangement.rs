@@ -268,6 +268,8 @@ impl Arrangement {
             return;
         }
 
+        let extend = mods.shift() && self.s.time_sel.with_untracked(|t| t.is_some());
+        let hit = if extend { None } else { hit };
         let Some((id, zone)) = hit else {
             if mods.shift() {
                 if let Some(ts) = self.s.time_sel.get_untracked() {
@@ -1353,7 +1355,7 @@ impl View for Arrangement {
 fn draw_guide(canvas: &Canvas, rect: vg::Rect, s: f32, dismiss: bool) {
     use crate::shortcuts::{label, Action};
     let lines: [String; 5] = [
-        "Double-click an empty lane to make a MIDI clip, then double-click the clip to write notes.".into(),
+        "Double-click an empty lane to make a clip; double-click the clip to write notes.".into(),
         "Drag a preset from the browser onto a track to give it a sound.".into(),
         "Drop a MIDI file on the window to start from it (File > New from MIDI File).".into(),
         format!("Space plays from the insert marker · {} to undo.", label(Action::Undo)),
@@ -1382,7 +1384,7 @@ fn draw_guide(canvas: &Canvas, rect: vg::Rect, s: f32, dismiss: bool) {
 }
 
 /// Guide card geometry (logical px).
-const GUIDE_W: f32 = 560.0;
+const GUIDE_W: f32 = 600.0;
 const GUIDE_PAD: f32 = 20.0;
 const GUIDE_TITLE_H: f32 = 28.0;
 const GUIDE_TITLE_PX: f32 = 13.0;

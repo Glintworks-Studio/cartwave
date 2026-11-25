@@ -758,6 +758,10 @@ pub struct Settings {
     /// Open Recent, newest first (at most `MAX_RECENT`).
     pub recent: Vec<String>,
     pub browser_open: bool,
+    /// The export dialog's last choices (E4), as `key:value` strings.
+    pub export: Vec<String>,
+    /// Interface scale in percent (Settings > Display; 100 = the OS scale).
+    pub ui_scale: u32,
 }
 
 /// Open Recent keeps this many projects.
@@ -780,11 +784,25 @@ impl Default for Settings {
             silenced: Vec::new(),
             recent: Vec::new(),
             browser_open: true,
+            export: Vec::new(),
+            ui_scale: 100,
         }
     }
 }
 
+/// The interface scales offered (percent).
+pub const UI_SCALES: [u32; 6] = [75, 100, 125, 150, 175, 200];
+
 impl Settings {
+    /// The interface scale as a factor (an unknown value gives 1.0).
+    pub fn ui_scale_factor(&self) -> f64 {
+        if UI_SCALES.contains(&self.ui_scale) {
+            self.ui_scale as f64 / 100.0
+        } else {
+            1.0
+        }
+    }
+
     /// Puts `path` first in Open Recent (no duplicates, at most `MAX_RECENT`).
     pub fn add_recent(&mut self, path: &str) {
         self.recent.retain(|p| !same_path(p, path));

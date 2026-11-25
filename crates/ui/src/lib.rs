@@ -725,8 +725,11 @@ impl Model for AppState {
             }
             AppEvent::ExportWav => {
                 if self.s.export_dlg.with_untracked(|d| d.is_none()) {
-                    let sel = self.s.time_sel.get_untracked().is_some();
-                    self.s.export_dlg.set(Some(views::export_dialog::ExportDialog::new(sel)));
+                    let ts = self.s.time_sel.get_untracked().map(|t| (t.start, t.end));
+                    let mut d = views::export_dialog::ExportDialog::new(ts.is_some());
+                    // E4: the last choices.
+                    d.restore(&self.settings.export, ts);
+                    self.s.export_dlg.set(Some(d));
                 }
             }
             AppEvent::ExportPick(p) => {
@@ -750,6 +753,10 @@ impl Model for AppState {
             }
             AppEvent::ExportClose => {
                 if self.export_job.is_none() {
+                    if let Some(d) = self.s.export_dlg.get_untracked() {
+                        self.settings.export = d.remembered();
+                        self.save_settings();
+                    }
                     self.s.export_dlg.set(None);
                 }
             }
@@ -1015,7 +1022,8 @@ impl AppState {
         }
         let Some(p) = preset else { return };
         if self.s.transport.with_untracked(|t| t.playing) {
-            return;
+            // B2: no preview voice yet; say why nothing plays.
+            return self.set_status("Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one.".into());
         }
         let Some(lane) = self.lane_for(p, None) else { return };
         let Some(pr) = self.preset(p) else { return };
@@ -1522,11 +1530,21 @@ const IDLE_PUMP: Duration = Duration::from_millis(50);
 /// disabled one says why.
 pub fn tip<'a>(cx: &'a mut Context, text: &str) -> Handle<'a, Tooltip> {
     let text = text.to_string();
+    let long = text.chars().count() > TIP_LONG;
     Tooltip::new(cx, move |cx| {
-        Label::new(cx, text.clone()).class("tip-text");
+        Label::new(cx, text.clone()).class("tip-text").toggle_class("long", long);
     })
     .class("tip")
 }
+
+/// A wrapper that carries a control's tooltip: vizia never hovers a
+/// disabled view, so a disabled button's "why" goes on this instead (I4).
+pub fn tip_wrap<'a>(cx: &'a mut Context, content: impl FnOnce(&mut Context)) -> Handle<'a, HStack> {
+    HStack::new(cx, content).width(Auto).height(Auto).class("tip-wrap")
+}
+
+/// A tooltip longer than this (characters) wraps at a fixed width.
+const TIP_LONG: usize = 40;
 
 /// How long the pointer rests before a tooltip shows.
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
@@ -1898,6 +1916,14 @@ fn context_menu(cx: &mut Context, s: Signals) {
     });
 }
 
+/// A notice longer than this (characters) wraps in a fixed-width capsule.
+const NOTICE_LONG: usize = 96;
+/// The notice's distance from the window's bottom-right corner (logical px).
+const NOTICE_MARGIN: f32 = 16.0;
+/// How long a notice stays, and an import report (F-37: long enough to read).
+const STATUS_SECS: u64 = 6;
+const REPORT_SECS: u64 = 30;
+
 /// Width of the recovery prompt's keys (logical px).
 const NOTICE_KEY_W: f32 = 64.0;
 
@@ -1916,8 +1942,10 @@ fn notice(cx: &mut Context, s: Signals) {
             Label::new(cx, s.audio_msg)
                 .class("notice-text")
                 .toggle_class("hidden", s.audio_msg.map(|m| m.is_empty()));
+            // A long message (an import report) wraps in a wide capsule.
             Label::new(cx, s.status)
                 .class("notice-text")
+                .toggle_class("long", s.status.map(|m| m.chars().count() > NOTICE_LONG))
                 .toggle_class("hidden", s.status.map(|m| m.is_empty()));
             Binding::new(cx, s.recovery_offer, move |cx| {
                 if s.recovery_offer.get() {
@@ -1932,10 +1960,14 @@ fn notice(cx: &mut Context, s: Signals) {
             });
         })
         .class("notice")
+        // F-37: docked bottom-right, clear of the ruler and the first bars;
+        // a click dismisses it.
+        .on_press(|cx| cx.emit(AppEvent::Status(String::new())))
         .position_type(PositionType::Absolute)
         .left(Stretch(1.0))
-        .right(Stretch(1.0))
-        .top(Pixels(theme::tokens::TOPBAR_HEIGHT + 8.0));
+        .right(Pixels(NOTICE_MARGIN))
+        .top(Stretch(1.0))
+        .bottom(Pixels(NOTICE_MARGIN));
     });
 }
 
@@ -1956,7 +1988,8 @@ fn top_bar(cx: &mut Context, s: Signals) {
             VStack::new(cx, |cx| {
                 StatPill::new(cx, s, PillKind::Bpm, PILL_TEMPO_LABEL_W)
                     .width(Pixels(PILL_TEMPO_W))
-                    .height(Pixels(PILL_H));
+                    .height(Pixels(PILL_H))
+                    .tooltip(|cx| tip(cx, "Tempo: drag up or down, or use the wheel."));
             })
             .class("pill-stack");
         })
@@ -1968,20 +2001,24 @@ fn top_bar(cx: &mut Context, s: Signals) {
 
         TimeCapsule::new(cx, s)
             .width(Pixels(BOX_W))
-            .height(Pixels(BOX_H));
+            .height(Pixels(BOX_H))
+            .tooltip(|cx| tip(cx, &format!("Play / stop ({}), continue ({}), back to the start ({}). The loop light switches the song loop. Drag the clock to move the playhead.", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Continue), shortcuts::label(Action::Rewind))));
 
         // Right
         HStack::new(cx, |cx| {
             SpectrumBox::new(cx, s)
                 .width(Pixels(BOX_W))
-                .height(Pixels(BOX_H));
+                .height(Pixels(BOX_H))
+                .tooltip(|cx| tip(cx, "The output spectrum and each channel's level."));
             VStack::new(cx, |cx| {
                 StatPill::new(cx, s, PillKind::Cpu, PILL_STAT_LABEL_W)
                     .width(Pixels(PILL_W))
-                    .height(Pixels(PILL_H));
+                    .height(Pixels(PILL_H))
+                    .tooltip(|cx| tip(cx, "Audio load: the time the sound engine needs per buffer, as a share of the buffer's length. \"No audio\": no output device is running."));
                 StatPill::new(cx, s, PillKind::Khz, PILL_STAT_LABEL_W)
                     .width(Pixels(PILL_W))
-                    .height(Pixels(PILL_H));
+                    .height(Pixels(PILL_H))
+                    .tooltip(|cx| tip(cx, "The output sample rate (Settings > Audio)."));
             })
             .class("pill-stack");
         })
@@ -2019,7 +2056,7 @@ fn device_panel(cx: &mut Context, s: Signals) {
                         Label::new(cx, "Select a clip to edit its channel.").class("section-title");
                     }
                     for (slot, (_, spec)) in dials.into_iter().enumerate() {
-                        Dial::new(cx, s, slot, spec).class("dial");
+                        Dial::new(cx, s, slot, spec).class("dial").tooltip(move |cx| tip(cx, &dial_tip(s, slot, spec.label)));
                     }
                 })
                 .gap(Pixels(DIAL_GAP))
@@ -2030,12 +2067,45 @@ fn device_panel(cx: &mut Context, s: Signals) {
         .class("device-section")
         .width(Pixels(DIALS_SECTION_W));
 
-        // Text fields
+        // The clip: its name (renamed in place, UX.md §4) and the clip's
+        // instrument commands as visible buttons (I3; disabled ones say why).
         VStack::new(cx, |cx| {
             Label::new(cx, "CLIP").class("section-title");
             let name = s.arrangement.map(|a| a.first_selected().map(|c| c.name.clone()).unwrap_or_else(|| "No clip selected".into()));
             Label::new(cx, name).class("clip-name");
             Label::new(cx, format!("Rename it in place: {} or right-click > Rename.", shortcuts::label(Action::Rename))).class("field-label").class("clip-hint");
+            let st = Memo::new(move |_| {
+                s.arrangement.with(|a| {
+                    let clips: Vec<&state::Clip> = a.selection.iter().filter_map(|id| a.clip(*id)).collect();
+                    let none = clips.is_empty();
+                    let unique = !none && clips.iter().all(|c| c.instrument.is_some_and(|i| a.instruments.users(i, &a.clips) == 1));
+                    let track = !none && clips.iter().all(|c| c.instrument.is_none());
+                    (none, unique, track)
+                })
+            });
+            HStack::new(cx, |cx| {
+                tip_wrap(cx, |cx| {
+                    Button::new(cx, |cx| Label::new(cx, "Make Unique"))
+                        .class("btn")
+                        .disabled(st.map(|(none, unique, _)| *none || *unique))
+                        .on_press(|cx| cx.emit(AppEvent::MakeInstrumentUnique));
+                })
+                    .tooltip(move |cx| {
+                        let (none, unique, _) = st.get_untracked();
+                        tip(cx, if none { "Select a clip: Make Unique gives it its own copy of the instrument." } else if unique { edit::WHY_NOT_UNIQUE } else { "Give the selected clip(s) their own copy of this instrument, so editing it changes only them." })
+                    });
+                tip_wrap(cx, |cx| {
+                    Button::new(cx, |cx| Label::new(cx, "Use Track Instrument"))
+                        .class("btn")
+                        .disabled(st.map(|(none, _, track)| *none || *track))
+                        .on_press(|cx| cx.emit(AppEvent::UseLaneInstrument));
+                })
+                    .tooltip(move |cx| {
+                        let (none, _, track) = st.get_untracked();
+                        tip(cx, if none { "Select a clip that has its own instrument." } else if track { edit::WHY_TRACK_INST } else { "The selected clip(s) go back to the track's instrument." })
+                    });
+            })
+            .class("inst-actions");
         })
         .class("device-section")
         .width(Stretch(1.0))
@@ -2051,14 +2121,25 @@ fn device_panel(cx: &mut Context, s: Signals) {
                 s.arrangement.with(|a| {
                     let id = a.current_instrument(lane);
                     let name = a.instruments.get(id).map(|i| i.label()).unwrap_or_default();
-                    let whose = if id == a.instruments.lane_id(lane) { "LANE DEFAULT" } else { "CLIP'S OWN" };
+                    let whose = if id == a.instruments.lane_id(lane) { "TRACK DEFAULT" } else { "CLIP'S OWN" };
                     let n = a.instruments.users(id, &a.clips);
                     let shared = if n == 1 { "1 CLIP".to_string() } else { format!("{n} CLIPS") };
                     format!("INSTRUMENT  ·  {}  ·  {whose}  ·  {shared}", name.to_uppercase())
                 })
             });
-            Label::new(cx, title).class("section-title");
-            InstrumentView::new(cx, s).width(Stretch(1.0)).height(Stretch(1.0));
+            HStack::new(cx, |cx| {
+                Label::new(cx, title).class("section-title");
+                Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
+                Button::new(cx, |cx| Label::new(cx, "Save as Preset"))
+                    .class("btn")
+                    .on_press(|cx| cx.emit(AppEvent::SaveUserPreset))
+                    .tooltip(|cx| tip(cx, "Save this instrument to your presets (the browser lists them after the factory presets)."));
+            })
+            .class("inst-actions");
+            InstrumentView::new(cx, s)
+                .width(Stretch(1.0))
+                .height(Stretch(1.0))
+                .tooltip(|cx| tip(cx, "Drag across a graph to draw the macro. Shift-click sets the loop point, Alt-click the release point; double-click a marker to remove it. Drag the vibrato values up or down."));
         })
         .class("device-section")
         .width(Stretch(1.0))
@@ -2069,6 +2150,14 @@ fn device_panel(cx: &mut Context, s: Signals) {
     })
     .class("panel")
     .class("device");
+}
+
+/// A dial's tooltip: what it is, and why it's inert when it is (I4).
+fn dial_tip(s: Signals, slot: usize, label: &str) -> String {
+    match s.dial_state.with_untracked(|d| d.get(slot).and_then(|d| d.locked)) {
+        Some(why) => format!("{label}: inert, {why}. The instrument's macro drives it; clear that macro to use the dial."),
+        None => format!("{label}: drag up or down (Shift for fine steps), or use the wheel."),
+    }
 }
 
 /// The piano roll's key hint, from the shortcut table and the platform's
@@ -2377,7 +2466,7 @@ impl AppState {
         // A new song nobody has saved yet.
         self.mark_unsaved();
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        self.set_status(format!("Imported {name}: {}", imp.report));
+        self.set_status_for(format!("Imported {name}: {}", imp.report), REPORT_SECS);
     }
 
     /// Asks where to save (the base name of every file), then renders on a
@@ -2387,6 +2476,8 @@ impl AppState {
         if self.export_job.is_some() {
             return;
         }
+        self.settings.export = dlg.remembered();
+        self.save_settings();
         let cur = file::with_extension(&self.s.file_path.get_untracked());
         let stem = cur.file_stem().and_then(|n| n.to_str()).filter(|n| !n.is_empty()).unwrap_or("song");
         let mut d = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).set_file_name(format!("{stem}.wav"));
@@ -2525,8 +2616,12 @@ impl AppState {
     }
 
     fn set_status(&mut self, msg: String) {
+        self.set_status_for(msg, STATUS_SECS);
+    }
+
+    fn set_status_for(&mut self, msg: String, secs: u64) {
         self.s.status.set(msg);
-        self.status_until = Some(Instant::now() + Duration::from_secs(6));
+        self.status_until = Some(Instant::now() + Duration::from_secs(secs));
     }
 
     fn open_piano(&mut self, id: u32) {
@@ -3088,6 +3183,11 @@ impl AppState {
                 self.cap = FrameCap::from_setting(c);
                 self.apply_frame_cap(cx);
             }
+            Set::UiScale(p) => {
+                st.ui_scale = p;
+                let f = st.ui_scale_factor();
+                cx.emit(WindowEvent::SetUserScaleFactor(f));
+            }
             Set::ClockBars(b) => {
                 st.clock_bars = b;
                 self.s.clock_bars.set(b);
@@ -3207,7 +3307,7 @@ impl AppState {
                 if self.s.modal.with_untracked(|m| m.is_some()) {
                     self.s.modal.set(None);
                 } else if self.export_job.is_none() {
-                    self.s.export_dlg.set(None);
+                    cx.emit(AppEvent::ExportClose);
                 }
             }
             Action::TransposeUp

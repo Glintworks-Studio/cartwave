@@ -97,9 +97,12 @@ fn main() -> Result<(), ApplicationError> {
     // winit only applies the minimum to user resizes, so clamp the start size too.
     let (w, h) = parse_size();
     let size = (w.max(ui::MIN_WINDOW_SIZE.0), h.max(ui::MIN_WINDOW_SIZE.1));
+    // Settings > Display > Interface scale, on top of the OS scale.
+    let scale = ui::file::load_settings().ui_scale_factor();
     Application::new(|cx| {
         ui::build_ui(cx);
     })
+    .user_scale_factor(scale)
     .title("ChipDAW")
     .inner_size(size)
     // Below this the top bar's sides and the lanes would be cut off.

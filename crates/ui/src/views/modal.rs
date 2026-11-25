@@ -51,6 +51,7 @@ pub enum Set {
     Buffer(Option<u32>),
     Rate(u32),
     FrameCap(u32),
+    UiScale(u32),
     ClockBars(bool),
     ArrangementGrid(String),
     PianoGrid(String),
@@ -107,7 +108,7 @@ pub fn build(cx: &mut Context, s: Signals) {
         if !open.get() {
             return;
         }
-        Backdrop::new(cx).class("modal-backdrop").position_type(PositionType::Absolute).width(Stretch(1.0)).height(Stretch(1.0));
+        Backdrop::new(cx, AppEvent::CloseModal).class("modal-backdrop").position_type(PositionType::Absolute).width(Stretch(1.0)).height(Stretch(1.0));
         Binding::new(cx, s.modal, move |cx| {
             let Some(m) = s.modal.get() else { return };
             VStack::new(cx, |cx| {
@@ -207,9 +208,11 @@ fn display(cx: &mut Context, st: &Settings) {
     });
     note(cx, "60 fps uses about half the power of 120 with the most even motion; 120 is smoother on fast displays.");
     row(cx, "Interface scale", |cx| {
-        choice(cx, "Follows the system", true, false, || AppEvent::CloseModal);
+        for p in crate::file::UI_SCALES {
+            choice(cx, format!("{p}%"), st.ui_scale == p, true, set(Set::UiScale(p)));
+        }
     });
-    note(cx, "The interface follows the system's display scaling. An in-app scale needs a change to the UI toolkit and comes in a later build.");
+    note(cx, "On top of the system's display scaling. The window keeps its layout and grows or shrinks with it.");
     row(cx, "Clock shows", |cx| {
         choice(cx, "Time (m:ss.cc)", !st.clock_bars, true, set(Set::ClockBars(false)));
         choice(cx, "Bars (bar.beat.16th)", st.clock_bars, true, set(Set::ClockBars(true)));
@@ -335,12 +338,19 @@ fn sheet(cx: &mut Context) {
     .height(Pixels(SHEET_H));
 }
 
-/// Dims the window and takes every click while a panel is open.
-pub struct Backdrop;
+/// Dims the window and takes every click while a panel or dialog is open;
+/// a click on it sends `close`.
+pub struct Backdrop {
+    close: fn() -> AppEvent,
+}
 
 impl Backdrop {
-    pub fn new(cx: &mut Context) -> Handle<'_, Self> {
-        Self.build(cx, |_| {})
+    pub fn new(cx: &mut Context, close: AppEvent) -> Handle<'_, Self> {
+        let close: fn() -> AppEvent = match close {
+            AppEvent::ExportClose => || AppEvent::ExportClose,
+            _ => || AppEvent::CloseModal,
+        };
+        Self { close }.build(cx, |_| {})
     }
 }
 
@@ -352,7 +362,7 @@ impl View for Backdrop {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(_) => {
-                cx.emit(AppEvent::CloseModal);
+                cx.emit((self.close)());
                 meta.consume();
             }
             WindowEvent::MouseScroll(..) | WindowEvent::MouseUp(_) | WindowEvent::MouseDoubleClick(_) => meta.consume(),

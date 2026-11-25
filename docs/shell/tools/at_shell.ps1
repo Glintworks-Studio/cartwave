@@ -169,14 +169,14 @@ if (Want "AT-03") {
   $obs.t03_search_texts = (Ui-Texts) -join " | "
   $obs.t03_title_after_typing = Title
   Key 0x1B; Start-Sleep -Milliseconds 300
-  # Rename a clip in the inspector, then Ctrl+Z inside the field.
+  # Rename a clip in place (Batch 3: Ctrl+R; the inspector's name is a
+  # label now), with Ctrl+Z pressed inside the field before Enter.
   Click @IntroLead; Start-Sleep -Milliseconds 300
-  Click @ClipField; Ctrl 0x41
+  Ctrl 0x52
   foreach ($c in "VERSE".ToCharArray()) { Key ([int][char]$c) }
-  Key 0x0D; Start-Sleep -Milliseconds 300
   KeyDown 0x11; Key 0x5A; KeyUp 0x11; Start-Sleep -Milliseconds 300
   Shot "at03_rename"
-  Key 0x1B; Start-Sleep -Milliseconds 200
+  Key 0x0D; Start-Sleep -Milliseconds 300
   Click @EmptyP2
   Ctrl 0x53; Start-Sleep -Milliseconds 400; Copy-Item $a "$Work\at03_saved.chipdaw" -Force
   Stop-App
@@ -277,7 +277,7 @@ if (Want "AT-18") {
   Highlight-Menu "File" 2; MKey 0x27; Start-Sleep -Milliseconds 400; Shot "at18_open_recent"
   MKey 0x0D; Start-Sleep -Milliseconds 800                # the newest: "second"
   $obs.t18_opened = Title
-  Invoke-Menu "Help" 1; Start-Sleep -Milliseconds 400     # About
+  Invoke-Menu "Help" 2; Start-Sleep -Milliseconds 400     # About (after Getting Started, Batch 3)
   Shot "at18_about"
   $obs.t18_about_texts = (Ui-Texts) -join " | "
   Key 0x1B; Start-Sleep -Milliseconds 300

@@ -78,7 +78,11 @@ label {
    a capsule like the transport box, lifted off the canvas by a soft shadow. */
 .notice {
     width: auto;
-    height: 40px;
+    max-width: 720px;
+    height: auto;
+    min-height: 40px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     padding-left: 16px;
     padding-right: 16px;
     gap: 8px;
@@ -98,6 +102,11 @@ label {
     width: auto;
     height: auto;
     text-wrap: false;
+}
+
+.notice-text.long {
+    width: 640px;
+    text-wrap: true;
 }
 
 .hidden {
@@ -528,7 +537,7 @@ modal-backdrop {
 tooltip.tip {
     width: auto;
     height: auto;
-    max-width: 320px;
+    max-width: 304px;
     padding-left: 8px;
     padding-right: 8px;
     padding-top: 4px;
@@ -550,7 +559,11 @@ tooltip.tip arrow {
     color: var(--text-hi);
     width: auto;
     height: auto;
-    max-width: 304px;
+    text-wrap: false;
+}
+
+.tip-text.long {
+    width: 280px;
     text-wrap: true;
 }
 
@@ -588,4 +601,12 @@ rename-box {
 .clip-hint {
     width: 1s;
     text-wrap: true;
+}
+
+/* The instrument section's title row with its buttons (I3). */
+.inst-actions {
+    height: auto;
+    gap: 4px;
+    child-top: 1s;
+    child-bottom: 1s;
 }
