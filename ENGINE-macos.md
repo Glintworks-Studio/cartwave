@@ -397,7 +397,7 @@ All three were done with the user at the machine, playing at 256 frames.
 |---|---|---|
 | **H. Unplug** the M2, wait 15 s, plug it back | *Before bug 4's fix:* sound moved to the Mac mini speakers and back, no crash, song and position kept, playhead on the audio clock throughout. But no message, the buffer fell back to 512 frames, false detector counts. *After:* sound moved and came back, **"AUDIO: now playing on Mac mini Speakers" / "… on M2" shown** (user confirmed), 256 frames throughout, 0 false detections | **Pass after fix.** Gap: **80 ms** on unplug, **713 ms** on re-plug (before the fix 56 / 615 ms). The re-plug gap is mostly CoreAudio bringing the M2 back up |
 | **I. Sleep / wake** (Apple menu → Sleep, ~1 min, wake) | No crash or hang. The same stream resumed by itself at 256 frames (no rebuild, no error), the playhead stayed on the audio clock. macOS's monotonic clock (`Instant`) doesn't advance while asleep, so playback simply continued where it paused (one 550 ms gap in the log). **13 s after wake, audio callbacks stopped for 7.6 s** while the UI kept running normally: the displays' audio devices (DisplayPort, HDMI) were dropping and returning as the monitors woke (`coreaudio watch`), and CoreAudio paused our IO meanwhile. cpal reported nothing; the playhead froze correctly and resumed in sync. The monitor reconnect also moved the window to the 60 Hz display | **Pass**, with a finding: a silent 7.6 s pause after wake with no message. A "no callbacks for > 1 s while the stream should run" notice would cover it (not built: UI) |
-| **J. Display move** (320 Hz ↔ 60 Hz, dragged by the user, then repeated with `winctl move`) | Audio: 0 overloads, 0 late, largest callback gap 5.40 ms; playhead always from the audio clock; the app's `display_hz` followed the window both ways. **Pacing:** on the 60 Hz display the 60 fps cap beats against the display's real rate (59.951 Hz; vizia reports the mode's 60.0): every ~20 s a 5–10 s stretch of 2-vblank (33 ms) frames. 118 frames > 20 ms in 119 s on the 60 Hz display, against 0–2 per 30 s on the 320 Hz display. **A/V** (one-bar click loop, tap clicks vs presented crossings): 320 Hz −6.16 / −6.10 ms (sd 0.09 / 0.07) before / after the move; **60 Hz −6.71 ms but sd 4.84, outliers to −29 ms**. **User report: "on the 60 Hz display some of the clips start to have a visual glitch and will flash slightly"**; only there, not on the 320 Hz display | **Fail on the 60 Hz display** for pacing (the cap's beat; not fixed, see below). The flashing was a separate bug, **fixed** (bug 5). Audio unaffected |
+| **J. Display move** (320 Hz ↔ 60 Hz, dragged by the user, then repeated with `winctl move`) | Audio: 0 overloads, 0 late, largest callback gap 5.40 ms; playhead always from the audio clock; the app's `display_hz` followed the window both ways. **Pacing:** on the 60 Hz display the 60 fps cap beats against the display's real rate (59.951 Hz; vizia reports the mode's 60.0): every ~20 s a 5–10 s stretch of 2-vblank (33 ms) frames. 118 frames > 20 ms in 119 s on the 60 Hz display, against 0–2 per 30 s on the 320 Hz display. **A/V** (one-bar click loop, tap clicks vs presented crossings): 320 Hz −6.16 / −6.10 ms (sd 0.09 / 0.07) before / after the move; **60 Hz −6.71 ms but sd 4.84, outliers to −29 ms**. **User report: "on the 60 Hz display some of the clips start to have a visual glitch and will flash slightly"**; only there, not on the 320 Hz display | Pacing on the 60 Hz display: **fixed (stopgap), see PERF-macos.md §11** (fork commit 9: 230 → 6 frames > 20 ms per 120 s; the ≤ 2 target is not met, the rest are isolated 3-vblank holds that predate the fix). The flashing was a separate bug, **fixed** (bug 5). Audio unaffected |
 
 **J, what was tried and what's proposed.**
 - *Tried:* give up fixed slots when the display is no faster than the cap and let vsync pace
@@ -409,6 +409,9 @@ All three were done with the user at the machine, playing at 256 frames.
   `CAMetalDisplayLink`) of the window's current display, i.e. vblank-locked slots, instead of a
   free-running 60.0 Hz clock. That's the change PERF-macos.md §6/§7 already recommends together
   with the Metal backend; it belongs to vizia's winit backend (out of scope here).
+- *Stopgap, done:* fork commit 9 locks the slots to the display's precise rate (59.951 Hz) and
+  re-anchors their phase to display-link timestamps; the display link never drives rendering.
+  See PERF-macos.md §11.
 - *The flashing clips:* found and fixed (§7, bug 5). It was unrelated to the beat.
 
 ## 9. Possible upstream issues (cpal 0.18.2, CoreAudio)
@@ -443,7 +446,7 @@ All three were done with the user at the machine, playing at 256 frames.
 | Default-device switch | rebuild, ~0.4 s gap | rebuild (bug 4), 74–164 ms gaps; unplug 80 ms, re-plug 713 ms |
 | Callback cost | p99 ≤ 0.6% of 10.67 ms | p99 ≤ 0.5% even at 64 frames (1.33 ms) |
 | UI budget with engine | +0.5 points of a core | +2–6% instructions/frame, same cadence |
-| Display issues | — | 60 fps cap beats against 59.95 Hz displays (open); window flashing on display change (fixed) |
+| Display issues | — | 60 fps cap beats against 59.95 Hz displays (fixed, stopgap: PERF-macos.md §11); window flashing on display change (fixed) |
 
 ## 11. Lowest reliable buffer size and latency
 

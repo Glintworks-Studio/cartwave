@@ -378,3 +378,257 @@ python3 docs/perf/tools/macos/tp_categories.py /tmp/tp.trace
 
 The terminal needs Accessibility permission (synthetic input). Raw traces are not committed: they
 are large and system-wide.
+
+## 11. 60 Hz pacing fix
+
+**Status: stopgap fix in fork commit 9 ([`75e643a0`](https://github.com/jeffreyfrederick/vizia/commit/75e643a012f83f19e835b9adcfbff05fae86cdc8), app pin `00c4d17`). Large improvement, but the pass criterion
+(≤ 2 frames > 20 ms per 120 s on the 60 Hz display) is not met: 6–9 remain.** They are isolated
+3-vblank holds that the build without the fix shows at the same rate. Their cause is not found.
+
+The problem (ENGINE-macos.md §8, test J): the cap's fixed 60.000 Hz slots beat against the 60 Hz
+display's real rate. Every ~21 s the slots slide across a vblank boundary, which gives a
+multi-second stretch of 2-vblank frames.
+
+### 11.1 Refresh-rate sources and their agreement
+
+60 Hz display (XB271HU, CG display 1, `external-0` in Instruments):
+
+| Source | Rate |
+|---|---|
+| winit `refresh_rate_millihertz` (`CGDisplayModeGetRefreshRate`) | 60.000 (rounded) |
+| `CVDisplayLinkGetNominalOutputVideoRefreshPeriod` | 400330 / 24000000 s = **59.9505 Hz** |
+| `NSScreen.minimumRefreshInterval` | 0.016680416 s, the same value |
+| `CVDisplayLinkGetActualOutputVideoRefreshPeriod` | the nominal value again (not measured independently) |
+| Metal System Trace VSYNC events, least-squares fit over 120 s (5 runs) | **59.9528–59.9533 Hz** |
+
+The display-link and trace sources disagree by 47 ppm. A third source settled it:
+- The build without the fix beats against the display, and its hold clusters recur every
+  ~21.3 s, which gives 60 − 1/21.3 = **59.953 Hz**.
+- Display links started fresh every 10 s and sampled over 2 min gave vblank timestamps that fit
+  59.9530–59.9532 Hz.
+
+So the display really runs at 59.953 Hz in host time. The CoreVideo "nominal" figure is the mode's
+pixel-clock ratio, 47 ppm off. That error is too small to matter for the slot *rate* (one vblank
+of drift every ~6 minutes), but it does matter for *phase*, see 11.3.
+
+The 320 Hz display reports 320.000 from every source.
+
+### 11.2 Slot-rate rule
+
+In `vizia_core::context::frame_slot_rate(cap, refresh)`, with `FRAME_SLOT_RATE_TOLERANCE = 0.02`:
+- If `refresh ≤ cap × 1.02`: slots at `refresh` (one frame per vblank).
+- Else, if `refresh / cap` is within 2% of a whole number `n`: slots at `refresh / n`.
+- Otherwise: slots at `cap`, exactly as before (fork commit 7).
+
+Examples (unit-tested):
+
+| Display | Cap | Slots |
+|---|---|---|
+| 59.951 Hz | 60 | 59.951 Hz |
+| 59.951 Hz | 120 | 59.951 Hz |
+| 119.88 Hz | 60 | 59.94 Hz |
+| 240 Hz | 60 | 60 Hz |
+| 50 Hz | 60 | 50 Hz |
+| 320 Hz | 60 / 120 | 60 / 120, unchanged |
+| 144 Hz / 75 Hz | 60 | 60, unchanged |
+
+Locking can exceed the cap by up to 2%.
+
+The precise rate comes from `CVDisplayLinkGetNominalOutputVideoRefreshPeriod` for the window's
+display (macOS) or `DwmGetCompositionTimingInfo` (Windows). It is used only when it agrees with
+winit's rounded rate within 1 Hz. It is re-read on window move and scale change, and once a
+second.
+
+### 11.3 Phase findings
+
+**Rate alone was not enough** (measured, 60 Hz display, cap 60, 120 s): with the slots at
+59.9505 Hz but free-running, holds fell to 6, but the phase drifted from 0.45 to 0.77 of a vblank
+over 120 s. That is the 47 ppm error, about 1 vblank in 6 minutes, so a longer session would
+cross the boundary again.
+
+**Where the boundary is.** The "commit phase" is when the app's GL command buffer is committed,
+relative to VSYNC in Metal System Trace. Mapped across runs:
+- commit phase 0.9 → 0.2 (wrapping through VSYNC): frames are held a vblank or skipped;
+- 0.2–0.9: clean.
+
+With the build without the fix, the hold clusters are exactly the stretches where the drifting
+phase crosses 0.9–0.2.
+
+**Fix: re-anchor to the display link's timestamps.** While the slots are locked (macOS only):
+- Every 10 s a `CVDisplayLink` is started for ~6 vblanks, only to read their host timestamps, and
+  then stopped. It never drives rendering.
+- Slots are snapped to `anchor + 0.85 × period + k × period`.
+- Calibration: commit phase ≈ slot phase − 0.32. At φ = 0.35 the commits landed at 0.05 and were
+  held 771 times; at φ = 0.85 they land at 0.52–0.54.
+
+Display-link behaviour measured with probes (`cvnow`, `cvlong`, `cvresync`):
+- A **freshly started** link is anchored to the hardware. Anchors 5 s apart move by −0.20 to
+  −0.23 ms, which is the 47 ppm drift, with ~0.03 ms jitter.
+- A link **left running** produces an exact nominal lattice. It drifts away from the hardware and
+  jumps back only after errors of 3–4 ms, so it is restarted for each sample instead.
+- Single timestamps can arrive up to ~2 ms early, so the anchor is the *latest* lattice point of
+  the sample.
+- Estimating the real period from successive anchors failed: a 3 s baseline gave −377 ppm for a
+  real −47 ppm. So the nominal period is used, re-anchored every 10 s (≤ 0.5 ms of drift between
+  samples).
+- Start/stop costs ~0.03 ms. The first callback arrives 22–26 ms after start.
+- Traced runs show one slower present (3–12 ms) around each sample. Untraced runs mostly don't.
+
+After a move or a scale change the phase is re-read at once, not at the next 1 s check.
+Without that, the first second on the 60 Hz display ran at the new rate with an unknown phase
+and showed ~0.7 s of 2-vblank frames after two of three moves (11.4).
+
+**Remaining holds.** Every 60 Hz run (fixed or not, display link or not) has ~4–8 isolated
+3-vblank (50 ms) holds per 120 s. In these, a single frame's present blocks 3–12 ms. They are not
+in clusters and not tied to the commit phase. They are the reason the ≤ 2 criterion is missed.
+The cause is not identified (not investigated further, as this task is the stopgap).
+
+### 11.4 Before / after
+
+Release build, demo playing, Metal System Trace displayed surfaces. "Before" is the build
+without the fix (fork commit 8), "after" is fork commit 9.
+
+| Test | Before | After | Pass |
+|---|---|---|---|
+| 60 Hz, cap 60, 120 s: frames > 20 ms (display) | **230** {1: 6723, 2: 225, 3: 5} | **6** {1: 7179, 2: 1, 3: 5} | **No** (≤ 2) |
+| … app-side p99 interval | 31.55 ms | 17.55 ms | |
+| … commit phase | sweeps 0 → 1 continuously | 0.52–0.54, sd 0.03 | |
+| 60 Hz, cap 120, 120 s: frames > 20 ms | 9 at 120 fps | **9** {1: 7163, 2: 1, 3: 8} at 59.95 fps | **No** (≤ 2) |
+| … energy / instructions per second | 753 mW / 2.15 G | 412 mW / 1.18 G | |
+| 320 Hz, cap 60, 60 s: cadence (vblanks: count) | 5: 2284, 6: 1129 | 5: 2374, 6: 1184 | Yes (5/5/6) |
+| … instructions per frame | 19.6 M | 19.7 M | Yes (+0.5%) |
+| 320 Hz, cap 120, 60 s: cadence | 2: 2402, 3: 4755 | 2: 2377, 3: 4773 | Yes (2/3) |
+| … instructions per frame | 18.3 M | 18.2 M | Yes |
+| Moves 320 ↔ 60 Hz, 3 round trips | rate never refined (60.0) | `display_hz` follows each move within the 1 s log step | Yes (rate) |
+| … app frames > 20 ms per segment on the 60 Hz display (3 × ~10.5 s) | — | rate check only once a second: 1 / 7 / 6, with ~0.7 s of 2-vblank frames after two arrivals. Phase re-read on move (commit 9): **1 / 1 / 1**, one hold at each arrival | Yes for the fix; one hold per arrival |
+| … same on the 320 Hz display (4 segments) | — | 3 / 3 / 4 / 4 → **2 / 1 / 2 / 1** (22–28 ms holds) | Yes |
+| Flash check, 60 Hz, 20 s (`flashcap`) | 8 flagged | 5 flagged | See below |
+| Audio, all runs | 0 overloads, 1–2 late | 0 overloads, 1 late | **No** for "0 late" (same before) |
+
+- **Flash check.** Every flagged frame in both builds is the 16 px top segment of a level meter,
+  i.e. meter content, not a rendering fault. Neither build reproduces the "0" recorded after
+  fork commit 8, so the check now has a floor from the demo's meters. No whole-window flicker
+  is flagged in either build. Not a regression.
+- **Move runs disturbed by Terminal.** Two further move runs with commit 9 had 287–298 long
+  frames from a Terminal window redrawing on the 320 Hz display. In those runs the app's 320 Hz
+  holds rose to 10–16 per segment, including the segment before the first move, where the code
+  path is the same as before the change. The repeat with Terminal quiet (table above) is the
+  clean measurement. Compare move runs only when other surfaces' long frames are at the ~14
+  floor.
+- **Audio "late".** The 1 late callback happens at startup, while the window is being placed,
+  in both builds.
+
+### 11.5 Thermal log
+
+`thermalState` (ProcessInfo) and `pmset -g therm` were read before and after every run, with
+≥ 2 min between runs. All 86 entries were **nominal**, with no CPU speed limit, so no run was
+discarded. The longest runs were 120 s; there were no soak tests. The full log is below
+(timestamps local, 2026-11-24):
+
+```
+15:47:55 base60_c60 before thermalState=nominal lowPower=false
+15:51:37 base60_c60 after thermalState=nominal lowPower=false
+15:54:29 fix60_c60 before thermalState=nominal lowPower=false
+15:58:09 fix60_c60 after thermalState=nominal lowPower=false
+16:13:13 cal35 before thermalState=nominal lowPower=false
+16:15:04 cal35 after thermalState=nominal lowPower=false
+16:17:16 cal85 before thermalState=nominal lowPower=false
+16:19:08 cal85 after thermalState=nominal lowPower=false
+16:20:59 fin60_c60 before thermalState=nominal lowPower=false
+16:24:24 fin60_c60 after thermalState=nominal lowPower=false
+16:26:34 base60_c120 before thermalState=nominal lowPower=false
+16:30:41 base60_c120 after thermalState=nominal lowPower=false
+16:32:51 fin60_c120 before thermalState=nominal lowPower=false
+16:36:10 fin60_c120 after thermalState=nominal lowPower=false
+16:38:20 base320_c60 before thermalState=nominal lowPower=false
+16:40:13 base320_c60 after thermalState=nominal lowPower=false
+16:42:23 fin320_c60 before thermalState=nominal lowPower=false
+16:44:18 fin320_c60 after thermalState=nominal lowPower=false
+16:46:28 base320_c120 before thermalState=nominal lowPower=false
+16:49:04 base320_c120 after thermalState=nominal lowPower=false
+16:51:14 fin320_c120 before thermalState=nominal lowPower=false
+16:53:53 fin320_c120 after thermalState=nominal lowPower=false
+17:00:28 exp_restart before thermalState=nominal lowPower=false
+17:01:16 exp_restart after thermalState=nominal lowPower=false
+17:03:21 exp_keep before thermalState=nominal lowPower=false
+17:04:08 exp_keep after thermalState=nominal lowPower=false
+17:06:13 exp_startonly before thermalState=nominal lowPower=false
+17:07:00 exp_startonly after thermalState=nominal lowPower=false
+17:09:25 tx_keep before thermalState=nominal lowPower=false
+17:11:10 tx_keep after thermalState=nominal lowPower=false
+17:13:20 tx_startonly before thermalState=nominal lowPower=false
+17:15:03 tx_startonly after thermalState=nominal lowPower=false
+17:17:13 tx_restart before thermalState=nominal lowPower=false
+17:18:57 tx_restart after thermalState=nominal lowPower=false
+17:21:41 dbg before thermalState=nominal lowPower=false
+17:22:29 dbg after thermalState=nominal lowPower=false
+17:24:49 v2_60_c60 before thermalState=nominal lowPower=false
+17:28:07 v2_60_c60 after thermalState=nominal lowPower=false
+17:30:43 v2_60_c120 before thermalState=nominal lowPower=false
+17:33:59 v2_60_c120 after thermalState=nominal lowPower=false
+17:37:17 dbg120 before thermalState=nominal lowPower=false
+17:38:39 dbg120 after thermalState=nominal lowPower=false
+17:40:30 F_60_c60 before thermalState=nominal lowPower=false
+17:43:47 F_60_c60 after thermalState=nominal lowPower=false
+17:45:57 F_60_c120 before thermalState=nominal lowPower=false
+17:49:14 F_60_c120 after thermalState=nominal lowPower=false
+17:51:24 F_320_c60 before thermalState=nominal lowPower=false
+17:53:19 F_320_c60 after thermalState=nominal lowPower=false
+17:55:29 F_320_c120 before thermalState=nominal lowPower=false
+17:58:09 F_320_c120 after thermalState=nominal lowPower=false
+18:00:20 F_move before thermalState=nominal lowPower=false
+18:02:38 F_move after thermalState=nominal lowPower=false
+18:04:49 flash before thermalState=nominal lowPower=false
+18:05:26 flash after thermalState=nominal lowPower=false
+18:17:42 F_60_c60 before thermalState=nominal lowPower=false
+18:21:02 F_60_c60 after thermalState=nominal lowPower=false
+18:23:50 F_60_c120 before thermalState=nominal lowPower=false
+18:27:10 F_60_c120 after thermalState=nominal lowPower=false
+18:30:18 B_320_c60 before thermalState=nominal lowPower=false
+18:32:15 B_320_c60 after thermalState=nominal lowPower=false
+18:34:27 F_320_c60 before thermalState=nominal lowPower=false
+18:36:16 F_320_c60 after thermalState=nominal lowPower=false
+18:38:26 B_320_c120 before thermalState=nominal lowPower=false
+18:38:26 B_320_c120 after thermalState=nominal lowPower=false
+19:43:02 B_320_c60 before thermalState=nominal lowPower=false
+19:45:05 B_320_c60 after thermalState=nominal lowPower=false
+19:47:39 F_320_c60 before thermalState=nominal lowPower=false
+19:49:32 F_320_c60 after thermalState=nominal lowPower=false
+19:52:04 B_320_c120 before thermalState=nominal lowPower=false
+19:54:41 B_320_c120 after thermalState=nominal lowPower=false
+19:57:24 F_320_c120 before thermalState=nominal lowPower=false
+19:59:59 F_320_c120 after thermalState=nominal lowPower=false
+20:02:42 F_move before thermalState=nominal lowPower=false
+20:04:58 F_move after thermalState=nominal lowPower=false
+20:06:22 flash_base before thermalState=nominal lowPower=false
+20:06:59 flash_base after thermalState=nominal lowPower=false
+20:34:00 F_move2 before thermalState=nominal lowPower=false
+20:36:26 F_move2 after thermalState=nominal lowPower=false
+20:39:32 F_move3 before thermalState=nominal lowPower=false
+20:41:56 F_move3 after thermalState=nominal lowPower=false
+20:43:22 F_moveP before thermalState=nominal lowPower=false
+20:45:58 F_moveP after thermalState=nominal lowPower=false
+20:48:37 F_move4 before thermalState=nominal lowPower=false
+20:50:56 F_move4 after thermalState=nominal lowPower=false
+20:52:36 pin_smoke before thermalState=nominal lowPower=false
+20:53:14 pin_smoke after thermalState=nominal lowPower=false
+```
+
+Note: each traced run left a 3.5–6 GB `instruments*.ktrace` file in `$TMPDIR`, and these filled
+the disk twice. The run script now deletes it after each run and refuses to start with less
+than 20 GB free.
+
+### 11.6 Windows status
+
+**Implemented, not compiled or tested.** `dwm_refresh_rate()` reads
+`DwmGetCompositionTimingInfo(NULL).rateRefresh` (windows-sys, whose `Win32_Graphics_Dwm`
+feature was already enabled, so no new dependency) and feeds the same slot-rate rule. There is no
+phase re-anchoring on Windows: `SwapBuffers` locks to vblank there.
+
+Follow-up on the Windows machine:
+- build it;
+- check that `rateRefresh` matches PERF.md §1's measured rate;
+- repeat the cap-60 run on a 59.94/60 Hz display.
+
+DWM's rate is for the composition, not for each monitor, which is why it is only used when it
+agrees with winit's per-monitor rate.
