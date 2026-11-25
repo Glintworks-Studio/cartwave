@@ -8,7 +8,11 @@
 > piano roll, global undo and `.chipdaw` save/load, so songs can be written in it (see
 > [PIANOROLL.md](PIANOROLL.md), including the full keyboard and mouse map).
 
-![Arrangement view at 200% scaling](docs/screens/main-200.png)
+![Arrangement view, prototype redesign, playing](docs/screens/redesign/main-playing-100.png)
+
+The UI follows the designer's prototype ([`docs/design/reference.png`](docs/design/reference.png));
+see [DESIGN.md](DESIGN.md) for how it was matched (sampled palette, gradient strokes,
+4 px grid). The earlier look is on the `backup/pre-prototype-ui` branch.
 
 The target product is a chiptune workstation for indie game developers (2A03 + VRC6 channel
 layout, arrangement view). This prototype covers only the UI: arrangement clips with layered

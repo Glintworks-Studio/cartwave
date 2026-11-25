@@ -919,7 +919,7 @@ const BADGE_PX: f32 = 9.0;
 /// The big italic lane number: size, centre x and baseline (logical px).
 const WATERMARK_PX: f32 = 48.0;
 const WATERMARK_X: f32 = 180.0;
-const WATERMARK_BASELINE: f32 = 46.0;
+const WATERMARK_BASELINE: f32 = 48.0;
 /// Text column start: strip + 8.
 const ROW_TEXT_X: f32 = LANE_STRIP_W + SP_2;
 

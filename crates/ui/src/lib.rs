@@ -1246,7 +1246,7 @@ fn piano_panel(cx: &mut Context, s: Signals) {
             let grid = s.piano.map(|p| p.grid.label());
             Button::new(cx, |cx| Label::new(cx, grid))
                 .class("btn")
-                .width(Pixels(58.0))
+                .width(Pixels(60.0))
                 .on_press(|cx| cx.emit(AppEvent::CyclePianoGrid));
             let follow = s.piano.map(|p| p.follow);
             Button::new(cx, |cx| Label::new(cx, "Follow"))
