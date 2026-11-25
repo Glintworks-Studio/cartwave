@@ -148,7 +148,7 @@ impl View for Ruler {
                 meta.consume();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) if self.brace_at(cx).is_some() => {
-                // Ableton: double-click the brace to switch the loop on/off.
+                // Double-click the brace to switch the loop on/off.
                 cx.emit(AppEvent::ToggleLoop);
                 meta.consume();
             }
@@ -262,7 +262,7 @@ fn draw_static(
     canvas.draw_rect(rect, &gfx::vgrad(rect, BAND_TOP, BAND_BOTTOM));
     canvas.draw_rect(vg::Rect::from_xywh(rect.left, rect.top, rect.width(), s), &gfx::fill(LINE));
 
-    // Loop brace (Ableton): a bar over the loop range; drag the body to
+    // Loop brace: a bar over the loop range; drag the body to
     // move it, the ends to resize. Lit while the loop light is on.
     let lx0 = (rect.left + view.tick_to_x(loop_start) as f32 * s).round();
     let lx1 = (rect.left + view.tick_to_x(loop_end) as f32 * s).round();

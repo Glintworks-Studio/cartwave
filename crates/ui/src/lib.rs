@@ -193,7 +193,7 @@ pub enum AppEvent {
     /// The song loop (ticks). The ruler's loop brace sends this while dragged.
     SetLoop(f64, f64),
     /// Open / close a context menu, or run one of its commands (also bound
-    /// to the Ableton shortcuts).
+    /// to the usual DAW shortcuts).
     OpenMenu(ContextMenuSpec),
     CloseMenu,
     Menu(MenuAction),
@@ -236,7 +236,7 @@ pub enum AppEvent {
     EditMacro { lane: usize, which: usize, step: usize, value: i8 },
     /// Native open dialog for a .mid file; it becomes a new project (Ctrl+I).
     ImportMidi,
-    /// Render the song to a WAV file (Ctrl+Shift+R, as in Ableton).
+    /// Render the song to a WAV file (Ctrl+Shift+R).
     ExportWav,
     /// Native open dialog for a WAV file, converted into a DPCM sample.
     ImportAudio,
@@ -536,11 +536,11 @@ impl Model for AppState {
                         Code::KeyS => Some(AppEvent::SaveProject),
                         Code::KeyO => Some(AppEvent::OpenProject),
                         Code::KeyN => Some(AppEvent::NewProject),
-                        // Ableton: loop selection, duplicate, insert MIDI clip.
+                        // Loop selection, duplicate, insert MIDI clip.
                         Code::KeyL => Some(AppEvent::Menu(MenuAction::LoopSelection)),
                         Code::KeyD => Some(AppEvent::Menu(MenuAction::Duplicate)),
                         Code::KeyM if mods.shift() => Some(AppEvent::Menu(MenuAction::InsertClip)),
-                        // Ableton: Ctrl+Alt+B shows / hides the browser.
+                        // Ctrl+Alt+B shows / hides the browser.
                         Code::KeyB if mods.alt() => Some(AppEvent::ToggleBrowser),
                         _ => None,
                     };
@@ -1981,7 +1981,7 @@ impl AppState {
     }
 
     /// Sets the song loop (the ruler's loop brace). `enable` also turns the
-    /// loop light on (Ableton's Loop Selection does). A piano-roll clip loop
+    /// loop light on (as a DAW's Loop Selection does). A piano-roll clip loop
     /// gives way to it.
     fn set_song_loop(&mut self, start: f64, end: f64, enable: bool) {
         let start = start.max(0.0);
@@ -2005,7 +2005,7 @@ impl AppState {
         }
     }
 
-    /// Context-menu commands and their Ableton shortcuts.
+    /// Context-menu commands and their shortcuts.
     fn run_menu_action(&mut self, action: MenuAction) {
         let sel = self.s.time_sel.get_untracked();
         let span = self.s.arrangement.with_untracked(|a| a.selection_span());

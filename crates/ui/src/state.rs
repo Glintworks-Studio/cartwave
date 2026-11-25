@@ -218,7 +218,7 @@ impl Viewport {
     }
 }
 
-/// An arrangement time selection (Ableton: drag across empty lane space):
+/// An arrangement time selection (drag across empty lane space):
 /// a tick range over a run of lanes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TimeSel {
@@ -352,7 +352,7 @@ impl Arrangement {
             .reduce(|(a0, a1), (b0, b1)| (a0.min(b0), a1.max(b1)))
     }
 
-    /// Ableton's Duplicate (Ctrl+D): copies of the selected clips placed
+    /// Duplicate (Ctrl+D): copies of the selected clips placed
     /// right after the selection's span; the copies become the selection.
     pub fn duplicate_selected(&mut self) {
         let Some((start, end)) = self.selection_span() else { return };

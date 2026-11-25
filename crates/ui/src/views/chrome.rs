@@ -1061,7 +1061,7 @@ const GRIP_H: f32 = 4.0;
 const PIANO_MIN_H: f32 = 240.0;
 
 /// The draggable band between the arrangement and the piano roll, as in
-/// Ableton: it sets how much of the arrangement is visible (in 4 px steps).
+/// It sets how much of the arrangement is visible (in 4 px steps).
 /// Lanes keep their height; when they don't all fit they scroll vertically.
 /// Double-click restores the default split.
 pub struct SplitHandle {

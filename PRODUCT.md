@@ -20,7 +20,7 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 
 | Area | What you get |
 |---|---|
-| **Arrangement** | 8 chip channels (Pulse 1/2, Triangle, Noise, DPCM, VRC6 Pulse 1/2, VRC6 Saw). Drag, resize and duplicate clips with grid snap; time selection; loop brace; context menus; Ableton-style shortcuts; scrollbars; a resizable piano-roll split. |
+| **Arrangement** | 8 chip channels (Pulse 1/2, Triangle, Noise, DPCM, VRC6 Pulse 1/2, VRC6 Saw). Drag, resize and duplicate clips with grid snap; time selection; loop brace; context menus; standard DAW shortcuts; scrollbars; a resizable piano-roll split. |
 | **Piano roll** | Note editing with per-note volume, the one-note-at-a-time rule each chip channel has, a quantize command (Q), copy and paste, and named rows for drums and samples. |
 | **Instruments** *(new)* | Each channel plays an instrument built from per-frame **macros** (volume, arpeggio, pitch, duty) with loop and release points, plus delayed vibrato. This is how real chip drivers make "cello", "flute" or "explosion" on hardware that has no ADSR, LFO or filter. |
 | **Preset library** *(new)* | 60 factory presets: Leads, Bass, Strings (Cello, Violin, Pizzicato, String Pad), Winds (Flute, Clarinet, Oboe, Ocarina, Pan Pipe), Brass, Keys & Mallets, Arpeggios, Drums, Drum Kits and Sound Effects (Explosion, Laser, Coin, Jump, Power Up, 1-Up, Siren, Thunder, Engine, Wind…). |
@@ -52,7 +52,7 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 | 2026-11-23 | **Open-sourced** | Published at github.com/jeffreyfrederick/chipdaw (MIT OR Apache-2.0). | – |
 | 2026-11-24 | **Real-time engine**: a clean-room 2A03 + VRC6 emulator, written from hardware docs only | **0 dropouts** over 15 stress runs and 3.5 h of playback. Edits are heard within one console frame (≤ 16.6 ms). Picture-to-sound sync is 0.3 ms. 58 hardware-behaviour tests. | [ENGINE.md](ENGINE.md) |
 | 2026-11-24/25 | **Piano roll**, undo, file format, autosave | Songs can be written end to end: 1000-step undo, crash recovery. | [PIANOROLL.md](PIANOROLL.md) |
-| 2026-11-25 | **Redesign** to the designer's prototype | Pixel-sampled palette, gradient strokes, 4 px grid, Ableton-style editing. | [DESIGN.md](DESIGN.md) |
+| 2026-11-25 | **Redesign** to the designer's prototype | Pixel-sampled palette, gradient strokes, 4 px grid, clip-launcher-style editing. | [DESIGN.md](DESIGN.md) |
 | 2026-11-25 | **Product pass** (this one) | Instruments, presets, layouts, browser, instrument editor, drum kits, DPCM import, MIDI import, WAV export. | this file |
 
 Earlier states are kept as branches: `backup/pre-prototype-ui` (before the redesign) and

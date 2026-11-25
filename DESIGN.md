@@ -123,7 +123,7 @@ constants. Where the prototype was off-grid, the grid won:
   far-away loop end (`NO_LOOP_TICKS`), so playback runs on. A piano-roll clip loop
   always loops.
 
-## 5b. Ableton-style editing
+## 5b. Clip-launcher-style editing
 
 | Action | Behaviour |
 |---|---|
@@ -173,7 +173,7 @@ the existing Inter faces).
   varying length (save status, audio problems, the recovery prompt) float in a
   notice capsule under the transport, so the top bar only holds fixed-size
   controls.
-- The piano roll works like Ableton's detail view. A **split handle** (an 8 px band
+- The piano roll works like a DAW's detail view (an editor docked under the arrangement). A **split handle** (an 8 px band
   with a grip) sets how much of the arrangement is visible, in 4 px steps, from one
   lane to all eight. The piano roll keeps at least 240 px. Lanes and track headers
   keep their full 60 px height and scroll vertically together when they don't fit:

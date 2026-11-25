@@ -69,7 +69,7 @@ pub struct Arrangement {
     /// Scrollbar thumb being dragged, and the scrollbar under the mouse.
     sb_drag: Option<BarDrag>,
     sb_hover: Option<Axis>,
-    /// A time-selection drag in empty lane space (Ableton).
+    /// A time-selection drag in empty lane space.
     time_drag: Option<TimeDrag>,
 }
 
@@ -226,7 +226,7 @@ impl Arrangement {
             if !mods.shift() {
                 arr.update(|a| a.selection.clear());
             }
-            // Ableton: drag across empty space selects time; a click sets the
+            // Drag across empty space selects time; a click sets the
             // insert marker.
             let (tick, lane) = self.tick_lane_at(mx, my, !crate::input::bypass_snap(&mods));
             self.time_drag = Some(TimeDrag {
@@ -828,7 +828,7 @@ impl View for Arrangement {
                 let zoom = crate::input::zoom_wheel(cx.modifiers());
                 let (sx, sy) = (*sx, *sy);
                 // Lanes overflowing (piano roll open): the wheel scrolls them
-                // vertically, as in Ableton; Shift-wheel scrolls in time.
+                // vertically; Shift-wheel scrolls in time.
                 let overflow = self.s.lane_scroll_max.get_untracked() > 0.0;
                 if overflow && !zoom && !cx.modifiers().shift() && sy != 0.0 {
                     cx.emit(crate::AppEvent::ScrollLanes(-sy * LANE_SCROLL_PER_NOTCH));
