@@ -145,11 +145,16 @@ the existing Inter faces).
 
 ## 8. Open items
 
-- The window has a minimum size (`ui::MIN_WINDOW_SIZE`, 1060×812 logical): the
-  capsule plus two top-bar sides wide enough for the left side's contents, and
-  tall enough for 8 lanes above the inspector. Below that, things were being cut
-  off. A responsive top bar (folding the FILTER column away) would allow narrower
-  windows.
+- The window has a minimum size (`ui::MIN_WINDOW_SIZE`, 1140×812 logical), derived
+  from the layout constants:
+  - the inspector's fixed sections (the dials, and 8 channel meters at 40 px each)
+    plus a CLIP section of at least 240 px;
+  - 8 full lanes above the inspector.
+
+  Nothing squeezes or slides under the capsule at any allowed size. Messages of
+  varying length (save status, audio problems, the recovery prompt) float in a
+  notice capsule under the transport, so the top bar only holds fixed-size
+  controls.
 - Already broken before the redesign (the pre-redesign binary crashes too): resizing
   the window from another process with `SetWindowPos` panics in the vizia fork
   (`WinState::resize`, `new_surface_with_dimensions` returns `None`). Dragging the

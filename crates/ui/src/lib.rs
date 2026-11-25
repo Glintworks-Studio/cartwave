@@ -1002,6 +1002,7 @@ pub fn build_ui(cx: &mut Context) {
                 });
             }
         });
+        notice(cx, s);
     })
     .class("shell");
 
@@ -1060,17 +1061,69 @@ impl AppState {
     }
 }
 
-/// Smallest window (logical px) that shows everything unsquished:
-/// - width: the transport capsule plus two top-bar sides, each as wide as the
-///   left side's contents (8 pad + 3 word keys + 2 pill columns + gaps = 428);
+/// Smallest window (logical px) that shows everything at its designed size:
+/// - width: the inspector's fixed sections (dials, channels) plus the
+///   smallest CLIP section and the panel's padding and gaps. This is wider
+///   than the top bar needs (capsule + two sides of 412: 1028);
 /// - height: top bar + ruler + eight full lanes + the inspector panel.
 pub const MIN_WINDOW_SIZE: (u32, u32) = (
-    2 * 428 + theme::tokens::BOX_W as u32,
+    // Two paddings and three gaps (the last one before the spacer).
+    INSPECTOR_PAD * 5 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + CHANNELS_SECTION_W as u32,
     (theme::tokens::TOPBAR_HEIGHT + theme::tokens::RULER_HEIGHT + 8.0 * LANE_H_NORMAL) as u32
         + INSPECTOR_HEIGHT,
 );
-/// The device inspector's height; must match `.device` in style.css.
+/// The device inspector's height, padding and gap; must match `.device` in style.css.
 const INSPECTOR_HEIGHT: u32 = 232;
+const INSPECTOR_PAD: u32 = 16;
+/// Inspector section widths (logical px). Dials and channels are fixed so
+/// they never squeeze; the CLIP section takes what's left.
+const DIALS_SECTION_W: f32 = MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0;
+const CLIP_SECTION_MIN_W: u32 = 240;
+const CLIP_SECTION_MAX_W: f32 = 480.0;
+/// One meter column: well, light and label (logical px).
+const METER_COL_W: f32 = 40.0;
+const CHANNELS_SECTION_W: f32 = 8.0 * METER_COL_W + 24.0;
+
+/// Width of the recovery prompt's keys (logical px).
+const NOTICE_KEY_W: f32 = 64.0;
+
+/// Messages of varying length (save status, audio device problems, the crash
+/// recovery prompt) float in a capsule under the transport instead of living
+/// in the top bar, where they would push the fixed-size controls around.
+fn notice(cx: &mut Context, s: Signals) {
+    let visible = Memo::new(move |_| {
+        !s.status.get().is_empty() || !s.audio_msg.get().is_empty() || s.recovery_offer.get()
+    });
+    Binding::new(cx, visible, move |cx| {
+        if !visible.get() {
+            return;
+        }
+        HStack::new(cx, |cx| {
+            Label::new(cx, s.audio_msg)
+                .class("notice-text")
+                .toggle_class("hidden", s.audio_msg.map(|m| m.is_empty()));
+            Label::new(cx, s.status)
+                .class("notice-text")
+                .toggle_class("hidden", s.status.map(|m| m.is_empty()));
+            Binding::new(cx, s.recovery_offer, move |cx| {
+                if s.recovery_offer.get() {
+                    Label::new(cx, "Last session didn't close cleanly").class("notice-text");
+                    Key::new(cx, s, "RECOVER", KeyAction::Recover)
+                        .width(Pixels(NOTICE_KEY_W))
+                        .height(Pixels(theme::tokens::KEY_SIZE));
+                    Key::new(cx, s, "DISCARD", KeyAction::Discard)
+                        .width(Pixels(NOTICE_KEY_W))
+                        .height(Pixels(theme::tokens::KEY_SIZE));
+                }
+            });
+        })
+        .class("notice")
+        .position_type(PositionType::Absolute)
+        .left(Stretch(1.0))
+        .right(Stretch(1.0))
+        .top(Pixels(theme::tokens::TOPBAR_HEIGHT + 8.0));
+    });
+}
 
 /// Split-pill widths (logical px): label segment and whole pill, per column.
 const PILL_TEMPO_LABEL_W: f32 = 44.0;
@@ -1112,19 +1165,6 @@ fn top_bar(cx: &mut Context, s: Signals) {
                     .height(Pixels(PILL_H));
             })
             .class("pill-stack");
-            Element::new(cx).class("bar-gap");
-            Label::new(cx, s.status).class("bar-status");
-            Binding::new(cx, s.recovery_offer, move |cx| {
-                if s.recovery_offer.get() {
-                    Label::new(cx, "Last session didn't close cleanly").class("bar-status");
-                    Key::new(cx, s, "RECOVER", KeyAction::Recover)
-                        .width(Pixels(64.0))
-                        .height(Pixels(KEY_SIZE));
-                    Key::new(cx, s, "DISCARD", KeyAction::Discard)
-                        .width(Pixels(64.0))
-                        .height(Pixels(KEY_SIZE));
-                }
-            });
         })
         .class("bar-side")
         .class("left")
@@ -1138,8 +1178,6 @@ fn top_bar(cx: &mut Context, s: Signals) {
 
         // Right
         HStack::new(cx, |cx| {
-            // Only shows text when the audio device has a problem.
-            Label::new(cx, s.audio_msg).class("bar-status");
             SpectrumBox::new(cx, s)
                 .width(Pixels(BOX_W))
                 .height(Pixels(BOX_H));
@@ -1197,9 +1235,7 @@ fn device_panel(cx: &mut Context, s: Signals) {
             });
         })
         .class("device-section")
-        .width(Pixels(
-            MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0,
-        ));
+        .width(Pixels(DIALS_SECTION_W));
 
         // Text fields
         VStack::new(cx, |cx| {
@@ -1225,7 +1261,12 @@ fn device_panel(cx: &mut Context, s: Signals) {
             .class("field");
         })
         .class("device-section")
-        .width(Pixels(300.0));
+        .width(Stretch(1.0))
+        .min_width(Pixels(CLIP_SECTION_MIN_W as f32))
+        .max_width(Pixels(CLIP_SECTION_MAX_W));
+
+        // Spare width goes here, so the channels sit at the right edge.
+        Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
 
         // Meters
         VStack::new(cx, |cx| {
@@ -1235,7 +1276,7 @@ fn device_panel(cx: &mut Context, s: Signals) {
                 .width(Stretch(1.0));
         })
         .class("device-section")
-        .width(Stretch(1.0));
+        .width(Pixels(CHANNELS_SECTION_W));
     })
     .class("panel")
     .class("device");
