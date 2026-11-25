@@ -26,6 +26,7 @@ pub const MAX_VOLUME: u8 = 15;
 /// The derive order is the file order (`file.rs` serialises this struct
 /// directly; PIANOROLL.md §5 has the spec).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Note {
     pub id: u32,
     pub start: u32,

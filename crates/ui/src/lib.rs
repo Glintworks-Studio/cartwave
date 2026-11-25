@@ -1,6 +1,8 @@
 //! ChipDAW GUI prototype. A library crate so the same UI can later be hosted
 //! inside a plugin window (baseview) as well as the standalone app.
 
+pub mod file;
+pub mod history;
 pub mod input;
 pub mod mock;
 pub mod notes;
