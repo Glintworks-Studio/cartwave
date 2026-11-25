@@ -54,15 +54,15 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 |---|---|---|---|---|---|
 | Undo | Ctrl+Z | ⌘Z | Undo (R21) | M | ✓ |
 | Redo | Ctrl+Y (also Ctrl+Shift+Z, ours) | ⌘⇧Z | Redo (R22; Ctrl+Shift+Z on Windows is not in the manual, R23) | M | ✓ |
-| Cut / Copy / Paste | Ctrl+X / C / V | ⌘X / C / V | Clips, notes, or the time selection (R24) | M | ✓ |
-| Duplicate | Ctrl+D | ⌘D | Clips/notes/time, placed right after (R25) | M | ✓ |
-| Delete | Del | ⌫ / Del | Clips/notes/time (R26) | M | ✓ |
-| Cut / Copy / Paste / Duplicate / Delete Time | Ctrl+Shift+X/C/V/D/Del | ⌘⇧ + same | Time commands (R46) | S | ✓ |
-| Insert Silence | Ctrl+I | ⌘I | At the time selection (R47; decision 3: no longer MIDI import) | S | ✓ |
-| Split | Ctrl+E | ⌘E | Clips at the insert marker or selection edges; notes in the piano roll (R38, R73) | M | ✓ |
-| Consolidate | Ctrl+J | ⌘J | Selected clips on a track → one clip (R39) | M | ✓ |
+| Cut / Copy / Paste | Ctrl+X / C / V | ⌘X / C / V | Clips, notes, or the time selection (R24) | M | ✓ · **done** (B3) |
+| Duplicate | Ctrl+D | ⌘D | Clips/notes/time, placed right after (R25) | M | ✓ · **done** (B3) |
+| Delete | Del | ⌫ / Del | Clips/notes/time (R26) | M | ✓ · **done** (B3) |
+| Cut / Copy / Paste / Duplicate / Delete Time | Ctrl+Shift+X/C/V/D/Del | ⌘⇧ + same | Time commands (R46) | S | ✓ · **done** (B3) |
+| Insert Silence | Ctrl+I | ⌘I | At the time selection (R47; decision 3: no longer MIDI import) | S | ✓ · **done** (B3) |
+| Split | Ctrl+E | ⌘E | Clips at the insert marker or selection edges; notes in the piano roll (R38, R73) | M | ✓ · **done** (B3) |
+| Consolidate | Ctrl+J | ⌘J | Selected clips on a track → one clip (R39) | M | ✓ · **done** (B3) |
 | Select All | Ctrl+A | ⌘A | In the focused editor (R27) | M | ✓ |
-| Rename | Ctrl+R | ⌘R | Selected clip / track / marker (R8–R11) | M | ✓ |
+| Rename | Ctrl+R | ⌘R | Selected clip / track / marker (R8–R11) | M | ✓ · **done** (B3) |
 | Quantize | Ctrl+U | ⌘U | Selected notes (R64; decision 3: Q retired) | S | ✓ |
 | Settings… (Windows) | Ctrl+, | (App menu ⌘,) | Settings window (R129) | M | ✓ |
 
@@ -79,11 +79,11 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Browser | Ctrl+Alt+B | ⌘⌥B | Show/hide (R80) | M | ✓ |
 | Piano Roll / Inspector | Shift+Tab | ⇧Tab | Toggle the bottom panel between clip editor and instrument (R78) | S | ✓ |
 | Follow | Ctrl+Shift+F | ⌥⇧F | Auto-scroll while playing, both editors (R135; decision 3) | S | ✓ |
-| Zoom In / Out | + / − | + / − | Time zoom of the focused editor (R34) | M | ✓ |
-| Zoom to Selection | Z | Z | (R30) | M | ✓ |
-| Zoom Back | X | X | (R31) | M | ✓ |
-| Zoom to Fit | (double-click the ruler) | same | Whole song (R32) | M | ✓ |
-| Draw Mode | B | B | Toggle (R5) | M | ✓ |
+| Zoom In / Out | + / − | + / − | Time zoom of the focused editor (R34) | M | ✓ · **done** (B3) |
+| Zoom to Selection | Z | Z | (R30) | M | ✓ · **done** (B3) |
+| Zoom Back | X | X | (R31) | M | ✓ · **done** (B3) |
+| Zoom to Fit | (double-click the ruler) | same | Whole song (R32) | M | ✓ · **done** (B3) |
+| Draw Mode | B | B | Toggle (R5) | M | ✓ · **done** (B3) |
 | Clock: Bars / Time | — | — | Replaces the click-on-clock toggle (F-38); Home rewinds | S | ✓ |
 | Automation Mode | A | A | (R104) | L | ✓ |
 
@@ -91,7 +91,7 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Item | Does | Pri | CEO |
 |---|---|---|---|
 | Keyboard Shortcuts | A generated sheet from the one shortcut table (F-30), per platform | M | ✓ |
-| Getting Started | Reopens the empty-project guide (F-14) | S | ✓ |
+| Getting Started | Reopens the empty-project guide (F-14) | S | ✓ · **done** (B3) |
 | About ChipDAW (Windows) | Version, commit, licences, font credits (ASSETS.md) | M | ✓ |
 
 ### Window (macOS only)
@@ -112,7 +112,7 @@ Support/ChipDAW`). Every field has a default, unknown fields are ignored (today'
 | | Buffer size | Device default (show the latency in ms) | M | ✓ |
 | | Sample rate | 48 kHz (44.1 / 48 / 96) | M | ✓ |
 | Display | Frame-rate cap (replaces F6) | **60 fps** (options 60 / 120; Off in dev mode only) | S | ✓ |
-| | Interface scale | 100% (follows the OS) | S | ✓ |
+| | Interface scale | 100% (follows the OS) | S | ✓ · **done** (B3): 75–200%, live |
 | | Clock shows | Time (m:ss.cc) | S | ✓ |
 | Editing | Default arrangement grid | 1/16 | S | ✓ |
 | | Default piano-roll grid | 1/16 | S | ✓ |
@@ -159,71 +159,71 @@ Stored **in the project file** (v4).
 |---|---|---|---|---|
 | A1 | Click empty space | Insert marker there; clears clip selection (today) | M | ✓ |
 | A2 | Drag empty space | Time selection across tracks (today) | M | ✓ |
-| A3 | Shift-click | Extends the time selection, across tracks (R44) | S | ✓ |
+| A3 | Shift-click | Extends the time selection, across tracks (R44) | S | ✓ · **done** (B3) |
 | A4 | Click / Shift-click / Ctrl-click a clip | Select / add range / toggle (R28) | M | ✓ |
 | A5 | Drag clip, edges | Move (also to another track) / resize (today) | M | ✓ |
 | A6 | Ctrl-drag (⌥-drag) clip | Copy (today; unverified for the arrangement, R48) | S | ✓ |
 | A7 | Double-click clip | Open in the piano roll (today; R150) | M | ✓ |
 | A8 | Double-click empty lane | New 1-bar clip (today; ours) | S | ✓ |
-| A9 | Cmd+C / X / V | Copy / cut / paste clips at the insert marker | M | ✓ |
-| A10 | Cmd+D | Duplicate clips or time | M | ✓ |
-| A11 | Del | Delete clips, or the time selection's contents | M | ✓ |
-| A12 | Cmd+E / Cmd+J | Split / consolidate | M | ✓ |
-| A13 | Cmd+R | Rename clip (in place) | M | ✓ |
-| A14 | Z / X / + / − / double-click ruler | Zoom to selection / back / in / out / fit | M | ✓ |
-| A15 | ← → | Move insert marker / nudge selected clips by the grid (R50, R51) | S | ✓ |
-| A16 | Home, Shift+Space | Rewind / continue (R137, R138) | S | ✓ |
-| A17 | Cmd+1 / 2 / 3 / 4 / 5 | Narrow / widen / triplet / snap / adaptive (R56–R59) | S | ✓ |
-| A18 | Right-click clip | Cut, Copy, Paste, Duplicate, Delete, Split, Consolidate, Rename, Colour ▸, Loop Clip, Make Instrument Unique, Use Track Instrument, Save Instrument as Preset | M | ✓ |
-| A19 | Right-click empty / selection | Paste, Insert MIDI Clip, Loop Selection, Insert Silence, Delete Time, Grid ▸ | M | ✓ |
-| A20 | Right-click ruler / scrub area | Set Loop to Selection, Zoom to Fit, Insert Time Signature Change (L) (R17) | S | ✓ |
+| A9 | Cmd+C / X / V | Copy / cut / paste clips at the insert marker | M | ✓ · **done** (B3) |
+| A10 | Cmd+D | Duplicate clips or time | M | ✓ · **done** (B3) |
+| A11 | Del | Delete clips, or the time selection's contents | M | ✓ · **done** (B3) |
+| A12 | Cmd+E / Cmd+J | Split / consolidate | M | ✓ · **done** (B3) |
+| A13 | Cmd+R | Rename clip (in place) | M | ✓ · **done** (B3) |
+| A14 | Z / X / + / − / double-click ruler | Zoom to selection / back / in / out / fit | M | ✓ · **done** (B3) |
+| A15 | ← → | Move insert marker / nudge selected clips by the grid (R50, R51) | S | ✓ · **done** (B3) |
+| A16 | Home, Shift+Space | Rewind / continue (R137, R138) | S | ✓ · **done** (B3) |
+| A17 | Cmd+1 / 2 / 3 / 4 / 5 | Narrow / widen / triplet / snap / adaptive (R56–R59) | S | ✓ · **done** (B3) |
+| A18 | Right-click clip | Cut, Copy, Paste, Duplicate, Delete, Split, Consolidate, Rename, Colour ▸, Loop Clip, Make Instrument Unique, Use Track Instrument, Save Instrument as Preset | M | ✓ · **done** (B3) |
+| A19 | Right-click empty / selection | Paste, Insert MIDI Clip, Loop Selection, Insert Silence, Delete Time, Grid ▸ | M | ✓ · **done** (B3) |
+| A20 | Right-click ruler / scrub area | Set Loop to Selection, Zoom to Fit, Insert Time Signature Change (L) (R17) | S | ✓ · **done** (B3): Set Loop to Selection, Zoom to Fit; the time-signature item comes with F-45 |
 | A21 | Drop a `.mid` | Adds tracks at the drop point (F-17; live preview later, F-47) | M | ✓ |
-| A22 | Empty project | Guide overlay until the first clip exists (F-14) | M | ✓ |
+| A22 | Empty project | Guide overlay until the first clip exists (F-14) | M | ✓ · **done** (B3) |
 
 ### 5.2 Track headers
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| T1 | Click | Select the track (Shift/Ctrl add) | S | ✓ |
-| T2 | Cmd+R / double-click name | Rename (Tab → next track, R9) | M | ✓ |
-| T3 | Right-click | Rename, Colour ▸, Insert Track, Duplicate, Delete, Lock/Unlock (L) | M | ✓ |
+| T1 | Click | Select the track (Shift/Ctrl add) | S | ✓ · **done** (B3) |
+| T2 | Cmd+R / double-click name | Rename (Tab → next track, R9) | M | ✓ · **done** (B3) |
+| T3 | Right-click | Rename, Colour ▸, Insert Track, Duplicate, Delete, Lock/Unlock (L) | M | ✓ · **done** (B3): Rename, Colour ▸. Insert / Duplicate / Delete Track wait for the model change (Batch 4); Lock is L |
 | T4 | Drag header | Reorder (R88) | M (model) | ✓ |
-| T5 | M / S | Mute / solo (today); Cmd-click solo adds (R143) | S | ✓ |
+| T5 | M / S | Mute / solo (today); Cmd-click solo adds (R143) | S | ✓ · **done** (B3) |
 | T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ |
 | T7 | Click 🔒 | Unlock: becomes a studio track that sounds the same (VISION) | L | ✓ |
 
 ### 5.3 Piano roll
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| P1 | Double-click empty | Create a note of the grid length (R2; length unverified, R3) | M | ✓ |
-| P2 | Double-click note | Delete it (R1) | M | ✓ |
-| P3 | Click / drag empty (draw mode off) | Deselect / marquee (R76) | M | ✓ |
-| P4 | B | Toggle draw mode; in draw mode a click draws (today's behaviour) (R5, R6) | M | ✓ |
+| P1 | Double-click empty | Create a note of the grid length (R2; length unverified, R3) | M | ✓ · **done** (B3) |
+| P2 | Double-click note | Delete it (R1) | M | ✓ · **done** (B3) |
+| P3 | Click / drag empty (draw mode off) | Deselect / marquee (R76) | M | ✓ · **done** (B3) |
+| P4 | B | Toggle draw mode; in draw mode a click draws (today's behaviour) (R5, R6) | M | ✓ · **done** (B3) |
 | P5 | ↑ ↓ / Shift | Semitone / octave (today; R60, R61) | M | ✓ |
 | P6 | ← → | Nudge by grid (today; R52) | M | ✓ |
-| P7 | Shift+← → | Shorten / lengthen (R63) | S | ✓ |
+| P7 | Shift+← → | Shorten / lengthen (R63) | S | ✓ · **done** (B3) |
 | P8 | Cmd+U | Quantize (R64); Q retired | S | ✓ |
-| P9 | Cmd+E / Cmd+J | Chop / join notes (R73) | S | ✓ |
-| P10 | Right-click note / empty | Cut, Copy, Paste, Duplicate, Delete, Quantize, Select All | M | ✓ |
-| P11 | Z / X / + / − | Zoom (R75) | M | ✓ |
+| P9 | Cmd+E / Cmd+J | Chop / join notes (R73) | S | ✓ · **done** (B3) |
+| P10 | Right-click note / empty | Cut, Copy, Paste, Duplicate, Delete, Quantize, Select All | M | ✓ · **done** (B3) |
+| P11 | Z / X / + / − | Zoom (R75) | M | ✓ · **done** (B3) |
 | P12 | F / G | Fold / Fold to Scale (R68, R69) | L | ✓ |
 
 ### 5.4 Browser
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| B1 | Typing in search | Never triggers shortcuts (F-03); Esc clears | M | ✓ |
-| B2 | Click preset | Select + hear (today); while playing: hear through the preview voice or say why not | S | ✓ |
+| B1 | Typing in search | Never triggers shortcuts (F-03); Esc clears | M | ✓ · **done** (B3) |
+| B2 | Click preset | Select + hear (today); while playing: hear through the preview voice or say why not | S | ✓ · **done** (B3): no preview voice yet, so a click while playing says why |
 | B3 | Double-click / drag preset | Load (today) | M | ✓ |
-| B4 | Click layout | Select only; double-click or drag loads (F-36). A layout is a template: if it needs another hardware profile, it asks first (decision 5) | S | ✓ |
-| B5 | Right-click user preset | Rename, Delete, Show in Explorer/Finder | S | ✓ |
+| B4 | Click layout | Select only; double-click or drag loads (F-36). A layout is a template: if it needs another hardware profile, it asks first (decision 5) | S | ✓ · **done** (B3) |
+| B5 | Right-click user preset | Rename, Delete, Show in Explorer/Finder | S | ✓ · **done** (B3) |
 | B6 | Authentic preset row | Shows 🔒 + profile; loading it locks the track (VISION) | L | ✓ |
 
 ### 5.5 Inspector
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| I1 | Select a track (no clip) | Shows the track's instrument | S | ✓ |
-| I2 | Controls the channel lacks | Hidden (triangle Duty/Volume macros) (F-05) | S | ✓ |
-| I3 | Instrument header | Make Unique, Use Track Instrument, Save as Preset as visible buttons | S | ✓ |
-| I4 | Hover any control | Tooltip; disabled ones say why (F-34) | S | ✓ |
+| I1 | Select a track (no clip) | Shows the track's instrument | S | ✓ · **done** (B3) |
+| I2 | Controls the channel lacks | Hidden (triangle Duty/Volume macros) (F-05) | S | ✓ · **done** (B3) |
+| I3 | Instrument header | Make Unique, Use Track Instrument, Save as Preset as visible buttons | S | ✓ · **done** (B3) |
+| I4 | Hover any control | Tooltip; disabled ones say why (F-34) | S | ✓ · **done** (B3) |
 
 ### 5.6 Automation lanes (later)
 | # | Action | Result | Pri | CEO |
@@ -238,10 +238,10 @@ Stored **in the project file** (v4).
 ### 5.7 Export
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| E1 | Cmd+Shift+R | Modal dialog with backdrop (F-26) | S | ✓ |
-| E2 | Esc / Enter | Close / Export | S | ✓ |
-| E3 | Disabled option | Says why on hover | S | ✓ |
-| E4 | Reopen | Last options remembered | S | ✓ |
+| E1 | Cmd+Shift+R | Modal dialog with backdrop (F-26) | S | ✓ · **done** (B3) |
+| E2 | Esc / Enter | Close / Export | S | ✓ · **done** (B3) |
+| E3 | Disabled option | Says why on hover | S | ✓ · **done** (B3) |
+| E4 | Reopen | Last options remembered | S | ✓ · **done** (B3) |
 
 ## 6. Acceptance tests for every "must"
 
@@ -269,6 +269,20 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | AT-18 (F-18) | Save two projects; File > Open Recent lists both, newest first; Help > About opens; Help > Keyboard Shortcuts lists every table entry |
 | AT-19 (F-19) | The top bar has no NEW/OPEN/SAVE/MIDI IN/EXPORT keys (screenshot); Ctrl+S still saves |
 | AT-22 (F-22) | Time-select bars 2–3 across two tracks with clips, press Del: notes in that range are gone, clips split at the edges |
+| AT-23 (A15, A17) | Select a clip, → → : it moves 2 × 1/16; Ctrl+2, → : one 1/8 more (saved file) |
+| AT-24 (A10, R46, R47) | Time-select bar 2 over three tracks, Ctrl+I: a bar of silence on every track; Ctrl+Shift+Del: every note back in place (saved files) |
+| AT-25 (T1, T5, I1) | Click a track header: the inspector shows that channel (UIA text); S on track 1 then 2 = only 2 soloed; Ctrl-click S on 3 adds it (saved file); a disabled button's tooltip (screenshot) |
+| AT-26 (T3, A18) | Track header menu > Colour > Sky, clip menu > Colour > Coral: both saved |
+| AT-27 (P7, P9, P11) | In the piano roll, Ctrl+A, Shift+→: notes one grid step longer; Ctrl+E chops on the grid; Ctrl+J joins (saved files); Z zooms (screenshot) |
+| AT-28 (E1–E4) | Ctrl+Shift+R opens the dialog over a backdrop; Esc closes it; a choice is remembered in `settings.json`; the disabled Selection says why (tooltip); Enter exports |
+| AT-29 (B1, B4) | Type in the search, Esc: the field is empty; a click on a layout loads nothing; a double-click asks about the profile, then loads it (saved files) |
+| AT-30 (§1 menus) | The Edit, View and Help menus show the Batch 3 items (screenshots); the shortcut sheet lists them |
+| AT-31 (B5, I3) | Save as Preset (a visible button) writes a user preset; its browser menu offers Rename, Delete, Show in Explorer |
+| [unit] (A9–A12, F-22, P7, P9, R46, R47, format v4) | `state::edit_tests`, `notes::tests::batch3_note_ops`, the undo property test (split, consolidate, time commands, paste, rename, colour), `tests/migration.rs` (v3 → v4 hashes), `tests/robustness.rs` (v4 names and colours) |
+
+Batch 3 results: AT-07…AT-12, AT-14, AT-22 and AT-23…AT-31 pass in
+`docs/batch3/tools/at_b3.ps1` (checker `check_b3.py`); AT-01…AT-19 still pass in
+`docs/shell/tools/at_shell.ps1`. See [BATCH3.md](BATCH3.md).
 
 ## 7. Build order
 

@@ -36,6 +36,8 @@ const MIN_GRID_H: f32 = 96.0;
 const EDGE_PX: f32 = 5.0;
 /// Pointer travel before a press becomes a drag.
 const DRAG_SLOP: f32 = 3.0;
+/// Row, ruler and lane labels (F-39: informative text is at least 11 px).
+const LABEL_PX: f32 = 11.0;
 /// Grid lines closer than this are not drawn.
 const MIN_LINE_GAP: f32 = 5.0;
 
@@ -1120,7 +1122,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
     let w = px(g.w);
     let (gx0, gy0, gy1) = (px(g.grid_x0), px(g.grid_y0), px(g.grid_y1));
     let kind = m.kind;
-    let label_font = gfx::font(Face::Mono, 9.5 * s);
+    let label_font = gfx::font(Face::Mono, LABEL_PX * s);
 
     // Background.
     canvas.draw_rect(vg::Rect::from_ltrb(0.0, 0.0, w, px(g.h)), &gfx::fill(BG_INSET.lighten(0.02)));
@@ -1224,7 +1226,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
     canvas.draw_rect(vg::Rect::from_ltrb(0.0, 0.0, w, gy0), &gfx::fill(BG_1));
     canvas.draw_rect(vg::Rect::from_ltrb(0.0, gy0 - s, w, gy0), &gfx::fill(LINE));
     {
-        let f = gfx::font(Face::MonoMedium, 9.5 * s);
+        let f = gfx::font(Face::MonoMedium, LABEL_PX * s);
         let bar_px = (TICKS_PER_BAR as f64 * m.ppt) as f32;
         let every = if bar_px >= 40.0 { 1 } else if bar_px >= 16.0 { 4 } else { 16 };
         let t0 = m.tick_at(g.grid_x0).max(0.0);
@@ -1314,7 +1316,7 @@ fn draw_notes(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &P
             canvas.draw_rect(vg::Rect::from_ltrb(x0, top, x0 + bw.max(px(6.0)), top + px(2.0)), &gfx::fill(col.lighten(0.3)));
         }
         canvas.restore();
-        let f = gfx::font(Face::Medium, 9.5 * s);
+        let f = gfx::font(Face::Medium, LABEL_PX * s);
         gfx::draw_text(canvas, "VOLUME", px(8.0), gfx::baseline_for_center(&f, (v0 + v1) * 0.5), &f, TEXT_LO);
     }
 

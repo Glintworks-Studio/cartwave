@@ -14,6 +14,8 @@ Then read what the task touches:
 - UX work: **`UX.md`** (the build spec; every line keeps its acceptance test), then
   `docs/ux-audit/` (INVENTORY, FINDINGS, FEASIBILITY) for the background.
 - App shell (menus, settings, shortcut table): `SHELL.md`.
+- Arrangement / piano-roll editing (clipboard, split, time commands, rename, context menus,
+  interface scale): `BATCH3.md`, `crates/ui/src/edit.rs`; its harness is `docs/batch3/tools/`.
 - Product state: `PRODUCT.md`, `STABILIZE.md`.
 - Rendering/pacing: `PERF.md` §8/§11 and `DESIGN.md` before touching drawing or the frame loop.
 - Engine: `ENGINE.md` (the audio thread never allocates or locks).

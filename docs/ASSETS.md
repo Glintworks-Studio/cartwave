@@ -14,6 +14,7 @@ from a script or command in this repository and compared **byte for byte** with 
 | `docs/audio/*.wav` (17 files, the listening pack) | Ours: rendered by our emulator from test patterns | `cargo run --release -p chip --example lab -- pack` and `--render-demo` (docs/audio/README.md) | MIT OR Apache-2.0 | Generator in repo |
 | Built-in DPCM drums (Kick, Snare, Tom, Crash) | Ours: synthesised in code at startup, never stored as files | `crates/chip/src/samples.rs` | MIT OR Apache-2.0 | Source |
 | Demo arrangement and the 200-clip stress set | Ours: procedurally generated notes from a fixed seed | `crates/ui/src/mock.rs` | MIT OR Apache-2.0 | Source |
+| Format-v3 corpus `docs/songs/v3/*.chipdaw` | Ours: the v2 corpus and the scale test above, re-saved by the pre-Batch-3 build (fb2d632) | `docs/songs/v3/v3corpus.rs.txt` (hashes in `HASHES.txt`) | MIT OR Apache-2.0 | Migration test (`crates/ui/tests/migration.rs`) |
 | Test song `docs/songs/scale_test.chipdaw` | Ours: scales and arpeggios per channel | `crates/ui/src/songs.rs` | MIT OR Apache-2.0 | Golden-render test |
 | The 60 presets and 5 channel layouts | Ours: macro tables written by hand with generic names (Cello, Flute, Explosion…) | `crates/chip/src/presets.rs` | MIT OR Apache-2.0 | Source |
 
@@ -40,6 +41,7 @@ The fonts are embedded unmodified, under their original names, as OFL 1.1 allows
 | `docs/screens/redesign/compare-reference.png` | The two above, stacked | MIT OR Apache-2.0 |
 | `docs/screens/v1.1/*`, `docs/export-examples/*` | This pass: screenshots and exports of the app | MIT OR Apache-2.0 |
 | `docs/screens/shell/*` | The app-shell run (SHELL.md): screenshots of the app and its native dialogs, taken by `docs/shell/tools/at_shell.ps1` | MIT OR Apache-2.0 |
+| `docs/screens/batch3/*` | The Batch 3 run (BATCH3.md): screenshots of the app (context menus, draw mode, split, rename, the guide, the export dialog, interface scales, menus), taken by `docs/batch3/tools/at_b3.ps1` and `scales.ps1` | MIT OR Apache-2.0 |
 
 ## Measurement data
 

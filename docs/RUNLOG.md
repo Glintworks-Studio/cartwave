@@ -380,3 +380,58 @@ Branch `app-shell/batch-3` from `main` @ fb2d632. Unattended; decisions are numb
   *bar* (`MenuTheme::Dark`, shipped in Batch 2) itself relies on the undocumented
   `WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM` messages. Left as it is and flagged for the owner in
   BATCH3.md (switching to `MenuTheme::Light` is a one-line change).
+- **B3-D3 (Space).** Space plays from the insert marker; stopping puts the playhead back on it
+  and remembers the stop point, which Shift+Space continues from (R137). While stopped the
+  playhead *is* the insert marker. A click on empty lane space or inside a clip (without a
+  drag) moves the insert marker (A1); while playing it is drawn as a short line on its track.
+- **B3-D4 (clipboard).** Clips (and time) are copied to an in-app clipboard, separate from the
+  notes clipboard; nothing is read from the system clipboard, so there is no new parser.
+- **B3-D5 (time scope).** The …Time commands act on every track (R46). Cut / Copy / Duplicate /
+  Delete with a time selection act on its tracks only and leave the gap (Delete splits at the
+  edges, AT-22). Duplicate on a time selection overwrites what follows (the copies win, like
+  every newer clip); Duplicate Time inserts.
+- **B3-D6 (Insert Silence).** UX.md: "at the time selection"; R47: "the chosen amount at the
+  insert marker". Without a dialog for the amount, it inserts the selection's length at its
+  start; without a time selection it says so.
+- **B3-D7 (consolidate).** Our clips can have their own instrument (Live's can't). Consolidate
+  leaves a track alone if its clips play different instruments, and says why.
+- **B3-D8 (ruler double-click).** UX.md says Zoom to Fit = whole song; R32's full text: the time
+  selection if there is one, else the whole arrangement. Both agree with no selection; it
+  follows R32. AT-12 clears the selection (Esc) before the double-click.
+- **B3-D9 (draw mode).** In Draw Mode a click on a note erases it (R6). A double-click-created
+  note is one grid step long (R3 is unverified: ours).
+- **B3-D10 (grid keys).** Cmd+1–5 act on the focused editor. The arrangement grid gained 1/32,
+  1/8 and 1/2, triplets, snap off and an adaptive grid. The piano roll has narrow / widen /
+  triplet; Snap and Adaptive there say they don't apply (its grid is always on; the no-snap
+  modifier places freely).
+- **B3-D11 (I2).** F-05 asked whether the triangle's Volume macro does anything: `driver.rs`
+  silences the triangle on a step of 0, so it works as a gate. It stays, labelled "GATE
+  (0 = SILENT)"; the triangle's Duty and the DPCM's Volume and Duty (ignored by the driver)
+  are hidden with the reason.
+- **B3-D12 (I3).** The instrument header has no room for three buttons next to its title at
+  the minimum window width. Make Unique and Use Track Instrument (they act on the clip) are in
+  the CLIP section, Save as Preset in the instrument header.
+- **B3-D13 (tooltips).** vizia never hovers a disabled view, so a disabled control's tooltip
+  sits on a thin wrapper around it. Tooltips show after 500 ms.
+- **B3-D14 (B2).** There is no preview voice during playback; a click on a preset while
+  playing says why nothing plays.
+- **B3-D15 (F-38).** The CPU pill reads OFF when no output runs (with a tooltip).
+- **B3-D16 (F-37).** Notices sit at the bottom right; a click dismisses one; an import report
+  stays 30 s and wraps.
+- **B3-D17 (format v4).** Track names and colours and clip colours are saved: format 4. A v1–3
+  lane `name` was informational, so older files keep the default names (exact migration,
+  checked against the v3 corpus hashes). Bad colours are clear errors; names lose control
+  characters and are capped at 48 characters.
+- **B3-D18 (bug fixed on the way).** A clip split by an overlap lost its own instrument
+  (`Clip::trimmed` didn't copy it). Fixed; unit-tested.
+- **B3-D19 (F-33).** The profile, the loop brace and the loop switch are undoable (part of the
+  undo document). Mute/solo stay out (R141 is unverified).
+- **B3-D20 (T5).** Solo is exclusive; Ctrl/Cmd-click adds (R143).
+- **B3-D21 (shortcut test).** `no_conflicts` now checks the contexts keys are looked up in
+  (Arrangement, PianoRoll, Text, Modal): the arrangement's ← → (insert marker) and the piano
+  roll's ← → (nudge notes) may share keys.
+- **B3-D22 (interface scale).** Settings > Display: 75–200%, on top of the OS scale, applied at
+  start (`Application::user_scale_factor`) and live (`WindowEvent::SetUserScaleFactor`, fork
+  5a3b035a). The window keeps its logical size, so at 200% on this 2560×1440 display it is
+  2880×1800 px, larger than the screen.
+- **B3-D23 (Follow).** One Follow (View menu, Ctrl+Shift+F) pages both editors (F-32).
