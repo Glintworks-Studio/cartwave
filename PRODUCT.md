@@ -139,17 +139,18 @@ changes, becomes an immutable snapshot that the engine swaps in at the next fram
 snapshots are freed on the UI thread.
 
 ## 6. Quality status
-- **116 automated tests** pass (chip 70, engine 10, UI 35, golden render 1). `cargo clippy` is clean.
+- **153 automated tests** pass (chip 71, engine 10, UI 72, including the parser robustness
+  campaigns, migration identity and loop-export identity). `cargo clippy` is clean.
+- Re-measured in v1.1 with instruments on (STABILIZE.md §A2): 0 audio dropouts in every stress run.
+  The worst-case macros cost 0.35% of the audio period. The UI meets PERF.md's targets: demo playback
+  sits at the 10% line, and piano-roll dragging went from 33% to 8%.
 - The showcase song's 29 s render peaks at −5.1 dBFS with no clipping.
-- Performance and audio-glitch figures come from the earlier passes (PERF.md, ENGINE.md). They
-  **haven't been re-measured** since this pass. Instrument macros add a few register writes per
-  channel per frame, which should be negligible, but verifying it is the first item below.
 
 ## 7. Known gaps and next steps
-1. Re-run the PERF.md and ENGINE.md benchmarks with instruments on, then do the macOS pass (engine and piano roll still need their Mac measurements).
-2. Instrument editor: loop and release points can't be dragged yet (presets set them), sequence length is fixed, and there's no "save as user preset".
-3. Instruments are per channel. Per-clip or per-note instrument changes (switching lead → bass mid-song on one channel) need a data-model extension.
+1. The macOS pass: the engine and piano roll still need their Mac measurements, and v1.1 hasn't run on the Mac.
+2. Default-device switching (stress test E) needs the MOTU reconnected (STABILIZE.md, known gaps).
+3. Per-note instrument changes (`NoteFx`); macro sequence length can't be changed by dragging (new macros start at 16 steps).
 4. MIDI import reduces chords to the top note. Splitting chords across free channels would be better.
-5. The piano roll labels sample rows "User 1–4" rather than by the sample's name.
+5. Live looping re-quantises notes to the frame clock on every pass; the exported loop keeps the second pass (docs/EXPORT.md §7).
 6. VRC6 vs 2A03 relative level needs one hardware recording to calibrate (ENGINE.md §6.5).
 7. Shipping: installer and code signing, a final name and branding, 120/144 Hz displays, and AMD/Intel GPU checks.

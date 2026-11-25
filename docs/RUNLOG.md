@@ -190,7 +190,7 @@ Times are local (CST). Each decision taken without the user lists the options an
   **Decision D16:** Part B changed the driver after this build, so A, B, C and G are re-run on the
   final build before the merge decision (one buffer size each: WASAPI ignores the request, so the
   three sizes are the same run).
-- **A2 UI benchmarks (09:20–09:45; final build; HDMI audio).**
+- **A2 UI benchmarks (09:20–09:43; HDMI audio).**
   - **The harnesses were stale since the redesign.** `bench.ps1`/`pacing.ps1` dragged at client
     (300, 160), now a track header, and `bench_pr.ps1`/`pacing.ps1 prdrag` at (98, 591), now an
     empty piano-roll row: those "drag" scenarios dragged nothing since the redesign. They now drag a
@@ -213,7 +213,7 @@ Times are local (CST). Each decision taken without the user lists the options an
     *other* notes and reused; dragged notes and their volume bars are drawn live on top.
     After: **dragging 7.3/8.1/7.8%**, pacing 8.8–9.0% with **0 > 20 ms, 0 missed vblanks** (×2);
     playing 5.9–6.6%.
-- **A3 UI scenarios and A4.4 contrast (09:45–10:05).**
+- **A3 UI scenarios and A4.4 contrast (09:44–09:50).**
   - `docs/stabilize/tools/scenario_v11.ps1` + `check_v11.py` (synthetic input, a v2 file opened
     and saved as v3 at each stage): draw on all four macro graphs, undo ×4 / redo ×4, drag the
     release marker, wheel the vibrato, browser search, drag onto a clip / an invalid lane / a lane
@@ -233,3 +233,6 @@ Times are local (CST). Each decision taken without the user lists the options an
     `CHIPDAW_EXPORT_TO` stands in for the native save dialog. The "export done" capture was dropped
     because it showed a local user path.
   - Final suite: **153 tests pass**, clippy clean, release build 0 warnings.
+- **09:55** Verified with the product/v1 build's own loader: a v3 file is refused with "This
+  project was saved by a newer ChipDAW (file format version 3). This version reads format 2. Update
+  ChipDAW to open it." 09:50: final-build matrix started (A, B, C, G at 512, plus H; frozen exe).
