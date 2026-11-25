@@ -67,7 +67,7 @@ fn song(rng: &mut Rng, version: u64) -> SongSnapshot {
         }
     }
     SongSnapshot::build(
-        clips.iter().map(|(lane, s, l, n)| ClipInput { lane: *lane, start: *s, len: *l, notes: n }),
+        clips.iter().map(|(lane, s, l, n)| ClipInput { lane: *lane, start: *s, len: *l, inst: engine::chip::instrument::NONE, notes: n }),
         version,
     )
 }

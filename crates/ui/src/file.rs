@@ -82,6 +82,10 @@ struct FileV1 {
     /// "auto" (follows the chip), or "nes", "nes+440", "famicom", "off".
     filter: String,
     loop_end: u32,
+    /// Version 3: the instrument table (each entry has an `id`); lanes and
+    /// clips refer to it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    instruments: Vec<InstV2>,
     /// Version 3: loop start (ticks) and whether the loop is on.
     #[serde(default)]
     loop_start: u32,
@@ -117,9 +121,12 @@ struct LaneV1 {
     /// Only the controls this lane's hardware has; missing ones are the defaults.
     #[serde(default)]
     params: BTreeMap<String, i32>,
-    /// Version 2: the lane's instrument. Missing: the raw channel (v1 sound).
+    /// Version 2: the lane's instrument, inline. Missing: the raw channel (v1 sound).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     instrument: Option<InstV2>,
+    /// Version 3: the lane's default instrument (an id in `instruments`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    inst: Option<u32>,
 }
 
 /// An instrument. Sequences are text in tracker style: values separated by
@@ -128,6 +135,9 @@ struct LaneV1 {
 #[derive(Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct InstV2 {
+    /// Version 3: the id lanes and clips refer to (table entries only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    id: Option<u32>,
     name: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     edited: bool,
@@ -197,6 +207,7 @@ fn seq_parse(t: &str) -> Result<Seq, String> {
 
 fn inst_to_file(name: &str, edited: bool, i: &Instrument) -> InstV2 {
     InstV2 {
+        id: None,
         name: name.into(),
         edited,
         volume: seq_text(&i.volume),
@@ -229,6 +240,17 @@ fn lane_inst_to_file(l: &LaneInstrument) -> InstV2 {
     f
 }
 
+/// An instrument as JSON, in the project file's format (user presets).
+pub fn instrument_json(l: &LaneInstrument) -> serde_json::Value {
+    serde_json::to_value(lane_inst_to_file(l)).unwrap_or_default()
+}
+
+/// The inverse of `instrument_json`; errors are user-facing.
+pub fn instrument_from_json(v: serde_json::Value) -> Result<LaneInstrument, String> {
+    let f: InstV2 = serde_json::from_value(v).map_err(|e| format!("A damaged instrument: {e}"))?;
+    lane_inst_from_file(&f)
+}
+
 fn lane_inst_from_file(f: &InstV2) -> Result<LaneInstrument, String> {
     let kit = f
         .kit
@@ -249,6 +271,9 @@ struct ClipV1 {
     start: u32,
     len: u32,
     name: String,
+    /// Version 3: the clip's own instrument (an id); missing: the lane's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    instrument: Option<u32>,
     notes: Vec<Note>,
 }
 
@@ -297,7 +322,8 @@ pub fn to_string(p: &Project) -> String {
                 .iter()
                 .map(|&id| (param_key(id).to_string(), p.params.get(lane, id)))
                 .collect(),
-            instrument: p.arrangement.instruments.get(lane).map(lane_inst_to_file),
+            instrument: None,
+            inst: Some(p.arrangement.instruments.lane_id(lane)),
         })
         .collect();
     let clips = p
@@ -310,8 +336,16 @@ pub fn to_string(p: &Project) -> String {
             start: c.start_ticks,
             len: c.len_ticks,
             name: c.name.clone(),
+            instrument: c.instrument,
             notes: c.notes.clone(),
         })
+        .collect();
+    let instruments = p
+        .arrangement
+        .instruments
+        .entries
+        .iter()
+        .map(|e| InstV2 { id: Some(e.id), ..lane_inst_to_file(&e.inst) })
         .collect();
     let f = FileV1 {
         format: FORMAT.into(),
@@ -324,6 +358,7 @@ pub fn to_string(p: &Project) -> String {
         .into(),
         filter: if p.filter_auto { "auto".into() } else { filter_key(p.filter).into() },
         loop_end: p.loop_end_ticks,
+        instruments,
         loop_start: p.loop_start_ticks,
         loop_on: p.loop_on,
         lanes,
@@ -440,11 +475,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         }
     }
     let mut arrangement = Arrangement::empty();
-    arrangement.instruments = f
-        .lanes
-        .iter()
-        .map(|l| l.instrument.as_ref().map_or(Ok(LaneInstrument::plain()), lane_inst_from_file))
-        .collect::<Result<_, _>>()?;
+    arrangement.instruments = instrument_table(&f)?;
     let mut seen = std::collections::HashSet::new();
     for c in f.clips {
         if c.lane >= LANES {
@@ -463,7 +494,11 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         if c.notes.iter().any(|n| too_late(c.start as u64 + n.start as u64 + n.len as u64)) {
             return Err(format!("A note in clip {} ends after bar {}, the end of a song.", c.id, crate::state::MAX_SONG_BARS));
         }
+        if let Some(i) = c.instrument.filter(|i| !arrangement.instruments.contains(*i)) {
+            return Err(format!("Clip {} uses instrument {i}, which isn't in the file.", c.id));
+        }
         let mut clip = Clip::new(c.id, c.lane, c.start, c.len.max(1), c.name, c.notes);
+        clip.instrument = c.instrument;
         // Hand-edited files: restore the invariants instead of failing.
         clip.notes.retain(|n| n.len > 0);
         for n in &mut clip.notes {
@@ -520,6 +555,44 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         migrate_v2(&mut p);
     }
     Ok(p)
+}
+
+/// The instrument table: version 3's `instruments` (lanes refer to ids), or
+/// version 2's inline lane instruments, or raw channels (version 1).
+fn instrument_table(f: &FileV1) -> Result<crate::instruments::InstrumentTable, String> {
+    use crate::instruments::{Entry, InstrumentTable, MAX_INSTRUMENTS};
+    if f.instruments.is_empty() {
+        if let Some(l) = f.lanes.iter().position(|l| l.inst.is_some()) {
+            return Err(format!("Lane {} refers to an instrument, but the file has none.", l + 1));
+        }
+        return Ok(InstrumentTable::from_lanes(
+            f.lanes.iter().map(|l| l.instrument.as_ref().map_or(Ok(LaneInstrument::plain()), lane_inst_from_file)).collect::<Result<_, _>>()?,
+        ));
+    }
+    if f.instruments.len() > MAX_INSTRUMENTS {
+        return Err(format!("The file has {} instruments; the most is {MAX_INSTRUMENTS}.", f.instruments.len()));
+    }
+    let mut entries: Vec<Entry> = Vec::with_capacity(f.instruments.len());
+    for i in &f.instruments {
+        let id = i.id.ok_or("An instrument in the table has no id.")?;
+        if id == 0 || id >= crate::state::MAX_ID || entries.iter().any(|e| e.id == id) {
+            return Err(format!("Instrument id {id} is out of range or used twice."));
+        }
+        entries.push(Entry { id, inst: lane_inst_from_file(i)? });
+    }
+    let mut lanes = [0; LANES];
+    for (lane, l) in f.lanes.iter().enumerate() {
+        if l.instrument.is_some() {
+            return Err(format!("Lane {} has an inline instrument next to an instrument table.", lane + 1));
+        }
+        let id = l.inst.ok_or_else(|| format!("Lane {} has no instrument.", lane + 1))?;
+        if !entries.iter().any(|e| e.id == id) {
+            return Err(format!("Lane {} uses instrument {id}, which isn't in the file.", lane + 1));
+        }
+        lanes[lane] = id;
+    }
+    let next_id = entries.iter().map(|e| e.id).max().unwrap_or(0) + 1;
+    Ok(InstrumentTable { entries, lanes, next_id })
 }
 
 /// Version 1/2 → 3. Before version 3 a note's own volume *replaced* the
@@ -791,25 +864,43 @@ mod tests {
     #[test]
     fn instruments_round_trip_and_v1_files_load_raw() {
         let mut p = sample_project();
-        p.arrangement.instruments[0] = LaneInstrument::named("Cello");
-        p.arrangement.instruments[0].inst.vibrato.depth = 33;
-        p.arrangement.instruments[0].edited = true;
-        p.arrangement.instruments[3] = LaneInstrument::named("Tight Kit");
+        let mut cello = LaneInstrument::named("Cello");
+        cello.inst.vibrato.depth = 33;
+        cello.edited = true;
+        p.arrangement.instruments.set_lane(0, cello);
+        p.arrangement.instruments.set_lane(3, LaneInstrument::named("Tight Kit"));
+        // A clip with its own instrument, shared by two clips.
+        let flute = p.arrangement.instruments.add(LaneInstrument::named("Flute")).unwrap();
+        let ids: Vec<u32> = p.arrangement.clips.iter().take(2).map(|c| c.id).collect();
+        for id in ids {
+            p.arrangement.clip_mut(id).unwrap().instrument = Some(flute);
+        }
+        let clips = p.arrangement.clips.clone();
+        p.arrangement.instruments.prune(&clips);
         let text = to_string(&p);
         assert!(text.contains("\"volume\": \"4 6 8 9 10 11 12 12 / 11 9 7 5 3 2 1 0\""), "{text}");
+        assert!(text.contains(&format!("\"instrument\": {flute},")), "clip refs are written");
         let back = from_str(&text).unwrap();
         assert_eq!(back.arrangement.instruments, p.arrangement.instruments);
+        assert_eq!(back.arrangement.clips.iter().filter(|c| c.instrument == Some(flute)).count(), 2);
+        // Broken references are clear errors.
+        let bad = text.replacen(&format!("\"instrument\": {flute},"), "\"instrument\": 777,", 1);
+        assert!(from_str(&bad).unwrap_err().contains("instrument 777"));
         // A version 1 file (no instruments) plays the raw channels, as it did.
         let v1: String = {
             let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
             v["version"] = 1.into();
+            v.as_object_mut().unwrap().remove("instruments");
             for l in v["lanes"].as_array_mut().unwrap() {
-                l.as_object_mut().unwrap().remove("instrument");
+                l.as_object_mut().unwrap().remove("inst");
+            }
+            for c in v["clips"].as_array_mut().unwrap() {
+                c.as_object_mut().unwrap().remove("instrument");
             }
             v.to_string()
         };
         let old = from_str(&v1).unwrap();
-        assert!(old.arrangement.instruments.iter().all(|i| *i == LaneInstrument::plain()));
+        assert!(old.arrangement.instruments.lane_instruments().iter().all(|i| *i == LaneInstrument::plain()));
     }
 
     #[test]

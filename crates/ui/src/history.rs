@@ -17,7 +17,6 @@
 //! the step after it. The history keeps at most [`MAX_STEPS`] steps and
 //! [`MAX_BYTES`]; the oldest steps go first.
 
-use crate::instruments::LaneInstrument;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -38,7 +37,7 @@ pub struct Doc {
     pub next_id: u32,
     pub bpm: f32,
     pub params: Params,
-    pub instruments: Vec<LaneInstrument>,
+    pub instruments: crate::instruments::InstrumentTable,
     pub samples: Vec<Option<crate::dpcm::UserSample>>,
 }
 

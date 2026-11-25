@@ -62,9 +62,17 @@ impl InstrumentView {
         std::array::from_fn(|i| vg::Rect::from_xywh(x0 + i as f32 * w, y, w - 4.0 * s, VIB_H * s))
     }
 
-    fn vibrato(&self) -> Option<chip::instrument::Vibrato> {
+    /// The instrument the inspector shows (the selected clip's, else the lane's).
+    fn current(&self) -> Option<(crate::instruments::InstId, crate::instruments::LaneInstrument)> {
         let lane = self.s.lane_sel.get_untracked();
-        self.s.arrangement.with_untracked(|a| a.instruments.get(lane).filter(|i| !i.is_kit()).map(|i| i.inst.vibrato))
+        self.s.arrangement.with_untracked(|a| {
+            let id = a.current_instrument(lane);
+            a.instruments.get(id).map(|i| (id, i.clone()))
+        })
+    }
+
+    fn vibrato(&self) -> Option<chip::instrument::Vibrato> {
+        self.current().filter(|(_, i)| !i.is_kit()).map(|(_, i)| i.inst.vibrato)
     }
 
     fn vib_get(v: &chip::instrument::Vibrato, i: usize) -> u8 {
@@ -81,10 +89,10 @@ impl InstrumentView {
     }
 
     fn set_vib(&self, cx: &mut EventContext, which: usize, value: i32) {
-        let lane = self.s.lane_sel.get_untracked();
+        let Some((inst, _)) = self.current() else { return };
         let lo = if which == 1 { 1 } else { 0 };
         let v = value.clamp(lo, VIB[which].1 as i32) as u8;
-        cx.emit(AppEvent::EditVibrato { lane, which, value: v });
+        cx.emit(AppEvent::EditVibrato { inst, which, value: v });
     }
 
     fn seq_of(inst: &chip::instrument::Instrument, i: usize) -> &Seq {
@@ -98,12 +106,7 @@ impl InstrumentView {
 
     /// Writes the value under the pointer into macro `m`.
     fn paint(&mut self, cx: &mut EventContext, m: usize) {
-        let lane = self.s.lane_sel.get_untracked();
-        let Some(len) = self
-            .s
-            .arrangement
-            .with_untracked(|a| a.instruments.get(lane).filter(|i| !i.is_kit()).map(|i| Self::seq_of(&i.inst, m).len))
-        else {
+        let Some((inst, len)) = self.current().filter(|(_, i)| !i.is_kit()).map(|(id, i)| (id, Self::seq_of(&i.inst, m).len)) else {
             return;
         };
         if len == 0 {
@@ -119,7 +122,7 @@ impl InstrumentView {
         let from = self.drawing.map_or(step, |(_, s)| s);
         let (a, b) = if from <= step { (from, step) } else { (step, from) };
         for st in a..=b {
-            cx.emit(AppEvent::EditMacro { lane, which: m, step: st, value: v as i8 });
+            cx.emit(AppEvent::EditMacro { inst, which: m, step: st, value: v as i8 });
         }
         self.drawing = Some((m, step));
     }
@@ -198,7 +201,7 @@ impl View for InstrumentView {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let lane = self.s.lane_sel.get_untracked();
-        let Some(inst) = self.s.arrangement.with_untracked(|a| a.instruments.get(lane).cloned()) else { return };
+        let Some((_, inst)) = self.current() else { return };
         let color = self
             .s
             .arrangement

@@ -32,11 +32,14 @@ pub struct Note {
     /// noise and VRC6 pulse use it as V; the saw maps it to its accumulator
     /// rate (`saw_rate_for_volume`); triangle and DMC have no volume.
     pub volume: Option<u8>,
+    /// The instrument (bank index) of the clip this note came from; `NONE`:
+    /// the lane's. Read only at note-on: a held note keeps its instrument.
+    pub inst: u8,
 }
 
 impl Note {
     pub const fn new(start: u32, end: u32, pitch: u8) -> Self {
-        Self { start, end, pitch, volume: None }
+        Self { start, end, pitch, volume: None, inst: NONE }
     }
 }
 
@@ -259,6 +262,10 @@ struct LaneState {
     period: Option<u16>,
     /// Bank index of the sounding instrument.
     inst: u8,
+    /// A copy of it, taken at note-on: the macros run from this copy, so a
+    /// new snapshot (another bank layout, a clip switched to another
+    /// instrument) never changes a note that is already sounding.
+    instr: Instrument,
     /// Pitch actually played (a kit zone can fix it).
     play_pitch: u8,
     mac: MacroState,
@@ -360,7 +367,10 @@ impl Driver {
             let chip_present = !vrc6_lane || self.vrc6;
             let audible = self.audible(lane) && chip_present;
             let (want, base) = if playing && audible {
-                (Self::note_at(song.lanes[lane], prev, pos), song.lane_inst[lane])
+                let n = Self::note_at(song.lanes[lane], prev, pos);
+                // The note's clip instrument, else the lane's.
+                let base = n.map_or(NONE, |n| n.inst);
+                (n, if base != NONE { base } else { song.lane_inst[lane] })
             } else if !playing && chip_present {
                 let base = if song.preview_inst != NONE { song.preview_inst } else { song.lane_inst[lane] };
                 (self.preview[lane], base)
@@ -377,20 +387,21 @@ impl Driver {
                 Some((n, inst, pitch)) if cur != Some((n.start, n.pitch)) => {
                     self.lanes[lane].vol = n.volume;
                     self.lanes[lane].inst = inst;
+                    self.lanes[lane].instr = *song.instrument(inst);
                     self.lanes[lane].play_pitch = pitch;
-                    self.lanes[lane].mac = MacroState::note_on(song.instrument(inst));
+                    self.lanes[lane].mac = MacroState::note_on(&self.lanes[lane].instr);
                     self.note_on(lane, song, w);
                     self.lanes[lane].note = Some((n.start, n.pitch));
                     self.note_ons[lane] = self.note_ons[lane].wrapping_add(1);
                 }
                 Some((n, _, _)) => {
                     self.lanes[lane].vol = n.volume;
-                    let inst = *song.instrument(self.lanes[lane].inst);
+                    let inst = self.lanes[lane].instr;
                     self.lanes[lane].mac.advance(&inst);
                     self.sustain(lane, song, w);
                 }
                 None if cur.is_some() => {
-                    let inst = *song.instrument(self.lanes[lane].inst);
+                    let inst = self.lanes[lane].instr;
                     let st = &mut self.lanes[lane].mac;
                     // A release tail plays out unless the lane was silenced.
                     if audible && inst.has_release() && lane != LANE_DMC {
@@ -573,11 +584,11 @@ impl Driver {
     }
 
     /// Writes this frame's registers for `lane` (`first`: note-on).
-    fn apply(&mut self, lane: usize, song: &Song, first: bool, w: &mut Writes) {
+    fn apply(&mut self, lane: usize, _song: &Song, first: bool, w: &mut Writes) {
         // Length index 1 = 254 half frames (2.1 s): only matters in decay mode,
         // where the envelope reaches 0 within 1 s anyway.
         const LEN: u8 = 1 << 3;
-        let inst = *song.instrument(self.lanes[lane].inst);
+        let inst = self.lanes[lane].instr;
         let f = self.lanes[lane].mac.frame(&inst);
         let macro_vol = !inst.volume.is_empty();
         let st = self.lanes[lane];
@@ -712,6 +723,48 @@ mod tests {
 
     fn writes_of(w: &Writes) -> Vec<(u16, u8)> {
         w.as_slice().to_vec()
+    }
+
+    /// The duty bits of the last $4000 write.
+    fn duty_written(w: &Writes) -> Option<u8> {
+        w.as_slice().iter().rev().find(|x| x.0 == 0x4000).map(|x| x.1 >> 6)
+    }
+
+    #[test]
+    fn clip_instruments_switch_at_note_on_and_never_mid_note() {
+        use crate::instrument::Seq;
+        // Two instruments that differ only in duty: 12.5% (2/16) and 75% (12/16).
+        let thin = Instrument { duty: Seq::new(&[2], NONE, NONE), ..Instrument::PLAIN };
+        let wide = Instrument { duty: Seq::new(&[12], NONE, NONE), ..Instrument::PLAIN };
+        let bank = [thin, wide];
+        let mut d = drv();
+        let mut w = Writes::default();
+        // Clip 1 (thin) then clip 2 (wide) on Pulse 1; the lane default is plain.
+        let notes = [Note { inst: 0, ..Note::new(0, 960, 69) }, Note { inst: 1, ..Note::new(960, 1920, 69) }];
+        let mut lanes: [&[Note]; LANES] = [&[]; LANES];
+        lanes[0] = &notes;
+        let song = Song { lanes, instruments: &bank, lane_inst: [NONE; LANES], preview_inst: NONE };
+        d.tick(&song, None, 0.0, true, &mut w);
+        assert_eq!(duty_written(&w), Some(0), "clip 1: 12.5%");
+        w.clear();
+        d.tick(&song, Some(0.0), 980.0, true, &mut w);
+        assert_eq!(duty_written(&w), Some(3), "clip 2's note-on: 75%");
+        // A held note keeps its instrument when a new snapshot moves its clip
+        // to the other instrument and reorders the bank.
+        let mut d = drv();
+        w.clear();
+        d.tick(&song, None, 0.0, true, &mut w);
+        let moved = [Note { inst: 1, ..Note::new(0, 960, 69) }];
+        let reordered = [wide, thin];
+        let mut lanes2: [&[Note]; LANES] = [&[]; LANES];
+        lanes2[0] = &moved;
+        let song2 = Song { lanes: lanes2, instruments: &reordered, lane_inst: [NONE; LANES], preview_inst: NONE };
+        w.clear();
+        for i in 1..10 {
+            d.tick(&song2, Some((i - 1) as f64 * 40.0), i as f64 * 40.0, true, &mut w);
+        }
+        assert_eq!(duty_written(&w), None, "no duty change while the note is held");
+        assert_eq!(d.note_ons[0], 1, "and no retrigger");
     }
 
     #[test]

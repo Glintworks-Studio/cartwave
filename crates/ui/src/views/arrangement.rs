@@ -14,6 +14,28 @@ use vizia::vg;
 use super::clip::{self, ClipAnim, ClipPaint};
 use super::gfx::{self, Face};
 use super::chrome::TrackRow;
+
+thread_local! {
+    /// The arrangement's left and right edges and scale as last drawn
+    /// (physical px), so a browser drag can find the clip under the pointer.
+    static ARRANGEMENT_AT: Cell<Option<(f32, f32, f32)>> = const { Cell::new(None) };
+}
+
+/// The clip under a window position (physical px), on a lane the browser
+/// knows the row of; the newest (topmost) clip wins.
+pub fn clip_at(a: &state::Arrangement, x: f32, y: f32) -> Option<u32> {
+    let (left, right, s) = ARRANGEMENT_AT.with(|c| c.get())?;
+    if x < left || x > right {
+        return None;
+    }
+    let lane = super::browser::lane_at(x, y)?;
+    let tick = a.view.x_to_tick(((x - left) / s) as f64);
+    a.clips
+        .iter()
+        .rev()
+        .find(|c| c.lane == lane && (c.start_ticks as f64) <= tick && tick < c.end_ticks() as f64)
+        .map(|c| c.id)
+}
 use crate::notes::Note;
 use crate::state::{self, Clip, TimeSel, MIN_CLIP_TICKS, TICKS_PER_BAR};
 use crate::theme::tokens::*;
@@ -512,7 +534,14 @@ impl Arrangement {
                 }
             });
             self.s.time_sel.set(None);
-            vec![MenuAction::Duplicate, MenuAction::Delete, MenuAction::LoopClips]
+            vec![
+                MenuAction::Duplicate,
+                MenuAction::Delete,
+                MenuAction::LoopClips,
+                MenuAction::MakeUnique,
+                MenuAction::LaneInstrument,
+                MenuAction::SavePreset,
+            ]
         } else {
             let tick = self.s.arrangement.with_untracked(|a| a.view.x_to_tick(mx as f64));
             let (_, lane) = self.tick_lane_at(mx, my, false);
@@ -892,6 +921,7 @@ impl View for Arrangement {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let rect: vg::Rect = b.into();
+        ARRANGEMENT_AT.with(|a| a.set(Some((rect.left, rect.right, s))));
 
         let dt = gfx::frame_dt(&self.last_draw);
 
@@ -961,6 +991,11 @@ impl View for Arrangement {
                             rect: r,
                             color: a.lanes[c.lane].color,
                             name: &c.name,
+                            inst: c
+                                .instrument
+                                .filter(|id| *id != a.instruments.lane_id(c.lane))
+                                .and_then(|id| a.instruments.get(id))
+                                .map(|i| i.name.as_str()),
                             notes: &c.notes,
                             len_ticks: c.len_ticks,
                             anim: *st,
@@ -1000,6 +1035,7 @@ impl View for Arrangement {
                         }
                         p.color.r.to_bits().hash(&mut h);
                         p.name.hash(&mut h);
+                        p.inst.hash(&mut h);
                         p.len_ticks.hash(&mut h);
                         for n in p.notes {
                             (n.start, n.len, n.pitch).hash(&mut h);
@@ -1186,6 +1222,18 @@ impl View for Arrangement {
                 } else if target {
                     canvas.draw_rect(band, &gfx::fill(ACCENT.with_alpha(0.06)));
                 }
+            }
+            // Over a clip: the preset becomes that clip's own instrument.
+            if let Some(id) = self.s.drag_preset.get_untracked().and_then(|d| d.clip) {
+                self.s.arrangement.with_untracked(|a| {
+                    let (Some(c), Some((y0, y1))) = (a.clip(id), a.clip(id).and_then(|c| super::browser::lane_span(c.lane))) else { return };
+                    let x0 = rect.left + a.view.tick_to_x(c.start_ticks as f64) as f32 * s;
+                    let x1 = rect.left + a.view.tick_to_x(c.end_ticks() as f64) as f32 * s;
+                    let r = vg::Rect::from_ltrb(x0.max(rect.left), y0 + CLIP_V_INSET * s, x1.min(rect.right), y1 - CLIP_V_INSET * s);
+                    let rr = gfx::rrect(r, RADIUS_CLIP * s);
+                    canvas.draw_rrect(rr, &gfx::fill(ACCENT.with_alpha(0.12)));
+                    gfx::ring(canvas, &rr, 2.0 * s, &gfx::fill(ACCENT));
+                });
             }
         }
 

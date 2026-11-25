@@ -246,7 +246,7 @@ fn files_v1_loads_and_v2_round_trips() {
     let v1 = std::fs::read_to_string("../../docs/songs/scale_test.chipdaw").unwrap();
     assert!(v1.contains("\"version\": 1"));
     let p = file::from_str(&v1).unwrap();
-    assert!(p.arrangement.instruments.iter().all(|i| i.name == "Raw Channel"), "v1 = raw channels");
+    assert!(p.arrangement.instruments.lane_instruments().iter().all(|i| i.name == "Raw Channel"), "v1 = raw channels");
     let text = file::to_string(&p);
     assert_eq!(file::to_string(&file::from_str(&text).unwrap()), text);
     let mut h = project(4);

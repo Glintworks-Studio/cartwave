@@ -33,6 +33,9 @@ pub struct PresetDrag {
     pub y: f32,
     /// The lane under the pointer, if any (whether or not the preset fits).
     pub target: Option<usize>,
+    /// The clip under the pointer, if any: the drop sets that clip's
+    /// instrument instead of the lane's default.
+    pub clip: Option<u32>,
 }
 
 thread_local! {
@@ -89,7 +92,7 @@ enum Item {
     ImportAudio,
 }
 
-fn items(query: &str, samples: &[Option<String>]) -> Vec<Item> {
+fn items(query: &str, samples: &[Option<String>], user: &[crate::user_presets::UserPreset]) -> Vec<Item> {
     let q = query.trim().to_lowercase();
     let hit = |name: &str, blurb: &str, cat: &str| {
         q.is_empty() || name.to_lowercase().contains(&q) || blurb.to_lowercase().contains(&q) || cat.to_lowercase().contains(&q)
@@ -109,6 +112,11 @@ fn items(query: &str, samples: &[Option<String>]) -> Vec<Item> {
         out.push(Item::Header("DPCM Samples", filled.len()));
         out.extend(filled.into_iter().map(Item::Sample));
         out.push(Item::ImportAudio);
+    }
+    let mine: Vec<usize> = (0..user.len()).filter(|&i| hit(&user[i].name, "your preset", "user presets")).collect();
+    if !mine.is_empty() {
+        out.push(Item::Header("User Presets", mine.len()));
+        out.extend(mine.into_iter().map(|i| Item::Preset(PRESETS.len() + i)));
     }
     for cat in Category::ALL {
         let ps: Vec<usize> = (0..PRESETS.len())
@@ -151,6 +159,9 @@ impl PresetList {
                 })
                 .needs_redraw();
             })
+            .bind(s.user_presets, |h| {
+                h.modify(|v: &mut PresetList| v.refresh());
+            })
             .bind(s.arrangement, |h| {
                 h.modify(|v: &mut PresetList| v.refresh());
             })
@@ -164,7 +175,7 @@ impl PresetList {
             .s
             .arrangement
             .with_untracked(|a| a.samples.iter().map(|s| s.as_ref().map(|s| s.name.clone())).collect());
-        self.items = items(&self.s.browser_query.get_untracked(), &names);
+        self.items = self.s.user_presets.with_untracked(|u| items(&self.s.browser_query.get_untracked(), &names, u));
     }
 
     fn content_h(&self) -> f32 {
@@ -251,7 +262,12 @@ impl View for PresetList {
                     if self.dragging {
                         if let Item::Preset(p) = self.items[i] {
                             let target = lane_at(*x, *y).filter(|_| !Self::inside(cx));
-                            self.s.drag_preset.set(Some(PresetDrag { preset: p, x: *x, y: *y, target }));
+                            let kinds = self.s.user_presets.with_untracked(|u| crate::user_presets::view(p, u).map_or(0, |v| v.kinds));
+                            let fits = target.is_some_and(|l| kinds & lane_kind(l) != 0);
+                            let clip = target
+                                .filter(|_| fits)
+                                .and_then(|_| self.s.arrangement.with_untracked(|a| super::arrangement::clip_at(a, *x, *y)));
+                            self.s.drag_preset.set(Some(PresetDrag { preset: p, x: *x, y: *y, target, clip }));
                         }
                     }
                 } else {
@@ -272,8 +288,10 @@ impl View for PresetList {
                 cx.release();
                 if self.dragging {
                     if let Some(d) = self.s.drag_preset.get_untracked() {
-                        if let Some(lane) = d.target {
-                            cx.emit(AppEvent::AssignPreset { lane: Some(lane), preset: d.preset });
+                        match (d.clip, d.target) {
+                            (Some(clip), _) => cx.emit(AppEvent::AssignPresetToClip { clip, preset: d.preset }),
+                            (None, Some(lane)) => cx.emit(AppEvent::AssignPreset { lane: Some(lane), preset: d.preset }),
+                            _ => {}
                         }
                     }
                     self.s.drag_preset.set(None);
@@ -303,7 +321,7 @@ impl View for PresetList {
         let lane_names: Vec<String> = self
             .s
             .arrangement
-            .with_untracked(|a| a.instruments.iter().map(|i| i.name.clone()).collect());
+            .with_untracked(|a| a.instruments.lane_instruments().iter().map(|i| i.name.clone()).collect());
         let fh = gfx::font(Face::SemiBold, 10.0 * s);
         let fr = gfx::font(Face::Medium, 12.0 * s);
         let fs = gfx::font(Face::Regular, 10.0 * s);
@@ -382,11 +400,12 @@ impl View for PresetList {
                         canvas.draw_rrect(rr, &gfx::vgrad(card, Rgba::white(0.06), Rgba::white(0.025)));
                     }
                     let (name, kinds, current) = if is_preset {
-                        let p = &PRESETS[l];
+                        let Some(p) = self.s.user_presets.with_untracked(|u| crate::user_presets::view(l, u)) else { continue };
                         let fits_sel = lane < 8 && p.fits(lane);
-                        (p.name, p.kinds, fits_sel && lane_names.get(lane).is_some_and(|n| n == p.name))
+                        let current = fits_sel && lane_names.get(lane).is_some_and(|n| *n == p.name);
+                        (p.name, p.kinds, current)
                     } else {
-                        (LAYOUTS[l].name, 0, false)
+                        (LAYOUTS[l].name.to_string(), 0, false)
                     };
                     // Leading glyph: kind colour square for presets, a stack for layouts.
                     let gx = x;
@@ -403,7 +422,7 @@ impl View for PresetList {
                     }
                     let ink = if selected || current { TEXT_HI } else { TEXT_MID };
                     let base = gfx::baseline_for_center(&fr, row.center_y());
-                    gfx::draw_text(canvas, name, (x + 16.0 * s).round(), base.round(), &fr, ink);
+                    gfx::draw_text(canvas, &name, (x + 16.0 * s).round(), base.round(), &fr, ink);
                     let mut rx = row.right - PAD_X * s;
                     if is_preset {
                         // Channel-kind dots, right-aligned; lit if the kind is supported.
@@ -520,13 +539,14 @@ impl View for DragGhost {
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let Some(d) = self.s.drag_preset.get_untracked() else { return };
         let s = cx.scale_factor();
-        let p = &PRESETS[d.preset];
+        let Some(p) = self.s.user_presets.with_untracked(|u| crate::user_presets::view(d.preset, u)) else { return };
         let fits = d.target.map(|l| p.fits(l));
         let f = gfx::font(Face::SemiBold, 12.0 * s);
         let label = match (d.target, fits) {
+            (Some(l), Some(true)) if d.clip.is_some() => format!("{}  →  this clip ({})", p.name, crate::state::default_lanes()[l].name),
             (Some(l), Some(true)) => format!("{}  →  {}", p.name, crate::state::default_lanes()[l].name),
             (Some(_), Some(false)) => format!("{}  ·  can't play here", p.name),
-            _ => p.name.to_string(),
+            _ => p.name.clone(),
         };
         let w = gfx::text_width(&f, &label) + 32.0 * s;
         let r = vg::Rect::from_xywh(d.x + 12.0 * s, d.y + 8.0 * s, w, 28.0 * s);
@@ -552,6 +572,7 @@ impl View for DragGhost {
 /// it fits, `Some(false)` = can't play the preset (dimmed), `None` = normal.
 pub fn drag_state(s: &Signals, lane: usize) -> Option<(bool, bool)> {
     let d = s.drag_preset.get_untracked()?;
-    let fits = PRESETS[d.preset].kinds & lane_kind(lane) != 0;
+    let kinds = s.user_presets.with_untracked(|u| crate::user_presets::view(d.preset, u).map_or(0, |v| v.kinds));
+    let fits = kinds & lane_kind(lane) != 0;
     Some((fits, d.target == Some(lane)))
 }

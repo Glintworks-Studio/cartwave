@@ -36,6 +36,8 @@ pub struct ClipPaint<'a> {
     pub rect: vg::Rect,
     pub color: Rgba,
     pub name: &'a str,
+    /// The clip's own instrument, when it differs from its lane's default.
+    pub inst: Option<&'a str>,
     pub notes: &'a [Note],
     pub len_ticks: u32,
     pub anim: ClipAnim,
@@ -159,7 +161,13 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
         let f = gfx::font(Face::SemiBold, 10.0 * s);
         let base_y = gfx::baseline_for_center(&f, r.top + header_h * 0.5).round();
         let x = (r.left.max(p.visible.0) + 8.0 * s).round();
-        gfx::draw_text_clipped(canvas, p.name, x, base_y, r.right - x - 4.0 * s, &f, ink);
+        match p.inst {
+            Some(i) => {
+                let t = format!("{}  ·  {i}", p.name);
+                gfx::draw_text_clipped(canvas, &t, x, base_y, r.right - x - 4.0 * s, &f, ink);
+            }
+            None => gfx::draw_text_clipped(canvas, p.name, x, base_y, r.right - x - 4.0 * s, &f, ink),
+        }
     }
 
     // 5. Subtle inner shadow at the bottom edge.

@@ -357,10 +357,12 @@ pub fn heavy_arrangement() -> Arrangement {
         vibrato: Vibrato { depth: 30, period: 6, delay: 0 },
         ..Instrument::PLAIN
     };
-    for (lane, slot) in a.instruments.iter_mut().enumerate() {
+    for lane in 0..engine::LANES {
         if lane != 4 {
-            *slot = crate::instruments::LaneInstrument { name: "Heavy Macros".into(), inst, kit: Vec::new(), edited: true };
+            a.instruments.set_lane(lane, crate::instruments::LaneInstrument { name: "Heavy Macros".into(), inst, kit: Vec::new(), edited: true });
         }
     }
+    let clips = a.clips.clone();
+    a.instruments.prune(&clips);
     a
 }

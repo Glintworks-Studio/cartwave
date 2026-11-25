@@ -63,13 +63,16 @@ pub struct Clip {
     pub notes: Vec<Note>,
     /// Next note id in this clip (ids are per clip).
     pub next_note_id: u32,
+    /// The clip's own instrument (an id in the project's table); `None`:
+    /// its lane's default. Copies of a clip share it (by reference).
+    pub instrument: Option<crate::instruments::InstId>,
     pub rev: Rev,
 }
 
 impl Clip {
     pub fn new(id: u32, lane: usize, start_ticks: u32, len_ticks: u32, name: String, notes: Vec<Note>) -> Self {
         let next_note_id = notes.iter().map(|n| n.id.saturating_add(1)).max().unwrap_or(1);
-        Self { id, lane, start_ticks, len_ticks, name, notes, next_note_id, rev: Rev::next() }
+        Self { id, lane, start_ticks, len_ticks, name, notes, next_note_id, instrument: None, rev: Rev::next() }
     }
 
     pub fn end_ticks(&self) -> u32 {
@@ -248,6 +251,12 @@ pub enum MenuAction {
     Duplicate,
     Delete,
     LoopClips,
+    /// The clip gets its own copy of its instrument.
+    MakeUnique,
+    /// The clip goes back to its lane's default instrument.
+    LaneInstrument,
+    /// Save the clip's instrument as a user preset.
+    SavePreset,
 }
 
 impl MenuAction {
@@ -258,6 +267,9 @@ impl MenuAction {
             MenuAction::Duplicate => "Duplicate",
             MenuAction::Delete => "Delete",
             MenuAction::LoopClips => "Loop Clip",
+            MenuAction::MakeUnique => "Make Instrument Unique",
+            MenuAction::LaneInstrument => "Use Lane Instrument",
+            MenuAction::SavePreset => "Save Instrument as Preset",
         }
     }
 
@@ -267,6 +279,7 @@ impl MenuAction {
             MenuAction::InsertClip => "Ctrl+Shift+M",
             MenuAction::Duplicate => "Ctrl+D",
             MenuAction::Delete => "Del",
+            MenuAction::MakeUnique | MenuAction::LaneInstrument | MenuAction::SavePreset => "",
         }
     }
 }
@@ -297,8 +310,9 @@ pub struct Arrangement {
     /// Notes being dragged in the piano roll: (clip, note ids). Like
     /// `editing`, the engine hears them winning while the drag lasts.
     pub editing_notes: Option<(u32, Vec<u32>)>,
-    /// One instrument per lane (part of the document: undo, files).
-    pub instruments: Vec<LaneInstrument>,
+    /// The project's instruments: lane defaults and clip overrides (part of
+    /// the document: undo, files).
+    pub instruments: crate::instruments::InstrumentTable,
     /// A preset being auditioned from the browser (not part of the document).
     pub audition: Option<LaneInstrument>,
     /// Imported DPCM samples (user slots, played from DPCM rows 5..8).
@@ -393,6 +407,20 @@ impl Arrangement {
         self.selection.first().and_then(|id| self.clip(*id))
     }
 
+    /// The instrument the inspector edits for `lane`: the selected clip's
+    /// (its own or its lane's default), else the lane's default.
+    pub fn current_instrument(&self, lane: usize) -> crate::instruments::InstId {
+        match self.first_selected().filter(|c| c.lane == lane) {
+            Some(c) => self.instruments.id_for(c),
+            None => self.instruments.lane_id(lane),
+        }
+    }
+
+    /// The instrument a clip plays.
+    pub fn clip_instrument(&self, c: &Clip) -> Option<&LaneInstrument> {
+        self.instruments.get(self.instruments.id_for(c))
+    }
+
     /// A new empty clip of `len` ticks on `lane` at `start` (the newest clip:
     /// it wins overlaps). Returns its id.
     pub fn add_clip(&mut self, lane: usize, start: u32, len: u32) -> u32 {
@@ -481,17 +509,19 @@ impl Arrangement {
             .iter()
             .map(|c| c.audible_notes().map(|n| (n.start, n.len, n.pitch, n.volume)).collect())
             .collect();
-        let (bank, lane_inst, preview) = instruments::bank(&self.instruments, self.audition.as_ref());
+        let b = instruments::bank(&self.instruments, self.audition.as_ref());
         SongSnapshot::build(
             clips.iter().zip(&notes).map(|(c, n)| ClipInput {
                 lane: c.lane,
                 start: c.start_ticks,
                 len: c.len_ticks,
+                // Only a real override: lane-default clips follow the lane.
+                inst: c.instrument.filter(|id| self.instruments.contains(*id)).map_or(chip::instrument::NONE, |id| b.of(id)),
                 notes: n,
             }),
             version,
         )
-        .with_instruments(bank, lane_inst, preview)
+        .with_instruments(b.bank, b.lane_inst, b.preview)
         .with_dpcm(crate::dpcm::bank(&self.samples))
     }
 }

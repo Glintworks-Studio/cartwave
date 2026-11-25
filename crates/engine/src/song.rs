@@ -45,11 +45,13 @@ pub struct SongSnapshot {
 /// volume or `None` for the lane default).
 pub type NoteInput = (u32, u32, u8, Option<u8>);
 
-/// One clip's worth of input: lane, start, length (ticks), and its notes.
+/// One clip's worth of input: lane, start, length (ticks), its instrument
+/// (bank index, `NONE` = the lane's) and its notes.
 pub struct ClipInput<'a> {
     pub lane: usize,
     pub start: u32,
     pub len: u32,
+    pub inst: u8,
     pub notes: &'a [NoteInput],
 }
 
@@ -84,7 +86,7 @@ impl SongSnapshot {
                 let start = c.start.saturating_add(s);
                 let end = start.saturating_add(l).min(clip_end);
                 if start < end {
-                    lanes[c.lane].push(Note { start, end, pitch, volume });
+                    lanes[c.lane].push(Note { start, end, pitch, volume, inst: c.inst });
                 }
             }
         }
@@ -145,8 +147,8 @@ mod tests {
         let b = [(0, 30, 70, None)];
         let s = SongSnapshot::build(
             [
-                ClipInput { lane: 0, start: 1000, len: 520, notes: &a },
-                ClipInput { lane: 0, start: 1120, len: 30, notes: &b },
+                ClipInput { lane: 0, start: 1000, len: 520, inst: NONE, notes: &a },
+                ClipInput { lane: 0, start: 1120, len: 30, inst: NONE, notes: &b },
             ],
             1,
         );

@@ -7,6 +7,7 @@ pub mod export;
 pub mod history;
 pub mod midi;
 pub mod instruments;
+pub mod user_presets;
 pub mod input;
 pub mod mock;
 pub mod notes;
@@ -104,6 +105,8 @@ pub struct Signals {
     pub browser_sel: Signal<Option<usize>>,
     /// A preset being dragged out of the browser.
     pub drag_preset: Signal<Option<PresetDrag>>,
+    /// The user's saved presets (browser indices after the factory presets).
+    pub user_presets: Signal<Vec<user_presets::UserPreset>>,
 }
 
 /// Loop end sent to the engine while looping is off: far past any song.
@@ -238,10 +241,10 @@ pub enum AppEvent {
     RecoverDiscard,
     /// Draw on an instrument macro: lane, macro (0 volume, 1 arpeggio,
     /// 2 pitch, 3 duty), step, value. Undo groups a whole drag.
-    EditMacro { lane: usize, which: usize, step: usize, value: i8 },
+    EditMacro { inst: instruments::InstId, which: usize, step: usize, value: i8 },
     /// Set the lane instrument's vibrato: 0 depth (cents), 1 period
     /// (frames), 2 delay (frames). Undo groups a whole drag.
-    EditVibrato { lane: usize, which: usize, value: u8 },
+    EditVibrato { inst: instruments::InstId, which: usize, value: u8 },
     /// Native open dialog for a .mid file; it becomes a new project (Ctrl+I).
     ImportMidi,
     /// Render the song to a WAV file (Ctrl+Shift+R).
@@ -259,6 +262,14 @@ pub enum AppEvent {
     Audition(Option<usize>),
     /// Load a preset onto a lane (`None`: the selected lane, or the first that fits).
     AssignPreset { lane: Option<usize>, preset: usize },
+    /// A preset dropped on a clip: it becomes the clip's own instrument.
+    AssignPresetToClip { clip: u32, preset: usize },
+    /// The selected clips get their own copy of the instrument they play.
+    MakeInstrumentUnique,
+    /// The selected clips go back to their lane's default instrument.
+    UseLaneInstrument,
+    /// Save the instrument the inspector shows as a user preset.
+    SaveUserPreset,
     /// Load a whole channel layout (chip + every lane's instrument).
     ApplyLayout(usize),
 }
@@ -319,9 +330,9 @@ impl Model for AppState {
                 };
                 self.set_chip(next);
             }
-            AppEvent::EditMacro { lane, which, step, value } => {
+            AppEvent::EditMacro { inst, which, step, value } => {
                 self.s.arrangement.update(|a| {
-                    if let Some(i) = a.instruments.get_mut(*lane) {
+                    if let Some(i) = a.instruments.get_mut(*inst) {
                         let q = match which {
                             0 => &mut i.inst.volume,
                             1 => &mut i.inst.arp,
@@ -335,9 +346,9 @@ impl Model for AppState {
                     }
                 });
             }
-            AppEvent::EditVibrato { lane, which, value } => {
+            AppEvent::EditVibrato { inst, which, value } => {
                 self.s.arrangement.update(|a| {
-                    if let Some(i) = a.instruments.get_mut(*lane) {
+                    if let Some(i) = a.instruments.get_mut(*inst) {
                         let v = &mut i.inst.vibrato;
                         let f = match which {
                             0 => &mut v.depth,
@@ -355,6 +366,10 @@ impl Model for AppState {
             AppEvent::BrowserSelect(p) => self.s.browser_sel.set(*p),
             AppEvent::Audition(p) => self.audition(*p),
             AppEvent::AssignPreset { lane, preset } => self.assign_preset(*lane, *preset),
+            AppEvent::AssignPresetToClip { clip, preset } => self.assign_preset_to_clip(*clip, *preset),
+            AppEvent::MakeInstrumentUnique => self.make_instrument_unique(),
+            AppEvent::UseLaneInstrument => self.use_lane_instrument(),
+            AppEvent::SaveUserPreset => self.save_user_preset(),
             AppEvent::ApplyLayout(i) => self.apply_layout(*i),
             AppEvent::ToggleMute(i) => {
                 self.s.mute.update(|m| *m ^= 1 << *i);
@@ -733,8 +748,13 @@ impl AppState {
     /// The lane a preset goes to: `want` if given (and it fits), else the
     /// selected lane if it fits, else the first lane that fits (VRC6 lanes
     /// only with the VRC6 on).
+    /// A factory or user preset by browser index.
+    fn preset(&self, p: usize) -> Option<user_presets::PresetView> {
+        self.s.user_presets.with_untracked(|u| user_presets::view(p, u))
+    }
+
     fn lane_for(&self, preset: usize, want: Option<usize>) -> Option<usize> {
-        let p = &chip::presets::PRESETS[preset];
+        let p = self.preset(preset)?;
         let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
         let ok = |l: usize| p.fits(l) && (vrc6 || l < chip::driver::LANE_V1);
         if let Some(l) = want {
@@ -756,10 +776,8 @@ impl AppState {
             return;
         }
         let Some(lane) = self.lane_for(p, None) else { return };
-        let pr = &chip::presets::PRESETS[p];
-        self.s
-            .arrangement
-            .update(|a| a.audition = Some(instruments::LaneInstrument::from_preset(pr)));
+        let Some(pr) = self.preset(p) else { return };
+        self.s.arrangement.update(|a| a.audition = Some(pr.inst));
         let pitch = match lane {
             chip::driver::LANE_TRI => 48,
             chip::driver::LANE_NOISE => 56,
@@ -771,24 +789,129 @@ impl AppState {
 
     /// Loads preset `p` on a lane, with its channel controls; one undo step.
     fn assign_preset(&mut self, lane: Option<usize>, p: usize) {
-        let pr = &chip::presets::PRESETS[p];
+        let Some(pr) = self.preset(p) else { return };
         let Some(lane) = self.lane_for(p, lane) else {
             self.set_status(format!("{} can't play on that channel.", pr.name));
             return;
         };
-        self.load_preset_on(lane, pr);
+        self.load_preset_on(lane, pr.inst, pr.params);
         self.commit();
         let name = state::default_lanes()[lane].name;
         self.set_status(format!("{} loaded on {name}", pr.name));
     }
 
-    fn load_preset_on(&mut self, lane: usize, pr: &chip::presets::Preset) {
+    /// A preset dropped on a clip becomes that clip's own instrument (a new
+    /// table entry). The lane's channel controls stay as they are: they
+    /// belong to the lane, not the clip. One undo step.
+    fn assign_preset_to_clip(&mut self, clip: u32, p: usize) {
+        let Some(pr) = self.preset(p) else { return };
+        let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(clip).map(|c| c.lane)) else { return };
+        if self.lane_for(p, Some(lane)) != Some(lane) {
+            self.set_status(format!("{} can't play on that channel.", pr.name));
+            return;
+        }
+        let mut ok = false;
         self.s.arrangement.update(|a| {
-            if let Some(slot) = a.instruments.get_mut(lane) {
-                *slot = instruments::LaneInstrument::from_preset(pr);
+            if let Some(id) = a.instruments.add(pr.inst.clone()) {
+                if let Some(c) = a.clip_mut(clip) {
+                    c.instrument = Some(id);
+                }
+                let clips = a.clips.clone();
+                a.instruments.prune(&clips);
+                ok = true;
             }
         });
-        for &(id, v) in pr.params {
+        if !ok {
+            return self.set_status(format!("The project has {} instruments, the most it can hold.", instruments::MAX_INSTRUMENTS));
+        }
+        self.commit();
+        let name = self.s.arrangement.with_untracked(|a| a.clip(clip).map(|c| c.name.clone())).unwrap_or_default();
+        self.set_status(format!("{} is now the instrument of clip \"{name}\"", pr.name));
+    }
+
+    /// "Make unique": the selected clips get one new copy of the instrument
+    /// each plays, so editing it no longer changes the others.
+    fn make_instrument_unique(&mut self) {
+        let mut made = 0;
+        let mut full = false;
+        self.s.arrangement.update(|a| {
+            let ids: Vec<u32> = a.selection.clone();
+            let mut copies: Vec<(instruments::InstId, instruments::InstId)> = Vec::new();
+            for id in ids {
+                let Some(c) = a.clip(id) else { continue };
+                let from = a.instruments.id_for(c);
+                let to = match copies.iter().find(|x| x.0 == from) {
+                    Some(x) => x.1,
+                    None => {
+                        let Some(mut inst) = a.instruments.get(from).cloned() else { continue };
+                        inst.name = format!("{} copy", inst.name.trim_end_matches('*'));
+                        let Some(new) = a.instruments.add(inst) else {
+                            full = true;
+                            break;
+                        };
+                        copies.push((from, new));
+                        made += 1;
+                        new
+                    }
+                };
+                if let Some(c) = a.clip_mut(id) {
+                    c.instrument = Some(to);
+                }
+            }
+            let clips = a.clips.clone();
+            a.instruments.prune(&clips);
+        });
+        if made > 0 {
+            self.commit();
+            self.set_status("The selected clips have their own instrument now.".into());
+        } else if full {
+            self.set_status(format!("The project has {} instruments, the most it can hold.", instruments::MAX_INSTRUMENTS));
+        }
+    }
+
+    /// The selected clips go back to their lane's default instrument.
+    fn use_lane_instrument(&mut self) {
+        let mut changed = false;
+        self.s.arrangement.update(|a| {
+            for id in a.selection.clone() {
+                if a.clip(id).is_some_and(|c| c.instrument.is_some()) {
+                    if let Some(c) = a.clip_mut(id) {
+                        c.instrument = None;
+                        changed = true;
+                    }
+                }
+            }
+            let clips = a.clips.clone();
+            a.instruments.prune(&clips);
+        });
+        if changed {
+            self.commit();
+        }
+    }
+
+    /// Saves the inspector's instrument as a user preset (app-data folder).
+    fn save_user_preset(&mut self) {
+        let lane = self.s.lane_sel.get_untracked();
+        let Some(inst) = self.s.arrangement.with_untracked(|a| a.instruments.get(a.current_instrument(lane)).cloned()) else {
+            return;
+        };
+        let msg = match crate::user_presets::save(&inst, lane) {
+            Ok(name) => {
+                self.s.user_presets.set(crate::user_presets::load());
+                format!("Saved \"{name}\" to your presets.")
+            }
+            Err(e) => e,
+        };
+        self.set_status(msg);
+    }
+
+    fn load_preset_on(&mut self, lane: usize, inst: instruments::LaneInstrument, params: &[(ParamId, i8)]) {
+        self.s.arrangement.update(|a| {
+            a.instruments.set_lane(lane, inst);
+            let clips = a.clips.clone();
+            a.instruments.prune(&clips);
+        });
+        for &(id, v) in params {
             self.params.set(lane, id, v as i32);
             let value = self.params.get(lane, id) as i8;
             self.send(Command::Param { lane: lane as u8, id, value });
@@ -806,7 +929,7 @@ impl AppState {
         }
         for (lane, name) in l.lanes.iter().enumerate() {
             if let Some(pr) = chip::presets::find(name) {
-                self.load_preset_on(lane, pr);
+                self.load_preset_on(lane, instruments::LaneInstrument::from_preset(pr), pr.params);
             }
         }
         self.commit();
@@ -885,7 +1008,7 @@ impl AppState {
         self.s.inspector.set_if_changed(any);
         // Which dials an instrument overrides (cheap; set only on change).
         let lane = self.s.lane_sel.get_untracked();
-        let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(lane)));
+        let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(a.current_instrument(lane))));
         self.s.dial_state.set_if_changed(st);
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
@@ -1191,6 +1314,7 @@ pub fn build_ui(cx: &mut Context) {
         browser_query: Signal::new(String::new()),
         browser_sel: Signal::new(None),
         drag_preset: Signal::new(None),
+        user_presets: Signal::new(user_presets::load()),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1596,8 +1720,12 @@ fn device_panel(cx: &mut Context, s: Signals) {
         VStack::new(cx, |cx| {
             let title = s.arrangement.map(move |a| {
                 let lane = s.lane_sel.get_untracked();
-                let name = a.instruments.get(lane).map(|i| i.label()).unwrap_or_default();
-                format!("INSTRUMENT  ·  {}", name.to_uppercase())
+                let id = a.current_instrument(lane);
+                let name = a.instruments.get(id).map(|i| i.label()).unwrap_or_default();
+                let whose = if id == a.instruments.lane_id(lane) { "LANE DEFAULT" } else { "CLIP'S OWN" };
+                let n = a.instruments.users(id, &a.clips);
+                let shared = if n == 1 { "1 CLIP".to_string() } else { format!("{n} CLIPS") };
+                format!("INSTRUMENT  ·  {}  ·  {whose}  ·  {shared}", name.to_uppercase())
             });
             Label::new(cx, title).class("section-title");
             InstrumentView::new(cx, s).width(Stretch(1.0)).height(Stretch(1.0));
@@ -1864,8 +1992,10 @@ impl AppState {
         let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
         let imp = midi::arrange(&song, vrc6);
         let mut p = self.project();
-        let instruments = p.arrangement.instruments.clone();
+        let mut instruments = p.arrangement.instruments.clone();
         p.arrangement = imp.arrangement;
+        // Keep the band; drop clip-only instruments the old clips used.
+        instruments.prune(&p.arrangement.clips);
         p.arrangement.instruments = instruments;
         if let Some(bpm) = imp.bpm {
             p.bpm = bpm.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
@@ -2074,6 +2204,9 @@ impl AppState {
                 self.s.arrangement.update(|a| a.delete_selected());
                 self.commit();
             }
+            MenuAction::MakeUnique => self.make_instrument_unique(),
+            MenuAction::LaneInstrument => self.use_lane_instrument(),
+            MenuAction::SavePreset => self.save_user_preset(),
         }
     }
 

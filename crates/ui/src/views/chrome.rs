@@ -1239,7 +1239,7 @@ impl TrackRow {
             let now = s.arrangement.with_untracked(|a| {
                 (
                     a.first_selected().map(|c| c.lane) == Some(lane),
-                    a.instruments.get(lane).map(|i| i.label()).unwrap_or_default(),
+                    a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(),
                 )
             });
             if *seen.borrow() != now {
@@ -1383,7 +1383,7 @@ impl View for TrackRow {
         let inst = self
             .s
             .arrangement
-            .with_untracked(|a| a.instruments.get(self.lane).map(|i| (i.label(), i.is_kit())));
+            .with_untracked(|a| a.instruments.lane(self.lane).map(|i| (i.label(), i.is_kit())));
         if let Some((label, kit)) = inst {
             let fi = gfx::font(Face::Medium, INST_PX * s);
             let (ix, ib) = if compact {

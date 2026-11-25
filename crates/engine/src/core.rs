@@ -166,6 +166,7 @@ impl Core {
                             end: u32::MAX,
                             pitch,
                             volume,
+                            inst: chip::instrument::NONE,
                         });
                     }
                 }
@@ -384,7 +385,7 @@ mod tests {
     fn plays_and_publishes() {
         let (mut c, mut tx, mut grx, shared) = core();
         let notes = [(0, 960, 69u8, None)];
-        let s = SongSnapshot::build([ClipInput { lane: 0, start: 0, len: 960, notes: &notes }], 1);
+        let s = SongSnapshot::build([ClipInput { lane: 0, start: 0, len: 960, inst: chip::instrument::NONE, notes: &notes }], 1);
         tx.push(Command::Song(Box::new(s))).ok().unwrap();
         tx.push(Command::Play).ok().unwrap();
         let mut out = vec![0f32; 512 * 2];
