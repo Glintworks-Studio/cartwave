@@ -1,0 +1,200 @@
+14:10:44.478 start; own drop target: true
+14:10:44.628 Init: HWND=0x165083C, own drop target: true
+14:10:44.628 Init: RevokeDragDrop=0x0 RegisterDragDrop=0x0
+14:10:46.897 vizia WindowEvent::MouseEnter
+14:10:46.897 vizia WindowEvent::MouseMove(400, 270)
+14:10:46.897 vizia WindowEvent::MouseLeave
+14:10:47.480 vizia WindowEvent::MouseLeave
+14:10:47.983 IDropTarget::DragEnter screen (1618, 381) client (10, 150) files=Some(["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"])
+14:10:47.983 IDropTarget::DragOver  screen (1618, 381) client (10, 150)
+14:10:47.984 vizia Model: OsDrag::Enter { files: ["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"], x: 10, y: 150 }
+14:10:47.984 vizia Model: OsDrag::Over { x: 10, y: 150 }
+14:10:47.985 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.037 IDropTarget::DragOver  screen (1618, 381) client (10, 150)
+14:10:48.037 vizia Model: OsDrag::Over { x: 10, y: 150 }
+14:10:48.037 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.048 IDropTarget::DragOver  screen (1686, 381) client (78, 150)
+14:10:48.048 vizia Model: OsDrag::Over { x: 78, y: 150 }
+14:10:48.049 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.099 IDropTarget::DragOver  screen (1686, 381) client (78, 150)
+14:10:48.099 vizia Model: OsDrag::Over { x: 78, y: 150 }
+14:10:48.099 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.115 IDropTarget::DragOver  screen (1754, 381) client (146, 150)
+14:10:48.115 vizia Model: OsDrag::Over { x: 146, y: 150 }
+14:10:48.115 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.164 IDropTarget::DragOver  screen (1822, 381) client (214, 150)
+14:10:48.165 vizia Model: OsDrag::Over { x: 214, y: 150 }
+14:10:48.165 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.223 IDropTarget::DragOver  screen (1822, 381) client (214, 150)
+14:10:48.223 vizia Model: OsDrag::Over { x: 214, y: 150 }
+14:10:48.223 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.231 IDropTarget::DragOver  screen (1890, 381) client (282, 150)
+14:10:48.231 vizia Model: OsDrag::Over { x: 282, y: 150 }
+14:10:48.231 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.287 IDropTarget::DragOver  screen (1890, 381) client (282, 150)
+14:10:48.287 vizia Model: OsDrag::Over { x: 282, y: 150 }
+14:10:48.288 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.298 IDropTarget::DragOver  screen (1958, 381) client (350, 150)
+14:10:48.298 vizia Model: OsDrag::Over { x: 350, y: 150 }
+14:10:48.298 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.349 IDropTarget::DragOver  screen (1958, 381) client (350, 150)
+14:10:48.349 vizia Model: OsDrag::Over { x: 350, y: 150 }
+14:10:48.350 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.365 IDropTarget::DragOver  screen (2026, 381) client (418, 150)
+14:10:48.365 vizia Model: OsDrag::Over { x: 418, y: 150 }
+14:10:48.365 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.414 IDropTarget::DragOver  screen (2094, 381) client (486, 150)
+14:10:48.414 vizia Model: OsDrag::Over { x: 486, y: 150 }
+14:10:48.415 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.474 IDropTarget::DragOver  screen (2094, 381) client (486, 150)
+14:10:48.474 vizia Model: OsDrag::Over { x: 486, y: 150 }
+14:10:48.474 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.481 IDropTarget::DragOver  screen (2162, 381) client (554, 150)
+14:10:48.481 vizia Model: OsDrag::Over { x: 554, y: 150 }
+14:10:48.482 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.538 IDropTarget::DragOver  screen (2162, 381) client (554, 150)
+14:10:48.538 vizia Model: OsDrag::Over { x: 554, y: 150 }
+14:10:48.538 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.548 IDropTarget::DragOver  screen (2230, 381) client (622, 150)
+14:10:48.548 vizia Model: OsDrag::Over { x: 622, y: 150 }
+14:10:48.549 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.599 IDropTarget::DragOver  screen (2230, 381) client (622, 150)
+14:10:48.599 vizia Model: OsDrag::Over { x: 622, y: 150 }
+14:10:48.599 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.615 IDropTarget::DragOver  screen (2298, 381) client (690, 150)
+14:10:48.615 vizia Model: OsDrag::Over { x: 690, y: 150 }
+14:10:48.615 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.664 IDropTarget::DragOver  screen (2211, 418) client (603, 187)
+14:10:48.665 vizia Model: OsDrag::Over { x: 603, y: 187 }
+14:10:48.665 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.724 IDropTarget::DragOver  screen (2211, 418) client (603, 187)
+14:10:48.724 vizia Model: OsDrag::Over { x: 603, y: 187 }
+14:10:48.724 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.731 IDropTarget::DragOver  screen (2123, 456) client (515, 225)
+14:10:48.732 vizia Model: OsDrag::Over { x: 515, y: 225 }
+14:10:48.732 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.787 IDropTarget::DragOver  screen (2123, 456) client (515, 225)
+14:10:48.787 vizia Model: OsDrag::Over { x: 515, y: 225 }
+14:10:48.787 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.798 IDropTarget::DragOver  screen (2036, 493) client (428, 262)
+14:10:48.798 vizia Model: OsDrag::Over { x: 428, y: 262 }
+14:10:48.799 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.849 IDropTarget::DragOver  screen (2036, 493) client (428, 262)
+14:10:48.849 vizia Model: OsDrag::Over { x: 428, y: 262 }
+14:10:48.849 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.865 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:48.865 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:48.865 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.899 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:48.899 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:48.900 vizia WindowEvent::MouseMove(400, 270)
+14:10:48.959 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:48.959 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:48.959 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.022 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.022 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.022 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.084 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.084 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.084 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.147 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.147 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.147 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.208 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.208 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.208 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.272 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.272 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.272 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.334 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.334 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.334 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.397 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:49.397 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:49.397 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.430 IDropTarget::Drop      screen (1948, 531) client (340, 300) files=["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"]
+14:10:49.431 vizia Model: OsDrag::Drop { files: ["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"], x: 340, y: 300 }
+14:10:49.431 vizia WindowEvent::MouseMove(400, 270)
+14:10:49.432 vizia WindowEvent::MouseEnter
+14:10:49.432 vizia WindowEvent::MouseMove(340, 300)
+14:10:49.899 vizia WindowEvent::MouseLeave
+14:10:50.367 IDropTarget::DragEnter screen (1618, 381) client (10, 150) files=Some(["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"])
+14:10:50.367 IDropTarget::DragOver  screen (1618, 381) client (10, 150)
+14:10:50.367 vizia Model: OsDrag::Enter { files: ["C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid"], x: 10, y: 150 }
+14:10:50.368 vizia Model: OsDrag::Over { x: 10, y: 150 }
+14:10:50.368 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.400 IDropTarget::DragOver  screen (1686, 381) client (78, 150)
+14:10:50.400 vizia Model: OsDrag::Over { x: 78, y: 150 }
+14:10:50.400 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.449 IDropTarget::DragOver  screen (1754, 381) client (146, 150)
+14:10:50.449 vizia Model: OsDrag::Over { x: 146, y: 150 }
+14:10:50.450 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.500 IDropTarget::DragOver  screen (1822, 381) client (214, 150)
+14:10:50.500 vizia Model: OsDrag::Over { x: 214, y: 150 }
+14:10:50.500 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.550 IDropTarget::DragOver  screen (1890, 381) client (282, 150)
+14:10:50.550 vizia Model: OsDrag::Over { x: 282, y: 150 }
+14:10:50.550 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.599 IDropTarget::DragOver  screen (1890, 381) client (282, 150)
+14:10:50.599 vizia Model: OsDrag::Over { x: 282, y: 150 }
+14:10:50.599 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.600 IDropTarget::DragOver  screen (1958, 381) client (350, 150)
+14:10:50.600 vizia Model: OsDrag::Over { x: 350, y: 150 }
+14:10:50.600 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.633 IDropTarget::DragOver  screen (2026, 381) client (418, 150)
+14:10:50.633 vizia Model: OsDrag::Over { x: 418, y: 150 }
+14:10:50.633 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.683 IDropTarget::DragOver  screen (2094, 381) client (486, 150)
+14:10:50.683 vizia Model: OsDrag::Over { x: 486, y: 150 }
+14:10:50.683 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.733 IDropTarget::DragOver  screen (2162, 381) client (554, 150)
+14:10:50.733 vizia Model: OsDrag::Over { x: 554, y: 150 }
+14:10:50.733 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.783 IDropTarget::DragOver  screen (2230, 381) client (622, 150)
+14:10:50.784 vizia Model: OsDrag::Over { x: 622, y: 150 }
+14:10:50.784 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.833 IDropTarget::DragOver  screen (2298, 381) client (690, 150)
+14:10:50.833 vizia Model: OsDrag::Over { x: 690, y: 150 }
+14:10:50.833 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.883 IDropTarget::DragOver  screen (2211, 418) client (603, 187)
+14:10:50.884 vizia Model: OsDrag::Over { x: 603, y: 187 }
+14:10:50.884 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.917 IDropTarget::DragOver  screen (2123, 456) client (515, 225)
+14:10:50.917 vizia Model: OsDrag::Over { x: 515, y: 225 }
+14:10:50.917 vizia WindowEvent::MouseMove(340, 300)
+14:10:50.967 IDropTarget::DragOver  screen (2036, 493) client (428, 262)
+14:10:50.967 vizia Model: OsDrag::Over { x: 428, y: 262 }
+14:10:50.967 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.017 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.017 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.018 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.067 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.067 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.067 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.130 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.130 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.130 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.192 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.192 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.192 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.254 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.254 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.254 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.318 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.318 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.318 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.379 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.379 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.379 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.443 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.443 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.443 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.504 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.504 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.504 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.568 IDropTarget::DragOver  screen (1948, 531) client (340, 300)
+14:10:51.568 vizia Model: OsDrag::Over { x: 340, y: 300 }
+14:10:51.569 vizia WindowEvent::MouseMove(340, 300)
+14:10:51.584 IDropTarget::DragLeave
+14:10:51.585 vizia Model: OsDrag::Leave
+14:10:51.585 vizia WindowEvent::MouseMove(340, 300)

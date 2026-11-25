@@ -1,0 +1,7 @@
+14:07:23.463 start; own drop target: false
+14:07:23.621 Init: HWND=0x2F0BC4, own drop target: false
+14:07:26.620 vizia WindowEvent::Drop(File("C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid")); cx.mouse() cursor at that moment (-1, -1)
+14:07:26.633 vizia WindowEvent::MouseEnter
+14:07:26.633 vizia .on_drop on LEFT pane (.on_drop): File("C:\\Users\\jeffrey\\AppData\\Local\\Temp\\claude\\0cedf1fbf734bfc1\\00e0c06a-44b0-4ccb-ba4e-fd2025156eee\\scratchpad\\probe_drop.mid") (cursor (340, 300))
+14:07:26.633 vizia WindowEvent::MouseMove(340, 300)
+14:07:26.633 vizia WindowEvent::MouseLeave

@@ -1,0 +1,19 @@
+[package]
+name = "dnd_winit"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+# Standalone probe: not a member of the ChipDAW workspace.
+[workspace]
+
+[dependencies]
+# The exact winit the app uses through the vizia fork (Cargo.lock: 0.30.13).
+winit = { version = "=0.30.13", default-features = false, features = ["rwh_06"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_System_SystemInformation",
+] }

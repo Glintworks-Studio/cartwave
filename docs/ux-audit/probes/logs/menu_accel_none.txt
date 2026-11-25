@@ -1,0 +1,38 @@
+       0.4 ms [tid 42380] start; accel mode "none"
+     130.2 ms [tid 42380] Init: HWND=0xEC0874; client 800x500 (winit inner 800x500) before SetMenu
+     134.0 ms [tid 42380] WM_SIZE client 800x480
+     135.8 ms [tid 42380] Init: menu attached; haccel=0x147B0CC7; client 800x480 (winit inner 800x480) after SetMenu
+     137.1 ms [tid 42380] WM_SIZE client 800x500
+     143.1 ms [tid 42380] layout: Pulse bounds x=0 y=24 w=800 h=452 (physical px); client rect 800x500
+    2119.7 ms [tid 42380] frames=120 ticks=132
+    4121.3 ms [tid 42380] frames=240 ticks=257
+    6123.0 ms [tid 42380] frames=360 ticks=382
+    8124.7 ms [tid 42380] frames=480 ticks=507
+   10126.3 ms [tid 42380] frames=600 ticks=632
+   12127.8 ms [tid 42380] frames=720 ticks=757
+   14129.6 ms [tid 42380] frames=840 ticks=882
+   16135.8 ms [tid 42380] frames=960 ticks=1008
+   16481.8 ms [tid 42380] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+   16515.4 ms [tid 42380] vizia KeyDown KeyS ctrl=true shift=false alt=false
+   16515.5 ms [tid 42380] APP SHORTCUT fired via vizia KeyDown: Save
+   16998.8 ms [tid 42380] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+   17032.5 ms [tid 42380] vizia KeyDown KeyZ ctrl=true shift=false alt=false
+   17032.6 ms [tid 42380] APP SHORTCUT fired via vizia KeyDown: Undo
+   17533.4 ms [tid 42380] vizia KeyDown AltLeft ctrl=false shift=false alt=true
+   17565.4 ms [tid 42380] WM_ENTERMENULOOP (modal menu loop starts; frames so far 1044)
+   17565.9 ms [tid 42380] WM_INITMENUPOPUP
+   19494.3 ms [tid 42380] WM_EXITMENULOOP (frames so far 1044)
+   19494.9 ms [tid 42380] muda handler: MenuEvent id="file.save" -> ContextProxy::emit
+   19495.1 ms [tid 42380] vizia KeyDown KeyF ctrl=false shift=false alt=true
+   19495.2 ms [tid 42380] vizia Model: ProbeEvent::Menu(file.save) received
+   19495.3 ms [tid 42380] timer STALL: 1946 ms without a tick
+   19495.5 ms [tid 42380] draw STALL: 1962 ms without a frame (frame #1045)
+   20055.5 ms [tid 42380] frames=1080 ticks=1253
+   22035.9 ms [tid 42380] frames=1200 ticks=1376
+   24037.6 ms [tid 42380] frames=1320 ticks=1501
+   26039.2 ms [tid 42380] frames=1440 ticks=1626
+   28040.8 ms [tid 42380] frames=1560 ticks=1752
+   30042.3 ms [tid 42380] frames=1680 ticks=1877
+   32044.1 ms [tid 42380] frames=1800 ticks=2002
+   34045.6 ms [tid 42380] frames=1920 ticks=2127
+   36047.5 ms [tid 42380] frames=2040 ticks=2252

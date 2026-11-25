@@ -1,0 +1,36 @@
+       0.2 ms [tid 35440] start; accel mode "hook-swallow"
+     139.6 ms [tid 35440] Init: HWND=0x19B0C0C; client 800x500 (winit inner 800x500) before SetMenu
+     143.8 ms [tid 35440] WM_SIZE client 800x480
+     144.5 ms [tid 35440] Init: menu attached; haccel=0x55E10C41; client 800x480 (winit inner 800x480) after SetMenu
+     144.7 ms [tid 35440] Init: WH_GETMESSAGE hook installed: 0x503b0bf7
+     145.7 ms [tid 35440] WM_SIZE client 800x500
+     150.4 ms [tid 35440] layout: Pulse bounds x=0 y=24 w=800 h=452 (physical px); client rect 800x500
+     922.3 ms [tid 35440] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+     954.7 ms [tid 35440] WM_INITMENUPOPUP
+     954.9 ms [tid 35440] muda handler: MenuEvent id="file.save" -> ContextProxy::emit
+     955.1 ms [tid 35440] hook: TranslateAcceleratorW translated vk=0x53 (WM_COMMAND sent); swallow=true
+     955.4 ms [tid 35440] vizia Model: ProbeEvent::Menu(file.save) received
+    1422.2 ms [tid 35440] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+    1455.1 ms [tid 35440] WM_INITMENUPOPUP
+    1455.3 ms [tid 35440] muda handler: MenuEvent id="edit.undo" -> ContextProxy::emit
+    1455.5 ms [tid 35440] hook: TranslateAcceleratorW translated vk=0x5A (WM_COMMAND sent); swallow=true
+    1455.8 ms [tid 35440] vizia Model: ProbeEvent::Menu(edit.undo) received
+    1922.5 ms [tid 35440] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+    1956.3 ms [tid 35440] vizia KeyDown ShiftLeft ctrl=true shift=true alt=false
+    1988.9 ms [tid 35440] WM_INITMENUPOPUP
+    1989.0 ms [tid 35440] muda handler: MenuEvent id="file.save_as" -> ContextProxy::emit
+    1989.2 ms [tid 35440] hook: TranslateAcceleratorW translated vk=0x53 (WM_COMMAND sent); swallow=true
+    1989.7 ms [tid 35440] vizia Model: ProbeEvent::Menu(file.save_as) received
+    2105.5 ms [tid 35440] frames=120 ticks=131
+    2489.7 ms [tid 35440] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+    2522.6 ms [tid 35440] WM_INITMENUPOPUP
+    2522.8 ms [tid 35440] muda handler: MenuEvent id="edit.duplicate" -> ContextProxy::emit
+    2523.0 ms [tid 35440] hook: TranslateAcceleratorW translated vk=0x44 (WM_COMMAND sent); swallow=true
+    2523.4 ms [tid 35440] vizia Model: ProbeEvent::Menu(edit.duplicate) received
+    4107.3 ms [tid 35440] frames=240 ticks=256
+    6109.3 ms [tid 35440] frames=360 ticks=381
+    8110.5 ms [tid 35440] frames=480 ticks=506
+   10112.1 ms [tid 35440] frames=600 ticks=631
+   12114.0 ms [tid 35440] frames=720 ticks=756
+   14115.3 ms [tid 35440] frames=840 ticks=881
+   16117.1 ms [tid 35440] frames=960 ticks=1006

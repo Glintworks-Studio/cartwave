@@ -1,0 +1,37 @@
+[package]
+name = "dnd_vizia"
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+
+# Standalone probe: not a member of the ChipDAW workspace.
+[workspace]
+
+[dependencies]
+vizia = "0.4.0"
+# Same winit as the vizia fork (0.30.13); only used for the raw-window-handle trait.
+winit = { version = "0.30.13", default-features = false, features = ["rwh_06"] }
+
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_System_Ole",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_Graphics_Gdi",
+] }
+
+[patch.crates-io]
+vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }
+vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "159bbe5546228f70f053e03b7469c53b028df623" }

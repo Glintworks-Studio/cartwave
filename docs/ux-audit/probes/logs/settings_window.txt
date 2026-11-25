@@ -1,0 +1,101 @@
+14:08:56.777 start
+14:08:56.926 WindowEvent::WindowFocused(true) target Entity (index: 0, generation: 0)
+14:08:57.940 frames in the last 1.01 s: main=62 settings=0
+14:08:58.940 frames in the last 1.00 s: main=60 settings=0
+14:08:59.941 frames in the last 1.00 s: main=60 settings=0
+14:09:00.241 WindowEvent::MouseDown(Left) target Entity (index: 4, generation: 0)
+14:09:00.275 AppEvent::OpenSettings (from Entity (index: 4, generation: 0))
+14:09:00.320 Settings window on_create (OS window exists)
+14:09:00.321 WindowEvent::WindowFocused(false) target Entity (index: 0, generation: 0)
+14:09:00.321 WindowEvent::WindowFocused(true) target Entity (index: 17, generation: 0)
+14:09:00.943 frames in the last 1.00 s: main=54 settings=36
+14:09:01.943 frames in the last 1.00 s: main=60 settings=60
+14:09:02.944 frames in the last 1.00 s: main=60 settings=60
+14:09:03.944 frames in the last 1.00 s: main=60 settings=60
+14:09:04.946 frames in the last 1.00 s: main=60 settings=60
+14:09:05.946 frames in the last 1.00 s: main=60 settings=60
+14:09:06.947 frames in the last 1.00 s: main=60 settings=60
+14:09:07.864 WindowEvent::MouseDown(Left) target Entity (index: 19, generation: 0)
+14:09:07.948 frames in the last 1.00 s: main=60 settings=60
+14:09:08.232 WindowEvent::KeyDown(Numpad6) target Entity (index: 4, generation: 0)
+14:09:08.332 WindowEvent::KeyDown(Numpad6) target Entity (index: 4, generation: 0)
+14:09:08.949 frames in the last 1.00 s: main=60 settings=60
+14:09:09.949 frames in the last 1.00 s: main=60 settings=60
+14:09:09.999 AppEvent::SettingsClosed (Window::on_close)
+14:09:10.008 WindowEvent::WindowFocused(true) target Entity (index: 0, generation: 0)
+14:09:10.008 WindowEvent::KeyDown(NonConvert) target Entity (index: 4, generation: 0)
+14:09:10.950 frames in the last 1.00 s: main=61 settings=3
+14:09:11.952 frames in the last 1.00 s: main=60 settings=0
+14:09:12.952 frames in the last 1.00 s: main=60 settings=0
+14:09:13.953 frames in the last 1.00 s: main=60 settings=0
+14:09:14.954 frames in the last 1.00 s: main=60 settings=0
+14:09:15.955 frames in the last 1.00 s: main=60 settings=0
+14:09:16.956 frames in the last 1.00 s: main=60 settings=0
+14:09:17.956 frames in the last 1.00 s: main=60 settings=0
+14:09:18.958 frames in the last 1.00 s: main=60 settings=0
+14:09:19.958 frames in the last 1.00 s: main=60 settings=0
+14:09:20.958 frames in the last 1.00 s: main=60 settings=0
+14:09:21.960 frames in the last 1.00 s: main=60 settings=0
+14:09:22.961 frames in the last 1.00 s: main=60 settings=0
+14:09:23.962 frames in the last 1.00 s: main=60 settings=0
+14:09:24.962 frames in the last 1.00 s: main=60 settings=0
+14:09:25.963 frames in the last 1.00 s: main=60 settings=0
+14:09:26.964 frames in the last 1.00 s: main=60 settings=0
+14:09:27.965 frames in the last 1.00 s: main=60 settings=0
+14:09:28.966 frames in the last 1.00 s: main=60 settings=0
+14:09:29.967 frames in the last 1.00 s: main=60 settings=0
+14:09:30.967 frames in the last 1.00 s: main=60 settings=0
+14:09:31.968 frames in the last 1.00 s: main=60 settings=0
+14:09:32.969 frames in the last 1.00 s: main=60 settings=0
+14:09:33.970 frames in the last 1.00 s: main=60 settings=0
+14:09:34.971 frames in the last 1.00 s: main=60 settings=0
+14:09:35.971 frames in the last 1.00 s: main=60 settings=0
+14:09:36.104 WindowEvent::MouseDown(Left) target Entity (index: 4, generation: 0)
+14:09:36.138 AppEvent::OpenSettings (from Entity (index: 4, generation: 0))
+14:09:36.183 Settings window on_create (OS window exists)
+14:09:36.183 WindowEvent::WindowFocused(false) target Entity (index: 0, generation: 0)
+14:09:36.183 WindowEvent::WindowFocused(true) target Entity (index: 42, generation: 0)
+14:09:36.972 frames in the last 1.00 s: main=56 settings=48
+14:09:37.973 frames in the last 1.00 s: main=60 settings=60
+14:09:38.189 WindowEvent::MouseDown(Left) target Entity (index: 47, generation: 0)
+14:09:38.189 AppEvent::SetVolume(0.94) from Entity (index: 47, generation: 0), handled by the main window's model
+14:09:38.657 WindowEvent::MouseDown(Left) target Entity (index: 44, generation: 0)
+14:09:38.974 frames in the last 1.00 s: main=60 settings=60
+14:09:39.974 frames in the last 1.00 s: main=60 settings=60
+14:09:40.975 frames in the last 1.00 s: main=60 settings=60
+14:09:41.975 frames in the last 1.00 s: main=60 settings=60
+14:09:42.977 frames in the last 1.00 s: main=60 settings=60
+14:09:43.978 frames in the last 1.00 s: main=60 settings=60
+14:09:44.979 frames in the last 1.00 s: main=60 settings=60
+14:09:45.979 frames in the last 1.00 s: main=60 settings=60
+14:09:46.980 frames in the last 1.00 s: main=60 settings=60
+14:09:47.981 frames in the last 1.00 s: main=60 settings=60
+14:09:48.982 frames in the last 1.00 s: main=60 settings=60
+14:09:49.983 frames in the last 1.00 s: main=60 settings=60
+14:09:50.984 frames in the last 1.00 s: main=60 settings=60
+14:09:51.984 frames in the last 1.00 s: main=60 settings=60
+14:09:52.669 WindowEvent::MouseDown(Left) target Entity (index: 60, generation: 0)
+14:09:52.702 AppEvent::ToggleDark -> false from Entity (index: 60, generation: 0)
+14:09:52.985 frames in the last 1.00 s: main=60 settings=60
+14:09:53.986 frames in the last 1.00 s: main=60 settings=60
+14:09:54.987 frames in the last 1.00 s: main=60 settings=60
+14:09:55.987 frames in the last 1.00 s: main=60 settings=60
+14:09:56.988 frames in the last 1.00 s: main=60 settings=60
+14:09:57.990 frames in the last 1.00 s: main=60 settings=60
+14:09:58.990 frames in the last 1.00 s: main=60 settings=60
+14:09:59.990 frames in the last 1.00 s: main=60 settings=60
+14:10:00.992 frames in the last 1.00 s: main=60 settings=60
+14:10:01.993 frames in the last 1.00 s: main=60 settings=60
+14:10:02.993 frames in the last 1.00 s: main=60 settings=60
+14:10:03.278 WindowEvent::MouseDown(Left) target Entity (index: 44, generation: 0)
+14:10:03.644 WindowEvent::KeyDown(Space) target Entity (index: 60, generation: 0)
+14:10:03.678 AppEvent::ToggleDark -> true from Entity (index: 60, generation: 0)
+14:10:03.994 frames in the last 1.00 s: main=60 settings=60
+14:10:04.995 frames in the last 1.00 s: main=60 settings=60
+14:10:05.996 frames in the last 1.00 s: main=60 settings=60
+14:10:06.997 frames in the last 1.00 s: main=60 settings=60
+14:10:07.997 frames in the last 1.00 s: main=60 settings=60
+14:10:08.998 frames in the last 1.00 s: main=60 settings=60
+14:10:09.999 frames in the last 1.00 s: main=60 settings=60
+14:10:11.000 frames in the last 1.00 s: main=60 settings=60
+14:10:12.000 frames in the last 1.00 s: main=60 settings=60

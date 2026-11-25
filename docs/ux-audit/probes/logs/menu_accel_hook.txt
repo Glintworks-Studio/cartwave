@@ -1,0 +1,34 @@
+       0.2 ms [tid  9844] start; accel mode "hook"
+     125.2 ms [tid  9844] Init: HWND=0x400BD2; client 800x500 (winit inner 800x500) before SetMenu
+     129.5 ms [tid  9844] WM_SIZE client 800x480
+     130.2 ms [tid  9844] Init: menu attached; haccel=0x5E3E0E0D; client 800x480 (winit inner 800x480) after SetMenu
+     130.3 ms [tid  9844] Init: WH_GETMESSAGE hook installed: 0x54a50e73
+     131.6 ms [tid  9844] WM_SIZE client 800x500
+     135.7 ms [tid  9844] layout: Pulse bounds x=0 y=24 w=800 h=452 (physical px); client rect 800x500
+    2105.2 ms [tid  9844] frames=120 ticks=131
+    3490.3 ms [tid  9844] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+    3523.3 ms [tid  9844] WM_INITMENUPOPUP
+    3523.4 ms [tid  9844] muda handler: MenuEvent id="file.save" -> ContextProxy::emit
+    3523.8 ms [tid  9844] hook: TranslateAcceleratorW translated vk=0x53 (WM_COMMAND sent); swallow=false
+    3524.2 ms [tid  9844] vizia Model: ProbeEvent::Menu(file.save) received
+    3524.3 ms [tid  9844] vizia KeyDown KeyS ctrl=true shift=false alt=false
+    3524.4 ms [tid  9844] APP SHORTCUT fired via vizia KeyDown: Save
+    3991.0 ms [tid  9844] vizia KeyDown ControlLeft ctrl=true shift=false alt=false
+    4007.4 ms [tid  9844] WM_INITMENUPOPUP
+    4007.5 ms [tid  9844] muda handler: MenuEvent id="edit.undo" -> ContextProxy::emit
+    4007.6 ms [tid  9844] hook: TranslateAcceleratorW translated vk=0x5A (WM_COMMAND sent); swallow=false
+    4008.0 ms [tid  9844] vizia Model: ProbeEvent::Menu(edit.undo) received
+    4008.1 ms [tid  9844] vizia KeyDown KeyZ ctrl=true shift=false alt=false
+    4008.2 ms [tid  9844] APP SHORTCUT fired via vizia KeyDown: Undo
+    4107.2 ms [tid  9844] frames=240 ticks=256
+    4573.9 ms [tid  9844] WM_ENTERMENULOOP (modal menu loop starts; frames so far 266)
+    4574.3 ms [tid  9844] WM_INITMENUPOPUP
+    5460.9 ms [tid  9844] WM_EXITMENULOOP (frames so far 266)
+    5461.2 ms [tid  9844] muda handler: MenuEvent id="edit.redo" -> ContextProxy::emit
+    5461.4 ms [tid  9844] vizia Model: ProbeEvent::Menu(edit.redo) received
+    5461.6 ms [tid  9844] timer STALL: 904 ms without a tick
+    5461.8 ms [tid  9844] draw STALL: 921 ms without a frame (frame #267)
+    6976.4 ms [tid  9844] frames=360 ticks=435
+    8977.8 ms [tid  9844] frames=480 ticks=560
+   10979.3 ms [tid  9844] frames=600 ticks=685
+   12981.1 ms [tid  9844] frames=720 ticks=810
