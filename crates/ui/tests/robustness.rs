@@ -286,7 +286,22 @@ fn project_seeds() -> Vec<Vec<u8>> {
     heavy.arrangement.samples = vec![Some(s.clone()), None, Some(s), None];
     let mut stress = file::Project::new_empty();
     stress.arrangement = mock::stress_arrangement();
-    [file::Project::new_empty(), demo, heavy, stress]
+    // Version 3 instrument table with clip overrides (one shared, one own).
+    let mut overrides = file::Project::new_empty();
+    overrides.arrangement = mock::demo_arrangement();
+    let a = &mut overrides.arrangement;
+    let cello = a.instruments.add(ui::instruments::LaneInstrument::named("Cello")).unwrap();
+    let kit = a.instruments.add(ui::instruments::LaneInstrument::named("Tight Kit")).unwrap();
+    let ids: Vec<(u32, usize)> = a.clips.iter().map(|c| (c.id, c.lane)).collect();
+    for (id, lane) in ids {
+        let inst = match lane {
+            0 | 1 | 5 | 6 => Some(cello),
+            3 => Some(kit),
+            _ => None,
+        };
+        a.clip_mut(id).unwrap().instrument = inst;
+    }
+    [file::Project::new_empty(), demo, heavy, stress, overrides]
         .iter()
         .map(|p| file::to_string(p).into_bytes())
         .collect()

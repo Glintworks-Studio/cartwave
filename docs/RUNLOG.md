@@ -116,7 +116,7 @@ Times are local (CST). Each decision taken without the user lists the options an
     on #151515), TEXT_MID → #9A9A9A (≥ 4.5:1 on key faces), with the stylesheet variables, the
     placeholder and the browser hint to match. Every informative TEXT_GHOST use moved to TEXT_LO;
     TEXT_GHOST is decoration only. The hierarchy HI > MID > LO is kept.
-- **Migration corpus (08:14–08:24).** A worktree of `product/v1` (281ee66, untouched) built
+- **Migration corpus (08:12–08:16).** A worktree of `product/v1` (281ee66, untouched) built
   `docs/songs/v2/v2corpus.rs.txt`, which saved 10 version-2 files (the demo band; mixed per-note
   volumes under channel controls < 15 with decay envelopes; raw channels; all 5 layouts; the
   showcase with its DPCM sample; one deliberately inexact saw case). It printed each file's hashes
@@ -124,3 +124,29 @@ Times are local (CST). Each decision taken without the user lists the options an
   `crates/ui/tests/migration.rs`: **all 9 exact files render bit-identically after migration to v3
   (both hashes)**, and again after a v3 save and reload. The inexact case is reported in
   `load_report` and does differ. This was checked before the Part B refactor, so B must keep it.
+- **Part B (08:17–08:30).** Started before the A2 UI benchmarks and the A3 UI scenarios, which need
+  the matrix finished (the matrix's app windows take focus). **Decision D12:** do B's offline code
+  in that time; A5's must-fix check is re-run once the A2/A3 runs are in, and anything found is
+  fixed before C ships.
+  - Model: `InstrumentTable` (stable ids, lane defaults, `Clip::instrument` overrides, shared by
+    reference, `prune`, max 32 so a table full of kits still fits the engine's u8 bank index).
+  - **Engine: the driver now copies the instrument at note-on.** Before, a held note kept a bank
+    *index*. Per-clip instruments reorder the bank whenever clips change, so a new snapshot could
+    have switched a sounding note to another instrument. Test
+    `clip_instruments_switch_at_note_on_and_never_mid_note` fails on the index version and passes
+    on the copy. No allocation, no locks (the copy is a fixed-size `Copy` struct).
+  - v3: top-level `instruments` (with ids), `lanes[].inst`, `clips[].instrument`. Broken references
+    are clear errors. Migration identity still holds after the refactor (all 9 v2 files, both hashes).
+  - UI: drop a preset on a clip (the clip is outlined during the drag; the ghost says "→ this
+    clip"); on the lane header it sets the lane default as before. The clip header shows
+    "name · instrument" when the clip has its own. The inspector title says whose instrument it is
+    and how many clips play it. The clip menu has Make Instrument Unique, Use Lane Instrument and
+    Save Instrument as Preset (`user_presets.json` in the app-data folder, listed in the browser
+    under "User Presets"). In the macro editor, loop and release markers can be dragged;
+    Shift-click sets the loop point, Alt-click the release point, a double-click removes one.
+  - **Decision D13:** a preset dropped on a *clip* sets only the instrument, not the preset's
+    channel controls: those belong to the lane, and changing them would alter every other clip
+    on the lane.
+  - Undo: the property test now mixes 5 instrument operations (lane default, clip override, make
+    unique, shared edit incl. loop point, back to lane) with the old ones, and checks every
+    reference stays valid. 40 seeds pass. Unused instruments are pruned at each undo commit.

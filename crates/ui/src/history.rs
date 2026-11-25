@@ -191,7 +191,61 @@ mod tests {
         let pick = |a: &Arrangement, r: &mut Rng| -> Option<u32> {
             (!a.clips.is_empty()).then(|| a.clips[r.range(0, a.clips.len() as u32) as usize].id)
         };
-        match r.range(0, 14) {
+        let preset = |r: &mut Rng, lane: usize| {
+            let fits: Vec<&chip::presets::Preset> = chip::presets::PRESETS.iter().filter(|p| p.fits(lane)).collect();
+            crate::instruments::LaneInstrument::from_preset(fits[r.range(0, fits.len() as u32) as usize])
+        };
+        match r.range(0, 19) {
+            // Instrument operations (STABILIZE_PROMPT.md §B5).
+            14 => {
+                let lane = r.range(0, 8) as usize;
+                let p = preset(r, lane);
+                a.instruments.set_lane(lane, p);
+                let clips = a.clips.clone();
+                a.instruments.prune(&clips);
+            }
+            15 => {
+                if let Some(id) = pick(a, r) {
+                    let lane = a.clip(id).map_or(0, |c| c.lane);
+                    let p = preset(r, lane);
+                    if let Some(i) = a.instruments.add(p) {
+                        a.clip_mut(id).unwrap().instrument = Some(i);
+                    }
+                    let clips = a.clips.clone();
+                    a.instruments.prune(&clips);
+                }
+            }
+            16 => {
+                // Make unique.
+                if let Some(id) = pick(a, r) {
+                    let from = a.instruments.id_for(a.clip(id).unwrap());
+                    let copy = a.instruments.get(from).cloned();
+                    if let Some(i) = copy.and_then(|c| a.instruments.add(c)) {
+                        a.clip_mut(id).unwrap().instrument = Some(i);
+                    }
+                }
+            }
+            17 => {
+                // Edit a shared instrument: every clip that plays it changes.
+                if !a.instruments.entries.is_empty() {
+                    let e = r.range(0, a.instruments.entries.len() as u32) as usize;
+                    let inst = &mut a.instruments.entries[e].inst;
+                    inst.inst.vibrato.depth = r.range(0, 60) as u8;
+                    if inst.inst.volume.len > 0 {
+                        let step = r.range(0, inst.inst.volume.len as u32) as usize;
+                        inst.inst.volume.data[step] = r.range(0, 16) as i8;
+                        inst.inst.volume.loop_at = r.range(0, inst.inst.volume.len as u32) as u8;
+                    }
+                    inst.edited = true;
+                }
+            }
+            18 => {
+                if let Some(id) = pick(a, r) {
+                    a.clip_mut(id).unwrap().instrument = None;
+                    let clips = a.clips.clone();
+                    a.instruments.prune(&clips);
+                }
+            }
             0 => {
                 let lane = r.range(0, 8) as usize;
                 a.add_clip(lane, r.range(0, 32) * TICKS_PER_BAR, TICKS_PER_BAR);
@@ -264,6 +318,12 @@ mod tests {
             let n = 20 + r.range(0, 60) as usize;
             for _ in 0..n {
                 random_edit(&mut a, &mut bpm, &mut params, &mut r);
+                // Instrument references stay valid through every operation.
+                assert!(a.instruments.entries.len() <= crate::instruments::MAX_INSTRUMENTS);
+                assert!((0..8).all(|l| a.instruments.contains(a.instruments.lane_id(l))), "seed {seed}");
+                for c in &a.clips {
+                    assert!(c.instrument.is_none_or(|i| a.instruments.contains(i)), "seed {seed}: clip {} -> {:?}", c.id, c.instrument);
+                }
                 let d = Doc::of(&a, bpm, params);
                 if h.commit(d.clone()) {
                     states.push(d);

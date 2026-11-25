@@ -245,6 +245,9 @@ pub enum AppEvent {
     /// Set the lane instrument's vibrato: 0 depth (cents), 1 period
     /// (frames), 2 delay (frames). Undo groups a whole drag.
     EditVibrato { inst: instruments::InstId, which: usize, value: u8 },
+    /// Move (or remove: `None`) a macro's loop point (`release: false`) or
+    /// release point (`true`). Undo groups a whole drag.
+    EditMacroPoint { inst: instruments::InstId, which: usize, release: bool, at: Option<u8> },
     /// Native open dialog for a .mid file; it becomes a new project (Ctrl+I).
     ImportMidi,
     /// Render the song to a WAV file (Ctrl+Shift+R).
@@ -341,6 +344,24 @@ impl Model for AppState {
                         };
                         if *step < q.len as usize && q.data[*step] != *value {
                             q.data[*step] = *value;
+                            i.edited = true;
+                        }
+                    }
+                });
+            }
+            AppEvent::EditMacroPoint { inst, which, release, at } => {
+                self.s.arrangement.update(|a| {
+                    if let Some(i) = a.instruments.get_mut(*inst) {
+                        let q = match which {
+                            0 => &mut i.inst.volume,
+                            1 => &mut i.inst.arp,
+                            2 => &mut i.inst.pitch,
+                            _ => &mut i.inst.duty,
+                        };
+                        let v = at.filter(|s| *s < q.len).unwrap_or(chip::instrument::NONE);
+                        let slot = if *release { &mut q.release_at } else { &mut q.loop_at };
+                        if *slot != v {
+                            *slot = v;
                             i.edited = true;
                         }
                     }
@@ -1799,6 +1820,13 @@ impl AppState {
         let busy = self.gesture_depth > 0
             || self.s.arrangement.with_untracked(|a| !a.editing.is_empty() || a.editing_notes.is_some());
         if !busy {
+            // Instruments only deleted clips used are dropped with the step.
+            if self.s.arrangement.with_untracked(|a| a.instruments.unused(&a.clips)) {
+                self.s.arrangement.update(|a| {
+                    let clips = a.clips.clone();
+                    a.instruments.prune(&clips);
+                });
+            }
             let d = self.doc();
             self.history.commit(d);
         }

@@ -194,6 +194,11 @@ impl InstrumentTable {
         clips.iter().filter(|c| self.id_for(c) == id).count()
     }
 
+    /// Whether some entry is used by no lane and no clip.
+    pub fn unused(&self, clips: &[std::sync::Arc<crate::state::Clip>]) -> bool {
+        self.entries.iter().any(|e| !self.lanes.contains(&e.id) && !clips.iter().any(|c| c.instrument == Some(e.id)))
+    }
+
     /// Drops entries no lane default and no clip refers to.
     pub fn prune(&mut self, clips: &[std::sync::Arc<crate::state::Clip>]) {
         let lanes = self.lanes;

@@ -1,8 +1,9 @@
 //! The device panel's INSTRUMENT section: the selected lane's macros drawn as
 //! four step graphs (volume, arpeggio, pitch, duty), editable by dragging
 //! across them, and the vibrato row (depth, rate, delay: drag or wheel).
-//! Loop (↺) and release (R) points are marked. A kit shows its drum map
-//! instead.
+//! Loop (↺) and release (R) points: drag a marker to move it, Shift-click a
+//! step to set the loop point there, Alt-click for the release point,
+//! double-click a marker to remove it. A kit shows its drum map instead.
 
 use chip::instrument::{Seq, NONE};
 use vizia::prelude::*;
@@ -23,6 +24,8 @@ const VIB_H: f32 = 20.0;
 const VIB: [(&str, u8); 3] = [("DEPTH", 100), ("RATE", 30), ("DELAY", 60)];
 /// Drag distance per vibrato step, logical px.
 const VIB_DRAG_PX: f32 = 4.0;
+/// How close (logical px) a press must be to a loop/release marker to grab it.
+const MARKER_GRAB_PX: f32 = 5.0;
 
 pub struct InstrumentView {
     s: Signals,
@@ -30,12 +33,14 @@ pub struct InstrumentView {
     drawing: Option<(usize, usize)>,
     /// Vibrato field being dragged: (field, start y, start value).
     vib_drag: Option<(usize, f32, u8)>,
+    /// Loop / release marker being dragged: (macro, release?).
+    point_drag: Option<(usize, bool)>,
     wheel: crate::input::WheelSteps,
 }
 
 impl InstrumentView {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, drawing: None, vib_drag: None, wheel: Default::default() }
+        Self { s, drawing: None, vib_drag: None, point_drag: None, wheel: Default::default() }
             .build(cx, |_| {})
             .class("instrument-view")
             .cursor(CursorIcon::Crosshair)
@@ -93,6 +98,34 @@ impl InstrumentView {
         let lo = if which == 1 { 1 } else { 0 };
         let v = value.clamp(lo, VIB[which].1 as i32) as u8;
         cx.emit(AppEvent::EditVibrato { inst, which, value: v });
+    }
+
+    /// The step under window x in graph `r` for a sequence of `len` steps.
+    fn step_at(r: vg::Rect, len: u8, x: f32) -> u8 {
+        (((x - r.left) / r.width()) * len as f32).floor().clamp(0.0, len.max(1) as f32 - 1.0) as u8
+    }
+
+    /// The loop (false) or release (true) marker within grab distance of x.
+    fn marker_at(q: &Seq, r: vg::Rect, x: f32, s: f32) -> Option<bool> {
+        if q.len == 0 {
+            return None;
+        }
+        let bw = r.width() / q.len as f32;
+        let near = |i: u8| i != NONE && (x - (r.left + bw * i as f32)).abs() <= MARKER_GRAB_PX * s;
+        // Release wins a tie (it is drawn on top).
+        if near(q.release_at) {
+            Some(true)
+        } else if near(q.loop_at) {
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    fn emit_point(&self, cx: &mut EventContext, m: usize, release: bool, at: Option<u8>) {
+        if let Some((inst, _)) = self.current() {
+            cx.emit(AppEvent::EditMacroPoint { inst, which: m, release, at });
+        }
     }
 
     fn seq_of(inst: &chip::instrument::Instrument, i: usize) -> &Seq {
@@ -162,7 +195,28 @@ impl View for InstrumentView {
             }
             WindowEvent::MouseDown(MouseButton::Left) => {
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
-                let gs = Self::graphs(cx.bounds(), cx.scale_factor());
+                let s = cx.scale_factor();
+                let gs = Self::graphs(cx.bounds(), s);
+                let inst = self.current().filter(|(_, i)| !i.is_kit()).map(|(_, i)| i.inst);
+                if let (Some(m), Some(inst)) = (gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom), inst) {
+                    let q = *Self::seq_of(&inst, m);
+                    let mods = cx.modifiers();
+                    // Shift / Alt-click: put the loop / release point on this step.
+                    if (mods.shift() || mods.alt()) && q.len > 0 {
+                        let step = Self::step_at(gs[m], q.len, x);
+                        self.emit_point(cx, m, mods.alt(), Some(step));
+                        meta.consume();
+                        return;
+                    }
+                    // On a marker: drag it.
+                    if let Some(release) = Self::marker_at(&q, gs[m], x, s) {
+                        self.point_drag = Some((m, release));
+                        cx.capture();
+                        cx.emit(AppEvent::GestureBegin);
+                        meta.consume();
+                        return;
+                    }
+                }
                 if let Some(m) = gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
                     cx.capture();
                     cx.emit(AppEvent::GestureBegin);
@@ -171,7 +225,31 @@ impl View for InstrumentView {
                     meta.consume();
                 }
             }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                // Double-click a marker: remove it.
+                let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
+                let s = cx.scale_factor();
+                let gs = Self::graphs(cx.bounds(), s);
+                if let (Some(m), Some((_, i))) =
+                    (gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom), self.current().filter(|(_, i)| !i.is_kit()))
+                {
+                    if let Some(release) = Self::marker_at(Self::seq_of(&i.inst, m), gs[m], x, s) {
+                        self.emit_point(cx, m, release, None);
+                        meta.consume();
+                    }
+                }
+            }
             WindowEvent::MouseMove(..) => {
+                if let Some((m, release)) = self.point_drag {
+                    let gs = Self::graphs(cx.bounds(), cx.scale_factor());
+                    if let Some((_, i)) = self.current() {
+                        let len = Self::seq_of(&i.inst, m).len;
+                        if len > 0 {
+                            let step = Self::step_at(gs[m], len, cx.mouse().cursor_x);
+                            self.emit_point(cx, m, release, Some(step));
+                        }
+                    }
+                }
                 if let Some((m, _)) = self.drawing {
                     self.paint(cx, m);
                 }
@@ -180,6 +258,12 @@ impl View for InstrumentView {
                     let dir = if f == 1 { -1 } else { 1 };
                     self.set_vib(cx, f, v0 as i32 + dir * steps);
                 }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.point_drag.is_some() => {
+                self.point_drag = None;
+                cx.release();
+                cx.emit(AppEvent::GestureEnd);
+                meta.consume();
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.vib_drag.is_some() => {
                 self.vib_drag = None;
@@ -274,12 +358,14 @@ impl View for InstrumentView {
                 let alpha = if in_loop { 1.0 } else { 0.78 };
                 canvas.draw_rect(bar, &gfx::vgrad(bar, c.lighten(0.1).with_alpha(alpha), c.darken(0.25).with_alpha(alpha)));
             }
-            // Loop and release markers.
+            // Loop and release markers, each with a grab tab at the top.
             for (idx, txt, col) in [(q.loop_at, "↺", ACCENT), (q.release_at, "R", RECORD)] {
                 if idx != NONE {
                     let x = (r.left + bw * idx as f32).round();
                     canvas.draw_rect(vg::Rect::from_xywh(x, r.top, gfx::hairline(s), r.height()), &gfx::fill(col.with_alpha(0.7)));
-                    gfx::draw_text(canvas, txt, x + 3.0 * s, r.top + 10.0 * s, &fl, col);
+                    let tab = vg::Rect::from_xywh(x, r.top, 12.0 * s, 12.0 * s);
+                    canvas.draw_rrect(gfx::rrect(tab, 2.0 * s), &gfx::fill(col.with_alpha(0.22)));
+                    gfx::draw_text(canvas, txt, x + 3.0 * s, r.top + 9.5 * s, &fl, col);
                 }
             }
             canvas.restore();
