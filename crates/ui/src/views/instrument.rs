@@ -237,7 +237,7 @@ impl View for InstrumentView {
             gfx::draw_text(canvas, label, r.left.round(), (r.top - 5.0 * s).round(), &fl, TEXT_LO);
             let summary = if q.is_empty() { "—".to_string() } else { format!("{} steps", q.len) };
             let sw = gfx::text_width(&fm, &summary);
-            gfx::draw_text(canvas, &summary, (r.right - sw).round(), (r.top - 5.0 * s).round(), &fm, TEXT_GHOST);
+            gfx::draw_text(canvas, &summary, (r.right - sw).round(), (r.top - 5.0 * s).round(), &fm, TEXT_LO);
             // Inset well.
             let rr = gfx::rrect(r, RADIUS_FIELD * s);
             canvas.draw_rrect(rr, &gfx::vgrad(r, Rgba::hex(0x070707), Rgba::hex(0x0E0E0E)));
@@ -247,7 +247,7 @@ impl View for InstrumentView {
                 let f = gfx::font(Face::Regular, 10.0 * s);
                 let t = "not used";
                 let tw = gfx::text_width(&f, t);
-                gfx::draw_text(canvas, t, (r.center_x() - tw * 0.5).round(), gfx::baseline_for_center(&f, r.center_y()).round(), &f, TEXT_GHOST);
+                gfx::draw_text(canvas, t, (r.center_x() - tw * 0.5).round(), gfx::baseline_for_center(&f, r.center_y()).round(), &f, TEXT_LO);
                 continue;
             }
             canvas.save();
@@ -295,7 +295,7 @@ impl View for InstrumentView {
             let t = Self::vib_text(&v, i);
             let tw = gfx::text_width(&fm, &t);
             let live = v.depth > 0 || i == 0;
-            gfx::draw_text(canvas, &t, (r.right - 6.0 * s - tw).round(), base(r), &fm, if live { TEXT_HI } else { TEXT_GHOST });
+            gfx::draw_text(canvas, &t, (r.right - 6.0 * s - tw).round(), base(r), &fm, if live { TEXT_HI } else { TEXT_LO });
         }
     }
 }

@@ -107,10 +107,12 @@ pub const PILL_LABEL_BOTTOM: Rgba = Rgba::hex(0x545454);
 
 // Text
 pub const TEXT_HI: Rgba = Rgba::hex(0xD9D9D9);
-/// Track names, key glyphs.
-pub const TEXT_MID: Rgba = Rgba::hex(0x888888);
-pub const TEXT_LO: Rgba = Rgba::hex(0x5C5C5C);
-/// Recessive ink (chip badges): barely above the surface.
+/// Track names, key glyphs. >= 4.5:1 on every surface incl. key faces (#2D).
+pub const TEXT_MID: Rgba = Rgba::hex(0x9A9A9A);
+/// Secondary information (labels, hints, read-outs): >= 4.5:1 on every panel
+/// background (#0A..#15). Raised from #5C (2.7:1) in STABILIZE.md §A4.4.
+pub const TEXT_LO: Rgba = Rgba::hex(0x808080);
+/// Decoration only (watermarks), never information: 1.6:1, below WCAG AA.
 pub const TEXT_GHOST: Rgba = Rgba::hex(0x3A3A3A);
 /// The big time read-out (gradient top → bottom).
 pub const READOUT_TOP: Rgba = Rgba::hex(0xDEDEDE);

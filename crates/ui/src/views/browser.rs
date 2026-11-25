@@ -322,7 +322,7 @@ impl View for PresetList {
                     gfx::draw_text(canvas, &label.to_uppercase(), x.round(), base.round(), &fh, TEXT_LO);
                     let count = n.to_string();
                     let cw = gfx::text_width(&fh, &count);
-                    gfx::draw_text(canvas, &count, (row.right - PAD_X * s - cw).round(), base.round(), &fh, TEXT_GHOST);
+                    gfx::draw_text(canvas, &count, (row.right - PAD_X * s - cw).round(), base.round(), &fh, TEXT_LO);
                     let hl = gfx::hairline(s);
                     canvas.draw_rect(
                         vg::Rect::from_xywh(x, row.bottom - hl, row.width() - 2.0 * PAD_X * s, hl),
@@ -346,8 +346,8 @@ impl View for PresetList {
                             canvas.draw_rect(g, &gfx::fill(LANE_DPCM));
                         }
                         let base = gfx::baseline_for_center(&fr, row.center_y());
-                        let row_name = chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot];
-                        let label = format!("{row_name}  {name}");
+                        // The row is named after the sample now; say which slot.
+                        let label = format!("{name}  ·  slot {}", slot + 1);
                         gfx::draw_text_clipped(canvas, &label, (x + 16.0 * s).round(), base.round(), row.width() - 120.0 * s, &fr, TEXT_MID);
                         let meta = if hovered { "remove ×".to_string() } else { format!("{secs:.2}s · {:.1}k", hz / 1000.0) };
                         let mw = gfx::text_width(&fs, &meta);

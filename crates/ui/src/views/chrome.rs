@@ -1375,7 +1375,7 @@ impl View for TrackRow {
                 (badge.center_x() - bw * 0.5).round(),
                 bb.round(),
                 &bf,
-                if selected { TEXT_LO } else { TEXT_GHOST },
+                if selected { TEXT_MID } else { TEXT_LO },
             );
         }
 

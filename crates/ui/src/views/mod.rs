@@ -5,7 +5,6 @@ pub mod clip;
 pub mod dial;
 pub mod gfx;
 pub mod instrument;
-pub mod meter;
 pub mod overlay;
 pub mod piano_roll;
 pub mod ruler;

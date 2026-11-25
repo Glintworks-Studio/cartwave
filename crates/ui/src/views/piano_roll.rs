@@ -711,7 +711,10 @@ fn hover_text(kind: RowKind, row: u32, lane: usize, s: Signals) -> String {
             let note = if lane == 3 && fixed >= 0.0 { "   (the Period control overrides the row)" } else { "" };
             format!("noise period index {}{note}", 15 - row)
         }
-        RowKind::Dpcm => format!("{} (sample {row})", notes::DPCM_NAMES[row as usize]),
+        RowKind::Dpcm => {
+            let names = s.arrangement.with_untracked(|a| notes::dpcm_row_names(&a.samples));
+            format!("{} (sample {row})", names[(row as usize).min(names.len() - 1)])
+        }
     }
 }
 
@@ -831,6 +834,8 @@ impl View for PianoRoll {
                     v.to_bits().hash(&mut h);
                 }
                 (m.ppt.to_bits(), m.scroll.to_bits(), c.id, c.rev.0, &p.sel, p.grid.ticks(), p.lane_volume).hash(&mut h);
+                // Sample names label the DPCM rows.
+                a.samples.hash(&mut h);
                 h.finish()
             };
             let mut layer = self.layer.borrow_mut();
@@ -843,7 +848,8 @@ impl View for PianoRoll {
                 if let Some(surface) = layer.surface.as_mut() {
                     let lc = surface.canvas();
                     lc.clear(vg::Color::TRANSPARENT);
-                    draw_static(lc, s, &m, c, color, &p);
+                    let names = notes::dpcm_row_names(&a.samples);
+                    draw_static(lc, s, &m, c, color, &p, &names);
                     layer.image = Some(surface.image_snapshot());
                     layer.key = key;
                 }
@@ -901,7 +907,7 @@ impl View for PianoRoll {
 
 /// Rows, grid, keys, ruler, notes and volume bars (into the layer; origin =
 /// the view's top-left, physical px).
-fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &PianoState) {
+fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &PianoState, dpcm_names: &[String]) {
     let g = m.geo;
     let px = |v: f32| v * s;
     let w = px(g.w);
@@ -946,6 +952,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         let label = match kind {
             RowKind::Piano { .. } if kind.pitch_of(row).is_multiple_of(12) => Some(kind.row_label(row)),
             RowKind::Piano { .. } => None,
+            RowKind::Dpcm => dpcm_names.get(row as usize).cloned(),
             _ => Some(kind.row_label(row)),
         };
         if let (Some(l), true) = (label, rh >= 8.0 * s) {

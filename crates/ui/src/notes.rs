@@ -162,6 +162,18 @@ pub enum RowKind {
     Dpcm,
 }
 
+/// Names of the DPCM rows: the built-in drums, then each user slot's sample
+/// name ("User n · empty" when nothing is imported there).
+pub fn dpcm_row_names(samples: &[Option<crate::dpcm::UserSample>]) -> [String; DPCM_NAMES.len()] {
+    std::array::from_fn(|row| match row.checked_sub(chip::samples::BUILTIN_COUNT) {
+        None => DPCM_NAMES[row].to_string(),
+        Some(slot) => match samples.get(slot).and_then(|s| s.as_ref()) {
+            Some(s) if !s.name.trim().is_empty() => s.name.clone(),
+            _ => format!("{} · empty", DPCM_NAMES[row]),
+        },
+    })
+}
+
 /// Lowest and highest MIDI note the piano rows show.
 pub const PIANO_LO: u8 = 21; // A0
 pub const PIANO_HI: u8 = 108; // C8
@@ -244,6 +256,8 @@ impl RowKind {
         }
     }
 
+    /// A row's label. DPCM rows of imported samples are named by
+    /// `dpcm_row_names`; this static version says "User n".
     pub fn row_label(self, row: u32) -> String {
         match self {
             RowKind::Piano { lo, .. } => note_name(lo + row as u8),

@@ -101,3 +101,18 @@ Times are local (CST). Each decision taken without the user lists the options an
     start and cancels its first click's toggle.
   - **A4.3 Vibrato** moved from the CLIP section to the INSTRUMENT section, now editable: depth,
     rate and delay fields (drag or wheel, undoable).
+  - **A4.5 Duplicate meters. Decision D10: keep the top-bar spectrum; remove the inspector's
+    CHANNELS meters.** The spectrum is in the designer's prototype and always visible. Per-channel
+    activity also shows on the track strips (they flash on note-ons). The inspector width goes to
+    the instrument editor, which Part B extends. The minimum window shrinks from 1460 to 1140 px
+    wide, the width the top bar was verified at (DESIGN.md §8). `views/meter.rs` was deleted.
+  - **A4.7 Sample rows** are named after the imported sample ("User n · empty" when the slot is
+    empty) in the piano roll rows, the hover read-out and the import message. The browser shows
+    "name · slot n".
+  - **A4.4 Contrast (by token; screenshots follow after the matrix).** WCAG ratios computed from
+    the tokens: TEXT_LO #5C was 2.7–3.0:1 on every panel; TEXT_GHOST (chip badges, step counts,
+    "not used", the browser's counts and hints, the field placeholder) was 1.6–1.7:1. TEXT_MID #88
+    was 5.2:1 on panels but 3.9:1 on key faces (#2D). **Decision D11:** TEXT_LO → #808080 (≥ 4.56:1
+    on #151515), TEXT_MID → #9A9A9A (≥ 4.5:1 on key faces), with the stylesheet variables, the
+    placeholder and the browser hint to match. Every informative TEXT_GHOST use moved to TEXT_LO;
+    TEXT_GHOST is decoration only. The hierarchy HI > MID > LO is kept.

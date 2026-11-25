@@ -37,7 +37,6 @@ use crate::views::{
     dial::Dial,
     instrument::InstrumentView,
     piano_roll::PianoRoll,
-    meter::MeterBank,
     overlay::StatsOverlay,
     ruler::Ruler,
 };
@@ -1366,9 +1365,12 @@ impl AppState {
 ///   than the top bar needs (capsule + two sides of 412: 1028);
 /// - height: top bar + ruler + eight full lanes + the inspector panel.
 pub const MIN_WINDOW_SIZE: (u32, u32) = (
-    // Two paddings and three gaps (the last one before the spacer).
-    INSPECTOR_PAD * 5 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + CHANNELS_SECTION_W as u32
-        + INSTRUMENT_SECTION_MIN_W as u32,
+    // The inspector (two paddings and two gaps), but never narrower than
+    // the top bar's fixed controls need.
+    max_u32(
+        INSPECTOR_PAD * 4 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + INSTRUMENT_SECTION_MIN_W as u32,
+        TOPBAR_MIN_W,
+    ),
     (theme::tokens::TOPBAR_HEIGHT + theme::tokens::RULER_HEIGHT + 8.0 * LANE_H_NORMAL) as u32
         + INSPECTOR_HEIGHT,
 );
@@ -1382,9 +1384,16 @@ const CLIP_SECTION_MIN_W: u32 = 240;
 /// The INSTRUMENT section's smallest width (its four graphs stay readable).
 const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
 const CLIP_SECTION_MAX_W: f32 = 480.0;
-/// One meter column: well, light and label (logical px).
-const METER_COL_W: f32 = 40.0;
-const CHANNELS_SECTION_W: f32 = 8.0 * METER_COL_W + 24.0;
+/// The narrowest window the top bar's fixed controls fit (DESIGN.md §8).
+const TOPBAR_MIN_W: u32 = 1140;
+
+const fn max_u32(a: u32, b: u32) -> u32 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
 
 /// The open context menu over a full-window backdrop that closes it.
 fn context_menu(cx: &mut Context, s: Signals) {
@@ -1596,16 +1605,9 @@ fn device_panel(cx: &mut Context, s: Signals) {
         .class("device-section")
         .width(Stretch(1.0))
         .min_width(Pixels(INSTRUMENT_SECTION_MIN_W));
-
-        // Meters
-        VStack::new(cx, |cx| {
-            Label::new(cx, "CHANNELS").class("section-title");
-            MeterBank::new(cx, s)
-                .height(Stretch(1.0))
-                .width(Stretch(1.0));
-        })
-        .class("device-section")
-        .width(Pixels(CHANNELS_SECTION_W));
+        // No CHANNELS meters here: the top bar's spectrum shows the same
+        // levels at all times (STABILIZE.md §A4.5); the room goes to the
+        // instrument editor.
     })
     .class("panel")
     .class("device");
@@ -1815,12 +1817,11 @@ impl AppState {
         match result {
             Ok((sample, truncated)) => {
                 let msg = format!(
-                    "{name} → DPCM {}: {:.2} s at {:.1} kHz{}. Play it on the DPCM row \"{}\".",
-                    chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot],
+                    "{name} → DPCM slot {}: {:.2} s at {:.1} kHz{}. Play it on the DPCM row \"{name}\".",
+                    slot + 1,
                     sample.seconds(),
                     sample.hz() / 1000.0,
                     if truncated { " (cut to fit the chip's memory)" } else { "" },
-                    chip::samples::NAMES[chip::samples::BUILTIN_COUNT + slot],
                 );
                 self.s.arrangement.update(|a| {
                     a.samples.resize(chip::samples::USER_SLOTS, None);
