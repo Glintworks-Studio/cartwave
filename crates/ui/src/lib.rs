@@ -87,6 +87,9 @@ pub struct AppState {
     audio_generation: u32,
     device_notice: Option<(Instant, String)>,
     tests: testing::Tests,
+    /// Playhead clock source counts for the F3 overlay: (audio, local) frames
+    /// in the current second, and when that second started.
+    clock_counts: (u32, u32, Instant),
 }
 
 pub enum AppEvent {
@@ -315,8 +318,12 @@ impl AppState {
                 .filter(|e| e.shared().stream_running.load(std::sync::atomic::Ordering::Relaxed))
                 .and_then(|e| e.audible_position_at(show_at));
             match heard {
-                Some((t, true)) => tr.playhead_ticks = t,
+                Some((t, true)) => {
+                    self.clock_counts.0 += 1;
+                    tr.playhead_ticks = t;
+                }
                 _ => {
+                    self.clock_counts.1 += 1;
                     self.tests.playhead_local_frames += 1;
                     // No audio (or a command in flight): integrate locally.
                     let ticks_per_sec = tr.bpm as f64 / 60.0 * PPQ as f64;
@@ -569,6 +576,13 @@ impl AppState {
         {
             self.recent.pop_front();
         }
+        let clock = if now - self.clock_counts.2 >= Duration::from_secs(1) {
+            let c = (self.clock_counts.0, self.clock_counts.1);
+            self.clock_counts = (0, 0, now);
+            Some(c)
+        } else {
+            None
+        };
         if !self.s.stats.with_untracked(|s| s.visible) {
             return;
         }
@@ -603,6 +617,10 @@ impl AppState {
             s.cpu_percent = cpu;
             s.clip_count = count;
             s.frames = ft.frame_count;
+            if let Some((audio, local)) = clock {
+                s.clock_audio = audio;
+                s.clock_local = local;
+            }
         });
     }
 }
@@ -706,6 +724,7 @@ pub fn build_ui(cx: &mut Context) {
         audio_generation: 0,
         device_notice: None,
         tests,
+        clock_counts: (0, 0, Instant::now()),
     };
     state.start_engine();
     state.build(cx);

@@ -523,6 +523,11 @@ pub struct FrameStats {
     pub cpu_percent: f32,
     pub clip_count: usize,
     pub frames: u64,
+    /// Playing frames in the last second whose playhead came from the audio
+    /// clock, and from the UI's own fallback clock (no stream, or a command
+    /// in flight; ENGINE.md §5).
+    pub clock_audio: u32,
+    pub clock_local: u32,
 }
 
 pub const PHASE_NAMES: [&str; 7] = [

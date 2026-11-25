@@ -438,12 +438,26 @@ Notes:
 **The UI budget with the engine running** (PERF.md's own scripts, `docs/perf/tools/bench.ps1` and
 `pacing.ps1`, process CPU in % of one core, 3 runs). This includes the audio thread:
 
-| Scenario | PERF.md, before the engine | With the engine | Pacing, 30 s, with the engine |
-|---|---|---|---|
-| Idle | 0.0–0.1% | **0.0–0.4%** | no frames |
-| Demo playing | 9.1 / 9.4 / 9.6% | **9.6 / 9.8 / 10.3%** | 1800 frames, p99 16.90 ms, 0 > 20 ms, 0 missed vblanks |
-| 200 clips playing | 9.1 / 9.8 / 9.9% | **10.1 / 10.5 / 10.8%** | p99 16.88 ms, 0 > 20 ms, 0 missed |
-| 200 clips, dragging | 10.0 / 10.9 / 11.2% | **10.6 / 10.7 / 12.1%** | p99 16.91 ms, one 20.7 ms submit interval, 0 missed vblanks |
+| Scenario | PERF.md, before the engine | With the engine | Re-measured, engine verified playing (PIANOROLL.md Part 0) | Pacing, 30 s, with the engine |
+|---|---|---|---|---|
+| Idle | 0.0–0.1% | **0.0–0.4%** | 0.1 / 0.4 / 0.7% | no frames |
+| Demo playing | 9.1 / 9.4 / 9.6% | **9.6 / 9.8 / 10.3%** | 8.9 / 9.1 / 10.0% | 1800 frames, p99 16.90 ms, 0 > 20 ms, 0 missed vblanks |
+| 200 clips playing | 9.1 / 9.8 / 9.9% | **10.1 / 10.5 / 10.8%** | 9.2 / 9.5 / 9.8% | p99 16.88 ms, 0 > 20 ms, 0 missed |
+| 200 clips, dragging | 10.0 / 10.9 / 11.2% | **10.6 / 10.7 / 12.1%** | 10.2 / 10.8 / 10.8% | p99 16.91 ms, one 20.7 ms submit interval, 0 missed vblanks |
+
+**Correction note (PIANOROLL.md Part 0, 2026-11-24).** ENGINE-macos.md's bug 3 (F4 lit "playing"
+without starting the engine, fixed in `fbc2309`) suggested that the "200 clips playing" row above
+was measured with the engine stopped. **On Windows it was not.** `bench.ps1` presses Space (which
+sends `Play`) *before* F4, so the engine was already playing when F4 loaded the 200 clips; only
+sequences that start with F4 alone (the macOS `chipbench` "200" scenario) hit the bug. The
+deciding probe: the pre-fix build (`4027a25`) run through `bench.ps1`'s exact key sequence with
+`CHIPDAW_AUDIOLOG` logged **0 playhead frames per second on the local clock** throughout the
+200-clip phase, i.e. every frame's playhead came from the playing engine. The original numbers
+therefore stand. The re-measured column (current build, fork commit 10, the F3 overlay showing
+"clock audio 60/s local 0/s") agrees within run-to-run noise. Two differences from the original
+runs: the default output device is now the monitor's HDMI endpoint (480-frame callbacks), not the
+MOTU; and during drags 4–21 frames per second take the local clock because a snapshot command is
+in flight (`audible_position_at` returns `None` while `pending() > 0`, by design, §5).
 
 All of PERF.md's targets still hold. The engine adds roughly 0.5 points of one core, which is the
 audio thread. The first measurement found **idle at 2.1–2.5%**. The cause: the hidden F3 overlay

@@ -14,8 +14,24 @@ const WIDTH: f32 = 300.0;
 const LINE_H: f32 = 16.0;
 const PAD: f32 = 12.0;
 /// Header lines + blank + phases + blank + spans + audio.
-const LINES: usize = 5 + 1 + PHASE_NAMES.len() + 1 + SPANS.len() + AUDIO_LINES;
+const LINES: usize = 7 + 1 + PHASE_NAMES.len() + 1 + SPANS.len() + AUDIO_LINES;
 const AUDIO_LINES: usize = 5;
+
+/// How the backend paces frames for this cap on this display (vizia fork,
+/// PERF-macos.md §11.2 and PIANOROLL.md Part 0): the slot rate and why.
+fn slot_line(cap: crate::state::FrameCap, display_hz: Option<f64>) -> String {
+    use vizia::context::{frame_slot_rate, frame_slot_vblanks};
+    let Some(cap) = cap.max_fps() else {
+        return "slots  none (vsync only)".into();
+    };
+    let rate = frame_slot_rate(cap, display_hz);
+    match frame_slot_vblanks(cap, display_hz) {
+        // fork commit 10: on Windows the vsync'd swap paces 1:1 frames itself.
+        Some(1) if cfg!(target_os = "windows") => format!("slots  {rate:.3} Hz  1:1, swap-paced"),
+        Some(n) => format!("slots  {rate:.3} Hz  every {n} vblank(s)"),
+        None => format!("slots  {rate:.3} Hz  at cap"),
+    }
+}
 
 pub struct StatsOverlay {
     s: Signals,
@@ -78,9 +94,21 @@ impl View for StatsOverlay {
                 format!(
                     "cap    {:<7} display {}",
                     st.cap.label(),
-                    st.display_hz.map_or("?".into(), |hz| format!("{hz:.2} Hz"))
+                    st.display_hz.map_or("?".into(), |hz| format!("{hz:.3} Hz"))
                 ),
                 TEXT_HI,
+            ),
+            (slot_line(st.cap, st.display_hz), TEXT_HI),
+            (
+                format!(
+                    "clock  audio {:3}/s  local {:3}/s",
+                    st.clock_audio, st.clock_local
+                ),
+                if st.clock_local > 0 && st.clock_audio == 0 {
+                    METER_AMBER
+                } else {
+                    TEXT_HI
+                },
             ),
             (
                 format!("clips  {:6}    frames {}", st.clip_count, st.frames),
