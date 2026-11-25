@@ -908,6 +908,130 @@ impl View for SpectrumBox {
 
 // ─────────────────────────────── Track rows ───────────────────────────────
 
+// ─────────────────────────────── Split handle ───────────────────────────────
+
+/// Height of the handle band (logical px) and its grip.
+pub const SPLIT_HANDLE_H: f32 = 8.0;
+const GRIP_W: f32 = 32.0;
+const GRIP_H: f32 = 4.0;
+/// The piano roll never gets shorter than this while dragging (logical px).
+const PIANO_MIN_H: f32 = 240.0;
+
+/// The draggable band between the arrangement and the piano roll. Dragging
+/// it sets the lane height in 4 px steps (all 8 lanes always fit, so clips
+/// are never cut off); double-click restores the default split.
+pub struct SplitHandle {
+    s: Signals,
+    /// Drag in progress: (mouse y at press, lane height at press).
+    drag: Option<(f32, f32)>,
+    hover: bool,
+}
+
+impl SplitHandle {
+    pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
+        Self {
+            s,
+            drag: None,
+            hover: false,
+        }
+        .build(cx, |_| {})
+        .class("split-handle")
+        .height(Pixels(SPLIT_HANDLE_H))
+        .width(Stretch(1.0))
+        .cursor(CursorIcon::NsResize)
+    }
+
+    /// The tallest lanes that still leave the piano roll its minimum height.
+    fn max_lane_h(cx: &EventContext) -> f32 {
+        use crate::state::{LANE_H_COMPACT, LANE_H_NORMAL, LANE_H_STEP};
+        let s = cx.scale_factor();
+        let win_h = cx.cache.get_bounds(Entity::root()).h / s;
+        let pane = win_h - TOPBAR_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H - RULER_HEIGHT;
+        let lane = (pane / 8.0 / LANE_H_STEP).floor() * LANE_H_STEP;
+        lane.clamp(LANE_H_COMPACT, LANE_H_NORMAL)
+    }
+}
+
+impl View for SplitHandle {
+    fn element(&self) -> Option<&'static str> {
+        Some("split-handle")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                // Window y: the handle itself moves while it's dragged.
+                let y = cx.mouse().cursor_y / cx.scale_factor();
+                self.drag = Some((y, self.s.lane_h.get_untracked()));
+                cx.capture();
+                cx.needs_redraw();
+                meta.consume();
+            }
+            WindowEvent::MouseMove(_, _) => {
+                if let Some((y0, h0)) = self.drag {
+                    use crate::state::{LANE_H_COMPACT, LANE_H_STEP};
+                    // The handle follows the bottom of the 8 lanes, so each
+                    // lane grows by an eighth of the drag.
+                    let y = cx.mouse().cursor_y / cx.scale_factor();
+                    let h = ((h0 + (y - y0) / 8.0) / LANE_H_STEP).round() * LANE_H_STEP;
+                    let h = h.clamp(LANE_H_COMPACT, Self::max_lane_h(cx));
+                    if h != self.s.lane_h.get_untracked() {
+                        cx.emit(AppEvent::SetPianoLaneHeight(h));
+                    }
+                }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.drag.is_some() => {
+                self.drag = None;
+                cx.release();
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                let h = crate::state::LANE_H_PIANO_DEFAULT.min(Self::max_lane_h(cx));
+                cx.emit(AppEvent::SetPianoLaneHeight(h));
+                meta.consume();
+            }
+            WindowEvent::MouseEnter => {
+                self.hover = true;
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseLeave => {
+                self.hover = false;
+                cx.needs_redraw();
+            }
+            _ => {}
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let b = cx.bounds();
+        let s = cx.scale_factor();
+        let r = gfx::snap(b.into());
+        let hl = gfx::hairline(s);
+        // The band: the panel gradient under a hairline.
+        canvas.draw_rect(r, &gfx::vgrad(r, BAND_TOP, BAND_BOTTOM));
+        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(LINE));
+        // Grip: a small sunk groove that lights up when used.
+        let g = gfx::snap(vg::Rect::from_xywh(
+            r.center_x() - GRIP_W * 0.5 * s,
+            r.center_y() - GRIP_H * 0.5 * s,
+            GRIP_W * s,
+            GRIP_H * s,
+        ));
+        let grr = gfx::rrect(g, g.height() * 0.5);
+        let active = self.drag.is_some();
+        if active || self.hover {
+            let c = if active { ACCENT } else { TEXT_MID };
+            if active {
+                canvas.draw_rrect(grr, &glow_paint(ACCENT.with_alpha(0.5), 3.0 * s));
+            }
+            canvas.draw_rrect(grr, &gfx::vgrad(g, c.lighten(0.1), c.darken(0.2)));
+        } else {
+            canvas.draw_rrect(grr, &gfx::fill(BG_INSET));
+            gfx::ring_vgrad(canvas, &grr, hl, Rgba::black(0.6), KEY_STROKE);
+        }
+    }
+}
+
 /// Track name size and its baseline below the row top (logical px).
 const ROW_NAME_PX: f32 = 13.0;
 const ROW_NAME_BASELINE: f32 = 20.0;
@@ -963,7 +1087,8 @@ impl View for TrackRow {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
-        let compact = r.height() < 48.0 * s;
+        // Below this there's no room for the badge under the name.
+        let compact = r.height() < 56.0 * s;
         let selected = self
             .s
             .arrangement
@@ -984,7 +1109,10 @@ impl View for TrackRow {
         // Watermark lane number, ghosted into the surface.
         canvas.save();
         canvas.clip_rect(body, None, None);
-        let wf = gfx::font(Face::HeavyItalic, if compact { 30.0 } else { WATERMARK_PX } * s);
+        let wf = gfx::font(
+            Face::HeavyItalic,
+            if compact { (r.height() / s - 8.0).min(WATERMARK_PX) } else { WATERMARK_PX } * s,
+        );
         let num = format!("{}", self.lane + 1);
         let ww = gfx::text_width(&wf, &num);
         let wb = if compact {

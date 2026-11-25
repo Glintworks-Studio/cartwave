@@ -25,7 +25,7 @@ use crate::notes::{Note, RowKind};
 use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
-    chrome::{Key, KeyAction, PillKind, SpectrumBox, StatPill, TimeCapsule},
+    chrome::{Key, KeyAction, PillKind, SpectrumBox, SplitHandle, StatPill, TimeCapsule},
     dial::Dial,
     piano_roll::PianoRoll,
     meter::MeterBank,
@@ -138,6 +138,8 @@ pub struct AppState {
     clip_looping: bool,
     /// When the CPU / kHz pills were last refreshed.
     last_load: Option<Instant>,
+    /// Lane height while the piano roll is open (set by the split handle).
+    piano_lane_h: f32,
 }
 
 pub enum AppEvent {
@@ -153,6 +155,8 @@ pub enum AppEvent {
     CycleSnap,
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
+    /// The split handle above the piano roll: lane height while it's open.
+    SetPianoLaneHeight(f32),
     ToggleStats,
     ToggleStress,
     CycleFrameCap,
@@ -271,6 +275,12 @@ impl Model for AppState {
                 self.last_audio_stats = None;
             }
             AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
+            AppEvent::SetPianoLaneHeight(h) => {
+                self.piano_lane_h = h.clamp(LANE_H_COMPACT, LANE_H_NORMAL);
+                if self.s.piano_open.get_untracked() {
+                    self.s.lane_h.set_if_changed(self.piano_lane_h);
+                }
+            }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
                 let end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
@@ -956,6 +966,7 @@ pub fn build_ui(cx: &mut Context) {
         loop_end_saved: (32 * TICKS_PER_BAR) as f64,
         clip_looping: false,
         last_load: None,
+        piano_lane_h: LANE_H_PIANO_DEFAULT,
     };
     if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
         state.s.recovery_offer.set(true);
@@ -978,11 +989,11 @@ pub fn build_ui(cx: &mut Context) {
             .overflow(Overflow::Hidden);
         })
         .class("main")
-        .height(s.lane_h.map(|h| {
-            if *h < LANE_H_NORMAL {
-                // Compact lanes: the arrangement takes what it needs and the
-                // piano roll gets the rest.
-                Pixels(theme::tokens::RULER_HEIGHT + 8.0 * *h)
+        .height(Memo::new(move |_| {
+            if s.piano_open.get() {
+                // Piano roll open: the arrangement takes exactly its lanes (the
+                // split handle sets their height) and the piano roll the rest.
+                Pixels(theme::tokens::RULER_HEIGHT + 8.0 * s.lane_h.get())
             } else {
                 Stretch(1.0)
             }
@@ -993,6 +1004,7 @@ pub fn build_ui(cx: &mut Context) {
         // full-height arrangement).
         Binding::new(cx, s.piano_open, move |cx| {
             if s.piano_open.get() {
+                SplitHandle::new(cx, s);
                 piano_panel(cx, s);
             } else {
                 Binding::new(cx, s.inspector, move |cx| {
@@ -1526,7 +1538,7 @@ impl AppState {
             const ROWS_SHOWN_GUESS: f32 = 22.0;
             p.top = ((kind.rows() - 1 - mid) as f32 - ROWS_SHOWN_GUESS / 2.0).max(0.0);
         });
-        self.s.lane_h.set(LANE_H_COMPACT);
+        self.s.lane_h.set(self.piano_lane_h);
         self.s.piano_open.set(true);
         self.sync_loop();
     }

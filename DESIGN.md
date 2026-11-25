@@ -155,6 +155,10 @@ the existing Inter faces).
   varying length (save status, audio problems, the recovery prompt) float in a
   notice capsule under the transport, so the top bar only holds fixed-size
   controls.
+- The piano roll opens below a **split handle** (an 8 px band with a grip). Dragging
+  it sets the lane height in 4 px steps, from 36 to 60. All 8 lanes always fit, the
+  piano roll keeps at least 240 px, the split is remembered, and a double-click
+  restores the default (48 px lanes, so clips keep their header and note preview).
 - Already broken before the redesign (the pre-redesign binary crashes too): resizing
   the window from another process with `SetWindowPos` panics in the vizia fork
   (`WinState::resize`, `new_surface_with_dimensions` returns `None`). Dragging the
