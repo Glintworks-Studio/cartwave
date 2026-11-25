@@ -27,6 +27,23 @@ pub struct Note {
     pub start: u32,
     pub end: u32,
     pub pitch: u8,
+    /// Per-note volume 0..=15 (`None`: the lane's Volume parameter). Pulse,
+    /// noise and VRC6 pulse use it as V; the saw maps it to its accumulator
+    /// rate (`saw_rate_for_volume`); triangle and DMC have no volume.
+    pub volume: Option<u8>,
+}
+
+impl Note {
+    pub const fn new(start: u32, end: u32, pitch: u8) -> Self {
+        Self { start, end, pitch, volume: None }
+    }
+}
+
+/// The saw's per-note volume: accumulator rate `round(v * 42 / 15)`, so 15 is
+/// the loudest rate that doesn't wrap (42) and 0 is silent.
+pub const fn saw_rate_for_volume(v: u8) -> u8 {
+    let v = if v > 15 { 15 } else { v };
+    ((v as u32 * 42 + 7) / 15) as u8
 }
 
 /// The song as the driver sees it: per lane, notes sorted by `start` and not
@@ -195,6 +212,8 @@ struct LaneState {
     /// The note currently sounding (identified by start + pitch, so an edit
     /// elsewhere in the lane doesn't retrigger it).
     note: Option<(u32, u8)>,
+    /// The sounding note's own volume (None: the lane parameter).
+    vol: Option<u8>,
     /// Shadow of the side-effect-free control register last written.
     ctl: Option<u8>,
     sweep: Option<u8>,
@@ -216,6 +235,10 @@ pub struct Driver {
     pub sounding: u8,
     /// Frame ticks run so far.
     pub ticks: u64,
+    /// Audition notes (the piano roll's Preview command), played while the
+    /// transport is stopped, regardless of mute/solo. `start` is a serial
+    /// number: a new serial retriggers even on the same pitch.
+    pub preview: [Option<Note>; LANES],
 }
 
 impl Driver {
@@ -231,6 +254,7 @@ impl Driver {
             note_ons: [0; LANES],
             sounding: 0,
             ticks: 0,
+            preview: [None; LANES],
         }
     }
 
@@ -288,12 +312,18 @@ impl Driver {
         let mut sounding = 0u8;
         for lane in 0..LANES {
             let vrc6_lane = lane >= LANE_V1;
-            let want = if playing && self.audible(lane) && (!vrc6_lane || self.vrc6) {
+            let chip_present = !vrc6_lane || self.vrc6;
+            let want = if playing && self.audible(lane) && chip_present {
                 Self::note_at(song.lanes[lane], prev, pos)
                     .filter(|n| self.playable(lane, n.pitch))
+            } else if !playing && chip_present {
+                self.preview[lane].filter(|n| self.playable(lane, n.pitch))
             } else {
                 None
             };
+            if let Some(n) = want {
+                self.lanes[lane].vol = n.volume;
+            }
             let cur = self.lanes[lane].note;
             match want {
                 Some(n) if cur != Some((n.start, n.pitch)) => {
@@ -322,9 +352,23 @@ impl Driver {
         }
     }
 
+    /// V for `lane`: the sounding note's volume, else the lane's parameter.
+    fn volume(&self, lane: usize) -> u8 {
+        self.lanes[lane]
+            .vol
+            .map_or(self.params.get(lane, ParamId::Volume) as u8, |v| v.min(15))
+    }
+
+    /// The saw's accumulator rate: from the note's volume if it has one.
+    fn saw_rate(&self, lane: usize) -> u8 {
+        self.lanes[lane]
+            .vol
+            .map_or(self.params.get(lane, ParamId::Rate) as u8, saw_rate_for_volume)
+    }
+
     fn env_bits(&self, lane: usize) -> u8 {
         let p = &self.params;
-        let v = p.get(lane, ParamId::Volume) as u8;
+        let v = self.volume(lane);
         match p.get(lane, ParamId::Envelope) {
             0 => 0x30 | v, // halt length, constant volume
             1 => v,        // length runs (254 half frames), decay
@@ -349,7 +393,7 @@ impl Driver {
 
     fn vrc6_ctl(&self, lane: usize) -> u8 {
         let d = self.params.get(lane, ParamId::Duty);
-        let v = self.params.get(lane, ParamId::Volume) as u8;
+        let v = self.volume(lane);
         if d >= 8 {
             0x80 | 0x70 | v
         } else {
@@ -421,7 +465,7 @@ impl Driver {
             }
             _ => {
                 let t = pitch::period_for(Osc::Saw, pitch).unwrap_or(0);
-                let rate = self.params.get(lane, ParamId::Rate) as u8;
+                let rate = self.saw_rate(lane);
                 w.push(0xB000, rate);
                 w.push(0xB001, t as u8);
                 w.push(0xB002, 0x80 | (t >> 8) as u8);
@@ -462,7 +506,7 @@ impl Driver {
                 }
             }
             LANE_SAW => {
-                let rate = self.params.get(lane, ParamId::Rate) as u8;
+                let rate = self.saw_rate(lane);
                 if st.ctl != Some(rate) {
                     w.push(0xB000, rate);
                     self.lanes[lane].ctl = Some(rate);
@@ -502,6 +546,7 @@ impl Driver {
             _ => w.push(0xB002, 0x00), // clear E: accumulator held at 0
         }
         self.lanes[lane].note = None;
+        self.lanes[lane].vol = None;
         self.lanes[lane].ctl = None;
         self.lanes[lane].sweep = None;
     }
@@ -523,8 +568,8 @@ mod tests {
     #[test]
     fn note_lookup() {
         let notes = [
-            Note { start: 0, end: 100, pitch: 60 },
-            Note { start: 200, end: 210, pitch: 62 },
+            Note::new(0, 100, 60),
+            Note::new(200, 210, 62),
         ];
         assert_eq!(Driver::note_at(&notes, Some(-1.0), 50.0).map(|n| n.pitch), Some(60));
         assert_eq!(Driver::note_at(&notes, Some(50.0), 150.0), None);
@@ -539,7 +584,7 @@ mod tests {
     #[test]
     fn pulse_note_on_sustain_off() {
         let mut d = drv();
-        let notes = [Note { start: 0, end: 960, pitch: 69 }];
+        let notes = [Note::new(0, 960, 69)];
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
         let song = Song { lanes };
@@ -569,7 +614,7 @@ mod tests {
     #[test]
     fn mute_and_solo() {
         let mut d = drv();
-        let notes = [Note { start: 0, end: 960, pitch: 40 }];
+        let notes = [Note::new(0, 960, 40)];
         let song = Song { lanes: [&notes; LANES] };
         let mut w = Writes::default();
         d.mute = 1 << LANE_TRI;
@@ -586,10 +631,10 @@ mod tests {
     #[test]
     fn edits_elsewhere_dont_retrigger() {
         let mut d = drv();
-        let a = [Note { start: 0, end: 960, pitch: 60 }];
+        let a = [Note::new(0, 960, 60)];
         let b = [
-            Note { start: 0, end: 960, pitch: 60 },
-            Note { start: 2000, end: 2100, pitch: 64 },
+            Note::new(0, 960, 60),
+            Note::new(2000, 2100, 64),
         ];
         let mut w = Writes::default();
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
@@ -600,6 +645,51 @@ mod tests {
         d.tick(&Song { lanes }, Some(10.0), 50.0, true, &mut w);
         assert!(w.as_slice().is_empty());
         assert_eq!(d.note_ons[0], 1);
+    }
+
+    #[test]
+    fn per_note_volume_overrides_the_lane_and_updates_while_held() {
+        let mut d = drv();
+        let mut notes = [Note { volume: Some(3), ..Note::new(0, 960, 69) }];
+        let mut w = Writes::default();
+        {
+            let mut lanes: [&[Note]; LANES] = [&[]; LANES];
+            lanes[0] = &notes;
+            d.tick(&Song { lanes }, None, 0.0, true, &mut w);
+        }
+        assert!(w.as_slice().contains(&(0x4000, 0x80 | 0x30 | 3)));
+        // Editing the volume of the sounding note: no retrigger, new V.
+        notes[0].volume = Some(9);
+        w.clear();
+        let mut lanes: [&[Note]; LANES] = [&[]; LANES];
+        lanes[0] = &notes;
+        d.tick(&Song { lanes }, Some(0.0), 40.0, true, &mut w);
+        assert_eq!(writes_of(&w), [(0x4000, 0x80 | 0x30 | 9)]);
+        assert_eq!(d.note_ons[0], 1);
+        assert_eq!(saw_rate_for_volume(15), 42);
+        assert_eq!(saw_rate_for_volume(0), 0);
+    }
+
+    #[test]
+    fn preview_plays_only_while_stopped_and_ignores_mute() {
+        let mut d = drv();
+        let mut w = Writes::default();
+        d.mute = 0xFF;
+        d.preview[LANE_TRI] = Some(Note::new(1, u32::MAX, 45));
+        d.tick(&Song::EMPTY, None, 0.0, false, &mut w);
+        assert_eq!(d.sounding, 1 << LANE_TRI);
+        assert_eq!(d.note_ons[LANE_TRI], 1);
+        // A new serial on the same pitch retriggers.
+        d.preview[LANE_TRI] = Some(Note::new(2, u32::MAX, 45));
+        d.tick(&Song::EMPTY, None, 0.0, false, &mut w);
+        assert_eq!(d.note_ons[LANE_TRI], 2);
+        // Playing: previews are ignored.
+        d.tick(&Song::EMPTY, Some(0.0), 10.0, true, &mut w);
+        assert_eq!(d.sounding, 0);
+        // Out of range: refused like song notes (2A03 pulse can't go below A1).
+        d.preview[LANE_P1] = Some(Note::new(3, u32::MAX, 20));
+        d.tick(&Song::EMPTY, None, 0.0, false, &mut w);
+        assert_eq!(d.sounding & 1, 0);
     }
 
     #[test]

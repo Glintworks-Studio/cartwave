@@ -3,6 +3,7 @@
 
 pub mod input;
 pub mod mock;
+pub mod notes;
 pub mod perf;
 pub mod state;
 pub mod testing;

@@ -55,6 +55,8 @@ pub struct Core {
     click_at: f64,
     click_left: u32,
     commands_seen: u64,
+    /// Serial numbers for audition notes (each one retriggers).
+    preview_serial: u32,
 }
 
 impl Core {
@@ -86,6 +88,7 @@ impl Core {
             click_at: -1.0,
             click_left: 0,
             commands_seen: 0,
+            preview_serial: 0,
         })
     }
 
@@ -140,6 +143,19 @@ impl Core {
                 Command::Seek(t) => p.seek(t),
                 Command::Bpm(b) => p.set_bpm(b),
                 Command::LoopEnd(t) => p.set_loop_end(t),
+                Command::LoopStart(t) => p.set_loop_start(t),
+                Command::Preview { lane, note } => {
+                    if let Some(slot) = p.driver.preview.get_mut(lane as usize) {
+                        self.preview_serial = self.preview_serial.wrapping_add(1);
+                        let serial = self.preview_serial;
+                        *slot = note.map(|(pitch, volume)| chip::driver::Note {
+                            start: serial,
+                            end: u32::MAX,
+                            pitch,
+                            volume,
+                        });
+                    }
+                }
                 Command::Mute(m) => p.driver.mute = m,
                 Command::Solo(m) => p.driver.solo = m,
                 Command::Param { lane, id, value } => {
@@ -277,6 +293,7 @@ impl Core {
         sh.publish_position(&PositionSnapshot {
             ticks: pos0,
             ticks_per_frame: tpf,
+            loop_start: self.player.loop_start(),
             loop_end: self.player.loop_end(),
             playing,
             callback_ns: t0,
@@ -327,7 +344,7 @@ mod tests {
     #[test]
     fn plays_and_publishes() {
         let (mut c, mut tx, mut grx, shared) = core();
-        let notes = [(0, 960, 69u8)];
+        let notes = [(0, 960, 69u8, None)];
         let s = SongSnapshot::build([ClipInput { lane: 0, start: 0, len: 960, notes: &notes }], 1);
         tx.push(Command::Song(Box::new(s))).ok().unwrap();
         tx.push(Command::Play).ok().unwrap();

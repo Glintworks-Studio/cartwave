@@ -18,6 +18,18 @@ use crate::tables::{CPU_CYCLES_PER_FRAME_X2, CPU_HZ_NTSC};
 
 pub const PPQ: f64 = 960.0;
 
+/// Wraps a song position into the loop `start..end`. Positions before the
+/// loop end pass through; past it they continue from the loop start. A loop
+/// start at or past the end counts as 0.
+pub fn wrap_loop(t: f64, start: f64, end: f64) -> f64 {
+    if end <= 0.0 || t < end {
+        return t;
+    }
+    let start = if start < end { start.max(0.0) } else { 0.0 };
+    // `t >= end > start` here, so the remainder is never negative (no_std: no rem_euclid).
+    start + (t - start) % (end - start)
+}
+
 pub struct Player {
     pub synth: Synth,
     pub driver: Driver,
@@ -26,6 +38,9 @@ pub struct Player {
     next_tick_x2: u64,
     playing: bool,
     bpm: f64,
+    /// Playback loops over `loop_start..loop_end` (start 0 = the whole song
+    /// up to the end).
+    loop_start: f64,
     loop_end: f64,
     /// Position (ticks) at `cycle0`.
     pos0: f64,
@@ -46,6 +61,7 @@ impl Player {
             next_tick_x2: 0,
             playing: false,
             bpm: 150.0,
+            loop_start: 0.0,
             loop_end: 32.0 * 4.0 * PPQ,
             pos0: 0.0,
             cycle0: 0,
@@ -68,12 +84,12 @@ impl Player {
         self.loop_end
     }
 
+    pub fn loop_start(&self) -> f64 {
+        self.loop_start
+    }
+
     fn wrap(&self, t: f64) -> f64 {
-        if self.loop_end > 0.0 && t >= self.loop_end {
-            t % self.loop_end
-        } else {
-            t
-        }
+        wrap_loop(t, self.loop_start, self.loop_end)
     }
 
     pub fn position_at(&self, cycle: u64) -> f64 {
@@ -111,11 +127,20 @@ impl Player {
         self.pos0 = self.wrap(self.pos0);
     }
 
+    /// Loop start (ticks). Takes effect at the next wrap; a start at or past
+    /// the loop end is ignored by the wrap (it falls back to 0).
+    pub fn set_loop_start(&mut self, ticks: f64) {
+        self.rebase();
+        self.loop_start = ticks.max(0.0);
+    }
+
     pub fn play(&mut self) {
         if !self.playing {
             self.rebase();
             self.playing = true;
             self.prev_tick_pos = None;
+            // No audition during playback.
+            self.driver.preview = [None; crate::driver::LANES];
         }
     }
 
@@ -211,11 +236,29 @@ mod tests {
     }
 
     #[test]
+    fn loop_range() {
+        assert_eq!(wrap_loop(500.0, 0.0, 1000.0), 500.0);
+        assert_eq!(wrap_loop(1200.0, 0.0, 1000.0), 200.0);
+        assert_eq!(wrap_loop(1200.0, 800.0, 1000.0), 800.0);
+        assert_eq!(wrap_loop(1100.0, 800.0, 1000.0), 900.0);
+        assert_eq!(wrap_loop(1100.0, 2000.0, 1000.0), 100.0, "bad start: whole song");
+        let mut p = Box::new(Player::new(48_000.0));
+        p.set_bpm(120.0); // 1920 ticks/s
+        p.set_loop_start(960.0);
+        p.set_loop_end(1920.0);
+        p.seek(1800.0);
+        p.play();
+        let mut buf = vec![0f32; 4800]; // 0.1 s = 192 ticks -> 1992 -> 960 + 72
+        p.render(&Song::EMPTY, &mut buf);
+        assert!((p.position() - 1032.0).abs() < 0.05, "{}", p.position());
+    }
+
+    #[test]
     fn note_starts_quantised_to_frame_ticks() {
         let mut p = Box::new(Player::new(48_000.0));
         p.set_bpm(150.0);
         // A pulse note at 1 beat (960 ticks = 0.4 s at 150 BPM).
-        let notes = [Note { start: 960, end: 1920, pitch: 69 }];
+        let notes = [Note::new(960, 1920, 69)];
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
         let song = Song { lanes };

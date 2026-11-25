@@ -1,8 +1,12 @@
-//! Plain data model for the prototype. No audio; everything is mock data.
+//! The arrangement model: lanes, clips (with their notes), selection and view.
+//! Notes and their editing operations live in `notes.rs`.
 
+use crate::notes::{self, Note};
 use crate::theme::tokens::{self, Rgba};
 use engine::{ClipInput, ParamId, SongSnapshot};
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 /// Ticks per quarter note. All timing and snapping is done in ticks.
 pub const PPQ: u32 = 960;
@@ -12,11 +16,31 @@ pub const TICKS_PER_BAR: u32 = PPQ * BEATS_PER_BAR;
 /// Minimum clip length when resizing.
 pub const MIN_CLIP_TICKS: u32 = PPQ / 4;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MockNote {
-    pub start: u32,
-    pub len: u32,
-    pub pitch: u8,
+/// A clip's revision stamp: a process-wide counter, set fresh every time the
+/// clip is changed (`Arrangement::clip_mut`, `Clip::new`, splits). `(id, rev)`
+/// identifies a clip's content without hashing its notes, and is never reused
+/// (unlike an `Arc` address). Not part of the content: equal clips compare
+/// equal whatever their stamps.
+#[derive(Clone, Copy, Debug)]
+pub struct Rev(pub u64);
+
+impl Rev {
+    pub fn next() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        Rev(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl Default for Rev {
+    fn default() -> Self {
+        Self::next()
+    }
+}
+
+impl PartialEq for Rev {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -26,13 +50,30 @@ pub struct Clip {
     pub start_ticks: u32,
     pub len_ticks: u32,
     pub name: String,
-    /// Note times are relative to the clip start.
-    pub notes: Vec<MockNote>,
+    /// Sorted by start, never overlapping (the monophonic rule, `notes.rs`).
+    /// Times are relative to the clip start. Notes past the clip end are kept
+    /// (a clip can be lengthened again) but not played or drawn.
+    pub notes: Vec<Note>,
+    /// Next note id in this clip (ids are per clip).
+    pub next_note_id: u32,
+    pub rev: Rev,
 }
 
 impl Clip {
+    pub fn new(id: u32, lane: usize, start_ticks: u32, len_ticks: u32, name: String, notes: Vec<Note>) -> Self {
+        let next_note_id = notes.iter().map(|n| n.id + 1).max().unwrap_or(1);
+        Self { id, lane, start_ticks, len_ticks, name, notes, next_note_id, rev: Rev::next() }
+    }
+
     pub fn end_ticks(&self) -> u32 {
         self.start_ticks + self.len_ticks
+    }
+
+    /// The notes that sound: those starting inside the clip (cut at its end
+    /// by the snapshot builder).
+    pub fn audible_notes(&self) -> impl Iterator<Item = &Note> {
+        let len = self.len_ticks;
+        self.notes.iter().filter(move |n| n.start < len)
     }
 }
 
@@ -88,7 +129,7 @@ pub fn default_lanes() -> Vec<Lane> {
     ]
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Snap {
     Sixteenth,
     Quarter,
@@ -179,7 +220,9 @@ impl Viewport {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arrangement {
     pub lanes: Vec<Lane>,
-    pub clips: Vec<Clip>,
+    /// Shared so an undo snapshot costs one pointer per clip; changed only
+    /// through `clip_mut` (copy on write + a fresh `Rev`).
+    pub clips: Vec<Arc<Clip>>,
     /// Selected clip ids.
     pub selection: Vec<u32>,
     pub snap: Snap,
@@ -189,19 +232,44 @@ pub struct Arrangement {
     /// engine hears them trimming whatever they overlap (without changing the
     /// other clips until the drop), and on release the trim is applied.
     pub editing: Vec<u32>,
+    /// Notes being dragged in the piano roll: (clip, note ids). Like
+    /// `editing`, the engine hears them winning while the drag lasts.
+    pub editing_notes: Option<(u32, Vec<u32>)>,
 }
 
 impl Arrangement {
+    /// An empty project: the 8 lanes and no clips (File > New).
+    pub fn empty() -> Self {
+        Self {
+            lanes: default_lanes(),
+            clips: Vec::new(),
+            selection: Vec::new(),
+            snap: Snap::Sixteenth,
+            view: Viewport::default(),
+            next_id: 1,
+            editing: Vec::new(),
+            editing_notes: None,
+        }
+    }
+
     pub fn is_selected(&self, id: u32) -> bool {
         self.selection.contains(&id)
     }
 
     pub fn clip(&self, id: u32) -> Option<&Clip> {
-        self.clips.iter().find(|c| c.id == id)
+        self.clips.iter().find(|c| c.id == id).map(|c| &**c)
     }
 
+    /// Mutable access for an edit: copies the clip if an undo snapshot (or
+    /// anything else) shares it, and stamps a new revision.
     pub fn clip_mut(&mut self, id: u32) -> Option<&mut Clip> {
-        self.clips.iter_mut().find(|c| c.id == id)
+        let c = Arc::make_mut(self.clips.iter_mut().find(|c| c.id == id)?);
+        c.rev = Rev::next();
+        Some(c)
+    }
+
+    pub fn push_clip(&mut self, c: Clip) {
+        self.clips.push(Arc::new(c));
     }
 
     pub fn delete_selected(&mut self) {
@@ -211,7 +279,7 @@ impl Arrangement {
 
     /// Brings the given clip ids to the end of the list (drawn on top).
     pub fn raise(&mut self, ids: &[u32]) {
-        let (mut top, rest): (Vec<Clip>, Vec<Clip>) =
+        let (mut top, rest): (Vec<_>, Vec<_>) =
             self.clips.drain(..).partition(|c| ids.contains(&c.id));
         self.clips = rest;
         self.clips.append(&mut top);
@@ -219,6 +287,17 @@ impl Arrangement {
 
     pub fn first_selected(&self) -> Option<&Clip> {
         self.selection.first().and_then(|id| self.clip(*id))
+    }
+
+    /// A new empty clip of `len` ticks on `lane` at `start` (the newest clip:
+    /// it wins overlaps). Returns its id.
+    pub fn add_clip(&mut self, lane: usize, start: u32, len: u32) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        let name = format!("{} {id}", self.lanes.get(lane).map_or("?", |l| l.short));
+        self.push_clip(Clip::new(id, lane, start, len, name, Vec::new()));
+        self.resolve_overlaps(&[id]);
+        id
     }
 
     /// Monophonic overlap rule: each clip in `winners` trims, splits or
@@ -244,11 +323,11 @@ impl Arrangement {
                     (Some(l), Some(mut r)) => {
                         r.id = self.next_id;
                         self.next_id += 1;
-                        out.push(l);
-                        out.push(r);
+                        out.push(Arc::new(l));
+                        out.push(Arc::new(r));
                     }
-                    (Some(l), None) => out.push(l),
-                    (None, Some(r)) => out.push(r),
+                    (Some(l), None) => out.push(Arc::new(l)),
+                    (None, Some(r)) => out.push(Arc::new(r)),
                     (None, None) => {}
                 }
             }
@@ -259,37 +338,41 @@ impl Arrangement {
     }
 
     /// The clips as the engine should hear them right now (with `editing`
-    /// winning over everything it overlaps).
-    pub fn resolved_clips(&self) -> std::borrow::Cow<'_, [Clip]> {
-        if self.editing.is_empty() {
-            std::borrow::Cow::Borrowed(&self.clips)
-        } else {
-            let mut a = self.clone();
-            let w = a.editing.clone();
-            a.resolve_overlaps(&w);
-            std::borrow::Cow::Owned(a.clips)
+    /// clips and `editing_notes` winning over everything they overlap).
+    pub fn resolved_clips(&self) -> std::borrow::Cow<'_, [Arc<Clip>]> {
+        if self.editing.is_empty() && self.editing_notes.is_none() {
+            return std::borrow::Cow::Borrowed(&self.clips);
         }
+        let mut a = self.clone();
+        let w = a.editing.clone();
+        a.resolve_overlaps(&w);
+        if let Some((cid, ids)) = a.editing_notes.clone() {
+            if let Some(c) = a.clip_mut(cid) {
+                let mut next = c.next_note_id;
+                notes::resolve_mono(&mut c.notes, &ids, &mut next);
+            }
+        }
+        std::borrow::Cow::Owned(a.clips)
     }
 
-    /// Changes whenever anything audible changes (not selection or view).
+    /// Changes whenever anything audible changes (not selection or view):
+    /// every clip edit stamps a new `Rev`.
     pub fn content_key(&self) -> u64 {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         for c in &self.clips {
-            (c.id, c.lane, c.start_ticks, c.len_ticks, c.notes.len()).hash(&mut h);
-            if let (Some(f), Some(l)) = (c.notes.first(), c.notes.last()) {
-                (f.start, f.pitch, l.start, l.len).hash(&mut h);
-            }
+            (c.id, c.rev.0).hash(&mut h);
         }
         self.editing.hash(&mut h);
+        self.editing_notes.hash(&mut h);
         h.finish()
     }
 
     /// Builds the engine's immutable snapshot (UI thread).
     pub fn song_snapshot(&self, version: u64) -> SongSnapshot {
         let clips = self.resolved_clips();
-        let notes: Vec<Vec<(u32, u32, u8)>> = clips
+        let notes: Vec<Vec<engine::NoteInput>> = clips
             .iter()
-            .map(|c| c.notes.iter().map(|n| (n.start, n.len, n.pitch)).collect())
+            .map(|c| c.audible_notes().map(|n| (n.start, n.len, n.pitch, n.volume)).collect())
             .collect();
         SongSnapshot::build(
             clips.iter().zip(&notes).map(|(c, n)| ClipInput {
@@ -310,22 +393,19 @@ impl Clip {
     pub fn trimmed(&self, from: u32, to: u32) -> Clip {
         let shift = from - self.start_ticks;
         let len = to - from;
+        let notes = self
+            .notes
+            .iter()
+            .filter(|n| n.start >= shift && n.start < shift + len)
+            .map(|n| Note {
+                start: n.start - shift,
+                len: n.len.min(shift + len - n.start),
+                ..*n
+            })
+            .collect();
         Clip {
-            id: self.id,
-            lane: self.lane,
-            start_ticks: from,
-            len_ticks: len,
-            name: self.name.clone(),
-            notes: self
-                .notes
-                .iter()
-                .filter(|n| n.start >= shift && n.start < shift + len)
-                .map(|n| MockNote {
-                    start: n.start - shift,
-                    len: n.len.min(shift + len - n.start),
-                    pitch: n.pitch,
-                })
-                .collect(),
+            next_note_id: self.next_note_id,
+            ..Clip::new(self.id, self.lane, from, len, self.name.clone(), notes)
         }
     }
 }
@@ -614,21 +694,17 @@ mod tests {
     fn clip(id: u32, lane: usize, start: u32, len: u32) -> Clip {
         // One note per quarter, absolute pitch = 60 + quarter index.
         let notes = (0..len / PPQ)
-            .map(|q| MockNote { start: q * PPQ, len: PPQ / 2, pitch: 60 + q as u8 })
+            .map(|q| Note::new(q + 1, q * PPQ, PPQ / 2, 60 + q as u8))
             .collect();
-        Clip { id, lane, start_ticks: start, len_ticks: len, name: format!("c{id}"), notes }
+        Clip::new(id, lane, start, len, format!("c{id}"), notes)
     }
 
     fn arr(clips: Vec<Clip>) -> Arrangement {
         let next_id = clips.iter().map(|c| c.id).max().unwrap_or(0) + 1;
         Arrangement {
-            lanes: default_lanes(),
-            clips,
-            selection: vec![],
-            snap: Snap::Sixteenth,
-            view: Viewport::default(),
+            clips: clips.into_iter().map(Arc::new).collect(),
             next_id,
-            editing: vec![],
+            ..Arrangement::empty()
         }
     }
 
@@ -704,7 +780,7 @@ mod tests {
         a.selection = vec![1];
         a.view.scroll_ticks = 100.0;
         assert_eq!(a.content_key(), k);
-        a.clips[0].start_ticks += 240;
+        a.clip_mut(1).unwrap().start_ticks += 240;
         assert_ne!(a.content_key(), k);
     }
 }

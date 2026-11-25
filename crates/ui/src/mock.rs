@@ -1,6 +1,12 @@
 //! Demo data and fake meter / playhead generators.
 
+use crate::notes::Note;
 use crate::state::*;
+use std::sync::Arc;
+
+fn mk(start: u32, len: u32, pitch: u8) -> Note {
+    Note::new(0, start, len, pitch)
+}
 
 /// Tiny deterministic xorshift RNG so the demo looks the same every launch.
 #[derive(Clone, Debug)]
@@ -31,7 +37,7 @@ impl Rng {
 }
 
 /// Generates plausible-looking notes for a lane.
-fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
+fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<Note> {
     let six = PPQ / 4;
     let mut notes = Vec::new();
     let mut t = 0;
@@ -42,11 +48,7 @@ fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
             while t < len {
                 let l = six * [1, 2, 2, 3, 4][rng.range(0, 5) as usize];
                 if rng.f32() > 0.15 {
-                    notes.push(MockNote {
-                        start: t,
-                        len: l.min(len - t),
-                        pitch,
-                    });
+                    notes.push(mk(t, l.min(len - t), pitch));
                 }
                 let step = rng.range(0, 7) as i32 - 3;
                 pitch = (pitch as i32 + step).clamp(52, 84) as u8;
@@ -60,11 +62,7 @@ fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
                 let root = roots[((t / TICKS_PER_BAR) % 4) as usize];
                 let p = if rng.f32() > 0.6 { root + 7 } else { root };
                 let l = six * [2, 4, 4, 8][rng.range(0, 4) as usize];
-                notes.push(MockNote {
-                    start: t,
-                    len: l.min(len - t),
-                    pitch: p,
-                });
+                notes.push(mk(t, l.min(len - t), p));
                 t += l;
             }
         }
@@ -78,11 +76,7 @@ fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
                     _ => 76,
                 };
                 if step.is_multiple_of(2) || rng.f32() > 0.6 {
-                    notes.push(MockNote {
-                        start: t,
-                        len: six,
-                        pitch: p,
-                    });
+                    notes.push(mk(t, six, p));
                 }
                 t += six;
             }
@@ -91,11 +85,7 @@ fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
         4 => {
             while t < len {
                 if rng.f32() > 0.45 {
-                    notes.push(MockNote {
-                        start: t,
-                        len: six * 2,
-                        pitch: 48 + rng.range(0, 16) as u8,
-                    });
+                    notes.push(mk(t, six * 2, 48 + rng.range(0, 16) as u8));
                 }
                 t += PPQ;
             }
@@ -106,14 +96,13 @@ fn notes_for(lane: usize, len: u32, rng: &mut Rng) -> Vec<MockNote> {
             while t < len {
                 let root = roots[((t / TICKS_PER_BAR) % 4) as usize];
                 let p = root + if (t / (six * 2)) % 4 == 3 { 12 } else { 0 };
-                notes.push(MockNote {
-                    start: t,
-                    len: six * 2 - six / 2,
-                    pitch: p,
-                });
+                notes.push(mk(t, six * 2 - six / 2, p));
                 t += six * 2;
             }
         }
+    }
+    for (i, n) in notes.iter_mut().enumerate() {
+        n.id = i as u32 + 1;
     }
     notes
 }
@@ -191,25 +180,22 @@ pub fn demo_arrangement() -> Arrangement {
         .enumerate()
         .map(|(i, &(lane, start, len, name))| {
             let len_ticks = (len * bar as f32) as u32;
-            Clip {
-                id: i as u32 + 1,
+            Arc::new(Clip::new(
+                i as u32 + 1,
                 lane,
-                start_ticks: (start * bar as f32) as u32,
+                (start * bar as f32) as u32,
                 len_ticks,
-                name: NAMES[lane][name % NAMES[lane].len()].to_string(),
-                notes: notes_for(lane, len_ticks, &mut rng),
-            }
+                NAMES[lane][name % NAMES[lane].len()].to_string(),
+                notes_for(lane, len_ticks, &mut rng),
+            ))
         })
         .collect::<Vec<_>>();
     let next_id = clips.len() as u32 + 1;
     Arrangement {
-        lanes: default_lanes(),
         clips,
         selection: vec![2],
-        snap: Snap::Sixteenth,
-        view: Viewport::default(),
         next_id,
-        editing: vec![],
+        ..Arrangement::empty()
     }
 }
 
@@ -223,30 +209,21 @@ pub fn stress_arrangement() -> Arrangement {
         for _ in 0..per_lane {
             let len = PPQ * rng.range(2, 6);
             let id = clips.len() as u32 + 1;
-            clips.push(Clip {
-                id,
-                lane,
-                start_ticks: t,
-                len_ticks: len,
-                name: NAMES[lane][rng.range(0, NAMES[lane].len() as u32) as usize].to_string(),
-                notes: notes_for(lane, len, &mut rng),
-            });
+            let name = NAMES[lane][rng.range(0, NAMES[lane].len() as u32) as usize].to_string();
+            clips.push(Arc::new(Clip::new(id, lane, t, len, name, notes_for(lane, len, &mut rng))));
             t += len + PPQ / 2 * rng.range(0, 2);
         }
     }
     let next_id = clips.len() as u32 + 1;
     Arrangement {
-        lanes: default_lanes(),
         clips,
-        selection: vec![],
-        snap: Snap::Sixteenth,
         // Zoomed out so all 200 clips are on screen at 1440 wide.
         view: Viewport {
             px_per_tick: 40.0 / TICKS_PER_BAR as f64,
             scroll_ticks: 0.0,
         },
         next_id,
-        editing: vec![],
+        ..Arrangement::empty()
     }
 }
 

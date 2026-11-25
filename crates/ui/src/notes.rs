@@ -1,0 +1,613 @@
+//! Notes inside a clip, and every editing operation on them (PIANOROLL.md §3).
+//!
+//! The operations here are pure functions on a clip's note list, so the piano
+//! roll, the scripted tests and the undo property test all go through the same
+//! code. Times are ticks (960 PPQ) relative to the clip start.
+//!
+//! **Monophonic rule.** A chip channel plays one note at a time, so a clip never
+//! holds overlapping notes. Every operation that places notes (add, move,
+//! resize, paste, duplicate, quantize, transpose) calls [`resolve_mono`] with
+//! the placed notes as *winners*: each winner trims, splits or removes every
+//! other note it overlaps, exactly like the clip overlap rule
+//! (`Arrangement::resolve_overlaps`). The engine's snapshot builder keeps its
+//! own backstop.
+
+use serde::{Deserialize, Serialize};
+
+use crate::state::PPQ;
+
+/// Shortest note the editor creates by resizing (a 1/64 note).
+pub const MIN_NOTE_TICKS: u32 = PPQ / 16;
+/// Highest per-note volume (the 4-bit volume of the 2A03 / VRC6 channels).
+pub const MAX_VOLUME: u8 = 15;
+
+/// One note. `start` and `len` are ticks relative to the clip start.
+///
+/// The derive order is the file order (`file.rs` serialises this struct
+/// directly; PIANOROLL.md §5 has the spec).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: u32,
+    pub start: u32,
+    pub len: u32,
+    /// MIDI note number. Noise and DPCM use the driver's mappings (see
+    /// [`RowKind`]).
+    pub pitch: u8,
+    /// 0–15, or `None` for the channel's default (the lane's Volume control).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub volume: Option<u8>,
+    /// Reserved for per-note effects (arpeggio, vibrato, duty or pitch
+    /// changes). Empty in format version 1; see [`NoteFx`].
+    #[serde(default, skip_serializing_if = "NoteFx::is_empty")]
+    pub fx: NoteFx,
+}
+
+/// Per-note effects: **the extension point** (PIANOROLL.md §3.2).
+///
+/// Version 1 has no effects, so this is an empty struct: it costs nothing in
+/// memory and is never written. A later phase adds optional fields here
+/// (e.g. `arp: Option<Arp>`, `vibrato: Option<Vibrato>`, `duty: Option<u8>`,
+/// `pitch_env: Option<PitchEnv>`), each `#[serde(default, skip_serializing_if
+/// = "Option::is_none")]`. Files written before then still load unchanged,
+/// and notes without effects are still written without an `fx` key. Unknown
+/// keys are rejected, so a version-1 build fails clearly on a file that uses
+/// effects (which will also carry a higher format version).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoteFx {}
+
+impl NoteFx {
+    pub fn is_empty(&self) -> bool {
+        *self == NoteFx::default()
+    }
+}
+
+impl Note {
+    pub fn new(id: u32, start: u32, len: u32, pitch: u8) -> Self {
+        Self { id, start, len, pitch, volume: None, fx: NoteFx::default() }
+    }
+
+    pub fn end(&self) -> u32 {
+        self.start + self.len
+    }
+}
+
+/// Piano-roll grid (PIANOROLL.md §2). Straight and triplet values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Grid {
+    Quarter,
+    Eighth,
+    Sixteenth,
+    ThirtySecond,
+    QuarterT,
+    EighthT,
+    SixteenthT,
+    ThirtySecondT,
+}
+
+impl Grid {
+    pub const ALL: [Grid; 8] = [
+        Grid::Quarter,
+        Grid::Eighth,
+        Grid::Sixteenth,
+        Grid::ThirtySecond,
+        Grid::QuarterT,
+        Grid::EighthT,
+        Grid::SixteenthT,
+        Grid::ThirtySecondT,
+    ];
+
+    pub fn ticks(self) -> u32 {
+        match self {
+            Grid::Quarter => PPQ,
+            Grid::Eighth => PPQ / 2,
+            Grid::Sixteenth => PPQ / 4,
+            Grid::ThirtySecond => PPQ / 8,
+            // Three in the time of two.
+            Grid::QuarterT => PPQ * 2 / 3,
+            Grid::EighthT => PPQ / 3,
+            Grid::SixteenthT => PPQ / 6,
+            Grid::ThirtySecondT => PPQ / 12,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Grid::Quarter => "1/4",
+            Grid::Eighth => "1/8",
+            Grid::Sixteenth => "1/16",
+            Grid::ThirtySecond => "1/32",
+            Grid::QuarterT => "1/4T",
+            Grid::EighthT => "1/8T",
+            Grid::SixteenthT => "1/16T",
+            Grid::ThirtySecondT => "1/32T",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        let i = Self::ALL.iter().position(|g| *g == self).unwrap_or(0);
+        Self::ALL[(i + 1) % Self::ALL.len()]
+    }
+
+    /// Nearest grid line.
+    pub fn round(self, t: i64) -> i64 {
+        let g = self.ticks() as i64;
+        (t + g / 2).div_euclid(g) * g
+    }
+
+    /// Grid line at or before `t`.
+    pub fn floor(self, t: i64) -> i64 {
+        let g = self.ticks() as i64;
+        t.div_euclid(g) * g
+    }
+}
+
+// ───────────────────────────── Channel rows ─────────────────────────────
+
+/// How a lane's notes map to piano-roll rows (PIANOROLL.md §6). Rows are
+/// numbered bottom-up; `row_of`/`pitch_of` convert.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RowKind {
+    /// One row per MIDI note in `lo..=hi`; the rows the channel can play
+    /// are `play_lo..=play_hi` (others are shaded and refused).
+    Piano { osc: chip::pitch::Osc, lo: u8, hi: u8, play_lo: u8, play_hi: u8 },
+    /// 16 rows, one per noise period index. Row r (bottom = 0) is period
+    /// index 15 - r, so higher rows sound higher. Stored pitch: the inverse
+    /// of the driver's `noise_index_for` (index = (96 - pitch) / 4), i.e.
+    /// pitch = 96 - 4 × index.
+    Noise,
+    /// One row per DPCM sample (Kick, Snare, Tom, Crash). Stored pitch:
+    /// 36 + sample (the driver plays sample `pitch % 4`).
+    Dpcm,
+}
+
+/// Lowest and highest MIDI note the piano rows show.
+pub const PIANO_LO: u8 = 21; // A0
+pub const PIANO_HI: u8 = 108; // C8
+pub const NOISE_ROWS: u8 = 16;
+pub const DPCM_BASE_PITCH: u8 = 36;
+pub const DPCM_NAMES: [&str; 4] = ["Kick", "Snare", "Tom", "Crash"];
+
+impl RowKind {
+    pub fn for_lane(lane: usize) -> Self {
+        use chip::pitch::Osc;
+        let osc = match lane {
+            3 => return RowKind::Noise,
+            4 => return RowKind::Dpcm,
+            2 => Osc::Triangle,
+            5 | 6 => Osc::Vrc6Pulse,
+            7 => Osc::Saw,
+            _ => Osc::Pulse,
+        };
+        let playable = |p: u8| chip::pitch::period_for(osc, p).is_some();
+        let play_lo = (PIANO_LO..=PIANO_HI).find(|p| playable(*p)).unwrap_or(PIANO_LO);
+        let play_hi = (PIANO_LO..=PIANO_HI).rev().find(|p| playable(*p)).unwrap_or(PIANO_HI);
+        RowKind::Piano { osc, lo: PIANO_LO, hi: PIANO_HI, play_lo, play_hi }
+    }
+
+    pub fn rows(self) -> u32 {
+        match self {
+            RowKind::Piano { lo, hi, .. } => (hi - lo) as u32 + 1,
+            RowKind::Noise => NOISE_ROWS as u32,
+            RowKind::Dpcm => DPCM_NAMES.len() as u32,
+        }
+    }
+
+    /// Row (0 = bottom) a pitch is drawn on. Out-of-range pitches clamp.
+    pub fn row_of(self, pitch: u8) -> u32 {
+        match self {
+            RowKind::Piano { lo, hi, .. } => (pitch.clamp(lo, hi) - lo) as u32,
+            RowKind::Noise => 15 - chip::pitch::noise_index_for(pitch) as u32,
+            RowKind::Dpcm => (pitch % DPCM_NAMES.len() as u8) as u32,
+        }
+    }
+
+    /// The pitch stored for a note placed on `row`.
+    pub fn pitch_of(self, row: u32) -> u8 {
+        let row = row.min(self.rows() - 1);
+        match self {
+            RowKind::Piano { lo, .. } => lo + row as u8,
+            RowKind::Noise => 96 - 4 * (15 - row as u8),
+            RowKind::Dpcm => DPCM_BASE_PITCH + row as u8,
+        }
+    }
+
+    /// Whether the channel can play notes on `row`.
+    pub fn playable_row(self, row: u32) -> bool {
+        match self {
+            RowKind::Piano { lo, play_lo, play_hi, .. } => {
+                let p = lo as u32 + row;
+                p >= play_lo as u32 && p <= play_hi as u32
+            }
+            _ => row < self.rows(),
+        }
+    }
+
+    /// Range of rows notes may be placed on (transpose clamps to it).
+    pub fn playable_rows(self) -> (u32, u32) {
+        match self {
+            RowKind::Piano { lo, play_lo, play_hi, .. } => {
+                ((play_lo - lo) as u32, (play_hi - lo) as u32)
+            }
+            _ => (0, self.rows() - 1),
+        }
+    }
+
+    /// Rows per octave step (Shift+↑/↓): 12 on piano rows, 4 on noise, all
+    /// four DPCM rows.
+    pub fn octave_rows(self) -> i32 {
+        match self {
+            RowKind::Piano { .. } => 12,
+            RowKind::Noise => 4,
+            RowKind::Dpcm => 4,
+        }
+    }
+
+    pub fn row_label(self, row: u32) -> String {
+        match self {
+            RowKind::Piano { lo, .. } => note_name(lo + row as u8),
+            RowKind::Noise => format!("{:>2}", 15 - row),
+            RowKind::Dpcm => DPCM_NAMES[row as usize % DPCM_NAMES.len()].to_string(),
+        }
+    }
+
+    /// Tuning error of the period the driver picks for this row, in cents
+    /// (`docs/tuning.md`), and the period. Piano rows only.
+    pub fn tuning(self, row: u32) -> Option<(f64, u16)> {
+        let RowKind::Piano { osc, .. } = self else { return None };
+        let pitch = self.pitch_of(row);
+        let t = chip::pitch::period_for(osc, pitch)?;
+        Some((chip::pitch::cents_error(osc, pitch, t), t))
+    }
+
+    /// Lanes without a volume control get no volume lane: the triangle has
+    /// no volume in hardware, the DMC plays samples at a fixed level.
+    pub fn has_volume(lane: usize) -> bool {
+        !matches!(lane, 2 | 4)
+    }
+}
+
+pub fn note_name(pitch: u8) -> String {
+    const NAMES: [&str; 12] = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    format!("{}{}", NAMES[(pitch % 12) as usize], pitch as i32 / 12 - 1)
+}
+
+// ───────────────────────────── Operations ─────────────────────────────
+
+/// The monophonic rule. Each note in `winners` trims, splits or removes every
+/// non-winner it overlaps; split-off right parts get new ids from `next_id`.
+/// Winners that overlap each other (e.g. two notes quantized onto one line)
+/// are resolved last: sorted by start, an equal start keeps the later winner
+/// in `winners` order, and each note is cut at the next one's start. The
+/// result is sorted by start and has no overlaps.
+pub fn resolve_mono(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
+    let spans: Vec<(u32, u32)> = notes
+        .iter()
+        .filter(|n| winners.contains(&n.id))
+        .map(|n| (n.start, n.end()))
+        .collect();
+    for (ws, we) in spans {
+        let mut out = Vec::with_capacity(notes.len() + 1);
+        for n in notes.drain(..) {
+            if winners.contains(&n.id) || n.end() <= ws || n.start >= we {
+                out.push(n);
+                continue;
+            }
+            if n.start < ws {
+                out.push(Note { len: ws - n.start, ..n });
+            }
+            if n.end() > we {
+                let id = if n.start < ws {
+                    let id = *next_id;
+                    *next_id += 1;
+                    id
+                } else {
+                    n.id
+                };
+                out.push(Note { id, start: we, len: n.end() - we, ..n });
+            }
+        }
+        *notes = out;
+    }
+    // Winners among themselves (and the invariant for everything else).
+    let rank = |id: u32| winners.iter().position(|w| *w == id);
+    notes.sort_by(|a, b| a.start.cmp(&b.start).then(rank(a.id).cmp(&rank(b.id))));
+    // Equal starts: keep the last of the run (the later winner).
+    let mut i = 0;
+    while i + 1 < notes.len() {
+        if notes[i].start == notes[i + 1].start {
+            notes.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+    for i in 1..notes.len() {
+        let next = notes[i].start;
+        if notes[i - 1].end() > next {
+            notes[i - 1].len = next - notes[i - 1].start;
+        }
+    }
+}
+
+/// Adds a note (the newest edit: it wins) and returns its id.
+pub fn add(notes: &mut Vec<Note>, next_id: &mut u32, start: u32, len: u32, pitch: u8) -> u32 {
+    let id = *next_id;
+    *next_id += 1;
+    notes.push(Note::new(id, start, len.max(1), pitch));
+    resolve_mono(notes, &[id], next_id);
+    id
+}
+
+pub fn delete(notes: &mut Vec<Note>, ids: &[u32]) {
+    notes.retain(|n| !ids.contains(&n.id));
+}
+
+/// Shifts the rows of `ids` by `rows`, clamped so that every note stays in
+/// `kind`'s playable range (the intervals are kept). Returns the shift used.
+pub fn transpose(notes: &mut Vec<Note>, ids: &[u32], rows: i32, kind: RowKind, next_id: &mut u32) -> i32 {
+    let sel: Vec<u32> = notes.iter().filter(|n| ids.contains(&n.id)).map(|n| kind.row_of(n.pitch)).collect();
+    let (Some(&lo), Some(&hi)) = (sel.iter().min(), sel.iter().max()) else { return 0 };
+    let (plo, phi) = kind.playable_rows();
+    let rows = rows.clamp(plo as i32 - lo as i32, phi as i32 - hi as i32);
+    // A selection that already sits partly outside the range doesn't move
+    // further out.
+    let rows = if lo < plo || hi > phi { 0 } else { rows };
+    if rows == 0 {
+        return 0;
+    }
+    for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
+        n.pitch = kind.pitch_of((kind.row_of(n.pitch) as i32 + rows) as u32);
+    }
+    resolve_mono(notes, ids, next_id);
+    rows
+}
+
+/// Moves `ids` by `dt` ticks (clamped at the clip start), keeping their
+/// spacing. Returns the shift used.
+pub fn nudge(notes: &mut Vec<Note>, ids: &[u32], dt: i64, next_id: &mut u32) -> i64 {
+    let Some(min) = notes.iter().filter(|n| ids.contains(&n.id)).map(|n| n.start).min() else {
+        return 0;
+    };
+    let dt = dt.max(-(min as i64));
+    if dt == 0 {
+        return 0;
+    }
+    for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
+        n.start = (n.start as i64 + dt) as u32;
+    }
+    resolve_mono(notes, ids, next_id);
+    dt
+}
+
+/// Snaps each start in `ids` to the nearest grid line. Lengths are kept.
+pub fn quantize(notes: &mut Vec<Note>, ids: &[u32], grid: Grid, next_id: &mut u32) {
+    for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
+        n.start = grid.round(n.start as i64).max(0) as u32;
+    }
+    resolve_mono(notes, ids, next_id);
+}
+
+/// Copies of `ids`, with starts relative to the earliest one: the clipboard.
+pub fn copy(notes: &[Note], ids: &[u32]) -> Vec<Note> {
+    let mut out: Vec<Note> = notes.iter().filter(|n| ids.contains(&n.id)).copied().collect();
+    out.sort_by_key(|n| n.start);
+    if let Some(first) = out.first().map(|n| n.start) {
+        for n in &mut out {
+            n.start -= first;
+        }
+    }
+    out
+}
+
+/// Inserts `clip` (from [`copy`]) at `at`, with new ids; the pasted notes win.
+/// Returns the new ids. Pitches are clamped into `kind`'s playable rows.
+pub fn paste(notes: &mut Vec<Note>, next_id: &mut u32, clip: &[Note], at: u32, kind: RowKind) -> Vec<u32> {
+    let (plo, phi) = kind.playable_rows();
+    let mut ids = Vec::with_capacity(clip.len());
+    for n in clip {
+        let id = *next_id;
+        *next_id += 1;
+        ids.push(id);
+        let row = kind.row_of(n.pitch).clamp(plo, phi);
+        notes.push(Note { id, start: at + n.start, pitch: kind.pitch_of(row), ..*n });
+    }
+    resolve_mono(notes, &ids, next_id);
+    ids
+}
+
+/// The span the selection covers: (earliest start, latest end).
+pub fn span(notes: &[Note], ids: &[u32]) -> Option<(u32, u32)> {
+    let sel = notes.iter().filter(|n| ids.contains(&n.id));
+    let lo = sel.clone().map(|n| n.start).min()?;
+    let hi = sel.map(|n| n.end()).max()?;
+    Some((lo, hi))
+}
+
+/// Ctrl+D: copies of the selection placed right after it. Returns the new
+/// ids (they become the selection).
+pub fn duplicate_right(notes: &mut Vec<Note>, next_id: &mut u32, ids: &[u32], kind: RowKind) -> Vec<u32> {
+    let Some((lo, hi)) = span(notes, ids) else { return Vec::new() };
+    let clip = copy(notes, ids);
+    // The copy of a selection starting mid-span keeps its offset to `lo`.
+    let first = notes.iter().filter(|n| ids.contains(&n.id)).map(|n| n.start).min().unwrap_or(lo);
+    paste(notes, next_id, &clip, hi + (first - lo), kind)
+}
+
+/// Sets the volume of `ids` (None = the channel default).
+pub fn set_volume(notes: &mut [Note], ids: &[u32], v: Option<u8>) {
+    for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
+        n.volume = v.map(|v| v.min(MAX_VOLUME));
+    }
+}
+
+/// True when no two notes overlap and the list is sorted (the invariant).
+pub fn is_mono(notes: &[Note]) -> bool {
+    notes.windows(2).all(|w| w[0].end() <= w[1].start && w[0].start < w[1].start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn n(id: u32, start: u32, len: u32, pitch: u8) -> Note {
+        Note::new(id, start, len, pitch)
+    }
+
+    fn spans(notes: &[Note]) -> Vec<(u32, u32, u32, u8)> {
+        notes.iter().map(|n| (n.id, n.start, n.end(), n.pitch)).collect()
+    }
+
+    #[test]
+    fn new_note_trims_end_and_start() {
+        let mut v = vec![n(1, 0, 400, 60), n(2, 600, 400, 62)];
+        let mut next = 3;
+        let id = add(&mut v, &mut next, 300, 400, 64);
+        assert_eq!(id, 3);
+        assert_eq!(spans(&v), [(1, 0, 300, 60), (3, 300, 700, 64), (2, 700, 1000, 62)]);
+        assert!(is_mono(&v));
+    }
+
+    #[test]
+    fn note_inside_another_splits_it() {
+        let mut v = vec![n(1, 0, 960, 60)];
+        let mut next = 2;
+        add(&mut v, &mut next, 240, 240, 67);
+        assert_eq!(spans(&v), [(1, 0, 240, 60), (2, 240, 480, 67), (3, 480, 960, 60)]);
+        assert_eq!(next, 4, "the right part got a new id");
+    }
+
+    #[test]
+    fn covered_note_is_removed() {
+        let mut v = vec![n(1, 100, 50, 60), n(2, 200, 50, 61)];
+        let mut next = 3;
+        add(&mut v, &mut next, 0, 960, 40);
+        assert_eq!(spans(&v), [(3, 0, 960, 40)]);
+    }
+
+    #[test]
+    fn same_start_newer_wins() {
+        // Like the clip rule: the older note keeps the part after the new one.
+        let mut v = vec![n(1, 0, 240, 60)];
+        let mut next = 2;
+        add(&mut v, &mut next, 0, 120, 70);
+        assert_eq!(spans(&v), [(2, 0, 120, 70), (1, 120, 240, 60)]);
+        // Same span: replaced.
+        add(&mut v, &mut next, 0, 240, 72);
+        assert_eq!(spans(&v), [(3, 0, 240, 72)]);
+    }
+
+    #[test]
+    fn move_selection_overwrites_and_keeps_spacing() {
+        let mut v = vec![n(1, 0, 240, 60), n(2, 480, 240, 62), n(3, 960, 240, 64)];
+        let mut next = 4;
+        // Move 1 and 2 right by 600: 1 -> 600..840 (overlaps 3? no), 2 -> 1080..1320 overlaps 3 (960..1200).
+        let d = nudge(&mut v, &[1, 2], 600, &mut next);
+        assert_eq!(d, 600);
+        assert_eq!(spans(&v), [(1, 600, 840, 60), (3, 960, 1080, 64), (2, 1080, 1320, 62)]);
+        // Can't move before the clip start: clamped by the earliest note.
+        let d = nudge(&mut v, &[1, 2], -10_000, &mut next);
+        assert_eq!(d, -600);
+        assert!(is_mono(&v));
+    }
+
+    #[test]
+    fn resize_by_editing_len_then_resolving() {
+        let mut v = vec![n(1, 0, 240, 60), n(2, 480, 240, 62)];
+        let mut next = 3;
+        v[0].len = 600; // drag the right edge over note 2
+        resolve_mono(&mut v, &[1], &mut next);
+        assert_eq!(spans(&v), [(1, 0, 600, 60), (2, 600, 720, 62)]);
+    }
+
+    #[test]
+    fn transpose_clamps_to_the_playable_range_and_keeps_intervals() {
+        let kind = RowKind::for_lane(0); // 2A03 pulse: lowest is A1 (33)
+        let RowKind::Piano { play_lo, play_hi, .. } = kind else { panic!() };
+        assert_eq!(play_lo, 33);
+        let mut v = vec![n(1, 0, 240, 35), n(2, 240, 240, 47)];
+        let mut next = 3;
+        assert_eq!(transpose(&mut v, &[1, 2], -12, kind, &mut next), -2);
+        assert_eq!((v[0].pitch, v[1].pitch), (33, 45));
+        let up = transpose(&mut v, &[1, 2], 200, kind, &mut next);
+        assert_eq!(v[1].pitch, play_hi);
+        assert_eq!(v[1].pitch - v[0].pitch, 12);
+        assert_eq!(up, (play_hi - 45) as i32);
+    }
+
+    #[test]
+    fn noise_and_dpcm_rows_round_trip_through_the_driver_mapping() {
+        let noise = RowKind::for_lane(3);
+        for row in 0..16 {
+            let p = noise.pitch_of(row);
+            assert_eq!(noise.row_of(p), row);
+            assert_eq!(chip::pitch::noise_index_for(p) as u32, 15 - row);
+        }
+        let dpcm = RowKind::for_lane(4);
+        for row in 0..4 {
+            assert_eq!(dpcm.pitch_of(row) % 4, row as u8, "driver plays sample pitch % 4");
+            assert_eq!(dpcm.row_of(dpcm.pitch_of(row)), row);
+        }
+        let mut v = vec![n(1, 0, 240, noise.pitch_of(14))];
+        let mut next = 2;
+        assert_eq!(transpose(&mut v, &[1], 4, noise, &mut next), 1, "clamped at the top row");
+    }
+
+    #[test]
+    fn quantize_snaps_starts_and_resolves_collisions() {
+        let mut v = vec![n(1, 10, 100, 60), n(2, 230, 100, 62), n(3, 250, 100, 64)];
+        let mut next = 4;
+        quantize(&mut v, &[1, 2, 3], Grid::Sixteenth, &mut next);
+        // 10 -> 0; 230 and 250 both -> 240: the later winner (3) keeps it.
+        assert_eq!(spans(&v), [(1, 0, 100, 60), (3, 240, 340, 64)]);
+        assert!(is_mono(&v));
+    }
+
+    #[test]
+    fn triplet_grid() {
+        assert_eq!(Grid::EighthT.ticks(), 320);
+        assert_eq!(Grid::SixteenthT.round(170), 160);
+        assert_eq!(Grid::QuarterT.ticks() * 3, 2 * PPQ);
+    }
+
+    #[test]
+    fn clipboard_copy_paste_and_duplicate() {
+        let kind = RowKind::for_lane(0);
+        let mut v = vec![n(1, 480, 240, 60), n(2, 960, 240, 64)];
+        let mut next = 3;
+        let clip = copy(&v, &[1, 2]);
+        assert_eq!(spans(&clip), [(1, 0, 240, 60), (2, 480, 720, 64)]);
+        let ids = paste(&mut v, &mut next, &clip, 1200, kind);
+        assert_eq!(ids, [3, 4]);
+        assert_eq!(spans(&v)[2..], [(3, 1200, 1440, 60), (4, 1680, 1920, 64)]);
+        // Paste over existing notes: the pasted ones win.
+        let ids = paste(&mut v, &mut next, &clip, 960, kind);
+        assert!(is_mono(&v));
+        assert_eq!(v.iter().find(|n| n.id == ids[0]).map(|n| (n.start, n.pitch)), Some((960, 60)));
+        // Duplicate: right after the selection's end.
+        let mut w = vec![n(1, 0, 240, 60), n(2, 240, 240, 62)];
+        let mut next = 3;
+        let d = duplicate_right(&mut w, &mut next, &[1, 2], kind);
+        assert_eq!(spans(&w), [(1, 0, 240, 60), (2, 240, 480, 62), (3, 480, 720, 60), (4, 720, 960, 62)]);
+        assert_eq!(d, [3, 4]);
+    }
+
+    #[test]
+    fn paste_clamps_pitch_into_the_target_channel() {
+        let tri = RowKind::for_lane(2);
+        let mut v = Vec::new();
+        let mut next = 1;
+        let clip = [n(9, 0, 240, 127)];
+        paste(&mut v, &mut next, &clip, 0, tri);
+        let RowKind::Piano { play_hi, .. } = tri else { panic!() };
+        assert_eq!(v[0].pitch, play_hi);
+    }
+
+    #[test]
+    fn volume_is_optional_and_clamped() {
+        let mut v = vec![n(1, 0, 240, 60), n(2, 240, 240, 62)];
+        set_volume(&mut v, &[1, 2], Some(99));
+        assert_eq!((v[0].volume, v[1].volume), (Some(15), Some(15)));
+        set_volume(&mut v, &[2], None);
+        assert_eq!(v[1].volume, None);
+    }
+}

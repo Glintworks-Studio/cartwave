@@ -42,7 +42,7 @@ impl Rng {
 
 /// A busy 32-bar song on all 8 lanes: 25 clips per lane (200 clips).
 fn song(rng: &mut Rng, version: u64) -> SongSnapshot {
-    type Clip = (usize, u32, u32, Vec<(u32, u32, u8)>);
+    type Clip = (usize, u32, u32, Vec<engine::NoteInput>);
     let mut clips: Vec<Clip> = Vec::new();
     for lane in 0..8 {
         let mut t = 0;
@@ -59,7 +59,7 @@ fn song(rng: &mut Rng, version: u64) -> SongSnapshot {
                     7 => 33,
                     _ => 60,
                 };
-                notes.push((n, l.min(len - n), (base + rng.next() % 24) as u8));
+                notes.push((n, l.min(len - n), (base + rng.next() % 24) as u8, None));
                 n += l;
             }
             clips.push((lane, t, len, notes));

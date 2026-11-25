@@ -14,7 +14,8 @@ use vizia::vg;
 use super::clip::{self, ClipAnim, ClipPaint};
 use super::gfx::{self, Face};
 use super::visualizer::draw_light;
-use crate::state::{self, Clip, MockNote, MIN_CLIP_TICKS, TICKS_PER_BAR};
+use crate::notes::Note;
+use crate::state::{self, Clip, MIN_CLIP_TICKS, TICKS_PER_BAR};
 use crate::theme::tokens::*;
 use crate::Signals;
 
@@ -38,7 +39,7 @@ struct Origin {
     lane: usize,
     start: u32,
     len: u32,
-    notes: Vec<MockNote>,
+    notes: Vec<Note>,
 }
 
 #[derive(Clone, Debug)]
@@ -198,6 +199,7 @@ impl Arrangement {
                     .iter()
                     .filter_map(|sid| a.clip(*sid).cloned())
                     .collect();
+                // Duplicates are independent copies (no linked clips yet).
                 for mut c in originals {
                     let new_id = a.next_id;
                     a.next_id += 1;
@@ -205,8 +207,9 @@ impl Arrangement {
                         anchor = new_id;
                     }
                     c.id = new_id;
+                    c.rev = state::Rev::next();
                     new_sel.push(new_id);
-                    a.clips.push(c);
+                    a.push_clip(c);
                 }
                 a.selection = new_sel;
             });
@@ -324,7 +327,7 @@ impl Arrangement {
                                 .notes
                                 .iter()
                                 .filter(|n| n.start as i64 >= shift)
-                                .map(|n| MockNote {
+                                .map(|n| Note {
                                     start: (n.start as i64 - shift) as u32,
                                     ..*n
                                 })

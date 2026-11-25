@@ -14,6 +14,12 @@ pub enum Command {
     Seek(f64),
     Bpm(f64),
     LoopEnd(f64),
+    /// Loop start (ticks); playback wraps from the loop end to here.
+    LoopStart(f64),
+    /// Audition: play `pitch` (with an optional volume) on `lane` while the
+    /// transport is stopped, until the next `Preview` for that lane; `None`
+    /// releases it. Ignored while playing; `Play` clears it.
+    Preview { lane: u8, note: Option<(u8, Option<u8>)> },
     /// Bit per lane.
     Mute(u8),
     Solo(u8),

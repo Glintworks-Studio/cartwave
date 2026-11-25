@@ -22,7 +22,7 @@ pub use chip::filter::FilterMode;
 pub use command::Command;
 pub use host::EngineConfig;
 pub use shared::{device_error, PositionSnapshot, Shared};
-pub use song::{ClipInput, SongSnapshot};
+pub use song::{ClipInput, NoteInput, SongSnapshot};
 
 use host::CoreCell;
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -167,11 +167,8 @@ impl Engine {
         // Never extrapolate past what has been rendered (audio stalled).
         let rendered = self.shared.cb_frames_last.load(Ordering::Relaxed) as f64;
         frames = frames.min(rendered);
-        let mut t = p.ticks + frames * p.ticks_per_frame;
-        if p.loop_end > 0.0 {
-            t = t.rem_euclid(p.loop_end);
-        }
-        Some((t, true))
+        let t = p.ticks + frames * p.ticks_per_frame;
+        Some((chip::player::wrap_loop(t, p.loop_start, p.loop_end), true))
     }
 }
 

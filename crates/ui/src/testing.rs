@@ -255,8 +255,9 @@ impl Tests {
                     c.id = a.next_id;
                     a.next_id += 1;
                     c.start_ticks = r.range(0, 30) * TICKS_PER_BAR;
+                    c.rev = crate::state::Rev::next();
                     let id = c.id;
-                    a.clips.push(c);
+                    a.push_clip(c);
                     a.resolve_overlaps(&[id]);
                 }
             }

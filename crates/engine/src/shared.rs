@@ -16,6 +16,7 @@ pub struct PositionSnapshot {
     pub ticks: f64,
     /// Song ticks per output frame.
     pub ticks_per_frame: f64,
+    pub loop_start: f64,
     pub loop_end: f64,
     pub playing: bool,
     /// When the callback that rendered it started (ns since the engine epoch).
@@ -31,6 +32,7 @@ struct Seq {
     seq: AtomicU32,
     ticks: AtomicU64,
     tpf: AtomicU64,
+    loop_start: AtomicU64,
     loop_end: AtomicU64,
     playing: AtomicBool,
     callback_ns: AtomicU64,
@@ -121,6 +123,7 @@ impl Shared {
         fence(Ordering::Release);
         s.ticks.store(p.ticks.to_bits(), Ordering::Relaxed);
         s.tpf.store(p.ticks_per_frame.to_bits(), Ordering::Relaxed);
+        s.loop_start.store(p.loop_start.to_bits(), Ordering::Relaxed);
         s.loop_end.store(p.loop_end.to_bits(), Ordering::Relaxed);
         s.playing.store(p.playing, Ordering::Relaxed);
         s.callback_ns.store(p.callback_ns, Ordering::Relaxed);
@@ -141,6 +144,7 @@ impl Shared {
             let p = PositionSnapshot {
                 ticks: f64::from_bits(s.ticks.load(Ordering::Relaxed)),
                 ticks_per_frame: f64::from_bits(s.tpf.load(Ordering::Relaxed)),
+                loop_start: f64::from_bits(s.loop_start.load(Ordering::Relaxed)),
                 loop_end: f64::from_bits(s.loop_end.load(Ordering::Relaxed)),
                 playing: s.playing.load(Ordering::Relaxed),
                 callback_ns: s.callback_ns.load(Ordering::Relaxed),
@@ -224,6 +228,7 @@ mod tests {
         let p = PositionSnapshot {
             ticks: 123.5,
             ticks_per_frame: 0.05,
+            loop_start: 0.0,
             loop_end: 1000.0,
             playing: true,
             callback_ns: 42,

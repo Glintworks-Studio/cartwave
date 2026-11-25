@@ -5,7 +5,7 @@ use vizia::prelude::*;
 use vizia::vg;
 
 use super::gfx::{self, Face};
-use crate::state::MockNote;
+use crate::notes::Note;
 use crate::theme::tokens::*;
 
 /// Eased 0..1 animation values for one clip.
@@ -36,7 +36,7 @@ pub struct ClipPaint<'a> {
     pub rect: vg::Rect,
     pub color: Rgba,
     pub name: &'a str,
-    pub notes: &'a [MockNote],
+    pub notes: &'a [Note],
     pub len_ticks: u32,
     pub anim: ClipAnim,
     /// Physical px per tick, for placing notes.

@@ -13,13 +13,16 @@ pub struct SongSnapshot {
     pub sent_ns: u64,
 }
 
-/// One clip's worth of input: lane, start, length (ticks), and its notes as
-/// (start relative to the clip, length, pitch).
+/// One note of a [`ClipInput`]: (start relative to the clip, length, pitch,
+/// volume or `None` for the lane default).
+pub type NoteInput = (u32, u32, u8, Option<u8>);
+
+/// One clip's worth of input: lane, start, length (ticks), and its notes.
 pub struct ClipInput<'a> {
     pub lane: usize,
     pub start: u32,
     pub len: u32,
-    pub notes: &'a [(u32, u32, u8)],
+    pub notes: &'a [NoteInput],
 }
 
 impl SongSnapshot {
@@ -40,11 +43,11 @@ impl SongSnapshot {
                 continue;
             }
             let clip_end = c.start.saturating_add(c.len);
-            for &(s, l, pitch) in c.notes {
+            for &(s, l, pitch, volume) in c.notes {
                 let start = c.start.saturating_add(s);
                 let end = start.saturating_add(l).min(clip_end);
                 if start < end {
-                    lanes[c.lane].push(Note { start, end, pitch });
+                    lanes[c.lane].push(Note { start, end, pitch, volume });
                 }
             }
         }
@@ -84,8 +87,8 @@ mod tests {
 
     #[test]
     fn flatten_cut_and_trim() {
-        let a = [(0, 100, 60), (90, 50, 62), (500, 100, 64)];
-        let b = [(0, 30, 70)];
+        let a = [(0, 100, 60, None), (90, 50, 62, None), (500, 100, 64, Some(7))];
+        let b = [(0, 30, 70, None)];
         let s = SongSnapshot::build(
             [
                 ClipInput { lane: 0, start: 1000, len: 520, notes: &a },
