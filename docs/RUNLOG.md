@@ -180,3 +180,13 @@ Times are local (CST). Each decision taken without the user lists the options an
   0.027 ms (was 0.007), 10k 0.128 (0.124), 50k 0.593 (0.602): a fixed ~0.02 ms for the
   instrument bank. DPCM with all 4 user slots filling the ROM plus the 4 built-ins: every row
   sounds, no overlap in the ROM (`dpcm_all_four_user_slots_full_play_with_the_built_ins`).
+- **09:18 Matrix done** (build of 07:50, i.e. after A3 but before A4/B/C; HDMI endpoint, 480-frame
+  callbacks, 23 kHz pilot). **All 16 runs: 0 loopback dropouts, 0 starved, 0 late, 0 allocation
+  violations, 0 dropped commands.** A (600 s ×3): cost mean 0.21% / p99 0.6% / max 3.5–3.8%.
+  B (600 s ×3, 141k edits each): 0.08% / 0.3% / 1.3–3.1%, edit → frame tick ≤ 16.64 ms. C (120 s ×3,
+  60 stalls each): 0.21% / 0.6% / 0.9–3.3%. G: A/V −10.29 … −10.33 ms, sd 0.10. D (resize churn):
+  A/V sd 0.43–0.58 ms, **no crash** from the external SetWindowPos resizes DESIGN.md §8 reported.
+  H (heavy macros, 600 s): 0.35% / 1.3% / 3.7%. E skipped (one output device).
+  **Decision D16:** Part B changed the driver after this build, so A, B, C and G are re-run on the
+  final build before the merge decision (one buffer size each: WASAPI ignores the request, so the
+  three sizes are the same run).
