@@ -845,10 +845,8 @@ impl PianoState {
 /// Lane height in the arrangement: normal, and compact while the piano roll
 /// is open (so the piano roll gets the room; PIANOROLL.md §2).
 pub const LANE_H_NORMAL: f32 = 60.0;
-/// The smallest lane height the piano-roll split allows.
-pub const LANE_H_COMPACT: f32 = 36.0;
-/// Lane height when the piano roll first opens: clips keep a readable
-/// header and note preview, and the piano roll gets most of the window.
-pub const LANE_H_PIANO_DEFAULT: f32 = 48.0;
-/// Lane heights step by this much (the 4 px grid) while dragging the split.
-pub const LANE_H_STEP: f32 = 4.0;
+/// Lane viewport height (below the ruler) while the piano roll is open: the
+/// default (four lanes) and the smallest the split handle allows (one lane).
+/// Lanes keep their full height and scroll vertically.
+pub const PIANO_PANE_DEFAULT: f32 = 4.0 * LANE_H_NORMAL;
+pub const PIANO_PANE_MIN: f32 = LANE_H_NORMAL;

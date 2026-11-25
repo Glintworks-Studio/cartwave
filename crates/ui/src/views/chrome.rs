@@ -917,12 +917,13 @@ const GRIP_H: f32 = 4.0;
 /// The piano roll never gets shorter than this while dragging (logical px).
 const PIANO_MIN_H: f32 = 240.0;
 
-/// The draggable band between the arrangement and the piano roll. Dragging
-/// it sets the lane height in 4 px steps (all 8 lanes always fit, so clips
-/// are never cut off); double-click restores the default split.
+/// The draggable band between the arrangement and the piano roll, as in
+/// Ableton: it sets how much of the arrangement is visible (in 4 px steps).
+/// Lanes keep their height; when they don't all fit they scroll vertically.
+/// Double-click restores the default split.
 pub struct SplitHandle {
     s: Signals,
-    /// Drag in progress: (mouse y at press, lane height at press).
+    /// Drag in progress: (window y at press, viewport height at press).
     drag: Option<(f32, f32)>,
     hover: bool,
 }
@@ -941,14 +942,14 @@ impl SplitHandle {
         .cursor(CursorIcon::NsResize)
     }
 
-    /// The tallest lanes that still leave the piano roll its minimum height.
-    fn max_lane_h(cx: &EventContext) -> f32 {
-        use crate::state::{LANE_H_COMPACT, LANE_H_NORMAL, LANE_H_STEP};
+    /// The tallest lane viewport that still leaves the piano roll its
+    /// minimum height (never taller than all 8 lanes).
+    fn max_pane_h(cx: &EventContext) -> f32 {
         let s = cx.scale_factor();
         let win_h = cx.cache.get_bounds(Entity::root()).h / s;
-        let pane = win_h - TOPBAR_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H - RULER_HEIGHT;
-        let lane = (pane / 8.0 / LANE_H_STEP).floor() * LANE_H_STEP;
-        lane.clamp(LANE_H_COMPACT, LANE_H_NORMAL)
+        let room = win_h - TOPBAR_HEIGHT - RULER_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H;
+        let room = (room / SP_1).floor() * SP_1;
+        room.clamp(crate::state::PIANO_PANE_MIN, 8.0 * LANE_HEIGHT)
     }
 }
 
@@ -962,21 +963,18 @@ impl View for SplitHandle {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 // Window y: the handle itself moves while it's dragged.
                 let y = cx.mouse().cursor_y / cx.scale_factor();
-                self.drag = Some((y, self.s.lane_h.get_untracked()));
+                self.drag = Some((y, self.s.piano_pane_h.get_untracked()));
                 cx.capture();
                 cx.needs_redraw();
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) => {
                 if let Some((y0, h0)) = self.drag {
-                    use crate::state::{LANE_H_COMPACT, LANE_H_STEP};
-                    // The handle follows the bottom of the 8 lanes, so each
-                    // lane grows by an eighth of the drag.
                     let y = cx.mouse().cursor_y / cx.scale_factor();
-                    let h = ((h0 + (y - y0) / 8.0) / LANE_H_STEP).round() * LANE_H_STEP;
-                    let h = h.clamp(LANE_H_COMPACT, Self::max_lane_h(cx));
-                    if h != self.s.lane_h.get_untracked() {
-                        cx.emit(AppEvent::SetPianoLaneHeight(h));
+                    let h = ((h0 + y - y0) / SP_1).round() * SP_1;
+                    let h = h.clamp(crate::state::PIANO_PANE_MIN, Self::max_pane_h(cx));
+                    if h != self.s.piano_pane_h.get_untracked() {
+                        cx.emit(AppEvent::SetPianoPaneHeight(h));
                     }
                 }
             }
@@ -986,8 +984,8 @@ impl View for SplitHandle {
                 cx.needs_redraw();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                let h = crate::state::LANE_H_PIANO_DEFAULT.min(Self::max_lane_h(cx));
-                cx.emit(AppEvent::SetPianoLaneHeight(h));
+                let h = crate::state::PIANO_PANE_DEFAULT.min(Self::max_pane_h(cx));
+                cx.emit(AppEvent::SetPianoPaneHeight(h));
                 meta.consume();
             }
             WindowEvent::MouseEnter => {
@@ -1080,6 +1078,20 @@ impl TrackRow {
 impl View for TrackRow {
     fn element(&self) -> Option<&'static str> {
         Some("track-row")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| {
+            // The header column scrolls with the lanes.
+            if let WindowEvent::MouseScroll(_, sy) = we {
+                if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
+                    cx.emit(AppEvent::ScrollLanes(
+                        -*sy * super::arrangement::LANE_SCROLL_PER_NOTCH,
+                    ));
+                    meta.consume();
+                }
+            }
+        });
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {

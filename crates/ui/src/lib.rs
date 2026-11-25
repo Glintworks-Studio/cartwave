@@ -58,8 +58,14 @@ pub struct Signals {
     pub piano: Signal<PianoState>,
     /// The bottom panel shows the piano roll (else the device panel).
     pub piano_open: Signal<bool>,
-    /// Arrangement lane height (compact while the piano roll is open).
+    /// Arrangement lane height.
     pub lane_h: Signal<f32>,
+    /// Lane viewport height while the piano roll is open (split handle).
+    pub piano_pane_h: Signal<f32>,
+    /// Vertical lane scroll (logical px) and its current maximum (0 when all
+    /// lanes fit).
+    pub lane_scroll: Signal<f32>,
+    pub lane_scroll_max: Signal<f32>,
     /// The project file path field.
     pub file_path: Signal<String>,
     /// Short status line (saved, errors); clears itself.
@@ -138,8 +144,6 @@ pub struct AppState {
     clip_looping: bool,
     /// When the CPU / kHz pills were last refreshed.
     last_load: Option<Instant>,
-    /// Lane height while the piano roll is open (set by the split handle).
-    piano_lane_h: f32,
 }
 
 pub enum AppEvent {
@@ -155,8 +159,10 @@ pub enum AppEvent {
     CycleSnap,
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
-    /// The split handle above the piano roll: lane height while it's open.
-    SetPianoLaneHeight(f32),
+    /// The split handle above the piano roll: lane viewport height.
+    SetPianoPaneHeight(f32),
+    /// Scroll the lanes vertically by this many logical px.
+    ScrollLanes(f32),
     ToggleStats,
     ToggleStress,
     CycleFrameCap,
@@ -275,11 +281,14 @@ impl Model for AppState {
                 self.last_audio_stats = None;
             }
             AppEvent::CycleSnap => self.s.arrangement.update(|a| a.snap = a.snap.next()),
-            AppEvent::SetPianoLaneHeight(h) => {
-                self.piano_lane_h = h.clamp(LANE_H_COMPACT, LANE_H_NORMAL);
-                if self.s.piano_open.get_untracked() {
-                    self.s.lane_h.set_if_changed(self.piano_lane_h);
-                }
+            AppEvent::SetPianoPaneHeight(h) => {
+                self.s.piano_pane_h.set_if_changed(*h);
+                self.clamp_lane_scroll();
+            }
+            AppEvent::ScrollLanes(dy) => {
+                let v = self.s.lane_scroll.get_untracked() + dy;
+                self.s.lane_scroll.set_if_changed(v);
+                self.clamp_lane_scroll();
             }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
@@ -909,6 +918,9 @@ pub fn build_ui(cx: &mut Context) {
         piano: Signal::new(PianoState::default()),
         piano_open: Signal::new(false),
         lane_h: Signal::new(LANE_H_NORMAL),
+        piano_pane_h: Signal::new(PIANO_PANE_DEFAULT),
+        lane_scroll: Signal::new(0.0),
+        lane_scroll_max: Signal::new(0.0),
         file_path: Signal::new(String::new()),
         status: Signal::new(String::new()),
         recovery_offer: Signal::new(false),
@@ -966,7 +978,6 @@ pub fn build_ui(cx: &mut Context) {
         loop_end_saved: (32 * TICKS_PER_BAR) as f64,
         clip_looping: false,
         last_load: None,
-        piano_lane_h: LANE_H_PIANO_DEFAULT,
     };
     if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
         state.s.recovery_offer.set(true);
@@ -991,9 +1002,9 @@ pub fn build_ui(cx: &mut Context) {
         .class("main")
         .height(Memo::new(move |_| {
             if s.piano_open.get() {
-                // Piano roll open: the arrangement takes exactly its lanes (the
-                // split handle sets their height) and the piano roll the rest.
-                Pixels(theme::tokens::RULER_HEIGHT + 8.0 * s.lane_h.get())
+                // Piano roll open: the arrangement gets the height the split
+                // handle sets (its lanes scroll) and the piano roll the rest.
+                Pixels(theme::tokens::RULER_HEIGHT + s.piano_pane_h.get())
             } else {
                 Stretch(1.0)
             }
@@ -1538,8 +1549,19 @@ impl AppState {
             const ROWS_SHOWN_GUESS: f32 = 22.0;
             p.top = ((kind.rows() - 1 - mid) as f32 - ROWS_SHOWN_GUESS / 2.0).max(0.0);
         });
-        self.s.lane_h.set(self.piano_lane_h);
         self.s.piano_open.set(true);
+        // Bring the clip's lane into view if it's scrolled out.
+        if let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) {
+            let (top, bottom) = (lane as f32 * LANE_H_NORMAL, (lane + 1) as f32 * LANE_H_NORMAL);
+            let pane = self.s.piano_pane_h.get_untracked();
+            let v = self.s.lane_scroll.get_untracked();
+            if top < v {
+                self.s.lane_scroll.set(top);
+            } else if bottom > v + pane {
+                self.s.lane_scroll.set(bottom - pane);
+            }
+        }
+        self.clamp_lane_scroll();
         self.sync_loop();
     }
 
@@ -1555,7 +1577,21 @@ impl AppState {
         });
         self.sync_loop();
         self.s.piano_open.set(false);
-        self.s.lane_h.set(LANE_H_NORMAL);
+        self.clamp_lane_scroll();
+    }
+
+    /// Keeps the lane scroll inside what the lane viewport allows: all lanes
+    /// fit (no scroll) unless the piano roll's split makes the viewport short.
+    fn clamp_lane_scroll(&mut self) {
+        let content = 8.0 * LANE_H_NORMAL;
+        let max = if self.s.piano_open.get_untracked() {
+            (content - self.s.piano_pane_h.get_untracked()).max(0.0)
+        } else {
+            0.0
+        };
+        self.s.lane_scroll_max.set_if_changed(max);
+        let v = self.s.lane_scroll.get_untracked().clamp(0.0, max);
+        self.s.lane_scroll.set_if_changed(v);
     }
 
     fn sync_piano_lane_volume(&mut self) {

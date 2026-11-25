@@ -96,6 +96,7 @@ impl Arrangement {
         .bind(s.transport, |mut h| h.needs_redraw())
         .bind(s.lane_h, |mut h| h.needs_redraw())
         .bind(s.loop_on, |mut h| h.needs_redraw())
+        .bind(s.lane_scroll, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -105,13 +106,15 @@ impl Arrangement {
         })
     }
 
-    /// Logical mouse position relative to the view.
-    fn local_mouse(cx: &EventContext) -> (f32, f32) {
+    /// Logical mouse position in lane space: relative to the view, plus the
+    /// vertical lane scroll (lanes scroll when the piano roll leaves too little
+    /// room for all of them).
+    fn local_mouse(&self, cx: &EventContext) -> (f32, f32) {
         let b = cx.bounds();
         let s = cx.scale_factor();
         (
             (cx.mouse().cursor_x - b.x) / s,
-            (cx.mouse().cursor_y - b.y) / s,
+            (cx.mouse().cursor_y - b.y) / s + self.s.lane_scroll.get_untracked(),
         )
     }
 
@@ -153,7 +156,7 @@ impl Arrangement {
     }
 
     fn on_press(&mut self, cx: &mut EventContext) {
-        let (mx, my) = Self::local_mouse(cx);
+        let (mx, my) = self.local_mouse(cx);
         let mods = *cx.modifiers();
         let arr = self.s.arrangement;
         let lane_h = self.s.lane_h.get_untracked();
@@ -253,7 +256,7 @@ impl Arrangement {
     }
 
     fn on_drag(&mut self, cx: &mut EventContext) {
-        let (mx, my) = Self::local_mouse(cx);
+        let (mx, my) = self.local_mouse(cx);
         let no_snap = crate::input::bypass_snap(cx.modifiers());
         let Some(drag) = self.drag.as_mut() else {
             return;
@@ -364,7 +367,7 @@ impl Arrangement {
     }
 
     fn update_hover(&mut self, cx: &mut EventContext) {
-        let (mx, my) = Self::local_mouse(cx);
+        let (mx, my) = self.local_mouse(cx);
         let lane_h = self.s.lane_h.get_untracked();
         let hit = self
             .s
@@ -394,12 +397,13 @@ impl Arrangement {
         let view = a.view;
         let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
         let lane_h = self.s.lane_h.get_untracked() * s;
+        let lanes_top = lanes_bottom - a.lanes.len() as f32 * lane_h;
         // The canvas: one gradient, lit from the top and falling to black,
         // as in the prototype. Lanes are only hairlines on it.
         canvas.draw_rect(rect, &gfx::vgrad(rect, CANVAS_TOP, CANVAS_BOTTOM));
         let lane_line = gfx::fill(Rgba::white(0.035));
         for i in 1..=a.lanes.len() {
-            let y = (rect.top + i as f32 * lane_h).round();
+            let y = (lanes_top + i as f32 * lane_h).round();
             canvas.draw_rect(vg::Rect::from_xywh(rect.left, y - s, rect.width(), s), &lane_line);
         }
 
@@ -455,7 +459,7 @@ impl View for Arrangement {
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                 // On a clip: open it in the piano roll. On empty lane space: a
                 // new 1-bar clip at the snapped position (it wins overlaps).
-                let (mx, my) = Self::local_mouse(cx);
+                let (mx, my) = self.local_mouse(cx);
                 let lane_h = self.s.lane_h.get_untracked();
                 let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
                 match hit {
@@ -500,9 +504,17 @@ impl View for Arrangement {
                 self.set_cursor(cx, CursorIcon::Default);
             }
             WindowEvent::MouseScroll(sx, sy) => {
-                let (mx, _) = Self::local_mouse(cx);
+                let (mx, _) = self.local_mouse(cx);
                 let zoom = crate::input::zoom_wheel(cx.modifiers());
                 let (sx, sy) = (*sx, *sy);
+                // Lanes overflowing (piano roll open): the wheel scrolls them
+                // vertically, as in Ableton; Shift-wheel scrolls in time.
+                let overflow = self.s.lane_scroll_max.get_untracked() > 0.0;
+                if overflow && !zoom && !cx.modifiers().shift() && sy != 0.0 {
+                    cx.emit(crate::AppEvent::ScrollLanes(-sy * LANE_SCROLL_PER_NOTCH));
+                    meta.consume();
+                    return;
+                }
                 self.s.arrangement.update(|a| {
                     if zoom {
                         a.view.zoom_at(mx as f64, 1.15f64.powf(sy as f64));
@@ -573,7 +585,9 @@ impl View for Arrangement {
             let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
             let lane_h = self.s.lane_h.get_untracked() * s;
 
-            let lanes_bottom = rect.top + a.lanes.len() as f32 * lane_h;
+            // Lanes scroll vertically when they don't all fit (piano roll open).
+            let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
+            let lanes_bottom = lanes_top + a.lanes.len() as f32 * lane_h;
             let loop_end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
 
             // Animation targets; a clip is "live" (drawn every frame on top of
@@ -607,7 +621,7 @@ impl View for Arrangement {
                     if x1 < rect.left - 20.0 * s || x0 > rect.right + 20.0 * s {
                         return None;
                     }
-                    let y = rect.top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
+                    let y = lanes_top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
                     // Snap edges to device pixels for crisp borders.
                     // A 1 px gutter on the right keeps abutting clips apart.
                     let r = vg::Rect::from_ltrb(
@@ -646,6 +660,7 @@ impl View for Arrangement {
                 }
                 view.px_per_tick.to_bits().hash(&mut h);
                 view.scroll_ticks.to_bits().hash(&mut h);
+                lanes_top.to_bits().hash(&mut h);
                 loop_end.to_bits().hash(&mut h);
                 self.s.loop_on.get_untracked().hash(&mut h);
                 for (live, p) in &paints {
@@ -711,7 +726,7 @@ impl View for Arrangement {
                 for o in &d.origins {
                     let x0 = x_of(o.start as f64);
                     let x1 = x_of((o.start + o.len) as f64);
-                    let y = rect.top + o.lane as f32 * lane_h + CLIP_V_INSET * s;
+                    let y = lanes_top + o.lane as f32 * lane_h + CLIP_V_INSET * s;
                     let r = vg::Rect::from_ltrb(
                         x0.round(),
                         y.round(),
@@ -781,6 +796,22 @@ impl View for Arrangement {
                     &gfx::fill(ink),
                 );
             }
+
+            // Vertical scroll indicator while the lanes overflow.
+            let content_h = lanes_bottom - lanes_top;
+            if content_h > rect.height() + 0.5 {
+                let view_h = rect.height();
+                let thumb_h = (view_h * view_h / content_h).max(24.0 * s);
+                let t = (rect.top - lanes_top) / (content_h - view_h);
+                let ty = rect.top + t * (view_h - thumb_h);
+                let thumb = gfx::snap(vg::Rect::from_xywh(
+                    rect.right - SCROLLBAR_INSET * s - SCROLLBAR_W * s,
+                    ty,
+                    SCROLLBAR_W * s,
+                    thumb_h,
+                ));
+                canvas.draw_rrect(gfx::rrect(thumb, thumb.width() * 0.5), &gfx::fill(Rgba::white(0.2)));
+            }
         });
 
         // Top edge inner shadow under the ruler for depth.
@@ -801,6 +832,11 @@ impl View for Arrangement {
     }
 }
 
+/// Lane scroll per wheel notch, scroll indicator width and inset (logical px).
+pub const LANE_SCROLL_PER_NOTCH: f32 = 60.0;
+const SCROLLBAR_W: f32 = 4.0;
+const SCROLLBAR_INSET: f32 = 4.0;
+
 // ───────────────────────────── Track headers ─────────────────────────────
 
 /// Builds the track header column: the empty band cell beside the ruler,
@@ -808,10 +844,20 @@ impl View for Arrangement {
 pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
     VStack::new(cx, |cx| {
         Element::new(cx).class("band-cell");
-        let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
-        for i in 0..lanes {
-            TrackRow::new(cx, s, i).height(s.lane_h.map(|h| Pixels(*h)));
-        }
+        // The rows scroll with the lanes; the viewport clips them.
+        VStack::new(cx, |cx| {
+            VStack::new(cx, |cx| {
+                let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
+                for i in 0..lanes {
+                    TrackRow::new(cx, s, i).height(s.lane_h.map(|h| Pixels(*h)));
+                }
+            })
+            .height(Auto)
+            .position_type(PositionType::Absolute)
+            .top(s.lane_scroll.map(|v| Pixels(-*v)));
+        })
+        .height(Stretch(1.0))
+        .overflow(Overflow::Hidden);
     })
     .class("track-column")
 }
