@@ -93,6 +93,8 @@ pub struct Arrangement {
     sb_hover: Option<Axis>,
     /// A time-selection drag in empty lane space.
     time_drag: Option<TimeDrag>,
+    /// The lane under the mouse (for the dimmed-lane hint, F-04).
+    hover_lane: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -166,6 +168,7 @@ impl Arrangement {
             sb_drag: None,
             sb_hover: None,
             time_drag: None,
+            hover_lane: None,
         }
         .build(cx, |_| {})
         .navigable(true)
@@ -179,6 +182,7 @@ impl Arrangement {
         .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
         .bind(s.time_sel, |mut h| h.needs_redraw())
         .bind(s.drag_preset, |mut h| h.needs_redraw())
+        .bind(s.chip, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -243,6 +247,16 @@ impl Arrangement {
         let arr = self.s.arrangement;
         let lane_h = self.s.lane_h.get_untracked();
         let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+
+        // F-04: a dimmed VRC6 lane takes no edits (its hover says why).
+        let lane = (my / lane_h).floor().max(0.0) as usize;
+        if crate::state::lane_off(self.s.chip.get_untracked(), lane) {
+            if !mods.shift() {
+                arr.update(|a| a.selection.clear());
+            }
+            self.s.time_sel.set(None);
+            return;
+        }
 
         let Some((id, zone)) = hit else {
             if !mods.shift() {
@@ -408,7 +422,9 @@ impl Arrangement {
             let Some(anchor) = drag.origins.iter().find(|o| o.id == drag.anchor) else {
                 return;
             };
-            let lanes = a.lanes.len() as i64;
+            // Clips can't be moved onto a dimmed VRC6 lane (F-04).
+            let open_lanes = (0..a.lanes.len()).take_while(|&l| !crate::state::lane_off(self.s.chip.get_untracked(), l)).count();
+            let lanes = open_lanes.max(1) as i64;
 
             match drag.mode {
                 DragMode::Move => {
@@ -428,7 +444,7 @@ impl Arrangement {
                         .fold((i64::MAX, i64::MIN), |(lo, hi), o| {
                             (lo.min(o.lane as i64), hi.max(o.lane as i64))
                         });
-                    dlane = dlane.clamp(-lo, lanes - 1 - hi);
+                    dlane = dlane.clamp(-lo, (lanes - 1 - hi).max(-lo));
                     for o in &drag.origins {
                         if let Some(c) = a.clip_mut(o.id) {
                             c.start_ticks = (o.start as i64 + delta) as u32;
@@ -505,6 +521,14 @@ impl Arrangement {
     fn update_hover(&mut self, cx: &mut EventContext) {
         let (mx, my) = self.local_mouse(cx);
         let lane_h = self.s.lane_h.get_untracked();
+        let lane = (my >= 0.0).then(|| (my / lane_h).floor() as usize);
+        if lane != self.hover_lane {
+            let off = |l: Option<usize>| l.is_some_and(|l| crate::state::lane_off(self.s.chip.get_untracked(), l));
+            if off(lane) || off(self.hover_lane) {
+                cx.needs_redraw();
+            }
+            self.hover_lane = lane;
+        }
         let hit = self
             .s
             .arrangement
@@ -526,6 +550,9 @@ impl Arrangement {
         use crate::state::{ContextMenuSpec, MenuAction};
         let (mx, my) = self.local_mouse(cx);
         let lane_h = self.s.lane_h.get_untracked();
+        if crate::state::lane_off(self.s.chip.get_untracked(), (my / lane_h).floor().max(0.0) as usize) {
+            return;
+        }
         let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
         let items = if let Some((id, _)) = hit {
             self.s.arrangement.update(|a| {
@@ -801,7 +828,9 @@ impl View for Arrangement {
                 let (mx, my) = self.local_mouse(cx);
                 let lane_h = self.s.lane_h.get_untracked();
                 let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+                let off = crate::state::lane_off(self.s.chip.get_untracked(), (my / lane_h).floor().max(0.0) as usize);
                 match hit {
+                    _ if off => {}
                     Some((id, _)) => cx.emit(crate::AppEvent::OpenPiano(id)),
                     None => {
                         let lane = (my / lane_h).floor();
@@ -910,9 +939,10 @@ impl View for Arrangement {
                         }
                     }
                     Some(Action::SelectAll) => {
-                        self.s
-                            .arrangement
-                            .update(|a| a.selection = a.clips.iter().map(|c| c.id).collect());
+                        let chip = self.s.chip.get_untracked();
+                        self.s.arrangement.update(|a| {
+                            a.selection = a.clips.iter().filter(|c| !crate::state::lane_off(chip, c.lane)).map(|c| c.id).collect()
+                        });
                         meta.consume();
                     }
                     _ => {}
@@ -1244,6 +1274,26 @@ impl View for Arrangement {
             }
         }
 
+        // F-04: the VRC6 lanes under the 2A03 profile are dimmed; the lane
+        // under the mouse says why.
+        let chip = self.s.chip.get_untracked();
+        if crate::state::lane_off(chip, chip::driver::LANE_V1) {
+            let lane_h = self.s.lane_h.get_untracked() * s;
+            let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
+            let lanes = self.s.arrangement.with_untracked(|a| a.lanes.len());
+            let f = gfx::font(Face::Medium, OFF_HINT_PX * s);
+            for lane in (0..lanes).filter(|&l| crate::state::lane_off(chip, l)) {
+                let band = vg::Rect::from_xywh(rect.left, lanes_top + lane as f32 * lane_h, rect.width(), lane_h);
+                canvas.draw_rect(band, &gfx::fill(Rgba::black(OFF_DIM)));
+                if self.hover_lane == Some(lane) {
+                    let tw = gfx::text_width(&f, crate::state::VRC6_OFF_HINT);
+                    let x = (rect.left + (rect.width() - tw) * 0.5).max(rect.left + 12.0 * s).round();
+                    let base = gfx::baseline_for_center(&f, band.center_y()).round();
+                    gfx::draw_text(canvas, crate::state::VRC6_OFF_HINT, x, base, &f, TEXT_HI);
+                }
+            }
+        }
+
         // Top edge inner shadow under the ruler for depth.
         canvas.draw_rect(
             vg::Rect::from_xywh(rect.left, rect.top, rect.width(), 8.0 * s),
@@ -1264,6 +1314,9 @@ impl View for Arrangement {
 
 /// Lane scroll per wheel notch (logical px).
 pub const LANE_SCROLL_PER_NOTCH: f32 = 60.0;
+/// A dimmed VRC6 lane (F-04): the black veil over it and its hint's size.
+pub const OFF_DIM: f32 = 0.62;
+const OFF_HINT_PX: f32 = 12.0;
 
 // ───────────────────────────── Track headers ─────────────────────────────
 

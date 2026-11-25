@@ -1150,12 +1150,13 @@ const ROW_TEXT_X: f32 = LANE_STRIP_W + SP_2;
 pub struct TrackRow {
     s: Signals,
     lane: usize,
+    hover: bool,
 }
 
 impl TrackRow {
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
         let seen = RefCell::new((false, String::new()));
-        Self { s, lane }
+        Self { s, lane, hover: false }
         .build(cx, move |cx| {
             Key::new(cx, s, "M", KeyAction::Mute(lane));
             Key::new(cx, s, "S", KeyAction::Solo(lane));
@@ -1164,6 +1165,7 @@ impl TrackRow {
         .bind(s.meters, |mut h| h.needs_redraw())
         .bind(s.lane_h, |mut h| h.needs_redraw())
         .bind(s.drag_preset, |mut h| h.needs_redraw())
+        .bind(s.chip, |mut h| h.needs_redraw())
         .bind(s.arrangement, move |mut h| {
             let now = s.arrangement.with_untracked(|a| {
                 (
@@ -1186,6 +1188,17 @@ impl View for TrackRow {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| {
+            match we {
+                WindowEvent::MouseEnter => {
+                    self.hover = true;
+                    cx.needs_redraw();
+                }
+                WindowEvent::MouseLeave => {
+                    self.hover = false;
+                    cx.needs_redraw();
+                }
+                _ => {}
+            }
             // The header column scrolls with the lanes.
             if let WindowEvent::MouseScroll(_, sy) = we {
                 if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
@@ -1324,6 +1337,20 @@ impl View for TrackRow {
             let max_w = r.right - INST_RIGHT_RESERVE * s - ix;
             let text = if kit { format!("{label}  (kit)") } else { label };
             gfx::draw_text_clipped(canvas, &text, ix.round(), ib.round(), max_w, &fi, if selected { ACCENT } else { TEXT_LO });
+        }
+
+        // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
+        if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {
+            canvas.draw_rect(r, &gfx::fill(Rgba::black(super::arrangement::OFF_DIM)));
+            let fh = gfx::font(Face::Medium, INST_PX * s);
+            let text = if self.hover { "Off: turn on VRC6 in File > Project Settings…" } else { "Off in the 2A03 profile" };
+            let hb = if compact { r.bottom - 6.0 * s } else { gfx::baseline_for_center(&fh, r.top + (BADGE_Y + BADGE_H * 0.5) * s) };
+            let hx = r.left + ROW_TEXT_X * s + if compact { 0.0 } else { BADGE_W * s + 8.0 * s };
+            let max_w = r.right - INST_RIGHT_RESERVE * s - hx;
+            // An opaque band under the text so the instrument name below it doesn't show through.
+            let band = vg::Rect::from_ltrb(hx - 2.0 * s, hb - 11.0 * s, hx + max_w, hb + 4.0 * s);
+            canvas.draw_rect(band, &gfx::fill(BAND_BOTTOM));
+            gfx::draw_text_clipped(canvas, text, hx.round(), hb.round(), max_w, &fh, TEXT_HI);
         }
 
         // Dragging a preset from the browser: dim the lanes it can't play

@@ -403,3 +403,120 @@ label {
     padding-top: 8px;
     shadow: 0px 1px 0px 0px #1A1A1A inset;
 }
+
+/* ───────────── Modal panels (Settings, Project Settings, About, shortcuts) ─────────────
+   In-app panels over a dimming backdrop (UX.md §2, FEASIBILITY.md §3). The
+   panel is the export dialog's box: #141414, a #323232 hairline, a soft
+   layered shadow. Every distance is on the 4 px grid. */
+
+modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.55);
+}
+
+.modal {
+    height: auto;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 12px;
+    padding-bottom: 16px;
+    gap: 8px;
+    corner-radius: 8px;
+    background-color: #141414;
+    border-width: 1px;
+    border-color: #323232;
+    shadow: 0px 8px 24px 0px rgba(0, 0, 0, 0.6), 0px 1px 0px 0px rgba(153, 153, 153, 0.12) inset;
+}
+
+.modal-head {
+    height: 28px;
+    alignment: left;
+    gap: 8px;
+}
+
+.modal-tabs {
+    height: auto;
+    gap: 4px;
+}
+
+.modal-rule {
+    height: 1px;
+    width: 1s;
+    background-color: #232323;
+}
+
+.modal-row {
+    height: auto;
+    gap: 12px;
+    alignment: top-left;
+}
+
+.modal-label {
+    width: 160px;
+    height: 24px;
+    font-size: 11;
+    color: var(--text-mid);
+    alignment: left;
+    text-wrap: true;
+}
+
+.modal-choices {
+    width: 1s;
+    height: auto;
+    gap: 4px;
+    layout-type: row;
+    wrap: wrap;
+    vertical-gap: 4px;
+}
+
+.modal-list {
+    width: auto;
+    height: auto;
+    gap: 4px;
+}
+
+.modal-note {
+    width: 1s;
+    height: auto;
+    font-size: 11;
+    color: var(--text-lo);
+    text-wrap: true;
+    padding-left: 172px;
+}
+
+.modal-title {
+    width: 1s;
+    height: auto;
+    font-size: 13;
+    font-weight: 600;
+    color: var(--text-hi);
+}
+
+.sheet {
+    width: 1s;
+    gap: 0px;
+    padding-right: 12px;
+}
+
+.sheet-group {
+    padding-top: 12px;
+    padding-bottom: 4px;
+}
+
+.sheet-row {
+    height: 24px;
+    gap: 12px;
+    alignment: left;
+}
+
+.sheet-name {
+    width: 1s;
+    font-size: 11;
+    color: var(--text-hi);
+}
+
+.sheet-keys {
+    width: auto;
+    font-family: "JetBrains Mono";
+    font-size: 11;
+    color: var(--text-mid);
+}

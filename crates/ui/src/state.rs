@@ -767,6 +767,15 @@ pub enum SoundChip {
     WithVrc6,
 }
 
+/// F-04: under the 2A03 profile the VRC6 lanes are silent, so they are drawn
+/// dimmed and can't be edited ("nothing pretends to work").
+pub fn lane_off(chip: SoundChip, lane: usize) -> bool {
+    chip == SoundChip::Base2A03 && lane >= chip::driver::LANE_V1
+}
+
+/// What a dimmed VRC6 lane says on hover.
+pub const VRC6_OFF_HINT: &str = "VRC6 is off in this project's hardware profile. Turn it on in File > Project Settings…";
+
 impl SoundChip {
     pub fn label(self) -> &'static str {
         match self {

@@ -280,14 +280,24 @@ fn project_settings(cx: &mut Context, s: Signals) {
     Binding::new(cx, s.filter_state, move |cx| {
         let (mode, auto) = s.filter_state.get();
         row(cx, "Output filter", |cx| {
-            let follows = format!("Follow the profile ({})", FilterMode::default_for(s.chip.get_untracked() == SoundChip::WithVrc6).label());
+            let follows = format!("Follow the profile ({})", filter_name(FilterMode::default_for(s.chip.get_untracked() == SoundChip::WithVrc6)));
             choice(cx, follows, auto, true, || AppEvent::SetFilter(FilterPick(None)));
             for m in FilterMode::ALL {
-                choice(cx, m.label(), !auto && m == mode, true, move || AppEvent::SetFilter(FilterPick(Some(m))));
+                choice(cx, filter_name(m), !auto && m == mode, true, move || AppEvent::SetFilter(FilterPick(Some(m))));
             }
         });
     });
     note(cx, "Saved in the project. Tempo lives in the top bar.");
+}
+
+/// The output filters as Project Settings names them.
+fn filter_name(m: FilterMode) -> &'static str {
+    match m {
+        FilterMode::Off => "Off (raw)",
+        FilterMode::Nes => "NES",
+        FilterMode::NesWith440 => "NES + 440 Hz",
+        FilterMode::Famicom => "Famicom",
+    }
 }
 
 /// The licences and credits shown in About (from docs/ASSETS.md).

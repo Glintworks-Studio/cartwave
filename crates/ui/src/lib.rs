@@ -944,6 +944,9 @@ impl AppState {
     /// Loads preset `p` on a lane, with its channel controls; one undo step.
     fn assign_preset(&mut self, lane: Option<usize>, p: usize) {
         let Some(pr) = self.preset(p) else { return };
+        if lane.is_some_and(|l| state::lane_off(self.s.chip.get_untracked(), l)) {
+            return self.set_status(state::VRC6_OFF_HINT.into());
+        }
         let Some(lane) = self.lane_for(p, lane) else {
             self.set_status(format!("{} can't play on that channel.", pr.name));
             return;
@@ -960,6 +963,9 @@ impl AppState {
     fn assign_preset_to_clip(&mut self, clip: u32, p: usize) {
         let Some(pr) = self.preset(p) else { return };
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(clip).map(|c| c.lane)) else { return };
+        if state::lane_off(self.s.chip.get_untracked(), lane) {
+            return self.set_status(state::VRC6_OFF_HINT.into());
+        }
         if self.lane_for(p, Some(lane)) != Some(lane) {
             self.set_status(format!("{} can't play on that channel.", pr.name));
             return;
@@ -1114,6 +1120,13 @@ impl AppState {
 
     fn set_chip(&mut self, chip: SoundChip) {
         self.s.chip.set(chip);
+        // Clips on lanes that just went silent leave the selection (F-04).
+        if chip == SoundChip::Base2A03 {
+            self.s.arrangement.update(|a| {
+                let off: Vec<u32> = a.clips.iter().filter(|c| state::lane_off(chip, c.lane)).map(|c| c.id).collect();
+                a.selection.retain(|id| !off.contains(id));
+            });
+        }
         let on = chip == SoundChip::WithVrc6;
         self.send(Command::Vrc6(on));
         if !self.filter_manual {
@@ -2372,6 +2385,10 @@ impl AppState {
     }
 
     fn open_piano(&mut self, id: u32) {
+        let chip = self.s.chip.get_untracked();
+        if self.s.arrangement.with_untracked(|a| a.clip(id).is_some_and(|c| state::lane_off(chip, c.lane))) {
+            return self.set_status(state::VRC6_OFF_HINT.into());
+        }
         let Some((lane, notes_mid)) = self.s.arrangement.with_untracked(|a| {
             a.clip(id).map(|c| {
                 let kind = RowKind::for_lane(c.lane);
@@ -2492,8 +2509,10 @@ impl AppState {
             }
             MenuAction::InsertClip => {
                 let Some(ts) = sel else { return };
+                let chip = self.s.chip.get_untracked();
                 self.s.arrangement.update(|a| {
                     let ids: Vec<u32> = (ts.lane0..=ts.lane1.min(a.lanes.len() - 1))
+                        .filter(|&lane| !state::lane_off(chip, lane))
                         .map(|lane| a.add_clip(lane, ts.start, ts.end - ts.start))
                         .collect();
                     a.resolve_overlaps(&ids);
@@ -3030,7 +3049,10 @@ impl AppState {
             // Keys: the focused editor handles these itself.
             Action::Delete | Action::SelectAll | Action::OpenClip if !menu => return false,
             Action::Delete => self.run_menu_action(MenuAction::Delete),
-            Action::SelectAll => self.s.arrangement.update(|a| a.selection = a.clips.iter().map(|c| c.id).collect()),
+            Action::SelectAll => {
+                let chip = self.s.chip.get_untracked();
+                self.s.arrangement.update(|a| a.selection = a.clips.iter().filter(|c| !state::lane_off(chip, c.lane)).map(|c| c.id).collect());
+            }
             Action::OpenClip => return false,
             Action::Settings => self.open_modal(Modal::Settings(SettingsTab::Audio)),
             Action::InsertClip => self.run_menu_action(MenuAction::InsertClip),

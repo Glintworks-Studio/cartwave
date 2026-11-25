@@ -60,14 +60,25 @@ impl Doc {
     }
 
     /// Equal content. Shared clips compare by pointer, the rest by value.
+    /// The clips' order is drawing order (a click raises a clip), not content:
+    /// a raised clip is the same document, so it's neither an undo step nor
+    /// an unsaved change.
     pub fn same_as(&self, o: &Doc) -> bool {
+        let same = |a: &Arc<Clip>, b: &Arc<Clip>| Arc::ptr_eq(a, b) || a == b;
         self.next_id == o.next_id
             && self.bpm == o.bpm
             && self.params == o.params
             && self.instruments == o.instruments
             && self.samples == o.samples
             && self.clips.len() == o.clips.len()
-            && self.clips.iter().zip(&o.clips).all(|(a, b)| Arc::ptr_eq(a, b) || a == b)
+            && (self.clips.iter().zip(&o.clips).all(|(a, b)| same(a, b)) || {
+                let by_id = |v: &[Arc<Clip>]| {
+                    let mut r: Vec<Arc<Clip>> = v.to_vec();
+                    r.sort_by_key(|c| c.id);
+                    r
+                };
+                by_id(&self.clips).iter().zip(by_id(&o.clips).iter()).all(|(a, b)| same(a, b))
+            })
     }
 }
 
@@ -187,6 +198,25 @@ impl History {
 mod tests {
     use super::*;
     use crate::mock::{self, Rng};
+
+    /// Raising a clip (a click) reorders the list but changes no content.
+    #[test]
+    fn clip_order_is_not_content() {
+        let a = mock::demo_arrangement();
+        let d0 = Doc::of(&a, 150.0, crate::instruments::default_params());
+        let mut b = a.clone();
+        let first = b.clips[0].id;
+        b.raise(&[first]);
+        assert_ne!(b.clips[0].id, first);
+        let d1 = Doc::of(&b, 150.0, crate::instruments::default_params());
+        assert!(d0.same_as(&d1) && d1.same_as(&d0));
+        let mut h = History::new(d0);
+        assert!(!h.commit(d1), "a click is not an undo step");
+        // A real change still is.
+        let id = b.clips[1].id;
+        b.clip_mut(id).unwrap().start_ticks += 1;
+        assert!(h.commit(Doc::of(&b, 150.0, crate::instruments::default_params())));
+    }
     use crate::notes::{self, Grid, RowKind};
     use crate::state::{PPQ, TICKS_PER_BAR};
     use engine::ParamId;

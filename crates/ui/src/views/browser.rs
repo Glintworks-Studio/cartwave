@@ -495,7 +495,7 @@ pub fn browser(cx: &mut Context, s: Signals) {
         HStack::new(cx, |cx| {
             Label::new(cx, "BROWSER").class("section-title");
             Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
-            Label::new(cx, "Ctrl+Alt+B").class("browser-hint");
+            Label::new(cx, crate::shortcuts::label(crate::shortcuts::Action::ToggleBrowser)).class("browser-hint");
         })
         .class("browser-head");
         HStack::new(cx, |cx| {

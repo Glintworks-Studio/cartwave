@@ -10,7 +10,9 @@ engine = { path = "../engine" }
 chip = { path = "../chip" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1"
-rfd = "0.18"
+# common-controls-v6: the save prompt's Save / Don't Save / Cancel buttons
+# (a task dialog; the binaries embed the manifest it needs, see build.rs).
+rfd = { version = "0.18", features = ["common-controls-v6"] }
 # EBU R128 loudness for the export's loudness option (MIT; pre-approved, STABILIZE_PROMPT.md).
 ebur128 = "0.1.11"
 # Native menu bar for the standalone app (MIT OR Apache-2.0; FEASIBILITY.md §1).
