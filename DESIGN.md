@@ -145,8 +145,15 @@ the existing Inter faces).
 
 ## 8. Open items
 
-- At 960 px logical width, the left pills are clipped at the capsule (they no longer
-  overlap it). A narrower layout (stacking or hiding the FILTER column) would be nicer.
+- The window has a minimum size (`ui::MIN_WINDOW_SIZE`, 1060×812 logical): the
+  capsule plus two top-bar sides wide enough for the left side's contents, and
+  tall enough for 8 lanes above the inspector. Below that, things were being cut
+  off. A responsive top bar (folding the FILTER column away) would allow narrower
+  windows.
+- Already broken before the redesign (the pre-redesign binary crashes too): resizing
+  the window from another process with `SetWindowPos` panics in the vizia fork
+  (`WinState::resize`, `new_surface_with_dimensions` returns `None`). Dragging the
+  window edges, maximizing and restoring work.
 - The inspector's dials and meters were recoloured to neutral greys, but their shapes
   are unchanged. The prototype doesn't show them; they could use the key language
   (lit from below, top sheen).

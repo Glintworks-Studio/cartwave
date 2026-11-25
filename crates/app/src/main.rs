@@ -94,12 +94,16 @@ fn main() -> Result<(), ApplicationError> {
         render_demo(dir, secs);
         return Ok(());
     }
-    let size = parse_size();
+    // winit only applies the minimum to user resizes, so clamp the start size too.
+    let (w, h) = parse_size();
+    let size = (w.max(ui::MIN_WINDOW_SIZE.0), h.max(ui::MIN_WINDOW_SIZE.1));
     Application::new(|cx| {
         ui::build_ui(cx);
     })
     .title("ChipDAW — GUI prototype")
     .inner_size(size)
+    // Below this the top bar's sides and the lanes would be cut off.
+    .min_inner_size(Some(ui::MIN_WINDOW_SIZE))
     // Present on vblank; the UI advances its model once per presented frame.
     // `CHIPDAW_VSYNC=0` turns it off (an experiment knob for PERF measurements).
     .vsync(std::env::var("CHIPDAW_VSYNC").map_or(true, |v| v != "0"))

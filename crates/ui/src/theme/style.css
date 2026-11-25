@@ -74,13 +74,13 @@ label {
     height: 4px;
 }
 
+/* Takes the room that's left and truncates, instead of being cut off. */
 .bar-status {
     font-size: 11;
     font-weight: 500;
     color: var(--text-mid);
-    width: auto;
+    width: 1s;
     height: auto;
-    max-width: 320px;
     text-overflow: ellipsis;
     text-wrap: false;
 }

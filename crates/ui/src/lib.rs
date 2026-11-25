@@ -1060,6 +1060,18 @@ impl AppState {
     }
 }
 
+/// Smallest window (logical px) that shows everything unsquished:
+/// - width: the transport capsule plus two top-bar sides, each as wide as the
+///   left side's contents (8 pad + 3 word keys + 2 pill columns + gaps = 428);
+/// - height: top bar + ruler + eight full lanes + the inspector panel.
+pub const MIN_WINDOW_SIZE: (u32, u32) = (
+    2 * 428 + theme::tokens::BOX_W as u32,
+    (theme::tokens::TOPBAR_HEIGHT + theme::tokens::RULER_HEIGHT + 8.0 * LANE_H_NORMAL) as u32
+        + INSPECTOR_HEIGHT,
+);
+/// The device inspector's height; must match `.device` in style.css.
+const INSPECTOR_HEIGHT: u32 = 232;
+
 /// Split-pill widths (logical px): label segment and whole pill, per column.
 const PILL_TEMPO_LABEL_W: f32 = 44.0;
 const PILL_TEMPO_W: f32 = 92.0;
