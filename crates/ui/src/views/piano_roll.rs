@@ -29,6 +29,8 @@ pub const RULER_H: f32 = 18.0;
 /// Height of the volume lane (lanes with volume only), and the gap above it.
 pub const VOL_H: f32 = 56.0;
 pub const VOL_GAP: f32 = 6.0;
+/// The note grid never gets shorter than this while the volume lane shows.
+const MIN_GRID_H: f32 = 96.0;
 /// Width of the resize zones at a note's ends.
 const EDGE_PX: f32 = 5.0;
 /// Pointer travel before a press becomes a drag.
@@ -48,7 +50,8 @@ struct Geo {
 
 impl Geo {
     fn new(w: f32, h: f32, lane: usize) -> Self {
-        let has_vol = RowKind::has_volume(lane);
+        // A short pane drops the volume lane rather than squeezing the grid.
+        let has_vol = RowKind::has_volume(lane) && h >= RULER_H + MIN_GRID_H + VOL_H + VOL_GAP;
         let grid_y1 = if has_vol { h - VOL_H - VOL_GAP } else { h };
         Self {
             w,
@@ -74,11 +77,13 @@ struct Map {
 
 impl Map {
     fn new(p: &PianoState, geo: Geo, kind: RowKind) -> Self {
-        // Noise (16 rows) and DPCM (4) rows grow to fill the panel.
-        const MAX_ROW_H: f32 = 32.0;
+        // Rows keep a fixed height (the grid scrolls instead of squeezing
+        // when the pane is resized). Noise (16 rows) and DPCM (4) rows are
+        // taller so their labels fit.
+        const DRUM_ROW_H: f32 = 24.0;
         let row_h = match kind {
             RowKind::Piano { .. } => p.row_h,
-            _ => ((geo.grid_y1 - geo.grid_y0) / kind.rows() as f32).clamp(p.row_h, MAX_ROW_H),
+            _ => DRUM_ROW_H,
         };
         let visible = (geo.grid_y1 - geo.grid_y0) / row_h;
         let max_top = (kind.rows() as f32 - visible).max(0.0);

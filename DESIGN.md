@@ -123,6 +123,24 @@ constants. Where the prototype was off-grid, the grid won:
   far-away loop end (`NO_LOOP_TICKS`), so playback runs on. A piano-roll clip loop
   always loops.
 
+## 5b. Ableton-style editing
+
+| Action | Behaviour |
+|---|---|
+| Drag across empty lane space | Time selection over the lanes covered, snapped to the grid (Alt: no snap); drawn as an accent wash |
+| Click empty space | Insert marker: the playhead moves there while stopped, and playback starts from it |
+| Right-click on a selection | **Loop Selection** (Ctrl+L), **Insert MIDI Clip** (Ctrl+Shift+M) |
+| Right-click on empty space | Selects that bar on that lane, then the same menu |
+| Right-click on a clip | **Duplicate** (Ctrl+D), **Delete** (Del), **Loop Clip** (Ctrl+L) |
+| Ctrl+L | Loops the time selection, or the span of the selected clips, and turns the loop on |
+| Ctrl+D | Duplicates the selected clips right after their span; the copies become the selection |
+| Loop brace (ruler) | Drag the body to move the loop, the ends to resize it (snapped); double-click toggles the loop |
+| Outside the loop | Dimmed while the loop is on |
+| Piano roll pane | Rows keep a fixed height (piano 12 px, noise/DPCM 24 px) and scroll; a short pane drops the volume lane instead of squeezing the note grid |
+
+The loop now has a real start (it used to start at bar 1). The `.chipdaw` format (v1)
+still saves only the loop end. Saving the loop start needs a format bump: an open item.
+
 ## 6. Performance
 
 Measured in a release build, with the demo playing at 1920×1080, from the F3 overlay

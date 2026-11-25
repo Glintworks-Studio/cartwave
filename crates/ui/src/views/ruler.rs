@@ -11,11 +11,27 @@ use crate::{AppEvent, Signals};
 pub struct Ruler {
     s: Signals,
     scrubbing: bool,
+    /// Loop brace drag: what's grabbed, press x, and the loop at press.
+    brace: Option<(BracePart, f32, f64, f64)>,
     /// Retained background, ticks and labels; re-rendered when the view changes.
     layer: std::cell::RefCell<Option<(u64, vg::Image)>>,
     /// Pre-rendered playhead handle (glow + shape) and its scale factor.
     handle: std::cell::RefCell<Option<(f32, vg::Image)>>,
 }
+
+/// Which part of the loop brace a drag holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BracePart {
+    Start,
+    End,
+    Body,
+}
+
+/// Loop brace: top and height in the ruler, and the grab zone at its ends
+/// (logical px).
+const BRACE_TOP: f32 = 4.0;
+const BRACE_H: f32 = 8.0;
+const BRACE_EDGE: f32 = 4.0;
 
 /// Handle geometry (logical px): half width and height.
 const HANDLE_W: f32 = 6.0;
@@ -28,14 +44,63 @@ impl Ruler {
         Self {
             s,
             scrubbing: false,
+            brace: None,
             layer: Default::default(),
             handle: Default::default(),
         }
         .build(cx, |_| {})
-        .cursor(CursorIcon::Hand)
         .bind(s.transport, |mut h| h.needs_redraw())
         .bind(s.arrangement, |mut h| h.needs_redraw())
         .bind(s.loop_on, |mut h| h.needs_redraw())
+    }
+
+    /// The part of the loop brace under the mouse, if any.
+    fn brace_at(&self, cx: &EventContext) -> Option<BracePart> {
+        let b = cx.bounds();
+        let s = cx.scale_factor();
+        let (x, y) = ((cx.mouse().cursor_x - b.x) / s, (cx.mouse().cursor_y - b.y) / s);
+        if !(BRACE_TOP - 2.0..=BRACE_TOP + BRACE_H + 2.0).contains(&y) {
+            return None;
+        }
+        let (view, (ls, le)) = (
+            self.s.arrangement.with_untracked(|a| a.view),
+            self.s.transport.with_untracked(|t| (t.loop_start_ticks, t.loop_end_ticks)),
+        );
+        let (x0, x1) = (view.tick_to_x(ls) as f32, view.tick_to_x(le) as f32);
+        if (x - x0).abs() <= BRACE_EDGE {
+            Some(BracePart::Start)
+        } else if (x - x1).abs() <= BRACE_EDGE {
+            Some(BracePart::End)
+        } else if x > x0 && x < x1 {
+            Some(BracePart::Body)
+        } else {
+            None
+        }
+    }
+
+    fn drag_brace(&self, cx: &mut EventContext) {
+        let Some((part, x0, s0, e0)) = self.brace else { return };
+        let b = cx.bounds();
+        let x = (cx.mouse().cursor_x - b.x) / cx.scale_factor();
+        let (view, snap) = self.s.arrangement.with_untracked(|a| (a.view, a.snap));
+        let d = view.px_to_ticks((x - x0) as f64);
+        let q = |t: f64| -> f64 {
+            if crate::input::bypass_snap(cx.modifiers()) {
+                t.max(0.0)
+            } else {
+                snap.round(t as i64).max(0) as f64
+            }
+        };
+        let g = snap.ticks() as f64;
+        let (start, end) = match part {
+            BracePart::Body => {
+                let ns = q(s0 + d);
+                (ns, ns + (e0 - s0))
+            }
+            BracePart::Start => (q(s0 + d).min(e0 - g), e0),
+            BracePart::End => (s0, q(e0 + d).max(s0 + g)),
+        };
+        cx.emit(AppEvent::SetLoop(start, end));
     }
 
     fn set_from_mouse(&self, cx: &mut EventContext) {
@@ -67,14 +132,42 @@ impl View for Ruler {
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
             WindowEvent::MouseDown(MouseButton::Left) => {
-                self.scrubbing = true;
+                if let Some(part) = self.brace_at(cx) {
+                    let b = cx.bounds();
+                    let x = (cx.mouse().cursor_x - b.x) / cx.scale_factor();
+                    let (ls, le) = self
+                        .s
+                        .transport
+                        .with_untracked(|t| (t.loop_start_ticks, t.loop_end_ticks));
+                    self.brace = Some((part, x, ls, le));
+                } else {
+                    self.scrubbing = true;
+                    self.set_from_mouse(cx);
+                }
                 cx.capture();
-                self.set_from_mouse(cx);
+                meta.consume();
+            }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) if self.brace_at(cx).is_some() => {
+                // Ableton: double-click the brace to switch the loop on/off.
+                cx.emit(AppEvent::ToggleLoop);
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) if self.scrubbing => self.set_from_mouse(cx),
-            WindowEvent::MouseUp(MouseButton::Left) if self.scrubbing => {
+            WindowEvent::MouseMove(_, _) if self.brace.is_some() => self.drag_brace(cx),
+            WindowEvent::MouseMove(_, _) => {
+                let icon = match self.brace_at(cx) {
+                    Some(BracePart::Start | BracePart::End) => CursorIcon::EwResize,
+                    Some(BracePart::Body) => CursorIcon::Grab,
+                    None => CursorIcon::Hand,
+                };
+                cx.emit(WindowEvent::SetCursor(icon));
+            }
+            WindowEvent::MouseLeave if self.brace.is_none() && !self.scrubbing => {
+                cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.scrubbing || self.brace.is_some() => {
                 self.scrubbing = false;
+                self.brace = None;
                 cx.release();
             }
             _ => {}
@@ -86,9 +179,10 @@ impl View for Ruler {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let rect: vg::Rect = b.into();
-        let (view, loop_end) = (
+        let (view, loop_end, loop_start) = (
             self.s.arrangement.with_untracked(|a| a.view),
             self.s.transport.with_untracked(|t| t.loop_end_ticks),
+            self.s.transport.with_untracked(|t| t.loop_start_ticks),
         );
         let ph = self.s.transport.with_untracked(|t| t.playhead_ticks);
         let loop_on = self.s.loop_on.get_untracked();
@@ -106,6 +200,7 @@ impl View for Ruler {
             view.px_per_tick.to_bits().hash(&mut h);
             view.scroll_ticks.to_bits().hash(&mut h);
             loop_end.to_bits().hash(&mut h);
+            loop_start.to_bits().hash(&mut h);
             loop_on.hash(&mut h);
             h.finish()
         };
@@ -117,7 +212,7 @@ impl View for Ruler {
                 .map(|mut surface| {
                     let lc = surface.canvas();
                     lc.translate((-rect.left, -rect.top));
-                    draw_static(lc, rect, s, &view, loop_end, loop_on);
+                    draw_static(lc, rect, s, &view, (loop_start, loop_end), loop_on);
                     (key, surface.image_snapshot())
                 });
         }
@@ -125,7 +220,7 @@ impl View for Ruler {
             Some((_, img)) => {
                 canvas.draw_image(img, (rect.left, rect.top), None);
             }
-            None => draw_static(canvas, rect, s, &view, loop_end, loop_on),
+            None => draw_static(canvas, rect, s, &view, (loop_start, loop_end), loop_on),
         }
         drop(layer);
 
@@ -160,31 +255,27 @@ fn draw_static(
     rect: vg::Rect,
     s: f32,
     view: &Viewport,
-    loop_end: f64,
+    (loop_start, loop_end): (f64, f64),
     loop_on: bool,
 ) {
     // The band: same gradient and top hairline as the cell beside it.
     canvas.draw_rect(rect, &gfx::vgrad(rect, BAND_TOP, BAND_BOTTOM));
     canvas.draw_rect(vg::Rect::from_xywh(rect.left, rect.top, rect.width(), s), &gfx::fill(LINE));
 
-    // Loop region: a thin lit rail along the top.
-    let lx0 = rect.left + view.tick_to_x(0.0) as f32 * s;
-    let lx1 = rect.left + view.tick_to_x(loop_end) as f32 * s;
-    let band = vg::Rect::from_ltrb(
-        lx0.max(rect.left),
-        rect.top + 4.0 * s,
-        lx1.min(rect.right),
-        rect.top + 6.0 * s,
-    );
-    if band.width() > 0.0 {
-        let c = if loop_on { ACCENT.with_alpha(0.35) } else { Rgba::white(0.06) };
-        canvas.draw_rrect(gfx::rrect(band, 1.0 * s), &gfx::fill(c));
-        if loop_on && lx1 < rect.right {
-            // End cap.
-            canvas.draw_rect(
-                vg::Rect::from_xywh(lx1.round() - s, rect.top + 4.0 * s, s, 8.0 * s),
-                &gfx::fill(ACCENT.with_alpha(0.8)),
-            );
+    // Loop brace (Ableton): a bar over the loop range; drag the body to
+    // move it, the ends to resize. Lit while the loop light is on.
+    let lx0 = (rect.left + view.tick_to_x(loop_start) as f32 * s).round();
+    let lx1 = (rect.left + view.tick_to_x(loop_end) as f32 * s).round();
+    let brace = vg::Rect::from_ltrb(lx0, rect.top + BRACE_TOP * s, lx1, rect.top + (BRACE_TOP + BRACE_H) * s);
+    if brace.right > rect.left && brace.left < rect.right {
+        let rr = gfx::rrect(brace, 2.0 * s);
+        let hl = gfx::hairline(s);
+        if loop_on {
+            canvas.draw_rrect(rr, &gfx::vgrad(brace, ACCENT.with_alpha(0.45), ACCENT.with_alpha(0.25)));
+            gfx::ring_vgrad(canvas, &rr, hl, ACCENT.lighten(0.2), ACCENT.darken(0.3).with_alpha(0.6));
+        } else {
+            canvas.draw_rrect(rr, &gfx::fill(Rgba::white(0.06)));
+            gfx::ring(canvas, &rr, hl, &gfx::fill(Rgba::white(0.12)));
         }
     }
 

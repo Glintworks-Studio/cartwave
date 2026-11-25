@@ -217,6 +217,61 @@ impl Viewport {
     }
 }
 
+/// An arrangement time selection (Ableton: drag across empty lane space):
+/// a tick range over a run of lanes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TimeSel {
+    pub start: u32,
+    pub end: u32,
+    pub lane0: usize,
+    pub lane1: usize,
+}
+
+impl TimeSel {
+    pub fn contains(&self, tick: f64, lane: usize) -> bool {
+        tick >= self.start as f64 && tick < self.end as f64 && (self.lane0..=self.lane1).contains(&lane)
+    }
+}
+
+/// Context-menu commands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MenuAction {
+    LoopSelection,
+    InsertClip,
+    Duplicate,
+    Delete,
+    LoopClips,
+}
+
+impl MenuAction {
+    pub fn label(self) -> &'static str {
+        match self {
+            MenuAction::LoopSelection => "Loop Selection",
+            MenuAction::InsertClip => "Insert MIDI Clip",
+            MenuAction::Duplicate => "Duplicate",
+            MenuAction::Delete => "Delete",
+            MenuAction::LoopClips => "Loop Clip",
+        }
+    }
+
+    pub fn shortcut(self) -> &'static str {
+        match self {
+            MenuAction::LoopSelection | MenuAction::LoopClips => "Ctrl+L",
+            MenuAction::InsertClip => "Ctrl+Shift+M",
+            MenuAction::Duplicate => "Ctrl+D",
+            MenuAction::Delete => "Del",
+        }
+    }
+}
+
+/// An open context menu: where (window logical px) and what it offers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContextMenuSpec {
+    pub x: f32,
+    pub y: f32,
+    pub items: Vec<MenuAction>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arrangement {
     pub lanes: Vec<Lane>,
@@ -275,6 +330,38 @@ impl Arrangement {
     pub fn delete_selected(&mut self) {
         let sel = std::mem::take(&mut self.selection);
         self.clips.retain(|c| !sel.contains(&c.id));
+    }
+
+    /// Tick span covered by the selected clips.
+    pub fn selection_span(&self) -> Option<(u32, u32)> {
+        self.selection
+            .iter()
+            .filter_map(|id| self.clip(*id))
+            .map(|c| (c.start_ticks, c.end_ticks()))
+            .reduce(|(a0, a1), (b0, b1)| (a0.min(b0), a1.max(b1)))
+    }
+
+    /// Ableton's Duplicate (Ctrl+D): copies of the selected clips placed
+    /// right after the selection's span; the copies become the selection.
+    pub fn duplicate_selected(&mut self) {
+        let Some((start, end)) = self.selection_span() else { return };
+        let offset = end - start;
+        let originals: Vec<Clip> = self
+            .selection
+            .iter()
+            .filter_map(|id| self.clip(*id).cloned())
+            .collect();
+        let mut new_ids = Vec::new();
+        for mut c in originals {
+            c.id = self.next_id;
+            self.next_id += 1;
+            c.start_ticks += offset;
+            c.rev = Rev::next();
+            new_ids.push(c.id);
+            self.push_clip(c);
+        }
+        self.resolve_overlaps(&new_ids);
+        self.selection = new_ids;
     }
 
     /// Brings the given clip ids to the end of the list (drawn on top).

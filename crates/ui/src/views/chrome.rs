@@ -908,6 +908,145 @@ impl View for SpectrumBox {
 
 // ─────────────────────────────── Track rows ───────────────────────────────
 
+// ─────────────────────────────── Context menu ───────────────────────────────
+
+/// Menu geometry (logical px).
+const MENU_W: f32 = 220.0;
+const MENU_ROW_H: f32 = 28.0;
+const MENU_PAD: f32 = 4.0;
+const MENU_TEXT_X: f32 = 12.0;
+const MENU_TEXT_PX: f32 = 12.0;
+
+/// A menu's size for `n` items (logical px).
+pub fn menu_size(n: usize) -> (f32, f32) {
+    (MENU_W, MENU_PAD * 2.0 + MENU_ROW_H * n as f32)
+}
+
+/// Where to open a menu of `n` items for a click at (x, y) (window logical
+/// px) so it stays inside the window: flipped left / up near the edges.
+pub fn menu_origin(cx: &EventContext, x: f32, y: f32, n: usize) -> (f32, f32) {
+    let (w, h) = menu_size(n);
+    let s = cx.scale_factor();
+    let win = cx.cache.get_bounds(Entity::root());
+    let (ww, wh) = (win.w / s, win.h / s);
+    let x = if x + w > ww - SP_1 { (x - w).max(0.0) } else { x };
+    let y = if y + h > wh - SP_1 { (y - h).max(0.0) } else { y };
+    (x, y)
+}
+
+/// Catches clicks outside the menu and closes it.
+pub struct MenuBackdrop;
+
+impl MenuBackdrop {
+    pub fn new(cx: &mut Context) -> Handle<'_, Self> {
+        Self.build(cx, |_| {})
+    }
+}
+
+impl View for MenuBackdrop {
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| {
+            if let WindowEvent::MouseDown(_) = we {
+                cx.emit(AppEvent::CloseMenu);
+                meta.consume();
+            }
+        });
+    }
+}
+
+/// A right-click menu in the capsule style: label left, shortcut right,
+/// the hovered row lit in the accent.
+pub struct ContextMenu {
+    items: Vec<crate::state::MenuAction>,
+    hover: Option<usize>,
+}
+
+impl ContextMenu {
+    pub fn new(cx: &mut Context, _s: Signals, m: crate::state::ContextMenuSpec) -> Handle<'_, Self> {
+        let (w, h) = menu_size(m.items.len());
+        let (x, y) = (m.x, m.y);
+        Self {
+            items: m.items,
+            hover: None,
+        }
+        .build(cx, |_| {})
+        .position_type(PositionType::Absolute)
+        .left(Pixels(x))
+        .top(Pixels(y))
+        .width(Pixels(w))
+        .height(Pixels(h))
+    }
+
+    fn row_at(&self, cx: &EventContext) -> Option<usize> {
+        let (_, y) = local_mouse(cx);
+        let i = ((y - MENU_PAD) / MENU_ROW_H).floor();
+        (i >= 0.0 && (i as usize) < self.items.len() && mouse_inside(cx)).then_some(i as usize)
+    }
+}
+
+impl View for ContextMenu {
+    fn element(&self) -> Option<&'static str> {
+        Some("context-menu")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| match we {
+            WindowEvent::MouseMove(_, _) => {
+                let r = self.row_at(cx);
+                if r != self.hover {
+                    self.hover = r;
+                    cx.needs_redraw();
+                }
+            }
+            WindowEvent::MouseLeave => {
+                self.hover = None;
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseDown(_) => meta.consume(),
+            WindowEvent::MouseUp(MouseButton::Left) => {
+                if let Some(i) = self.row_at(cx) {
+                    cx.emit(AppEvent::Menu(self.items[i]));
+                }
+                meta.consume();
+            }
+            _ => {}
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let b = cx.bounds();
+        let s = cx.scale_factor();
+        let r = gfx::snap(b.into());
+        let rr = gfx::rrect(r, RADIUS_BOX * s);
+        gfx::drop_shadow(canvas, &rr, 0.0, 6.0 * s, 16.0 * s, 0.0, Rgba::black(0.6));
+        draw_box(canvas, &rr, s);
+        gfx::top_sheen(canvas, &rr, gfx::hairline(s), STROKE, KEY_SHEEN.with_alpha(0.6));
+        let f = gfx::font(Face::Medium, MENU_TEXT_PX * s);
+        for (i, item) in self.items.iter().enumerate() {
+            let row = vg::Rect::from_xywh(
+                r.left + MENU_PAD * s,
+                r.top + (MENU_PAD + i as f32 * MENU_ROW_H) * s,
+                r.width() - 2.0 * MENU_PAD * s,
+                MENU_ROW_H * s,
+            );
+            let hot = self.hover == Some(i);
+            if hot {
+                canvas.draw_rrect(
+                    gfx::rrect(row, RADIUS_KEY * s),
+                    &gfx::vgrad(row, ACCENT.lighten(0.05), ACCENT.darken(0.15)),
+                );
+            }
+            let base = gfx::baseline_for_center(&f, row.center_y()).round();
+            let ink = if hot { Rgba::hex(0x0A0A0A) } else { TEXT_HI };
+            gfx::draw_text(canvas, item.label(), (row.left + MENU_TEXT_X * s).round(), base, &f, ink);
+            let sc = item.shortcut();
+            let sw = gfx::text_width(&f, sc);
+            let ink = if hot { Rgba::hex(0x0A0A0A).with_alpha(0.6) } else { TEXT_LO };
+            gfx::draw_text(canvas, sc, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
+        }
+    }
+}
+
 // ─────────────────────────────── Split handle ───────────────────────────────
 
 /// Height of the handle band (logical px) and its grip.

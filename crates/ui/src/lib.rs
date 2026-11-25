@@ -25,7 +25,10 @@ use crate::notes::{Note, RowKind};
 use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
-    chrome::{Key, KeyAction, PillKind, SpectrumBox, SplitHandle, StatPill, TimeCapsule},
+    chrome::{
+        ContextMenu, Key, KeyAction, MenuBackdrop, PillKind, SpectrumBox, SplitHandle, StatPill,
+        TimeCapsule,
+    },
     dial::Dial,
     piano_roll::PianoRoll,
     meter::MeterBank,
@@ -66,6 +69,10 @@ pub struct Signals {
     /// lanes fit).
     pub lane_scroll: Signal<f32>,
     pub lane_scroll_max: Signal<f32>,
+    /// Arrangement time selection (drag across empty lane space).
+    pub time_sel: Signal<Option<TimeSel>>,
+    /// The open context menu, if any.
+    pub menu: Signal<Option<ContextMenuSpec>>,
     /// The project file path field.
     pub file_path: Signal<String>,
     /// Short status line (saved, errors); clears itself.
@@ -140,6 +147,8 @@ pub struct AppState {
     status_until: Option<Instant>,
     /// Loop end to restore when "loop this clip" is switched off.
     loop_end_saved: f64,
+    /// Song loop start to restore when "loop this clip" is switched off.
+    loop_start_saved: f64,
     /// The engine is looping over the open clip.
     clip_looping: bool,
     /// When the CPU / kHz pills were last refreshed.
@@ -163,6 +172,13 @@ pub enum AppEvent {
     SetPianoPaneHeight(f32),
     /// Scroll the lanes vertically by this many logical px.
     ScrollLanes(f32),
+    /// The song loop (ticks). The ruler's loop brace sends this while dragged.
+    SetLoop(f64, f64),
+    /// Open / close a context menu, or run one of its commands (also bound
+    /// to the Ableton shortcuts).
+    OpenMenu(ContextMenuSpec),
+    CloseMenu,
+    Menu(MenuAction),
     ToggleStats,
     ToggleStress,
     CycleFrameCap,
@@ -284,6 +300,13 @@ impl Model for AppState {
             AppEvent::SetPianoPaneHeight(h) => {
                 self.s.piano_pane_h.set_if_changed(*h);
                 self.clamp_lane_scroll();
+            }
+            AppEvent::SetLoop(start, end) => self.set_song_loop(*start, *end, false),
+            AppEvent::OpenMenu(m) => self.s.menu.set(Some(m.clone())),
+            AppEvent::CloseMenu => self.s.menu.set(None),
+            AppEvent::Menu(action) => {
+                self.s.menu.set(None);
+                self.run_menu_action(*action);
             }
             AppEvent::ScrollLanes(dy) => {
                 let v = self.s.lane_scroll.get_untracked() + dy;
@@ -425,6 +448,10 @@ impl Model for AppState {
                         Code::KeyS => Some(AppEvent::SaveProject),
                         Code::KeyO => Some(AppEvent::OpenProject),
                         Code::KeyN => Some(AppEvent::NewProject),
+                        // Ableton: loop selection, duplicate, insert MIDI clip.
+                        Code::KeyL => Some(AppEvent::Menu(MenuAction::LoopSelection)),
+                        Code::KeyD => Some(AppEvent::Menu(MenuAction::Duplicate)),
+                        Code::KeyM if mods.shift() => Some(AppEvent::Menu(MenuAction::InsertClip)),
                         _ => None,
                     };
                     if let Some(ev) = ev {
@@ -437,6 +464,9 @@ impl Model for AppState {
                     Code::Space => {
                         cx.emit(AppEvent::TogglePlay);
                         meta.consume();
+                    }
+                    Code::Escape if self.s.menu.with_untracked(|m| m.is_some()) => {
+                        self.s.menu.set(None);
                     }
                     Code::Escape if self.s.piano_open.get_untracked() => cx.emit(AppEvent::ClosePiano),
                     Code::F3 => cx.emit(AppEvent::ToggleStats),
@@ -921,6 +951,8 @@ pub fn build_ui(cx: &mut Context) {
         piano_pane_h: Signal::new(PIANO_PANE_DEFAULT),
         lane_scroll: Signal::new(0.0),
         lane_scroll_max: Signal::new(0.0),
+        time_sel: Signal::new(None),
+        menu: Signal::new(None),
         file_path: Signal::new(String::new()),
         status: Signal::new(String::new()),
         recovery_offer: Signal::new(false),
@@ -976,6 +1008,7 @@ pub fn build_ui(cx: &mut Context) {
         autosaved: None,
         status_until: None,
         loop_end_saved: (32 * TICKS_PER_BAR) as f64,
+        loop_start_saved: 0.0,
         clip_looping: false,
         last_load: None,
     };
@@ -1026,6 +1059,7 @@ pub fn build_ui(cx: &mut Context) {
             }
         });
         notice(cx, s);
+        context_menu(cx, s);
     })
     .class("shell");
 
@@ -1106,6 +1140,22 @@ const CLIP_SECTION_MAX_W: f32 = 480.0;
 /// One meter column: well, light and label (logical px).
 const METER_COL_W: f32 = 40.0;
 const CHANNELS_SECTION_W: f32 = 8.0 * METER_COL_W + 24.0;
+
+/// The open context menu over a full-window backdrop that closes it.
+fn context_menu(cx: &mut Context, s: Signals) {
+    let open = Memo::new(move |_| s.menu.get().is_some());
+    Binding::new(cx, open, move |cx| {
+        if !open.get() {
+            return;
+        }
+        MenuBackdrop::new(cx)
+            .position_type(PositionType::Absolute)
+            .width(Stretch(1.0))
+            .height(Stretch(1.0));
+        let Some(m) = s.menu.get_untracked() else { return };
+        ContextMenu::new(cx, s, m);
+    });
+}
 
 /// Width of the recovery prompt's keys (logical px).
 const NOTICE_KEY_W: f32 = 64.0;
@@ -1455,6 +1505,7 @@ impl AppState {
             t.loop_start_ticks = 0.0;
         });
         self.loop_end_saved = p.loop_end_ticks as f64;
+        self.loop_start_saved = 0.0;
         self.clip_looping = false;
         self.send(Command::Bpm(p.bpm as f64));
         self.send(Command::LoopStart(0.0));
@@ -1594,6 +1645,71 @@ impl AppState {
         self.s.lane_scroll.set_if_changed(v);
     }
 
+    /// Sets the song loop (the ruler's loop brace). `enable` also turns the
+    /// loop light on (Ableton's Loop Selection does). A piano-roll clip loop
+    /// gives way to it.
+    fn set_song_loop(&mut self, start: f64, end: f64, enable: bool) {
+        let start = start.max(0.0);
+        let end = end.max(start + PPQ as f64);
+        self.loop_start_saved = start;
+        self.loop_end_saved = end;
+        if self.clip_looping {
+            self.s.piano.update(|p| p.loop_clip = false);
+            self.sync_loop();
+        } else {
+            self.s.transport.update(|t| {
+                t.loop_start_ticks = start;
+                t.loop_end_ticks = end;
+            });
+            self.send(Command::LoopStart(start));
+            self.send(Command::LoopEnd(self.engine_loop_end(end)));
+        }
+        if enable && !self.s.loop_on.get_untracked() {
+            self.s.loop_on.set(true);
+            self.send(Command::LoopEnd(self.engine_loop_end(end)));
+        }
+    }
+
+    /// Context-menu commands and their Ableton shortcuts.
+    fn run_menu_action(&mut self, action: MenuAction) {
+        let sel = self.s.time_sel.get_untracked();
+        let span = self.s.arrangement.with_untracked(|a| a.selection_span());
+        match action {
+            // Ctrl+L: the time selection, else the selected clips.
+            MenuAction::LoopSelection | MenuAction::LoopClips => {
+                let range = match (action, sel) {
+                    (MenuAction::LoopSelection, Some(ts)) => Some((ts.start, ts.end)),
+                    _ => span,
+                };
+                if let Some((a, b)) = range {
+                    self.set_song_loop(a as f64, b as f64, true);
+                }
+            }
+            MenuAction::InsertClip => {
+                let Some(ts) = sel else { return };
+                self.s.arrangement.update(|a| {
+                    let ids: Vec<u32> = (ts.lane0..=ts.lane1.min(a.lanes.len() - 1))
+                        .map(|lane| a.add_clip(lane, ts.start, ts.end - ts.start))
+                        .collect();
+                    a.resolve_overlaps(&ids);
+                    a.selection = ids;
+                });
+                self.s.time_sel.set(None);
+                self.commit();
+            }
+            MenuAction::Duplicate => {
+                if span.is_some() {
+                    self.s.arrangement.update(|a| a.duplicate_selected());
+                    self.commit();
+                }
+            }
+            MenuAction::Delete => {
+                self.s.arrangement.update(|a| a.delete_selected());
+                self.commit();
+            }
+        }
+    }
+
     fn sync_piano_lane_volume(&mut self) {
         let Some(id) = self.s.piano.with_untracked(|p| p.clip) else { return };
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) else { return };
@@ -1622,9 +1738,10 @@ impl AppState {
         if entering {
             // Remember the song loop to restore it afterwards.
             self.loop_end_saved = tr.loop_end_ticks;
+            self.loop_start_saved = tr.loop_start_ticks;
         }
         self.clip_looping = want.is_some();
-        let (start, end) = want.unwrap_or((0.0, self.loop_end_saved));
+        let (start, end) = want.unwrap_or((self.loop_start_saved, self.loop_end_saved));
         if (tr.loop_start_ticks, tr.loop_end_ticks) != (start, end) {
             self.send(Command::LoopStart(start));
             self.send(Command::LoopEnd(self.engine_loop_end(end)));

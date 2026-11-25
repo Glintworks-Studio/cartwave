@@ -15,7 +15,7 @@ use super::clip::{self, ClipAnim, ClipPaint};
 use super::gfx::{self, Face};
 use super::chrome::TrackRow;
 use crate::notes::Note;
-use crate::state::{self, Clip, MIN_CLIP_TICKS, TICKS_PER_BAR};
+use crate::state::{self, Clip, TimeSel, MIN_CLIP_TICKS, TICKS_PER_BAR};
 use crate::theme::tokens::*;
 use crate::Signals;
 
@@ -69,6 +69,17 @@ pub struct Arrangement {
     /// Scrollbar thumb being dragged, and the scrollbar under the mouse.
     sb_drag: Option<BarDrag>,
     sb_hover: Option<Axis>,
+    /// A time-selection drag in empty lane space (Ableton).
+    time_drag: Option<TimeDrag>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TimeDrag {
+    /// Snapped tick and lane under the press, and the press position.
+    tick: u32,
+    lane: usize,
+    press: (f32, f32),
+    moved: bool,
 }
 
 /// Which scrollbar.
@@ -132,6 +143,7 @@ impl Arrangement {
             layer: RefCell::new(StaticLayer::default()),
             sb_drag: None,
             sb_hover: None,
+            time_drag: None,
         }
         .build(cx, |_| {})
         .navigable(true)
@@ -143,6 +155,7 @@ impl Arrangement {
         .bind(s.loop_on, |mut h| h.needs_redraw())
         .bind(s.lane_scroll, |mut h| h.needs_redraw())
         .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
+        .bind(s.time_sel, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -212,8 +225,21 @@ impl Arrangement {
             if !mods.shift() {
                 arr.update(|a| a.selection.clear());
             }
+            // Ableton: drag across empty space selects time; a click sets the
+            // insert marker.
+            let (tick, lane) = self.tick_lane_at(mx, my, !crate::input::bypass_snap(&mods));
+            self.time_drag = Some(TimeDrag {
+                tick,
+                lane,
+                press: (mx, my),
+                moved: false,
+            });
+            self.s.time_sel.set(None);
+            cx.capture();
+            cx.focus();
             return;
         };
+        self.s.time_sel.set(None);
 
         let mut collapse_to = None;
         arr.update(|a| {
@@ -299,6 +325,38 @@ impl Arrangement {
         });
         cx.capture();
         cx.focus();
+    }
+
+    /// Snapped (or exact) tick and the lane at lane-space point (x, y).
+    fn tick_lane_at(&self, x: f32, y: f32, snap: bool) -> (u32, usize) {
+        let lane_h = self.s.lane_h.get_untracked();
+        self.s.arrangement.with_untracked(|a| {
+            let t = a.view.x_to_tick(x as f64).max(0.0) as i64;
+            let t = if snap { a.snap.round(t) } else { t };
+            let lane = ((y / lane_h).floor().max(0.0) as usize).min(a.lanes.len() - 1);
+            (t.max(0) as u32, lane)
+        })
+    }
+
+    fn on_time_drag(&mut self, cx: &mut EventContext) {
+        let (mx, my) = self.local_mouse(cx);
+        let snap = !crate::input::bypass_snap(cx.modifiers());
+        let Some(td) = self.time_drag.as_mut() else { return };
+        if !td.moved && (mx - td.press.0).abs() < 3.0 && (my - td.press.1).abs() < 3.0 {
+            return;
+        }
+        td.moved = true;
+        let td = *td;
+        let (tick, lane) = self.tick_lane_at(mx, my, snap);
+        let (start, end) = (td.tick.min(tick), td.tick.max(tick));
+        let grid = self.s.arrangement.with_untracked(|a| a.snap.ticks());
+        let sel = TimeSel {
+            start,
+            end: if end > start { end } else { start + grid },
+            lane0: td.lane.min(lane),
+            lane1: td.lane.max(lane),
+        };
+        self.s.time_sel.set_if_changed(Some(sel));
     }
 
     fn on_drag(&mut self, cx: &mut EventContext) {
@@ -393,6 +451,15 @@ impl Arrangement {
     }
 
     fn on_release(&mut self, cx: &mut EventContext) {
+        if let Some(td) = self.time_drag.take() {
+            cx.release();
+            // A click (no drag) moves the insert marker; while stopped the
+            // playhead goes there (playback starts from it).
+            if !td.moved && !self.s.transport.with_untracked(|t| t.playing) {
+                cx.emit(crate::AppEvent::SetPlayhead(td.tick as f64));
+            }
+            return;
+        }
         if let Some(drag) = self.drag.take() {
             cx.release();
             cx.emit(crate::AppEvent::GestureEnd);
@@ -428,6 +495,43 @@ impl Arrangement {
             _ => CursorIcon::Default,
         };
         self.set_cursor(cx, icon);
+    }
+
+    /// Right-click: a menu for the clip under the mouse, the time selection,
+    /// or (on empty space) a one-bar selection made where you clicked.
+    fn on_context_menu(&mut self, cx: &mut EventContext) {
+        use crate::state::{ContextMenuSpec, MenuAction};
+        let (mx, my) = self.local_mouse(cx);
+        let lane_h = self.s.lane_h.get_untracked();
+        let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+        let items = if let Some((id, _)) = hit {
+            self.s.arrangement.update(|a| {
+                if !a.is_selected(id) {
+                    a.selection = vec![id];
+                }
+            });
+            self.s.time_sel.set(None);
+            vec![MenuAction::Duplicate, MenuAction::Delete, MenuAction::LoopClips]
+        } else {
+            let tick = self.s.arrangement.with_untracked(|a| a.view.x_to_tick(mx as f64));
+            let (_, lane) = self.tick_lane_at(mx, my, false);
+            let inside = self.s.time_sel.get_untracked().is_some_and(|ts| ts.contains(tick, lane));
+            if !inside {
+                let bar = TICKS_PER_BAR;
+                let start = (tick.max(0.0) as u32) / bar * bar;
+                self.s.time_sel.set(Some(TimeSel { start, end: start + bar, lane0: lane, lane1: lane }));
+                self.s.arrangement.update(|a| a.selection.clear());
+            }
+            vec![MenuAction::LoopSelection, MenuAction::InsertClip]
+        };
+        let s = cx.scale_factor();
+        let (x, y) = super::chrome::menu_origin(
+            cx,
+            cx.mouse().cursor_x / s,
+            cx.mouse().cursor_y / s,
+            items.len(),
+        );
+        cx.emit(crate::AppEvent::OpenMenu(ContextMenuSpec { x, y, items }));
     }
 
     /// Mouse position relative to the view, without the lane scroll.
@@ -612,13 +716,17 @@ impl Arrangement {
             }
         }
 
-        // Past the loop end: dimmed (only while the loop light is on).
-        let lex = x_of(loop_end);
-        if self.s.loop_on.get_untracked() && lex > rect.left && lex < rect.right {
-            canvas.draw_rect(
-                vg::Rect::from_ltrb(lex, rect.top, rect.right, lanes_bottom),
-                &gfx::fill(Rgba::black(0.28)),
-            );
+        // Outside the loop: dimmed (only while the loop light is on).
+        if self.s.loop_on.get_untracked() {
+            let dim = gfx::fill(Rgba::black(0.28));
+            let lsx = x_of(self.s.transport.with_untracked(|t| t.loop_start_ticks));
+            if lsx > rect.left {
+                canvas.draw_rect(vg::Rect::from_ltrb(rect.left, rect.top, lsx.min(rect.right), lanes_bottom), &dim);
+            }
+            let lex = x_of(loop_end);
+            if lex < rect.right {
+                canvas.draw_rect(vg::Rect::from_ltrb(lex.max(rect.left), rect.top, rect.right, lanes_bottom), &dim);
+            }
         }
     }
 }
@@ -634,6 +742,10 @@ impl View for Arrangement {
                 if !self.bar_press(cx) {
                     self.on_press(cx);
                 }
+                meta.consume();
+            }
+            WindowEvent::MouseDown(MouseButton::Right) => {
+                self.on_context_menu(cx);
                 meta.consume();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left)
@@ -673,6 +785,8 @@ impl View for Arrangement {
             WindowEvent::MouseMove(_, _) => {
                 if self.sb_drag.is_some() {
                     self.bar_drag(cx);
+                } else if self.time_drag.is_some() {
+                    self.on_time_drag(cx);
                 } else if self.drag.is_none() && self.bar_hover(cx) {
                     // Over a scrollbar: no clip hover.
                     if self.hover.take().is_some() {
@@ -755,7 +869,10 @@ impl View for Arrangement {
                         meta.consume();
                     }
                 }
-                Code::Escape => self.s.arrangement.update(|a| a.selection.clear()),
+                Code::Escape => {
+                    self.s.arrangement.update(|a| a.selection.clear());
+                    self.s.time_sel.set(None);
+                }
                 Code::KeyA if crate::input::command(cx.modifiers()) => {
                     self.s
                         .arrangement
@@ -867,6 +984,7 @@ impl View for Arrangement {
                 view.scroll_ticks.to_bits().hash(&mut h);
                 lanes_top.to_bits().hash(&mut h);
                 loop_end.to_bits().hash(&mut h);
+                self.s.transport.with_untracked(|t| t.loop_start_ticks).to_bits().hash(&mut h);
                 self.s.loop_on.get_untracked().hash(&mut h);
                 for (live, p) in &paints {
                     if !live {
@@ -1000,6 +1118,21 @@ impl View for Arrangement {
                     vg::Rect::from_xywh(px, rect.top, s, lanes_bottom - rect.top),
                     &gfx::fill(ink),
                 );
+            }
+
+            // Time selection: an accent wash over the selected lanes and range.
+            if let Some(ts) = self.s.time_sel.get_untracked() {
+                let sel = vg::Rect::from_ltrb(
+                    x_of(ts.start as f64).round(),
+                    (lanes_top + ts.lane0 as f32 * lane_h).round(),
+                    x_of(ts.end as f64).round(),
+                    (lanes_top + (ts.lane1 + 1) as f32 * lane_h).round(),
+                );
+                canvas.draw_rect(sel, &gfx::fill(ACCENT.with_alpha(0.10)));
+                let edge = gfx::fill(ACCENT.with_alpha(0.6));
+                let hl = gfx::hairline(s);
+                canvas.draw_rect(vg::Rect::from_xywh(sel.left, sel.top, hl, sel.height()), &edge);
+                canvas.draw_rect(vg::Rect::from_xywh(sel.right - hl, sel.top, hl, sel.height()), &edge);
             }
 
             // Scrollbars: time along the bottom, lanes along the right while
