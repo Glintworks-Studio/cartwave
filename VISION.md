@@ -100,7 +100,7 @@ There are two kinds of track: **studio tracks** (the default: no hardware rules)
 - **Arrangement automation:** every track has automation lanes for any parameter
   (instrument, mixer, effects, macros). Breakpoint envelopes: click to add a point, drag to
   move it, drag a segment to curve it, draw freehand in draw mode, delete with a
-  double-click or Delete. Lanes show and hide per track.
+  **single click** on the breakpoint (as in the reference) or Delete. Lanes show and hide per track.
 - **Clip envelopes:** automation that lives inside a clip and moves with it.
 - **Touching an automated control** overrides it until playback re-engages the automation
   (the standard re-enable behaviour). The control shows clearly that it's automated.
@@ -171,8 +171,9 @@ the way that hardware was commonly used.
 - **Settings window** (Preferences on macOS): Audio (device, buffer size, sample rate),
   Display (frame-rate cap), Editing (default grid, follow playhead), Files (autosave,
   recovery), Warnings ("don't ask again" resets).
-- **Project settings:** tempo, time signature, hardware profile, output filter. The chip
-  and filter move **out of the top bar**.
+- **Project settings:** hardware profile, output filter. The chip and filter move **out of
+  the top bar**. **Tempo lives in the top bar**, as in the reference, with the time signature
+  next to it (not in Project Settings).
 - **Ableton-standard editing**, including: double-click a note to delete it, double-click
   empty space to create one; Ctrl/Cmd+R renames clips and tracks; right-click context menus
   everywhere; a full shortcut map.
@@ -213,3 +214,13 @@ automation. The second system is the 1989 arcade FM board.
    which Sam turns into UX.md (must / should / later, marked by the CEO).
 4. Then build in batches, **with an automated test for every specified behaviour**. Then
    dogfood with real songs.
+
+## Decisions
+
+*2026-11-25, CEO, recorded by the app-shell run (SHELL_PROMPT.md):*
+- **Tempo lives in the top bar**, as in the reference, with the time signature next to it.
+  It is not repeated in Project Settings (principle 2). Changed in "The app shell".
+- **A single click on an automation breakpoint deletes it**, as in the reference (it was a
+  double-click here). Changed in "Automation".
+- **UX.md** (from the UX audit's draft, every proposed priority accepted) is the build spec
+  from now on. The replaced `CLAUDE.md` points here first.
