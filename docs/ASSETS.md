@@ -39,6 +39,7 @@ The fonts are embedded unmodified, under their original names, as OFL 1.1 allows
 | `docs/screens/**/*.png`, `docs/screens/demo-100.mp4` | Screenshots and a screen recording of this app, taken by the harness scripts (`docs/perf/tools`, `docs/pianoroll/tools`) | MIT OR Apache-2.0 |
 | `docs/screens/redesign/compare-reference.png` | The two above, stacked | MIT OR Apache-2.0 |
 | `docs/screens/v1.1/*`, `docs/export-examples/*` | This pass: screenshots and exports of the app | MIT OR Apache-2.0 |
+| `docs/screens/shell/*` | The app-shell run (SHELL.md): screenshots of the app and its native dialogs, taken by `docs/shell/tools/at_shell.ps1` | MIT OR Apache-2.0 |
 
 ## Measurement data
 
@@ -56,9 +57,9 @@ PRODUCT.md. Kept on purpose:
 
 - **"2A03", "VRC6", "NES", "Famicom"** name the emulated hardware, which the product can't be
   described without (nominative use). No logo or trade dress is used.
-- **`CLAUDE.md`** (the project brief) names "Konami VRC6" and "Ableton-style" to describe the
-  target, and lists the forbidden names as a rule. It is the owner's document, so it was left
-  as written; whether to reword it is the owner's decision.
+- **`CLAUDE.md`** was replaced on 2026-11-25 (app-shell run) by the audit's proposal, which names
+  no publisher and no "Ableton-style"; the reference product is named only as the workflow
+  reference, as VISION.md does.
 - **ENGINE.md** cites the NESdev wiki page "Namco 163 audio" as a source it checked.
 - **Git history** still contains "Ableton" in older commit messages (e.g. `74dcd25`). History
   is not rewritten.

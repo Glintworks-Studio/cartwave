@@ -247,3 +247,112 @@ Times are local (CST). Each decision taken without the user lists the options an
   `main`, and it was not retried or worked around. The merge is a fast-forward, ready for the owner.
 - **10:27 End.** The old-build worktree was removed. No ETL traces were made. The default audio
   output was never changed, so there was nothing to restore.
+
+
+---
+
+# RUNLOG: app-shell/batch-1-2 (unattended run, SHELL_PROMPT.md)
+
+Times are local (CST). Same format as above: every decision taken without the user, with the
+options and the reason. The report is SHELL.md.
+
+## 2026-11-25
+
+- **14:20 Start.** VISION.md, the audit (SUMMARY, UX-DRAFT, FINDINGS, FEASIBILITY) and the earlier
+  reports read. `cargo` still isn't on PATH (`~/.cargo/bin`).
+- **Decision D1: the 5 untracked `*_PROMPT.md` files go to `wip/prompts-2026-11-25`** (local
+  commit, not pushed), as the brief says. They are the owner's prompts, so neither discarding
+  nor publishing them is right.
+- **14:24 Git.** `main` fast-forwarded to `stabilize/v1.1`, then to `docs/ux-audit`; no
+  conflicts. 153 tests pass on `main`, golden included. `git push origin main` succeeded
+  (`dd590e8..1ca4a75`). `app-shell/batch-1-2` cut from it.
+- **14:27 Documents.**
+  - **D2:** CLAUDE.md is the proposal without its "proposed" banner. Three standing rules from
+    the brief were missing (measure before/after, trust probes, benchmarks prove themselves) and
+    are added. It now points to UX.md, SHELL.md and `shortcuts.rs`.
+  - **D3:** Follow on macOS is ⌥⇧F, the reference's own Mac key (R135). Decision 3 names the
+    Windows key; making it ⌘⇧F would invent a key.
+- **Batch 1.**
+  - **D4:** dev mode is a debug build or `CHIPDAW_DEV=1`. It gates F3–F7 and every test hook.
+    `CHIPDAW_DATA_DIR`, `CHIPDAW_AUDIO=0` and `CHIPDAW_VSYNC=0` stay open: they are configuration
+    and change no document. Alternative (gate them too) rejected: harmless, and AT-02 needs a
+    throw-away data dir without dev mode.
+  - **D5:** the save prompt is rfd's task dialog with Save / Don't Save / Cancel. Its
+    `common-controls-v6` feature needs comctl32 v6. A manifest dependency is embedded with MSVC
+    linker arguments from `build.rs` (app, and ui for its tests and examples), with no new crate.
+    Alternative (Yes / No / Cancel buttons) rejected as unclear.
+  - **D6:** the window close is cancelled by the root model consuming `WindowClose`: vizia sends
+    it to models before the window view. No fork change.
+  - **D7:** "dirty" is the undo document plus the saved fields outside undo (profile, filter,
+    loop, mute/solo). A song from a MIDI file and a recovered session start out unsaved.
+  - **D8 (a fix):** clip order is not content. A click raises a clip, which reordered the list.
+    That made the song "unsaved" and, before this run already, added an undo step. `Doc::same_as`
+    now compares by id when the order differs (unit test).
+  - **D9:** the text-field rule tracks the field being edited from vizia's
+    `TextEvent::StartEdit` / `EndEdit`, which bubble up to the root. In a field, only the field's
+    own keys work: no Ctrl+S either, as the brief says ("only Esc, Enter, Tab and the field's own
+    text editing").
+  - **D10:** Esc is one app action: close the context menu, else close the piano roll, else clear
+    the selection. Before, the arrangement and the root each did part of this.
+  - **D11:** on dimmed VRC6 lanes the M/S keys stay clickable: muting a silent lane changes no
+    content, and hiding them would shift the header layout.
+- **Batch 2.**
+  - **D12: interface scale is shown, disabled, with its reason.** vizia's winit backend ignores
+    `WindowDescription::user_scale_factor`. Applying it is a small fork change, but the fork would
+    then need publishing, and the brief allows only the two pushes. Fork change described in
+    SHELL.md §7.
+  - **D13:** the Warnings tab and its reset work, but no warning can be silenced yet: the native
+    dialogs can't hold a "Don't ask again" box. The first one comes with F-47's in-app dialog.
+  - **D14:** muda is an optional feature (`menus`, on by default), so a plugin build can leave it
+    out. `raw-window-handle` 0.6 is a direct dependency, for the HWND; it was already in the tree
+    via winit, rfd and muda. New transitive crates: crossbeam-channel, fdeflate, keyboard-types,
+    miniz_oxide, png, muda. All MIT / Apache / Zlib.
+  - **D15:** on Windows no accelerator is registered. Items read `label\tkey`, which is exactly
+    what muda draws, and keys take our own path. No double fire.
+  - **D16:** the window grows by the menu bar's height when it is attached, so the content keeps
+    its size and every harness coordinate still holds.
+  - **D17:** menu contents: only existing features.
+    - Cut / Copy / Paste / Quantize act on notes, and are disabled without the piano roll.
+    - Import ▸ holds only Audio as DPCM Sample. Today's replacing MIDI import is File > New from
+      MIDI File, and Ctrl+I stays free (decision 3).
+    - The Edit menu acts on the editor that last had the mouse.
+  - **D18:** the arrangement grid is three items in the right-click menu (Grid: 1/16, 1/4, Bar,
+    with a tick) instead of a nested submenu: the in-app context menu has no submenus yet.
+  - **D19:** Settings > Audio switches through the engine's rebuild path. A new `ERR_RECONFIG`
+    wake reason makes the host drop the stream and rebuild at once. The sample rate is applied to
+    the core in between: `Synth::set_sample_rate` rebuilds the band-limited step buffer and the
+    filter at the current level, and keeps the chip state (unit test: no level jump, time keeps
+    running). Measured gap while playing: 26–34 ms.
+  - **D20:** Project Settings needs no format bump: `chip` and `filter` were already in v3.
+- **Harnesses.**
+  - **D21:** every harness sets `CHIPDAW_DEV=1`. In dev mode the app prints one stderr line per
+    hook it applied (`dev: mode on…`, `dev: F4 stress set on`, `dev: CHIPDAW_PROJECT … (n
+    clips)`, `dev: CHIPDAW_OPEN_CLIP n (piano roll open: true)`). bench, pacing, bench_pr and
+    trace_app check these lines and print "reached" or "NOT REACHED".
+  - The screenshot scripts were run, and their images inspected (copies kept in
+    `%TEMP%\chipdaw-harness-proof`). The committed images were then restored, since they document
+    earlier passes.
+  - `trace_app.ps1` was not run: it needs the elevated xperf helper. While editing it, its drag
+    coordinates (still the pre-redesign track header) were fixed.
+  - **D22:** `pianoroll/scenario.ps1` failed on the **pre-run build too** (pre-redesign
+    coordinates, a format-v1 check). It was rewritten for the current layout: grid from the
+    context menu, saving through the native Save dialog via the clipboard, because UI Automation
+    hangs walking the shell dialog. It passes. `stabilize/screens_v11.ps1` used the removed EXPORT
+    key and clock click; it now uses Ctrl+Shift+R and View > Clock Shows Bars. It passes (28-file
+    export).
+- **Acceptance harness** (`docs/shell/tools`): `at_shell.ps1` drives the app.
+  - `dialog.ps1` finds and answers the native dialogs through UI Automation: task-dialog
+    buttons are `CCPushButton` panes, file-dialog buttons are `Button` panes. It opens menus
+    with their Alt mnemonics, since vizia's accessibility tree hides the menu bar.
+  - `pixels.ps1` does the pixel checks (Pillow isn't installed).
+  - `check_shell.py` checks obs.json and the saved files.
+  - Final run (`%TEMP%\chipdaw-at-final`): **9/9, 49 checks**.
+- **Measurements.**
+  - **Before/after:** the pre-run build was built in a worktree and benched alternately with the
+    branch. No regression (SHELL.md §5).
+  - Pacing: 0 frames over 20 ms, 0 stalls.
+  - Engine A and C, 120 s: 0 pilot dropouts, on the HDMI endpoint (the MOTU is not connected;
+    D5 of the stabilize run applies).
+  - An Alt-drag doesn't leave the menu bar focused when Alt is released (checked).
+- **15:50 Gates:** all pass (SHELL.md summary). Merge follows.
+- **15:46 Merge.** Every gate passes, so `app-shell/batch-1-2` is fast-forwarded into `main` with this commit and pushed (branch pushed too).
