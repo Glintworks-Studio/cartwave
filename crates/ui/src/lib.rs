@@ -7,6 +7,8 @@ pub mod input;
 pub mod mock;
 pub mod notes;
 pub mod perf;
+pub mod render;
+pub mod songs;
 pub mod state;
 pub mod testing;
 pub mod theme;
@@ -1607,6 +1609,12 @@ impl AppState {
         }
         if let Some(id) = std::env::var("CHIPDAW_OPEN_CLIP").ok().and_then(|v| v.parse().ok()) {
             self.open_piano(id);
+        }
+        // `CHIPDAW_PIANO_ZOOM=px per bar` (the piano-roll benchmark shows
+        // all 2,000 notes at 32).
+        if let Some(ppb) = std::env::var("CHIPDAW_PIANO_ZOOM").ok().and_then(|v| v.parse::<f64>().ok()) {
+            let ppb = ppb.clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
+            self.s.piano.update(|p| p.px_per_tick = ppb / TICKS_PER_BAR as f64);
         }
     }
 }

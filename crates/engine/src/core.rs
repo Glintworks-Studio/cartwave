@@ -341,6 +341,32 @@ mod tests {
         (c, tx, grx, shared)
     }
 
+    /// Audition: `Preview` sounds while stopped and is released by `None`;
+    /// it runs inside `process`, under the no-allocation checker like
+    /// everything else here.
+    #[test]
+    fn preview_while_stopped() {
+        let (mut c, mut tx, _grx, shared) = core();
+        let mut out = vec![0f32; 512 * 2];
+        tx.push(Command::Preview { lane: 2, note: Some((45, None)) }).ok().unwrap();
+        for _ in 0..4 {
+            c.process(&mut out, 2, 30_000_000);
+        }
+        assert_eq!(shared.note_ons[2].load(Ordering::Relaxed), 1);
+        assert!(out.iter().any(|&v| v != 0.0));
+        tx.push(Command::Preview { lane: 2, note: None }).ok().unwrap();
+        tx.push(Command::Preview { lane: 0, note: Some((69, Some(8))) }).ok().unwrap();
+        for _ in 0..4 {
+            c.process(&mut out, 2, 30_000_000);
+        }
+        assert_eq!(shared.note_ons[0].load(Ordering::Relaxed), 1);
+        assert_eq!(c.player.driver.sounding, 1, "only the pulse preview sounds");
+        // Play clears auditions.
+        tx.push(Command::Play).ok().unwrap();
+        c.process(&mut out, 2, 30_000_000);
+        assert!(c.player.driver.preview.iter().all(|p| p.is_none()));
+    }
+
     #[test]
     fn plays_and_publishes() {
         let (mut c, mut tx, mut grx, shared) = core();
