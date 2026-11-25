@@ -33,16 +33,16 @@ Start-Sleep -Seconds 2
 $ff = Start-Process ffmpeg -ArgumentList "-hide_banner -loglevel info -f lavfi -i ddagrab=framerate=240:dup_frames=0:draw_mouse=0 -t $Secs -vf showinfo -f null -" -PassThru -NoNewWindow -RedirectStandardError "$S\pace_showinfo.txt"
 $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew()
 if ($Scenario -eq "drag") {
-  Move-To 300 160; Down
+  Move-To 720 130; Down   # a clip in the 200-clip view (300, 160 is a track header since the redesign)
   $i = 0
-  while (-not $ff.HasExited) { Move-To (300 + [int](120 * [Math]::Sin($i / 12.0))) (160 + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
+  while (-not $ff.HasExited) { Move-To (720 + [int](120 * [Math]::Sin($i / 12.0))) (130 + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
   Up
 }
 if ($Scenario -eq "prdrag") {
   # The handle note (C4, bar 1) of piano_bench.chipdaw at 32 px per bar.
-  Move-To 98 591; Down
+  Move-To 88 535; Down   # the C4 handle note (layout since the redesign; was 98, 591)
   $i = 0
-  while (-not $ff.HasExited) { Move-To (98 + [int](12 * [Math]::Sin($i / 12.0))) (591 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
+  while (-not $ff.HasExited) { Move-To (88 + [int](12 * [Math]::Sin($i / 12.0))) (535 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
   Up
 }
 $ff.WaitForExit()

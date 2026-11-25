@@ -827,13 +827,25 @@ impl View for PianoRoll {
             let m = Map::new(&p, Geo::new(b.w / s, b.h / s, lane), RowKind::for_lane(lane));
             let px = |v: f32| v * s;
 
-            // Retained layer: everything but the playhead, hover and marquee.
+            let dragged: &[u32] = a.editing_notes.as_ref().filter(|(id, _)| *id == c.id).map_or(&[], |(_, ids)| ids.as_slice());
+            // Retained layer: everything but the playhead, hover, marquee and dragged notes.
             let key = {
                 let mut h = std::collections::hash_map::DefaultHasher::new();
                 for v in [rect.left, rect.top, rect.width(), rect.height(), s, m.row_h, m.top] {
                     v.to_bits().hash(&mut h);
                 }
-                (m.ppt.to_bits(), m.scroll.to_bits(), c.id, c.rev.0, &p.sel, p.grid.ticks(), p.lane_volume).hash(&mut h);
+                (m.ppt.to_bits(), m.scroll.to_bits(), c.id, &p.sel, p.grid.ticks(), p.lane_volume).hash(&mut h);
+                if dragged.is_empty() {
+                    c.rev.0.hash(&mut h);
+                } else {
+                    // During a note drag only the dragged notes move: key on the
+                    // others, so the layer is reused while they are drawn live.
+                    dragged.hash(&mut h);
+                    c.len_ticks.hash(&mut h);
+                    for n in c.notes.iter().filter(|n| !dragged.contains(&n.id)) {
+                        (n.id, n.start, n.len, n.pitch, n.volume).hash(&mut h);
+                    }
+                }
                 // Sample names label the DPCM rows.
                 a.samples.hash(&mut h);
                 h.finish()
@@ -849,7 +861,7 @@ impl View for PianoRoll {
                     let lc = surface.canvas();
                     lc.clear(vg::Color::TRANSPARENT);
                     let names = notes::dpcm_row_names(&a.samples);
-                    draw_static(lc, s, &m, c, color, &p, &names);
+                    draw_static(lc, s, &m, c, color, &p, &names, dragged);
                     layer.image = Some(surface.image_snapshot());
                     layer.key = key;
                 }
@@ -858,6 +870,12 @@ impl View for PianoRoll {
                 canvas.draw_image(img, (rect.left, rect.top), None);
             }
             drop(layer);
+            if !dragged.is_empty() {
+                canvas.save();
+                canvas.translate((rect.left, rect.top));
+                draw_notes(canvas, s, &m, c, color, &p, &|id| dragged.contains(&id));
+                canvas.restore();
+            }
 
             // Hovered row (keys + a faint band across the grid).
             if let Some(row) = self.hover_row {
@@ -907,7 +925,10 @@ impl View for PianoRoll {
 
 /// Rows, grid, keys, ruler, notes and volume bars (into the layer; origin =
 /// the view's top-left, physical px).
-fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &PianoState, dpcm_names: &[String]) {
+/// `skip`: notes left out (being dragged: drawn live on top, so the layer
+/// isn't re-rendered for every pointer move).
+#[allow(clippy::too_many_arguments)]
+fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &PianoState, dpcm_names: &[String], skip: &[u32]) {
     let g = m.geo;
     let px = |v: f32| v * s;
     let w = px(g.w);
@@ -1038,11 +1059,25 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         }
     }
 
+    draw_notes(canvas, s, m, c, color, p, &|id| !skip.contains(&id));
+
+    // Keys column divider.
+    canvas.draw_rect(vg::Rect::from_ltrb(gx0 - s, 0.0, gx0, px(g.h)), &gfx::fill(LINE));
+}
+
+/// The notes and their volume-lane bars, for the notes `keep` accepts
+/// (layer-local coordinates).
+fn draw_notes(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &PianoState, keep: &dyn Fn(u32) -> bool) {
+    let g = m.geo;
+    let px = |v: f32| v * s;
+    let w = px(g.w);
+    let (gx0, gy0, gy1) = (px(g.grid_x0), px(g.grid_y0), px(g.grid_y1));
+    let kind = m.kind;
     // Notes (only the ones inside the clip are shown).
     canvas.save();
     canvas.clip_rect(vg::Rect::from_ltrb(gx0, gy0, w, gy1), None, None);
     let lane_vol = p.lane_volume;
-    for n in c.audible_notes() {
+    for n in c.audible_notes().filter(|n| keep(n.id)) {
         let row = kind.row_of(n.pitch);
         let y = px(m.y_of_row(row));
         if y > gy1 || y + px(m.row_h) < gy0 {
@@ -1078,7 +1113,7 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         for lvl in [0.0, 0.5, 1.0] {
             canvas.draw_rect(vg::Rect::from_ltrb(gx0, inner(lvl).round(), w, inner(lvl).round() + s), &gfx::fill(Rgba::white(0.05)));
         }
-        for n in c.audible_notes() {
+        for n in c.audible_notes().filter(|n| keep(n.id)) {
             let x0 = px(m.x_of(n.start as f64)).round();
             let x1 = px(m.x_of(n.end().min(c.len_ticks) as f64));
             if x1 < gx0 || x0 > w {
@@ -1097,8 +1132,6 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         gfx::draw_text(canvas, "VOLUME", px(8.0), gfx::baseline_for_center(&f, (v0 + v1) * 0.5), &f, TEXT_LO);
     }
 
-    // Keys column divider.
-    canvas.draw_rect(vg::Rect::from_ltrb(gx0 - s, 0.0, gx0, px(g.h)), &gfx::fill(LINE));
 }
 
 fn is_black_key(pitch: u8) -> bool {

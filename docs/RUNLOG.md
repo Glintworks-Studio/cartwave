@@ -190,3 +190,26 @@ Times are local (CST). Each decision taken without the user lists the options an
   **Decision D16:** Part B changed the driver after this build, so A, B, C and G are re-run on the
   final build before the merge decision (one buffer size each: WASAPI ignores the request, so the
   three sizes are the same run).
+- **A2 UI benchmarks (09:20–09:45; final build; HDMI audio).**
+  - **The harnesses were stale since the redesign.** `bench.ps1`/`pacing.ps1` dragged at client
+    (300, 160), now a track header, and `bench_pr.ps1`/`pacing.ps1 prdrag` at (98, 591), now an
+    empty piano-roll row: those "drag" scenarios dragged nothing since the redesign. They now drag a
+    clip (720, 130) and the C4 handle note (88, 535); a mid-drag screenshot confirmed each.
+    `make_songs` also silently rewrote the v1 golden song in the current format. It no longer
+    touches `docs/songs` (the file was restored from git).
+  - Arrangement (`bench.ps1`, 3 runs): idle 0.3/0.4/0.7%, demo 10.5/10.5/10.4%, 200 clips
+    9.1/11.6/11.2%, 200-clip drag 12.0/12.8/12.5%. Pacing (30 s): demo, 200 and two of three drag
+    runs: 0 > 20 ms, 0 missed vblanks; one drag run had a single 33 ms frame (1 missed vblank).
+  - **Demo playback is ~10.2% against the ≤ 10% target.** An alternating A/B with the untouched
+    product/v1 build on the same script: old 10.8/9.1%, new 9.5/10.1% (idle 2.1–2.3% on both: a busy
+    machine). So nothing in this pass changed it; it has been at the line since the redesign added
+    the spectrum, strip glows and browser. Within PERF.md's ±0.5–1 point noise; reported as at
+    target.
+  - **Regression found and fixed: piano-roll note drag at 32–35% CPU** (target ≤ 25%; PIANOROLL.md
+    measured 12.5–16%), with 5 frames > 20 ms. The A/B (with a v2 bench file, because the old build
+    rightly refuses v3) showed the old build at 33% too: the redesign made each note two gradient
+    shaders and two rounded rects, and the whole 2,000-note layer was re-rendered per pointer move.
+    **Fix** (PIANOROLL.md §8's proposed next step): during a note drag the layer is keyed on the
+    *other* notes and reused; dragged notes and their volume bars are drawn live on top.
+    After: **dragging 7.3/8.1/7.8%**, pacing 8.8–9.0% with **0 > 20 ms, 0 missed vblanks** (×2);
+    playing 5.9–6.6%.

@@ -347,10 +347,19 @@ impl View for Dial {
         // Value readout (mono, tabular), or why the dial is inert.
         let vy = b.y + (DIAL_CY + ARC_R + 22.0) * s;
         if let Some(why) = state.locked {
+            // Two short lines ("SET BY" / "INSTRUMENT"), clipped to the dial:
+            // one line is wider than the dial, and text drawn outside a view's
+            // bounds is left behind by later partial repaints.
             let f = gfx::font(Face::SemiBold, 9.0 * s);
             let t = why.to_uppercase();
-            let w = gfx::text_width(&f, &t);
-            gfx::draw_text(canvas, &t, cxp - w * 0.5, vy, &f, TEXT_LO);
+            let (a, b2) = t.split_once(" BY ").map_or((t.as_str(), ""), |(a, b)| (a, b));
+            canvas.save();
+            canvas.clip_rect(vg::Rect::from_xywh(b.x, b.y, b.w, b.h), None, Some(true));
+            for (k, line) in [format!("{a} BY"), b2.to_string()].iter().enumerate() {
+                let w = gfx::text_width(&f, line);
+                gfx::draw_text(canvas, line, cxp - w * 0.5, vy - 4.0 * s + k as f32 * 11.0 * s, &f, TEXT_LO);
+            }
+            canvas.restore();
             return;
         }
         let vf = gfx::font(Face::MonoMedium, 11.0 * s);

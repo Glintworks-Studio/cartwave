@@ -20,8 +20,8 @@ function Cpu([scriptblock]$during) {
 }
 Move-To 700 300; Key 0x20; Start-Sleep -Seconds 2
 $play = Cpu { param($t) Start-Sleep -Seconds $Secs }
-Move-To 98 591; Down
-$drag = Cpu { param($t) $i = 0; while ($t.Elapsed.TotalSeconds -lt $Secs) { Move-To (98 + [int](12 * [Math]::Sin($i / 12.0))) (591 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 } }
+Move-To 88 535; Down   # the C4 handle note (layout since the redesign; was 98, 591)
+$drag = Cpu { param($t) $i = 0; while ($t.Elapsed.TotalSeconds -lt $Secs) { Move-To (88 + [int](12 * [Math]::Sin($i / 12.0))) (535 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 } }
 Up
 Stop-Process -Id $p.Id -Force
 Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_OPEN_CLIP, Env:CHIPDAW_PIANO_ZOOM, Env:CHIPDAW_DATA_DIR

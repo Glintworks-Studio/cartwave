@@ -4,6 +4,9 @@
 # Appends one line per run to <Work>\bench_log.txt. -Exe is relative to -Repo.
 # Defaults: -Repo = this script's repo; -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf.
 param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\app.exe", [string]$Env = "",
+  # Where the drag starts (client px): on a clip in the 200-clip view. (300, 160) was right before
+  # the redesign; since then it is a track header, so that "drag" moved nothing (STABILIZE.md A2).
+  [int]$DragX = 720, [int]$DragY = 130,
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
 New-Item -ItemType Directory -Force $Work | Out-Null
@@ -21,9 +24,9 @@ function Cpu($name) {
   $global:Res[$name] = [math]::Round($pct, 1)
 }
 function CpuDrag($name) {
-  Move-To 300 160; Down
+  Move-To $DragX $DragY; Down
   $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew(); $i = 0
-  while ($t0.Elapsed.TotalSeconds -lt $Secs) { Move-To (300 + [int](120 * [Math]::Sin($i / 12.0))) (160 + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
+  while ($t0.Elapsed.TotalSeconds -lt $Secs) { Move-To ($DragX + [int](120 * [Math]::Sin($i / 12.0))) ($DragY + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
   $p.Refresh(); $pct = ($p.TotalProcessorTime - $c0).TotalMilliseconds / $t0.Elapsed.TotalMilliseconds * 100
   Up
   $global:Res[$name] = [math]::Round($pct, 1)

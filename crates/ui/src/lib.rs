@@ -1786,14 +1786,18 @@ fn device_panel(cx: &mut Context, s: Signals) {
 
         // The lane's instrument: its macros, editable.
         VStack::new(cx, |cx| {
-            let title = s.arrangement.map(move |a| {
-                let lane = s.lane_sel.get_untracked();
-                let id = a.current_instrument(lane);
-                let name = a.instruments.get(id).map(|i| i.label()).unwrap_or_default();
-                let whose = if id == a.instruments.lane_id(lane) { "LANE DEFAULT" } else { "CLIP'S OWN" };
-                let n = a.instruments.users(id, &a.clips);
-                let shared = if n == 1 { "1 CLIP".to_string() } else { format!("{n} CLIPS") };
-                format!("INSTRUMENT  ·  {}  ·  {whose}  ·  {shared}", name.to_uppercase())
+            // Tracks both the arrangement and the selected lane: a lane change
+            // alone (the selection moving to another lane) must update it too.
+            let title = Memo::new(move |_| {
+                let lane = s.lane_sel.get();
+                s.arrangement.with(|a| {
+                    let id = a.current_instrument(lane);
+                    let name = a.instruments.get(id).map(|i| i.label()).unwrap_or_default();
+                    let whose = if id == a.instruments.lane_id(lane) { "LANE DEFAULT" } else { "CLIP'S OWN" };
+                    let n = a.instruments.users(id, &a.clips);
+                    let shared = if n == 1 { "1 CLIP".to_string() } else { format!("{n} CLIPS") };
+                    format!("INSTRUMENT  ·  {}  ·  {whose}  ·  {shared}", name.to_uppercase())
+                })
             });
             Label::new(cx, title).class("section-title");
             InstrumentView::new(cx, s).width(Stretch(1.0)).height(Stretch(1.0));
