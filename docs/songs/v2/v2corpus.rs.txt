@@ -1,0 +1,119 @@
+//! Writes the version-2 migration corpus with the product/v1 build (281ee66)
+//! and prints each file's render hashes, so the version-3 build can prove its
+//! migration renders bit-identically (STABILIZE_PROMPT.md §B4).
+//!
+//!   cargo run --release -p ui --example v2corpus -- <out dir>
+
+use std::path::Path;
+use std::sync::Arc;
+
+use chip::presets;
+use engine::ParamId;
+use ui::instruments::LaneInstrument;
+use ui::{dpcm, export, file, midi, mock, render};
+
+fn secs(p: &file::Project) -> f64 {
+    p.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / p.bpm as f64 + 1.0
+}
+
+fn layout(p: &mut file::Project, i: usize) {
+    let l = &presets::LAYOUTS[i];
+    p.chip = if l.vrc6 { ui::state::SoundChip::WithVrc6 } else { ui::state::SoundChip::Base2A03 };
+    p.filter = engine::FilterMode::default_for(l.vrc6);
+    for (lane, name) in l.lanes.iter().enumerate() {
+        let pr = presets::find(name).unwrap();
+        p.arrangement.instruments[lane] = LaneInstrument::from_preset(pr);
+        for &(id, v) in pr.params {
+            p.params.set(lane, id, v as i32);
+        }
+    }
+}
+
+/// Every third note gets its own volume (3..15), so lanes mix notes with
+/// and without a volume.
+fn some_volumes(p: &mut file::Project) {
+    for c in p.arrangement.clips.iter_mut() {
+        let c = Arc::make_mut(c);
+        for (i, n) in c.notes.iter_mut().enumerate() {
+            if i % 3 == 0 {
+                n.volume = Some(3 + (i as u8 * 5) % 13);
+            }
+        }
+    }
+}
+
+fn demo() -> file::Project {
+    let mut p = file::Project::new_empty();
+    p.arrangement = mock::demo_arrangement();
+    p
+}
+
+fn main() {
+    let out = std::env::args().nth(1).expect("out dir");
+    let out = Path::new(&out);
+    std::fs::create_dir_all(out).unwrap();
+    let mut files: Vec<(String, file::Project)> = Vec::new();
+
+    // 1. The demo on the default band, as saved by the app.
+    files.push(("demo_band".into(), demo()));
+    // 2. Per-note volumes on every lane under channel controls below 15, a
+    //    decaying pulse and noise, and a saw at a rate a volume can express.
+    let mut v = demo();
+    some_volumes(&mut v);
+    v.params.set(0, ParamId::Volume, 9);
+    v.params.set(1, ParamId::Volume, 6);
+    v.params.set(1, ParamId::Envelope, 1);
+    v.params.set(3, ParamId::Volume, 11);
+    v.params.set(3, ParamId::Envelope, 2);
+    v.params.set(5, ParamId::Volume, 7);
+    v.params.set(6, ParamId::Volume, 13);
+    v.params.set(7, ParamId::Rate, 28);
+    files.push(("volumes_mixed".into(), v));
+    // 3. The same on raw channels (no instruments: the v1 sound).
+    let mut r = demo();
+    r.arrangement.instruments = vec![LaneInstrument::plain(); 8];
+    some_volumes(&mut r);
+    r.params.set(0, ParamId::Volume, 5);
+    r.params.set(0, ParamId::Envelope, 1);
+    r.params.set(5, ParamId::Volume, 8);
+    r.params.set(7, ParamId::Rate, 39);
+    files.push(("raw_volumes".into(), r));
+    // 4. Every channel layout (kits, strings, SFX), with volumes mixed in.
+    for i in 0..presets::LAYOUTS.len() {
+        let mut p = demo();
+        layout(&mut p, i);
+        if i % 2 == 1 {
+            some_volumes(&mut p);
+            p.params.set(0, ParamId::Volume, 10);
+        }
+        files.push((format!("layout_{i}"), p));
+    }
+    // 5. The showcase tune with its imported sample (DPCM user slot).
+    let mut s = file::Project::new_empty();
+    let song = midi::parse(&std::fs::read("docs/songs/showcase.mid").unwrap()).unwrap();
+    let imp = midi::arrange(&song, true);
+    s.arrangement = imp.arrangement;
+    s.bpm = imp.bpm.unwrap();
+    s.loop_end_ticks = imp.loop_end;
+    let (pcm, sr) = dpcm::read_wav(&std::fs::read("docs/songs/hey.wav").unwrap()).unwrap();
+    let (hey, _) = dpcm::convert("hey", &pcm, sr, dpcm::free_bytes(&[])).unwrap();
+    s.arrangement.samples = vec![Some(hey), None, None, None];
+    s.params.set(0, ParamId::Volume, 10);
+    files.push(("showcase".into(), s));
+    // 6. Not exact by design: a saw at rate 50 (no volume gives 50) next to
+    //    per-note volumes. The v3 build approximates it and says so.
+    let mut x = demo();
+    some_volumes(&mut x);
+    x.params.set(7, ParamId::Rate, 50);
+    files.push(("saw_rate_50_inexact".into(), x));
+
+    for (name, p) in &files {
+        let path = out.join(format!("{name}.chipdaw"));
+        file::save(p, &path).unwrap();
+        // Reload, as the new build will.
+        let q = file::load(&path).unwrap();
+        let a = render::hash(&render::render(&q, secs(&q)));
+        let b = render::hash(&export::render(&q));
+        println!("(\"{name}\", {a:#018x}, {b:#018x}),");
+    }
+}

@@ -116,3 +116,11 @@ Times are local (CST). Each decision taken without the user lists the options an
     on #151515), TEXT_MID → #9A9A9A (≥ 4.5:1 on key faces), with the stylesheet variables, the
     placeholder and the browser hint to match. Every informative TEXT_GHOST use moved to TEXT_LO;
     TEXT_GHOST is decoration only. The hierarchy HI > MID > LO is kept.
+- **Migration corpus (08:14–08:24).** A worktree of `product/v1` (281ee66, untouched) built
+  `docs/songs/v2/v2corpus.rs.txt`, which saved 10 version-2 files (the demo band; mixed per-note
+  volumes under channel controls < 15 with decay envelopes; raw channels; all 5 layouts; the
+  showcase with its DPCM sample; one deliberately inexact saw case). It printed each file's hashes
+  from *that* build: `render::render` and `export::render`, the latter including the DPCM samples.
+  `crates/ui/tests/migration.rs`: **all 9 exact files render bit-identically after migration to v3
+  (both hashes)**, and again after a v3 save and reload. The inexact case is reported in
+  `load_report` and does differ. This was checked before the Part B refactor, so B must keep it.
