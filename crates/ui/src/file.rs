@@ -1,5 +1,10 @@
-//! The `.chipdaw` project file, format version 1 (spec: PIANOROLL.md §5),
-//! plus the autosave / recovery files.
+//! The `.chipdaw` project file (spec: PIANOROLL.md §5, version 3 changes in
+//! STABILIZE.md §B), plus the autosave / recovery files.
+//!
+//! Versions: 1 (piano roll), 2 (instruments, DPCM samples), 3 (the lane
+//! Volume control is a channel volume that scales note volumes; loop start
+//! and loop on/off are saved). Older files are migrated on load so they
+//! sound exactly as before (`migrate_v2`).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
 //! in-memory model is converted to and from the file structs below, so the
@@ -20,7 +25,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 pub const EXTENSION: &str = "chipdaw";
 
 /// Everything a project file stores.
@@ -33,9 +38,15 @@ pub struct Project {
     /// The filter follows the chip (the user hasn't picked one).
     pub filter_auto: bool,
     pub loop_end_ticks: u32,
+    /// Loop start (version 3; older files: 0).
+    pub loop_start_ticks: u32,
+    /// The song loop is switched on (version 3; older files: on, the app's default).
+    pub loop_on: bool,
     pub mute: u8,
     pub solo: u8,
     pub params: Params,
+    /// What loading changed (migration notes); empty for a current file.
+    pub load_report: Vec<String>,
 }
 
 impl Project {
@@ -48,9 +59,12 @@ impl Project {
             filter: FilterMode::default_for(true),
             filter_auto: true,
             loop_end_ticks: 32 * crate::state::TICKS_PER_BAR,
+            loop_start_ticks: 0,
+            loop_on: true,
             mute: 0,
             solo: 0,
             params: crate::instruments::default_params(),
+            load_report: Vec::new(),
         }
     }
 }
@@ -68,6 +82,11 @@ struct FileV1 {
     /// "auto" (follows the chip), or "nes", "nes+440", "famicom", "off".
     filter: String,
     loop_end: u32,
+    /// Version 3: loop start (ticks) and whether the loop is on.
+    #[serde(default)]
+    loop_start: u32,
+    #[serde(default = "yes", rename = "loop")]
+    loop_on: bool,
     lanes: Vec<LaneV1>,
     clips: Vec<ClipV1>,
     /// Version 2: imported DPCM samples (hex-encoded delta bytes).
@@ -125,6 +144,10 @@ struct InstV2 {
     vibrato: [u8; 3],
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     kit: Vec<KitV2>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 fn is_zero3(v: &[u8; 3]) -> bool {
@@ -301,6 +324,8 @@ pub fn to_string(p: &Project) -> String {
         .into(),
         filter: if p.filter_auto { "auto".into() } else { filter_key(p.filter).into() },
         loop_end: p.loop_end_ticks,
+        loop_start: p.loop_start_ticks,
+        loop_on: p.loop_on,
         lanes,
         clips,
         samples: p
@@ -370,7 +395,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         return Err("Not a ChipDAW project (no \"format\": \"chipdaw\" field).".into());
     }
     match h.version {
-        Some(1 | VERSION) => {}
+        Some(1..=VERSION) => {}
         Some(v) if v > VERSION => {
             return Err(format!(
                 "This project was saved by a newer ChipDAW (file format version {v}). \
@@ -476,17 +501,78 @@ pub fn from_str(text: &str) -> Result<Project, String> {
     if arrangement.samples.iter().all(|s| s.is_none()) {
         arrangement.samples.clear();
     }
-    Ok(Project {
+    let loop_end_ticks = f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS);
+    let mut p = Project {
         arrangement,
         bpm: f.bpm.clamp(crate::state::Transport::MIN_BPM, crate::state::Transport::MAX_BPM),
         chip,
         filter,
         filter_auto,
-        loop_end_ticks: f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS),
+        loop_end_ticks,
+        loop_start_ticks: f.loop_start.min(loop_end_ticks.saturating_sub(crate::state::PPQ)),
+        loop_on: f.loop_on,
         mute,
         solo,
         params,
-    })
+        load_report: Vec::new(),
+    };
+    if h.version.unwrap_or(VERSION) < 3 {
+        migrate_v2(&mut p);
+    }
+    Ok(p)
+}
+
+/// Version 1/2 → 3. Before version 3 a note's own volume *replaced* the
+/// lane's Volume control (V); now the control is a channel volume that
+/// scales it (out = note × macro × channel). For a lane that mixes notes with
+/// and without their own volume under V < 15, the old sound is kept exactly:
+/// notes without a volume get V as their own, and the control goes to 15
+/// (which scales by exactly 1). The saw does the same with its Rate control
+/// (42 = scale 1); a rate no note volume can express is approximated and
+/// reported.
+pub fn migrate_v2(p: &mut Project) {
+    use chip::driver::saw_rate_for_volume;
+    const VOLUME_LANES: [usize; 5] = [0, 1, 3, 5, 6];
+    const SAW: usize = 7;
+    let has: [bool; LANES] =
+        std::array::from_fn(|lane| p.arrangement.clips.iter().any(|c| c.lane == lane && c.notes.iter().any(|n| n.volume.is_some())));
+    let has_volumes = |lane: usize| has[lane];
+    let mut fill: Vec<(usize, u8)> = Vec::new();
+    for lane in VOLUME_LANES {
+        let v = p.params.get(lane, ParamId::Volume) as u8;
+        if v != 15 && has_volumes(lane) {
+            fill.push((lane, v));
+            p.params.set(lane, ParamId::Volume, 15);
+        }
+    }
+    let r = p.params.get(SAW, ParamId::Rate) as u8;
+    if r != 42 && has_volumes(SAW) {
+        let exact = (0..=15u8).find(|&v| saw_rate_for_volume(v) == r);
+        let v = exact.unwrap_or_else(|| (0..=15u8).min_by_key(|&v| (saw_rate_for_volume(v) as i32 - r as i32).abs()).unwrap_or(15));
+        if exact.is_none() {
+            p.load_report.push(format!(
+                "VRC6 Saw: the Rate control ({r}) can't be kept exactly next to per-note volumes; notes without a volume now play at rate {}.",
+                saw_rate_for_volume(v)
+            ));
+        }
+        fill.push((SAW, v));
+        p.params.set(SAW, ParamId::Rate, 42);
+    }
+    if fill.is_empty() {
+        return;
+    }
+    let ids: Vec<u32> = p.arrangement.clips.iter().filter(|c| fill.iter().any(|f| f.0 == c.lane)).map(|c| c.id).collect();
+    for id in ids {
+        let Some(c) = p.arrangement.clip_mut(id) else { continue };
+        let v = fill.iter().find(|f| f.0 == c.lane).map_or(15, |f| f.1);
+        for n in &mut c.notes {
+            n.volume.get_or_insert(v);
+        }
+    }
+    p.load_report.push(format!(
+        "Upgraded from an older version: {} lane(s) moved their volume into the notes, so the song sounds the same.",
+        fill.len()
+    ));
 }
 
 /// Writes atomically: a temporary file next to the target, then a rename,
@@ -510,6 +596,37 @@ pub fn with_extension(path: &str) -> PathBuf {
         p.with_extension(EXTENSION)
     } else {
         p
+    }
+}
+
+// ───────────────────────────── Settings ─────────────────────────────
+
+/// App preferences (not part of a project), in `settings.json` next to the
+/// recovery file. Unknown or missing fields fall back to defaults, so an
+/// older or newer build never fails on it.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    /// The transport clock shows bars.beats.sixteenths instead of m:ss.cc.
+    pub clock_bars: bool,
+}
+
+pub fn load_settings() -> Settings {
+    data_dir()
+        .and_then(|d| std::fs::read_to_string(d.join("settings.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_settings(s: &Settings) {
+    if let Some(d) = data_dir() {
+        let _ = std::fs::create_dir_all(&d);
+        if let Ok(t) = serde_json::to_string_pretty(s) {
+            let tmp = d.join("settings.json.tmp");
+            if std::fs::write(&tmp, t).is_ok() {
+                let _ = std::fs::rename(&tmp, d.join("settings.json"));
+            }
+        }
     }
 }
 
@@ -600,14 +717,17 @@ mod tests {
             filter: FilterMode::NesWith440,
             filter_auto: false,
             loop_end_ticks: 16 * crate::state::TICKS_PER_BAR,
+            loop_start_ticks: 4 * crate::state::TICKS_PER_BAR,
+            loop_on: true,
             mute: 0b0000_0100,
             solo: 0b1000_0000,
             params,
+            load_report: Vec::new(),
         }
     }
 
     /// The parts of a project that are saved (view, selection: not).
-    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, u32, u8, u8, Params);
+    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, (u32, u32, bool), u8, u8, Params);
 
     fn saved_parts(p: &Project) -> SavedParts {
         (
@@ -617,7 +737,7 @@ mod tests {
             p.chip,
             p.filter,
             p.filter_auto,
-            p.loop_end_ticks,
+            (p.loop_end_ticks, p.loop_start_ticks, p.loop_on),
             p.mute,
             p.solo,
             p.params,
@@ -646,7 +766,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 2,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 3,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -656,9 +776,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 2,", "\"version\": 3,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 3,", "\"version\": 4,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 3"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 4"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

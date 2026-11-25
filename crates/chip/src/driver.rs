@@ -449,30 +449,47 @@ impl Driver {
         self.samples[BUILTIN_COUNT..].copy_from_slice(&refs);
     }
 
-    /// V for `lane`: the sounding note's volume, else the lane's parameter.
-    fn volume(&self, lane: usize) -> u8 {
-        self.lanes[lane]
-            .vol
-            .map_or(self.params.get(lane, ParamId::Volume) as u8, |v| v.min(15))
+    /// The lane's channel volume (its Volume control, 0..=15). It scales
+    /// everything the lane plays, like a driver's channel volume column:
+    /// out = note volume × volume macro × channel volume.
+    fn level(&self, lane: usize) -> u8 {
+        self.params.get(lane, ParamId::Volume) as u8
     }
 
-    /// The saw's accumulator rate: from the note's volume if it has one.
+    /// The sounding note's own volume, or full (15).
+    fn note_volume(&self, lane: usize) -> u8 {
+        self.lanes[lane].vol.map_or(15, |v| v.min(15))
+    }
+
+    /// The 4-bit volume for this frame: note × macro × channel.
+    fn out_volume(&self, lane: usize, f: &Frame, macro_vol: bool) -> u8 {
+        let v = self.note_volume(lane);
+        let v = if macro_vol { scale_volume(v, f.volume) } else { v };
+        scale_volume(v, self.level(lane))
+    }
+
+    /// The saw's accumulator rate: the note's volume as a rate (15 = 42, the
+    /// loudest that doesn't wrap), scaled by the Rate control (42 = as is;
+    /// above 42 it overdrives into the wrap distortion).
     fn saw_rate(&self, lane: usize) -> u8 {
-        self.lanes[lane]
-            .vol
-            .map_or(self.params.get(lane, ParamId::Rate) as u8, saw_rate_for_volume)
+        let base = self.lanes[lane].vol.map_or(42, saw_rate_for_volume) as u32;
+        let r = self.params.get(lane, ParamId::Rate) as u32;
+        ((base * r + 21) / 42).min(63) as u8
     }
 
     /// Envelope bits + V for pulse/noise. A volume macro needs constant volume.
     fn env_bits(&self, lane: usize, f: &Frame, macro_vol: bool) -> u8 {
-        let v = self.volume(lane);
         if macro_vol {
-            return 0x30 | scale_volume(v, f.volume);
+            return 0x30 | self.out_volume(lane, f, true);
         }
+        // In the hardware decay modes V is the decay speed, not a level, so
+        // the channel volume can't scale it: the note's volume, else the
+        // control (shown as "Decay" in the UI) sets the speed.
+        let decay = || self.lanes[lane].vol.map_or(self.level(lane), |v| v.min(15));
         match self.params.get(lane, ParamId::Envelope) {
-            0 => 0x30 | v, // halt length, constant volume
-            1 => v,        // length runs (254 half frames), decay
-            _ => 0x20 | v, // halt length + loop, decay
+            0 => 0x30 | self.out_volume(lane, f, false), // halt length, constant volume
+            1 => decay(),                                 // length runs (254 half frames), decay
+            _ => 0x20 | decay(),                          // halt length + loop, decay
         }
     }
 
@@ -492,8 +509,7 @@ impl Driver {
     }
 
     fn vrc6_ctl(&self, lane: usize, f: &Frame, macro_vol: bool) -> u8 {
-        let v = self.volume(lane);
-        let v = if macro_vol { scale_volume(v, f.volume) } else { v };
+        let v = self.out_volume(lane, f, macro_vol);
         match f.duty {
             Some(d) => (duty_vrc6(d) << 4) | v,
             None => {
@@ -781,8 +797,10 @@ mod tests {
     }
 
     #[test]
-    fn per_note_volume_overrides_the_lane_and_updates_while_held() {
+    fn per_note_volume_is_scaled_by_the_channel_and_updates_while_held() {
         let mut d = drv();
+        // Channel volume 15 passes the note's volume through unchanged.
+        d.params.set(0, ParamId::Volume, 15);
         let mut notes = [Note { volume: Some(3), ..Note::new(0, 960, 69) }];
         let mut w = Writes::default();
         {
@@ -798,6 +816,20 @@ mod tests {
         lanes[0] = &notes;
         d.tick(&Song::plain(lanes), Some(0.0), 40.0, true, &mut w);
         assert_eq!(writes_of(&w), [(0x4000, 0x80 | 0x30 | 9)]);
+        assert_eq!(d.note_ons[0], 1);
+        // Channel volume 10 scales it: ceil(9 * 10 / 15) = 6, still no retrigger.
+        d.params.set(0, ParamId::Volume, 10);
+        w.clear();
+        d.tick(&Song::plain(lanes), Some(40.0), 80.0, true, &mut w);
+        assert_eq!(writes_of(&w), [(0x4000, 0x80 | 0x30 | 6)]);
+        // A note without a volume plays at the channel volume (as before).
+        let plain = [Note::new(0, 960, 69)];
+        let mut d = drv();
+        let mut lanes: [&[Note]; LANES] = [&[]; LANES];
+        lanes[0] = &plain;
+        w.clear();
+        d.tick(&Song::plain(lanes), None, 0.0, true, &mut w);
+        assert!(w.as_slice().contains(&(0x4000, 0x80 | 0x30 | 12)));
         assert_eq!(d.note_ons[0], 1);
         assert_eq!(saw_rate_for_volume(15), 42);
         assert_eq!(saw_rate_for_volume(0), 0);

@@ -11,7 +11,7 @@ Times are local (CST). Each decision taken without the user lists the options an
   follows it. Alternative: push at once (rejected: it would publish an unverified sample).
 - **Environment.** `cargo` isn't on this session's PATH; every call prefixes
   `~/.cargo/bin`. No effect on results.
-- **A1 start (07:46).**
+- **A1 start (07:44).**
   - `hey.wav` and `showcase.mid`: no generator in the repo. A search of the product-pass session
     transcript found the generator, `make_assets.py`, written by that session. Its final version was
     still in that session's scratch folder. Running it reproduces **both files byte for byte**, and
@@ -27,8 +27,8 @@ Times are local (CST). Each decision taken without the user lists the options an
     the owner's call; logged in ASSETS.md.
   - **Decision D4: keep "NES", "Famicom", "2A03" and "VRC6".** They name the emulated hardware
     (nominative use), as the brief's own channel names ("VRC6 Pulse 1") do.
-- **08:05 A1 done**, pushed (first push of the branch).
-- **A2 start (08:06).**
+- **07:46 A1 done**, pushed (first push of the branch).
+- **A2 start (07:47).**
   - Added `CHIPDAW_SONG=heavy` (`mock::heavy_arrangement`): the demo's clips with 2-beat notes,
     and every lane except DPCM on an instrument that loops all four macros plus vibrato. Added
     test **H** (heavy song, 600 s) and an `-AppExe` parameter to `matrix.ps1`, so the matrix runs a
@@ -48,10 +48,10 @@ Times are local (CST). Each decision taken without the user lists the options an
     of 30 ms and 15 ms alternating every 3 s flagged exactly the five 30 ms stalls and none of the
     15 ms ones. That matches ENGINE.md §8.1 (stalls ≥ 22 ms drop out). **Decision D6:** this
     pass's matrix uses a 23 kHz pilot, and `PILOT_HZ` now defaults to 23 kHz.
-  - 08:20 Full matrix started in the background (A, B, C, G at full length × 3 buffer sizes; D; H).
+  - 07:50 Full matrix started in the background (A, B, C, G at full length × 3 buffer sizes; D; H).
     **Decision D7:** keep coding during it, with builds at below-normal priority. A dropout would
     then mean "even under a parallel build"; a clean run is stronger evidence, not weaker.
-- **A3 parsers (08:25–09:05).** `crates/ui/tests/robustness.rs`: seeded campaigns for `.mid`,
+- **A3 parsers (07:51–07:59).** `crates/ui/tests/robustness.rs`: seeded campaigns for `.mid`,
   `.wav` and `.chipdaw` (valid seeds of every kind, byte mutations, JSON-aware mutations, noise;
   20 s budget per input on its own thread, so a hang fails instead of blocking). Inputs that parse
   go on through arrange / convert / snapshot / a short render / save-and-reload.
@@ -77,3 +77,27 @@ Times are local (CST). Each decision taken without the user lists the options an
     changes, many tracks, chords, out-of-range, zero-length, drums, DPCM track, truncated/corrupt;
     WAV 6 formats × 3 rates × mono/stereo, silence, clipping, long, corrupt, ROM full; export
     length and tails; v1/v2 files, atomic save under a simulated failure, crash recovery).
+- **A2 interim (08:09).** A_128 (600 s): 0 loopback dropouts, 0 starved/late, callback mean 0.21%
+  / p99 0.6% / max 3.5%, with low-priority builds running beside it.
+- **A4 (08:00–08:12).**
+  - **A4.1 One source of truth.** The lane Volume control is now a **channel volume**:
+    out = note volume (or 15) × volume macro × channel. `scale_volume` is symmetric with 15 as
+    identity, so notes without their own volume sound exactly as before. In the hardware decay
+    envelope modes V is a decay speed, not a level; there the dial reads **"Decay"**. Duty,
+    Envelope and the noise Mode show **"SET BY INSTRUMENT"** (or "SET BY KIT" when every drum
+    overrides them), drawn faded, and ignore input. The values are kept and come back when the
+    instrument stops overriding them. Saw Rate scales the note's rate (42 = as is; above 42
+    overdrives into the wrap). Undo and saving already covered params.
+  - **Decision D9: bump the file format to version 3 now**, not in Part B, because the volume
+    semantics changed. Part B adds its instrument table to the same version 3 before any merge.
+    Migration v1/v2 → v3 (`file::migrate_v2`): on lanes that mix notes with and without their own
+    volume under V < 15, notes without one get V and the control goes to 15. This is exact. The
+    saw does the same when its Rate is a value a note volume can express; otherwise it is
+    approximated and reported. **Evidence:** the v1 golden song still renders to
+    `0xaaaca2df8157ca6a`.
+  - **A4.6 Loop start** and the loop on/off light are saved (v3 `loop_start`, `loop`).
+  - **A4.2 Clock:** `m:ss.cc`. A click without a drag toggles to bars.beats.sixteenths,
+    remembered in `settings.json` in the app-data folder. A double-click still returns to the
+    start and cancels its first click's toggle.
+  - **A4.3 Vibrato** moved from the CLIP section to the INSTRUMENT section, now editable: depth,
+    rate and delay fields (drag or wheel, undoable).

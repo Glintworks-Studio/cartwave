@@ -1,11 +1,13 @@
 //! The device panel's INSTRUMENT section: the selected lane's macros drawn as
 //! four step graphs (volume, arpeggio, pitch, duty), editable by dragging
-//! across them. Loop (↺) and release (R) points are marked. A kit shows its
-//! drum map instead.
+//! across them, and the vibrato row (depth, rate, delay: drag or wheel).
+//! Loop (↺) and release (R) points are marked. A kit shows its drum map
+//! instead.
 
 use chip::instrument::{Seq, NONE};
 use vizia::prelude::*;
 use vizia::vg;
+use vizia::vg::Contains;
 
 use super::gfx::{self, Face};
 use crate::theme::tokens::*;
@@ -15,16 +17,25 @@ use crate::{AppEvent, Signals};
 pub const MACROS: [(&str, i32, i32); 4] = [("VOLUME", 0, 15), ("ARPEGGIO", -12, 12), ("PITCH", -32, 32), ("DUTY", 0, 16)];
 const GAP: f32 = 8.0;
 const LABEL_H: f32 = 16.0;
+/// The vibrato row under the graphs.
+const VIB_H: f32 = 20.0;
+/// Vibrato fields: (label, max). Depth in cents, period and delay in frames.
+const VIB: [(&str, u8); 3] = [("DEPTH", 100), ("RATE", 30), ("DELAY", 60)];
+/// Drag distance per vibrato step, logical px.
+const VIB_DRAG_PX: f32 = 4.0;
 
 pub struct InstrumentView {
     s: Signals,
     /// Macro being drawn on, and the last step written.
     drawing: Option<(usize, usize)>,
+    /// Vibrato field being dragged: (field, start y, start value).
+    vib_drag: Option<(usize, f32, u8)>,
+    wheel: crate::input::WheelSteps,
 }
 
 impl InstrumentView {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, drawing: None }
+        Self { s, drawing: None, vib_drag: None, wheel: Default::default() }
             .build(cx, |_| {})
             .class("instrument-view")
             .cursor(CursorIcon::Crosshair)
@@ -32,14 +43,48 @@ impl InstrumentView {
             .bind(s.lane_sel, |mut h| h.needs_redraw())
     }
 
-    /// Graph rects (physical px) in a 2×2 grid.
+    /// Graph rects (physical px) in a 2×2 grid, above the vibrato row.
     fn graphs(b: BoundingBox, s: f32) -> [vg::Rect; 4] {
         let w = (b.w - GAP * s) / 2.0;
-        let h = (b.h - GAP * s) / 2.0;
+        let h = (b.h - (VIB_H + GAP) * s - GAP * s) / 2.0;
         std::array::from_fn(|i| {
             let (cx, cy) = ((i % 2) as f32, (i / 2) as f32);
             vg::Rect::from_xywh(b.x + cx * (w + GAP * s), b.y + cy * (h + GAP * s) + LABEL_H * s, w, h - LABEL_H * s)
         })
+    }
+
+    /// The vibrato fields' rects (physical px): the row under the graphs,
+    /// after its label.
+    fn vib_fields(b: BoundingBox, s: f32) -> [vg::Rect; 3] {
+        let y = b.y + b.h - VIB_H * s;
+        let x0 = b.x + 64.0 * s;
+        let w = ((b.w - 64.0 * s) / 3.0).max(0.0);
+        std::array::from_fn(|i| vg::Rect::from_xywh(x0 + i as f32 * w, y, w - 4.0 * s, VIB_H * s))
+    }
+
+    fn vibrato(&self) -> Option<chip::instrument::Vibrato> {
+        let lane = self.s.lane_sel.get_untracked();
+        self.s.arrangement.with_untracked(|a| a.instruments.get(lane).filter(|i| !i.is_kit()).map(|i| i.inst.vibrato))
+    }
+
+    fn vib_get(v: &chip::instrument::Vibrato, i: usize) -> u8 {
+        [v.depth, v.period, v.delay][i]
+    }
+
+    fn vib_text(v: &chip::instrument::Vibrato, i: usize) -> String {
+        match i {
+            0 if v.depth == 0 => "off".into(),
+            0 => format!("{}c", v.depth),
+            1 => format!("{:.1}Hz", 60.1 / v.period.max(1) as f32),
+            _ => format!("{}ms", (v.delay as f32 * 1000.0 / 60.1).round() as u32),
+        }
+    }
+
+    fn set_vib(&self, cx: &mut EventContext, which: usize, value: i32) {
+        let lane = self.s.lane_sel.get_untracked();
+        let lo = if which == 1 { 1 } else { 0 };
+        let v = value.clamp(lo, VIB[which].1 as i32) as u8;
+        cx.emit(AppEvent::EditVibrato { lane, which, value: v });
     }
 
     fn seq_of(inst: &chip::instrument::Instrument, i: usize) -> &Seq {
@@ -87,6 +132,31 @@ impl View for InstrumentView {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left)
+                if self.vibrato().is_some() && Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().any(|r| r.contains(vg::Point::new(cx.mouse().cursor_x, cx.mouse().cursor_y))) =>
+            {
+                let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
+                let f = Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().position(|r| r.contains(vg::Point::new(x, y))).unwrap_or(0);
+                let v = self.vibrato().map_or(0, |v| Self::vib_get(&v, f));
+                self.vib_drag = Some((f, y, v));
+                cx.capture();
+                cx.emit(AppEvent::GestureBegin);
+                meta.consume();
+            }
+            WindowEvent::MouseScroll(_, sy) => {
+                let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
+                if let (Some(v), Some(f)) =
+                    (self.vibrato(), Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().position(|r| r.contains(vg::Point::new(x, y))))
+                {
+                    let steps = self.wheel.steps(*sy);
+                    if steps != 0 {
+                        // Rate is shown in Hz: more Hz = fewer frames per cycle.
+                        let dir = if f == 1 { -1 } else { 1 };
+                        self.set_vib(cx, f, Self::vib_get(&v, f) as i32 + dir * steps);
+                    }
+                    meta.consume();
+                }
+            }
             WindowEvent::MouseDown(MouseButton::Left) => {
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
                 let gs = Self::graphs(cx.bounds(), cx.scale_factor());
@@ -102,6 +172,17 @@ impl View for InstrumentView {
                 if let Some((m, _)) = self.drawing {
                     self.paint(cx, m);
                 }
+                if let Some((f, y0, v0)) = self.vib_drag {
+                    let steps = ((y0 - cx.mouse().cursor_y) / (VIB_DRAG_PX * cx.scale_factor())).round() as i32;
+                    let dir = if f == 1 { -1 } else { 1 };
+                    self.set_vib(cx, f, v0 as i32 + dir * steps);
+                }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.vib_drag.is_some() => {
+                self.vib_drag = None;
+                cx.release();
+                cx.emit(AppEvent::GestureEnd);
+                meta.consume();
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.drawing.is_some() => {
                 self.drawing = None;
@@ -199,6 +280,22 @@ impl View for InstrumentView {
                 }
             }
             canvas.restore();
+        }
+
+        // Vibrato row.
+        let v = inst.inst.vibrato;
+        let fr = Self::vib_fields(b, s);
+        let base = |r: &vg::Rect| (r.top + VIB_H * s * 0.5 + 3.5 * s).round();
+        gfx::draw_text(canvas, "VIBRATO", b.x.round(), base(&fr[0]), &fl, TEXT_LO);
+        for (i, r) in fr.iter().enumerate() {
+            let rr = gfx::rrect(*r, RADIUS_FIELD * s);
+            canvas.draw_rrect(rr, &gfx::vgrad(*r, Rgba::hex(0x070707), Rgba::hex(0x0E0E0E)));
+            gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(STROKE.with_alpha(0.5)));
+            gfx::draw_text(canvas, VIB[i].0, (r.left + 6.0 * s).round(), base(r), &fl, TEXT_LO);
+            let t = Self::vib_text(&v, i);
+            let tw = gfx::text_width(&fm, &t);
+            let live = v.depth > 0 || i == 0;
+            gfx::draw_text(canvas, &t, (r.right - 6.0 * s - tw).round(), base(r), &fm, if live { TEXT_HI } else { TEXT_GHOST });
         }
     }
 }

@@ -66,6 +66,7 @@ impl Dial {
         }
         .build(cx, |_| {})
         .bind(s.dials, |mut h| h.needs_redraw())
+        .bind(s.dial_state, |mut h| h.needs_redraw())
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
             if animating.get() {
@@ -76,6 +77,10 @@ impl Dial {
 
     fn value(&self) -> f32 {
         self.s.dials.get_untracked()[self.index]
+    }
+
+    fn state(&self) -> crate::state::DialState {
+        self.s.dial_state.get_untracked()[self.index]
     }
 
     fn set_norm(&self, cx: &mut EventContext, n: f32) {
@@ -89,7 +94,14 @@ impl View for Dial {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        // Overridden by the instrument: inert (no drag, wheel or reset).
+        let locked = self.state().locked.is_some() && !self.dragging;
         event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) | WindowEvent::MouseDoubleClick(MouseButton::Left) | WindowEvent::MouseScroll(..)
+                if locked =>
+            {
+                meta.consume();
+            }
             WindowEvent::MouseDown(MouseButton::Left) => {
                 self.dragging = true;
                 self.drag_norm = self.spec.to_norm(self.value());
@@ -178,9 +190,16 @@ impl View for Dial {
         let cxp = b.x + b.w * 0.5;
         let cyp = b.y + DIAL_CY * s;
 
+        let state = self.state();
+        let locked = state.locked.is_some();
+        // A locked dial is drawn faded (one layer, only while locked), without the accent.
+        if locked {
+            canvas.save_layer_alpha_f(vg::Rect::from_xywh(b.x, b.y, b.w, b.h), 0.35);
+        }
+
         // Label.
         let lf = gfx::font(Face::SemiBold, 10.0 * s);
-        let label = self.spec.label.to_uppercase();
+        let label = state.label.unwrap_or(self.spec.label).to_uppercase();
         let lw = gfx::text_width(&lf, &label);
         gfx::draw_text(
             canvas,
@@ -219,7 +238,7 @@ impl View for Dial {
         } else {
             (START_DEG, n * SWEEP_DEG)
         };
-        if sweep.abs() > 0.5 {
+        if sweep.abs() > 0.5 && !locked {
             let col = ACCENT.lighten(0.1 + 0.15 * act);
             let mut glow = gfx::stroke(ACCENT.with_alpha(0.45 + 0.35 * act), (ARC_W + 2.0) * s);
             glow.set_stroke_cap(vg::PaintCap::Round);
@@ -321,11 +340,22 @@ impl View for Dial {
         ptr.set_stroke_cap(vg::PaintCap::Round);
         canvas.draw_line(p0, p1, &ptr);
 
-        // Value readout (mono, tabular).
+        if locked {
+            canvas.restore();
+        }
+
+        // Value readout (mono, tabular), or why the dial is inert.
+        let vy = b.y + (DIAL_CY + ARC_R + 22.0) * s;
+        if let Some(why) = state.locked {
+            let f = gfx::font(Face::SemiBold, 9.0 * s);
+            let t = why.to_uppercase();
+            let w = gfx::text_width(&f, &t);
+            gfx::draw_text(canvas, &t, cxp - w * 0.5, vy, &f, TEXT_LO);
+            return;
+        }
         let vf = gfx::font(Face::MonoMedium, 11.0 * s);
         let txt = self.spec.format(value);
         let vw = gfx::text_width(&vf, &txt);
-        let vy = b.y + (DIAL_CY + ARC_R + 22.0) * s;
         gfx::draw_text(
             canvas,
             &txt,

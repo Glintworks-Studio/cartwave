@@ -50,6 +50,8 @@ pub struct Signals {
     pub meters: Signal<Meters>,
     /// Values of the dial slots shown for `lane_sel`.
     pub dials: Signal<[f32; MAX_DIALS]>,
+    /// Whether each dial slot is live, and its label (see `state::dial_states`).
+    pub dial_state: Signal<[state::DialState; MAX_DIALS]>,
     /// Lane whose hardware controls the device panel shows.
     pub lane_sel: Signal<usize>,
     /// Bit per lane.
@@ -92,6 +94,8 @@ pub struct Signals {
     pub filter_label: Signal<&'static str>,
     /// The song loops at its loop end (the capsule's loop light).
     pub loop_on: Signal<bool>,
+    /// The clock shows bars.beats.sixteenths (else m:ss.cc); remembered in settings.
+    pub clock_bars: Signal<bool>,
     /// The bottom inspector (device panel) is open: a clip is selected.
     pub inspector: Signal<bool>,
     /// The browser sidebar is shown (Ctrl+Alt+B).
@@ -186,6 +190,8 @@ pub enum AppEvent {
     CycleSnap,
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
+    /// Click on the clock: m:ss.cc <-> bars.beats.sixteenths (remembered).
+    ToggleClockFormat,
     /// The split handle above the piano roll: lane viewport height.
     SetPianoPaneHeight(f32),
     /// Scroll the lanes vertically by this many logical px.
@@ -234,6 +240,9 @@ pub enum AppEvent {
     /// Draw on an instrument macro: lane, macro (0 volume, 1 arpeggio,
     /// 2 pitch, 3 duty), step, value. Undo groups a whole drag.
     EditMacro { lane: usize, which: usize, step: usize, value: i8 },
+    /// Set the lane instrument's vibrato: 0 depth (cents), 1 period
+    /// (frames), 2 delay (frames). Undo groups a whole drag.
+    EditVibrato { lane: usize, which: usize, value: u8 },
     /// Native open dialog for a .mid file; it becomes a new project (Ctrl+I).
     ImportMidi,
     /// Render the song to a WAV file (Ctrl+Shift+R).
@@ -299,7 +308,10 @@ impl Model for AppState {
             }
             AppEvent::SetDial(i, v) => {
                 let lane = self.s.lane_sel.get_untracked();
-                self.set_param(lane, *i, *v);
+                // A locked dial is inert (the view ignores input too).
+                if self.s.dial_state.with_untracked(|d| d.get(*i).is_some_and(|d| d.locked.is_none())) {
+                    self.set_param(lane, *i, *v);
+                }
             }
             AppEvent::CycleChip => {
                 let next = match self.s.chip.get_untracked() {
@@ -319,6 +331,22 @@ impl Model for AppState {
                         };
                         if *step < q.len as usize && q.data[*step] != *value {
                             q.data[*step] = *value;
+                            i.edited = true;
+                        }
+                    }
+                });
+            }
+            AppEvent::EditVibrato { lane, which, value } => {
+                self.s.arrangement.update(|a| {
+                    if let Some(i) = a.instruments.get_mut(*lane) {
+                        let v = &mut i.inst.vibrato;
+                        let f = match which {
+                            0 => &mut v.depth,
+                            1 => &mut v.period,
+                            _ => &mut v.delay,
+                        };
+                        if *f != *value {
+                            *f = *value;
                             i.edited = true;
                         }
                     }
@@ -364,6 +392,11 @@ impl Model for AppState {
                 let v = self.s.lane_scroll.get_untracked() + dy;
                 self.s.lane_scroll.set_if_changed(v);
                 self.clamp_lane_scroll();
+            }
+            AppEvent::ToggleClockFormat => {
+                let bars = !self.s.clock_bars.get_untracked();
+                self.s.clock_bars.set(bars);
+                file::save_settings(&file::Settings { clock_bars: bars });
             }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
@@ -851,6 +884,10 @@ impl AppState {
         }
         let any = self.s.arrangement.with_untracked(|a| !a.selection.is_empty());
         self.s.inspector.set_if_changed(any);
+        // Which dials an instrument overrides (cheap; set only on change).
+        let lane = self.s.lane_sel.get_untracked();
+        let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(lane)));
+        self.s.dial_state.set_if_changed(st);
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -1125,6 +1162,7 @@ pub fn build_ui(cx: &mut Context) {
         }),
         meters: Signal::new(Meters::default()),
         dials: Signal::new([0.0; MAX_DIALS]),
+        dial_state: Signal::new([state::DialState::default(); MAX_DIALS]),
         lane_sel: Signal::new(usize::MAX),
         mute: Signal::new(0),
         solo: Signal::new(0),
@@ -1148,6 +1186,7 @@ pub fn build_ui(cx: &mut Context) {
         audio_load: Signal::new((0, 0)),
         filter_label: Signal::new(""),
         loop_on: Signal::new(true),
+        clock_bars: Signal::new(file::load_settings().clock_bars),
         inspector: Signal::new(false),
         browser_open: Signal::new(true),
         browser_query: Signal::new(String::new()),
@@ -1538,27 +1577,6 @@ fn device_panel(cx: &mut Context, s: Signals) {
                     .on_submit(|cx, text, _| cx.emit(AppEvent::RenameSelected(text)));
             })
             .class("field");
-            Label::new(cx, "VIBRATO").class("section-title");
-            Label::new(
-                cx,
-                s.arrangement.map(move |a| {
-                    let lane = s.lane_sel.get_untracked();
-                    match a.instruments.get(lane) {
-                        Some(i) if i.is_kit() => "Kit: each drum has its own envelope".to_string(),
-                        Some(i) if i.inst.vibrato.depth > 0 => {
-                            let v = i.inst.vibrato;
-                            format!(
-                                "{}c · {:.1}Hz · {}ms",
-                                v.depth,
-                                60.1 / v.period.max(1) as f32,
-                                (v.delay as f32 * 16.6) as u32
-                            )
-                        }
-                        _ => "Off".to_string(),
-                    }
-                }),
-            )
-            .class("mono-info");
         })
         .class("device-section")
         .width(Stretch(1.0))
@@ -1718,9 +1736,16 @@ impl AppState {
             } else {
                 tr.loop_end_ticks
             } as u32,
+            loop_start_ticks: if self.clip_looping {
+                self.loop_start_saved
+            } else {
+                tr.loop_start_ticks
+            } as u32,
+            loop_on: self.s.loop_on.get_untracked(),
             mute: self.s.mute.get_untracked(),
             solo: self.s.solo.get_untracked(),
             params: self.params,
+            load_report: Vec::new(),
         }
     }
 
@@ -1740,13 +1765,17 @@ impl AppState {
             t.playhead_ticks = 0.0;
             t.bpm = p.bpm;
             t.loop_end_ticks = p.loop_end_ticks as f64;
-            t.loop_start_ticks = 0.0;
+            t.loop_start_ticks = p.loop_start_ticks as f64;
         });
         self.loop_end_saved = p.loop_end_ticks as f64;
-        self.loop_start_saved = 0.0;
+        self.loop_start_saved = p.loop_start_ticks as f64;
         self.clip_looping = false;
+        self.s.loop_on.set(p.loop_on);
+        if !p.load_report.is_empty() {
+            self.set_status(p.load_report.join(" "));
+        }
         self.send(Command::Bpm(p.bpm as f64));
-        self.send(Command::LoopStart(0.0));
+        self.send(Command::LoopStart(p.loop_start_ticks as f64));
         self.send(Command::LoopEnd(self.engine_loop_end(p.loop_end_ticks as f64)));
         self.s.chip.set(p.chip);
         self.send(Command::Vrc6(p.chip == SoundChip::WithVrc6));
@@ -2050,7 +2079,10 @@ impl AppState {
     fn sync_piano_lane_volume(&mut self) {
         let Some(id) = self.s.piano.with_untracked(|p| p.clip) else { return };
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) else { return };
-        let v = self.params.get(lane, ParamId::Volume) as u8;
+        // A note without a volume plays at full (15), scaled by the channel
+        // volume; in the hardware decay modes the control is its decay speed.
+        let decay = ParamId::for_lane(lane).contains(&ParamId::Envelope) && self.params.get(lane, ParamId::Envelope) != 0;
+        let v = if decay { self.params.get(lane, ParamId::Volume) as u8 } else { notes::MAX_VOLUME };
         if self.s.piano.with_untracked(|p| p.lane_volume) != v {
             self.s.piano.update(|p| p.lane_volume = v);
         }

@@ -463,12 +463,17 @@ enum CapsuleZone {
     Loop,
 }
 
-/// The centre capsule: play light, the m:ss:cc time read-out, loop light.
-/// Click the play light to play/pause, the loop light to toggle looping;
-/// drag the time to scrub, double-click it to return to the start.
+/// The centre capsule: play light, the time read-out (m:ss.cc, or
+/// bars.beats.sixteenths), loop light. Click the play light to play/pause,
+/// the loop light to toggle looping; click the time to switch its format,
+/// drag it to scrub, double-click it to return to the start.
 pub struct TimeCapsule {
     s: Signals,
     scrub: Option<(f32, f64)>,
+    /// The press on the time moved (a scrub, not a click).
+    scrubbed: bool,
+    /// Inside a double-click: its second release doesn't switch the format.
+    in_double: bool,
     pressed: Option<CapsuleZone>,
     hover: Option<CapsuleZone>,
 }
@@ -479,6 +484,8 @@ impl TimeCapsule {
         Self {
             s,
             scrub: None,
+            scrubbed: false,
+            in_double: false,
             pressed: None,
             hover: None,
         }
@@ -493,22 +500,20 @@ impl TimeCapsule {
             }
         })
         .bind(s.loop_on, |mut h| h.needs_redraw())
+        .bind(s.clock_bars, |mut h| h.needs_redraw())
     }
 
-    /// m:ss:cc (minutes, seconds, hundredths) of the playhead. The playing
-    /// flag rides along so a play/pause change also redraws.
+    /// m:ss.cc (minutes, seconds, hundredths) or bars.beats.sixteenths of
+    /// the playhead. The playing flag rides along so a play/pause change also
+    /// redraws.
     fn time_text(s: Signals) -> String {
         let (ticks, bpm, playing) =
             s.transport.with_untracked(|t| (t.playhead_ticks, t.bpm, t.playing));
-        let secs = ticks / PPQ as f64 * 60.0 / bpm.max(1.0) as f64;
-        let cs = (secs * 100.0).floor() as u64;
-        format!(
-            "{}:{:02}:{:02}{}",
-            cs / 6000,
-            (cs / 100) % 60,
-            cs % 100,
-            if playing { "" } else { " " }
-        )
+        let pad = if playing { "" } else { " " };
+        if s.clock_bars.get_untracked() {
+            return format!("{}{pad}", crate::state::Transport::position_string(ticks));
+        }
+        format!("{}{pad}", clock_string(ticks / PPQ as f64 * 60.0 / bpm.max(1.0) as f64))
     }
 
     fn zone_at(&self, x: f32, w: f32) -> CapsuleZone {
@@ -536,6 +541,7 @@ impl View for TimeCapsule {
                 if zone == CapsuleZone::Time {
                     let ph = self.s.transport.with_untracked(|t| t.playhead_ticks);
                     self.scrub = Some((x, ph));
+                    self.scrubbed = false;
                 }
                 self.pressed = Some(zone);
                 cx.capture();
@@ -547,6 +553,9 @@ impl View for TimeCapsule {
                 if let Some((x0, t0)) = self.scrub {
                     let sixteenth = PPQ as f64 / 4.0;
                     let steps = ((x - x0) / PX_PER_SIXTEENTH).round() as f64;
+                    if steps != 0.0 {
+                        self.scrubbed = true;
+                    }
                     cx.emit(AppEvent::SetPlayhead((t0 + steps * sixteenth).max(0.0)));
                 } else if self.pressed.is_none() {
                     let w = cx.bounds().w / cx.scale_factor();
@@ -563,12 +572,17 @@ impl View for TimeCapsule {
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
                 self.scrub = None;
+                let in_double = std::mem::take(&mut self.in_double);
                 if let Some(zone) = self.pressed.take() {
                     cx.release();
                     if mouse_inside(cx) {
                         match zone {
                             CapsuleZone::Play => cx.emit(AppEvent::TogglePlay),
                             CapsuleZone::Loop => cx.emit(AppEvent::ToggleLoop),
+                            // A click (not a scrub) switches the format.
+                            CapsuleZone::Time if !self.scrubbed && !in_double => {
+                                cx.emit(AppEvent::ToggleClockFormat)
+                            }
                             CapsuleZone::Time => {}
                         }
                     }
@@ -579,7 +593,10 @@ impl View for TimeCapsule {
                 let (x, _) = local_mouse(cx);
                 let w = cx.bounds().w / cx.scale_factor();
                 if self.zone_at(x, w) == CapsuleZone::Time {
+                    // Back to the start; undo the first click's format switch.
                     cx.emit(AppEvent::Stop);
+                    cx.emit(AppEvent::ToggleClockFormat);
+                    self.in_double = true;
                 }
                 meta.consume();
             }
@@ -670,7 +687,7 @@ impl View for TimeCapsule {
         let cell = ('0'..='9')
             .map(|d| gfx::text_width(&f, d.encode_utf8(&mut [0; 4])))
             .fold(0.0f32, f32::max);
-        let width_of = |c: char| if c.is_ascii_digit() { cell } else { gfx::text_width(&f, ":") };
+        let width_of = |c: char| if c.is_ascii_digit() { cell } else { gfx::text_width(&f, c.encode_utf8(&mut [0; 4])) };
         let total: f32 = text.chars().map(width_of).sum();
         let mut x = (r.center_x() - total * 0.5).round();
         let base = gfx::baseline_for_center(&f, r.center_y()).round();
@@ -688,6 +705,13 @@ impl View for TimeCapsule {
             x += cw;
         }
     }
+}
+
+/// m:ss.cc: minutes, seconds and hundredths (a full stop before the
+/// hundredths, as audio editors write it).
+pub fn clock_string(secs: f64) -> String {
+    let cs = (secs.max(0.0) * 100.0).floor() as u64;
+    format!("{}:{:02}.{:02}", cs / 6000, (cs / 100) % 60, cs % 100)
 }
 
 /// A capsule / box: flat interior, flat 1 px stroke (prototype values).

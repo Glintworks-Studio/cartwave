@@ -560,6 +560,47 @@ pub struct Meters {
 /// Most dials any channel shows (pulse: duty, volume, envelope, sweep, rate).
 pub const MAX_DIALS: usize = 5;
 
+/// What a dial can do right now. The rule: no control may look like it does
+/// something when it doesn't (STABILIZE_PROMPT.md §A4.1).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DialState {
+    /// A label that replaces the spec's (Volume reads "Decay" in the
+    /// hardware decay modes, where V is the decay speed).
+    pub label: Option<&'static str>,
+    /// Inert, and why ("set by instrument"): the value is kept and saved, and
+    /// applies again when the instrument stops overriding it.
+    pub locked: Option<&'static str>,
+}
+
+/// The dial states for `lane`, given its controls and instrument.
+pub fn dial_states(lane: usize, params: &engine::Params, inst: Option<&crate::instruments::LaneInstrument>) -> [DialState; MAX_DIALS] {
+    use chip::instrument::{Instrument, Seq};
+    // A macro overrides a control if the instrument has it; for a kit, only
+    // if every drum has it (otherwise the control still shapes some drums).
+    let overrides = |which: fn(&Instrument) -> &Seq| -> Option<&'static str> {
+        let i = inst?;
+        if i.is_kit() {
+            (!i.kit.is_empty() && i.kit.iter().all(|k| !which(&k.inst).is_empty())).then_some("set by kit")
+        } else {
+            (!which(&i.inst).is_empty()).then_some("set by instrument")
+        }
+    };
+    let vol_macro = overrides(|i| &i.volume);
+    let duty_macro = overrides(|i| &i.duty);
+    let mut out = [DialState::default(); MAX_DIALS];
+    for (slot, (pid, _)) in lane_dials(lane).into_iter().enumerate() {
+        out[slot] = match pid {
+            ParamId::Duty | ParamId::NoiseMode => DialState { label: None, locked: duty_macro },
+            ParamId::Envelope => DialState { label: None, locked: vol_macro },
+            ParamId::Volume if vol_macro.is_none() && params.get(lane, ParamId::Envelope) != 0 => {
+                DialState { label: Some("Decay"), locked: None }
+            }
+            _ => DialState::default(),
+        };
+    }
+    out
+}
+
 /// How a dial shows its value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Fmt {
@@ -791,6 +832,36 @@ impl FrameCap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dials_say_when_the_instrument_overrides_them() {
+        use crate::instruments::LaneInstrument;
+        let p = engine::Params::default();
+        let slot = |lane: usize, id: ParamId| lane_dials(lane).iter().position(|d| d.0 == id).unwrap();
+        // Raw channel: everything live; pulse Volume is a level (constant envelope).
+        let raw = LaneInstrument::plain();
+        let st = dial_states(0, &p, Some(&raw));
+        assert!(st.iter().all(|d| d.locked.is_none()));
+        assert_eq!(st[slot(0, ParamId::Volume)].label, None);
+        // A preset with a duty macro and a volume macro locks Duty and Envelope.
+        let cello = LaneInstrument::named("Cello");
+        assert!(!cello.inst.duty.is_empty() && !cello.inst.volume.is_empty());
+        let st = dial_states(5, &p, Some(&cello));
+        assert_eq!(st[slot(5, ParamId::Duty)].locked, Some("set by instrument"));
+        assert_eq!(st[slot(5, ParamId::Volume)].locked, None, "the channel volume always works");
+        let st = dial_states(0, &p, Some(&cello));
+        assert_eq!(st[slot(0, ParamId::Envelope)].locked, Some("set by instrument"));
+        // Decay envelope without a volume macro: the Volume dial is the decay speed.
+        let mut q = p;
+        q.set(0, ParamId::Envelope, 1);
+        assert_eq!(dial_states(0, &q, Some(&raw))[slot(0, ParamId::Volume)].label, Some("Decay"));
+        // A kit locks only what every drum overrides.
+        let kit = LaneInstrument::named("Standard Kit");
+        assert!(kit.is_kit());
+        let all_vol = kit.kit.iter().all(|k| !k.inst.volume.is_empty());
+        assert_eq!(dial_states(3, &p, Some(&kit))[slot(3, ParamId::Envelope)].locked.is_some(), all_vol);
+    }
+
 
     #[test]
     fn frame_cap_default_and_aliases() {
