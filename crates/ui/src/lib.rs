@@ -1115,7 +1115,10 @@ fn top_bar(cx: &mut Context, s: Signals) {
             });
         })
         .class("bar-side")
-        .class("left");
+        .class("left")
+        // A narrow window clips the sides at the capsule instead of sliding
+        // them under it.
+        .overflow(Overflow::Hidden);
 
         TimeCapsule::new(cx, s)
             .width(Pixels(BOX_W))
@@ -1139,7 +1142,8 @@ fn top_bar(cx: &mut Context, s: Signals) {
             .class("pill-stack");
         })
         .class("bar-side")
-        .class("right");
+        .class("right")
+        .overflow(Overflow::Hidden);
     })
     .class("topbar");
 }

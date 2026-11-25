@@ -1045,10 +1045,14 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         let vol = n.volume.unwrap_or(lane_vol) as f32 / notes::MAX_VOLUME as f32;
         let body = if selected { color.lighten(0.35) } else { color.mix(Rgba::hex(0x1E1E1E), 0.45 * (1.0 - vol)) };
         let r = vg::Rect::from_ltrb(x0.round(), (y + s).round(), (x1.round() - s).max(x0.round() + s), (y + px(m.row_h) - s).round());
-        canvas.draw_rect(r, &gfx::fill(body));
-        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.top, r.left + s, r.bottom), &gfx::fill(Rgba::black(0.35)));
+        // Lit from the top with a gradient stroke, like the clips.
+        let rr = gfx::rrect(r, (2.0 * s).min(r.height() * 0.5));
+        canvas.draw_rrect(rr, &gfx::vgrad(r, body.lighten(0.08), body.darken(0.12)));
+        let hl = gfx::hairline(s);
         if selected {
-            canvas.draw_rect(r, &gfx::stroke(Rgba::white(0.9), s));
+            gfx::ring(canvas, &rr, hl, &gfx::fill(Rgba::white(0.9)));
+        } else {
+            gfx::ring_vgrad(canvas, &rr, hl, body.lighten(0.35), Rgba::black(0.45));
         }
     }
     canvas.restore();

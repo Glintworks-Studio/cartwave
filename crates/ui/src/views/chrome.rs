@@ -145,9 +145,10 @@ impl View for Key {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Chrome);
         let b = cx.bounds();
         let s = cx.scale_factor();
-        let r: vg::Rect = b.into();
+        let r = gfx::snap(b.into());
         let rr = gfx::rrect(r, RADIUS_KEY * s);
         let lit = self.lit();
         let lift = if self.hover && !self.pressed { 0.05 } else { 0.0 };
@@ -173,7 +174,7 @@ impl View for Key {
         }
 
         // Stroke: plain sides and bottom, a sheen along the top edge.
-        gfx::ring(canvas, &rr, s, &gfx::fill(KEY_STROKE));
+        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(KEY_STROKE));
         let sheen = if self.pressed {
             KEY_STROKE.lighten(0.1)
         } else if lit {
@@ -181,7 +182,7 @@ impl View for Key {
         } else {
             KEY_SHEEN.lighten(lift)
         };
-        gfx::top_sheen(canvas, &rr, s, KEY_STROKE, sheen);
+        gfx::top_sheen(canvas, &rr, gfx::hairline(s), KEY_STROKE, sheen);
 
         // Glyph, nudged down 1 px while pressed.
         let px = if self.label.chars().count() == 1 {
@@ -398,9 +399,10 @@ impl View for StatPill {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Pills);
         let b = cx.bounds();
         let s = cx.scale_factor();
-        let r: vg::Rect = b.into();
+        let r = gfx::snap(b.into());
         let rr = gfx::rrect(r, r.height() * 0.5);
         let interactive = !matches!(self.kind, PillKind::Cpu | PillKind::Khz);
         let active = self.scrub.is_some() || self.pressed;
@@ -420,8 +422,8 @@ impl View for StatPill {
         canvas.draw_rect(val, &gfx::vgrad(val, vt, vb));
         canvas.restore();
 
-        gfx::ring(canvas, &rr, s, &gfx::fill(KEY_STROKE));
-        gfx::top_sheen(canvas, &rr, s, KEY_STROKE, KEY_SHEEN.lighten(lift));
+        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(KEY_STROKE));
+        gfx::top_sheen(canvas, &rr, gfx::hairline(s), KEY_STROKE, KEY_SHEEN.lighten(lift));
 
         let f = gfx::font(Face::Bold, PILL_TEXT_PX * s);
         let base = gfx::baseline_for_center(&f, r.center_y()).round();
@@ -548,11 +550,11 @@ impl View for TimeCapsule {
                     if z != self.hover {
                         self.hover = z;
                         cx.needs_redraw();
+                        cx.emit(WindowEvent::SetCursor(match z {
+                            Some(CapsuleZone::Time) => CursorIcon::EwResize,
+                            _ => CursorIcon::Hand,
+                        }));
                     }
-                    cx.emit(WindowEvent::SetCursor(match z {
-                        Some(CapsuleZone::Time) => CursorIcon::EwResize,
-                        _ => CursorIcon::Hand,
-                    }));
                 }
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
@@ -579,6 +581,7 @@ impl View for TimeCapsule {
             }
             WindowEvent::MouseLeave => {
                 self.hover = None;
+                cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
                 cx.needs_redraw();
             }
             _ => {}
@@ -586,11 +589,12 @@ impl View for TimeCapsule {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Chrome);
         let b = cx.bounds();
         let s = cx.scale_factor();
-        let r: vg::Rect = b.into();
+        let r = gfx::snap(b.into());
         let rr = gfx::rrect(r, RADIUS_BOX * s);
-        draw_box(canvas, &rr);
+        draw_box(canvas, &rr, s);
 
         let playing = self.s.transport.with_untracked(|t| t.playing);
         let loop_on = self.s.loop_on.get_untracked();
@@ -683,10 +687,9 @@ impl View for TimeCapsule {
 }
 
 /// A capsule / box: flat interior, flat 1 px stroke (prototype values).
-fn draw_box(canvas: &Canvas, rr: &vg::RRect) {
+fn draw_box(canvas: &Canvas, rr: &vg::RRect, s: f32) {
     canvas.draw_rrect(*rr, &gfx::fill(BG_2));
-    let s = 1.0f32.max(rr.rect().height() / BOX_H).round();
-    gfx::ring(canvas, rr, s, &gfx::fill(STROKE));
+    gfx::ring(canvas, rr, gfx::hairline(s), &gfx::fill(STROKE));
 }
 
 fn play_path(g: vg::Rect, s: f32) -> vg::Path {
@@ -869,14 +872,15 @@ impl View for SpectrumBox {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Spectrum);
         let b = cx.bounds();
         let s = cx.scale_factor();
-        let r: vg::Rect = b.into();
+        let r = gfx::snap(b.into());
         let dt = gfx::frame_dt(&self.last_draw);
         self.animating.set(self.step(dt));
 
         let rr = gfx::rrect(r, RADIUS_BOX * s);
-        draw_box(canvas, &rr);
+        draw_box(canvas, &rr, s);
 
         let st = self.st.borrow();
         let top = r.top + SPECTRUM_PAD * s;
@@ -955,10 +959,10 @@ impl View for TrackRow {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Badges);
+        let _perf = crate::perf::scope(crate::perf::Span::Rows);
         let b = cx.bounds();
         let s = cx.scale_factor();
-        let r: vg::Rect = b.into();
+        let r = gfx::snap(b.into());
         let compact = r.height() < 48.0 * s;
         let selected = self
             .s
@@ -973,8 +977,9 @@ impl View for TrackRow {
         // Row surface and its top hairline.
         let lift = if selected { 0.03 } else { 0.0 };
         canvas.draw_rect(r, &gfx::vgrad(r, BAND_TOP.lighten(lift), BAND_BOTTOM.lighten(lift)));
-        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), s), &gfx::fill(LINE));
-        let body = vg::Rect::from_ltrb(r.left, r.top + s, r.right, r.bottom);
+        let hl = gfx::hairline(s);
+        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(LINE));
+        let body = vg::Rect::from_ltrb(r.left, r.top + hl, r.right, r.bottom);
 
         // Watermark lane number, ghosted into the surface.
         canvas.save();
@@ -1014,7 +1019,9 @@ impl View for TrackRow {
         ));
         canvas.draw_rect(strip, &fill);
         let srr = gfx::rrect(strip, 0.0);
-        gfx::ring_hgrad(canvas, &srr, s, c.lighten(0.3), c.darken(0.37));
+        // Edge values sampled from the prototype's strips: the left edge sits
+        // just under the bright end, the right edge falls to ~half.
+        gfx::ring_hgrad(canvas, &srr, gfx::hairline(s), c.lighten(0.1).darken(0.08), c.darken(0.5));
         if light > 0.01 {
             let spill = vg::Rect::from_ltrb(strip.right, body.top, strip.right + 48.0 * s, r.bottom);
             let mut p = vg::Paint::default();
@@ -1041,7 +1048,7 @@ impl View for TrackRow {
         if !compact {
             let badge = vg::Rect::from_xywh(x, r.top + BADGE_Y * s, BADGE_W * s, BADGE_H * s);
             let brr = gfx::rrect(badge, badge.height() * 0.5);
-            gfx::ring(canvas, &brr, s, &gfx::fill(STROKE));
+            gfx::ring(canvas, &brr, gfx::hairline(s), &gfx::fill(STROKE));
             let chip = if self.lane >= 5 { "VRC6" } else { "2A03" };
             let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
             let bw = gfx::text_width(&bf, chip);

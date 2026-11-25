@@ -404,6 +404,18 @@ pub fn inner_border(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, color: Rgba
 // are drawn *inside* the shape as a ring (`draw_drrect`), so they stay crisp
 // on whole device pixels at every scale.
 
+/// A logical 1 px hairline in device px: whole pixels at every scale, so
+/// strokes stay crisp at 150% (2 px) instead of smearing over 1.5 px.
+pub fn hairline(scale: f32) -> f32 {
+    scale.round().max(1.0)
+}
+
+/// `r` with every edge on a whole device pixel (view bounds can be
+/// fractional at 150%).
+pub fn snap(r: vg::Rect) -> vg::Rect {
+    vg::Rect::from_ltrb(r.left.round(), r.top.round(), r.right.round(), r.bottom.round())
+}
+
 /// The `width`-wide ring just inside `rr`.
 fn ring_inner(rr: &vg::RRect, width: f32) -> vg::RRect {
     let mut inner = *rr;

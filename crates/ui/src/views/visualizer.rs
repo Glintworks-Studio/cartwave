@@ -1,23 +1,11 @@
-//! Strip of 8 channel lights that pulse when that channel's mock notes play.
+//! The channel light: a glowing lens that pulses on note-on (used by the
+//! inspector's meter bank; the track rows' colour strips pulse too).
 
 use vizia::prelude::*;
 use vizia::vg;
 
-use super::gfx::{self, Face};
+use super::gfx;
 use crate::theme::tokens::*;
-use crate::Signals;
-
-pub struct ChannelLights {
-    s: Signals,
-}
-
-impl ChannelLights {
-    pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s }
-            .build(cx, |_| {})
-            .bind(s.meters, |mut h| h.needs_redraw())
-    }
-}
 
 /// Draws one glowing "LED" lens centred at (x, y).
 pub fn draw_light(canvas: &Canvas, x: f32, y: f32, r: f32, color: Rgba, level: f32, s: f32) {
@@ -53,28 +41,4 @@ pub fn draw_light(canvas: &Canvas, x: f32, y: f32, r: f32, color: Rgba, level: f
         r * 0.28,
         &gfx::fill(Rgba::white(0.16 + 0.3 * level)),
     );
-}
-
-impl View for ChannelLights {
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Lights);
-        let b = cx.bounds();
-        let s = cx.scale_factor();
-        let lights = self.s.meters.with_untracked(|m| m.light);
-        let lanes: Vec<(Rgba, &'static str)> = self
-            .s
-            .arrangement
-            .with_untracked(|a| a.lanes.iter().map(|l| (l.color, l.short)).collect());
-        let n = lanes.len().min(8);
-        let step = b.w / n as f32;
-        let f = gfx::font(Face::SemiBold, 8.0 * s);
-        for (i, &(col, short)) in lanes.iter().enumerate().take(n) {
-            let x = b.x + step * (i as f32 + 0.5);
-            let y = b.y + 10.0 * s;
-            draw_light(canvas, x, y, 5.0 * s, col, lights[i], s);
-            let w = gfx::text_width(&f, short);
-            let tc = TEXT_LO.mix(col.lighten(0.3), lights[i] * 0.8);
-            gfx::draw_text(canvas, short, x - w * 0.5, b.y + 29.0 * s, &f, tc);
-        }
-    }
 }

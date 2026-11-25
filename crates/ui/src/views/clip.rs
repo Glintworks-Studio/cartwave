@@ -181,11 +181,11 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
         &[top, mid, bottom],
         Some(&[0.0, header_h / r.height().max(1.0), 1.0]),
     ));
-    gfx::ring(canvas, &rr, s, &ring);
+    gfx::ring(canvas, &rr, gfx::hairline(s), &ring);
     gfx::top_sheen(
         canvas,
         &rr,
-        s,
+        gfx::hairline(s),
         top,
         Rgba::white(0.55 + 0.25 * a.hover + 0.2 * sel),
     );
