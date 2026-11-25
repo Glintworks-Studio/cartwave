@@ -150,7 +150,7 @@ Times are local (CST). Each decision taken without the user lists the options an
   - Undo: the property test now mixes 5 instrument operations (lane default, clip override, make
     unique, shared edit incl. loop point, back to lane) with the old ones, and checks every
     reference stays valid. 40 seeds pass. Unused instruments are pruned at each undo commit.
-- **Part C core (08:27–08:36).** `crates/ui/src/game_export.rs`, `tests/export_loop.rs`.
+- **Part C core (08:27–08:32).** `crates/ui/src/game_export.rs`, `tests/export_loop.rs`.
   - **Decision D14: how a loop is made exactly periodic.** An emulator never repeats itself: its
     60.1 Hz driver clock, the LFSR and oscillator phases run on, so pass 3 of a free-running render
     differs from pass 2. The export renders the intro and pass 1 normally, **clones the whole
@@ -175,3 +175,8 @@ Times are local (CST). Each decision taken without the user lists the options an
   - Loudness: authentic (default), peak to −1 dBFS, or LUFS integrated via `ebur128` 0.1.11 (MIT,
     pre-approved) with a true-peak ceiling. One gain from the mix, applied to the mix and every
     stem, so stems keep their balance and the loop stays exact.
+- **08:38 Robustness, final:** 10,000 inputs per parser, in release (9 s) and debug with overflow
+  checks (58 s): 0 panics, 0 hangs. Snapshot build with instruments in the snapshot: 1k notes
+  0.027 ms (was 0.007), 10k 0.128 (0.124), 50k 0.593 (0.602): a fixed ~0.02 ms for the
+  instrument bank. DPCM with all 4 user slots filling the ROM plus the 4 built-ins: every row
+  sounds, no overlap in the ROM (`dpcm_all_four_user_slots_full_play_with_the_built_ins`).

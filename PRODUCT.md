@@ -1,6 +1,6 @@
 # ChipDAW: project rundown
 
-*As of 2026-11-25 · branch `product/v1` · "ChipDAW" is still a working title.*
+*As of 2026-11-25 · updated for `stabilize/v1.1` (see [STABILIZE.md](STABILIZE.md)) · "ChipDAW" is still a working title.*
 
 ChipDAW is a music workstation for indie game developers. It writes music that plays on
 **real sound-chip hardware**: the NES 2A03 and the VRC6 expansion chip,
@@ -22,16 +22,16 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 |---|---|
 | **Arrangement** | 8 chip channels (Pulse 1/2, Triangle, Noise, DPCM, VRC6 Pulse 1/2, VRC6 Saw). Drag, resize and duplicate clips with grid snap; time selection; loop brace; context menus; standard DAW shortcuts; scrollbars; a resizable piano-roll split. |
 | **Piano roll** | Note editing with per-note volume, the one-note-at-a-time rule each chip channel has, a quantize command (Q), copy and paste, and named rows for drums and samples. |
-| **Instruments** *(new)* | Each channel plays an instrument built from per-frame **macros** (volume, arpeggio, pitch, duty) with loop and release points, plus delayed vibrato. This is how real chip drivers make "cello", "flute" or "explosion" on hardware that has no ADSR, LFO or filter. |
+| **Instruments** | Instruments are built from per-frame **macros** (volume, arpeggio, pitch, duty) with loop and release points, plus delayed vibrato. This is how real chip drivers make "cello", "flute" or "explosion" on hardware that has no ADSR, LFO or filter. *(v1.1)* A project has an **instrument table**: every lane has a default, and a clip can have its own, so one channel can switch lead → bass mid-song. Instruments are shared by reference; **Make Instrument Unique** gives a clip its own copy. The switch happens at the next note; a held note never changes. |
 | **Preset library** *(new)* | 60 factory presets: Leads, Bass, Strings (Cello, Violin, Pizzicato, String Pad), Winds (Flute, Clarinet, Oboe, Ocarina, Pan Pipe), Brass, Keys & Mallets, Arpeggios, Drums, Drum Kits and Sound Effects (Explosion, Laser, Coin, Jump, Power Up, 1-Up, Siren, Thunder, Engine, Wind…). |
 | **Channel layouts** *(new)* | 5 one-click bands: Classic 2A03 Band, 2A03 + VRC6 Band, Chamber Strings, Arcade Action and Sound Effects Kit. Each sets the chip and loads one preset per channel. |
-| **Browser sidebar** *(new)* | Ctrl+Alt+B. Search, click to hear, double-click to load, or **drag onto a track**: channels the preset can't play on dim during the drag. |
-| **Instrument editor** *(new)* | The device panel shows the channel's macros as graphs. Draw on them with the mouse to edit them; undo works. Drum kits show their drum map instead. |
+| **Browser sidebar** | Ctrl+Alt+B. Search, click to hear, double-click to load, or **drag onto a track**: channels the preset can't play on dim during the drag. *(v1.1)* Drag onto a **clip** to give it that instrument. **User Presets** lists what you saved with "Save Instrument as Preset". |
+| **Instrument editor** | The device panel shows the instrument's macros as graphs. Draw on them with the mouse to edit them; undo works. Drum kits show their drum map instead. *(v1.1)* It edits the selected clip's instrument and says how many clips share it. Drag the loop and release markers (Shift-click / Alt-click sets them, a double-click removes one). Vibrato (depth, rate, delay) lives here. Knobs an instrument overrides read "SET BY INSTRUMENT"; the Volume knob is a channel volume that scales everything. |
 | **Drum kits** *(new)* | One noise channel plays kick, snare, hats and crash, each with its own envelope; the note's row picks the drum. |
 | **DPCM audio import** *(new)* | Drop a WAV file and it is converted to the chip's 1-bit delta format. The highest sample rate that fits the hardware's memory limits is picked automatically. There are 4 user slots next to the built-in drums. |
 | **MIDI import** *(new)* | Drop a `.mid` file and it is arranged onto the chip channels. Drums go to the noise kit, the lowest part to the triangle, and chords are reduced to their top note. A track named "DPCM" plays samples. A report says what went where. |
-| **WAV export** *(new)* | Ctrl+Shift+R. An offline render through the same emulation, about 600× faster than real time, with release tails. |
-| **Files** | `.chipdaw` JSON projects (format v2, still opens v1), atomic saves, autosave and crash recovery, and global undo (1000 steps). Projects, MIDI and WAV files can be dropped on the window or passed on the command line. |
+| **Game export** *(v1.1)* | Ctrl+Shift+R opens the export dialog: song, loop region or selection; 44.1/48 kHz, 16/24-bit. **Seamless loops** come as one WAV with `smpl` loop points, as intro + loop files, and as a JSON sidecar. Exporting `intro + loop × 3` is sample-identical to continuous playback. Also **stems** (8 channels, or groups), and loudness (authentic, peak −1 dBFS, or −16 LUFS with a true-peak ceiling). See [docs/EXPORT.md](docs/EXPORT.md). |
+| **Files** | `.chipdaw` JSON projects (format v3: instrument table, clip instruments, loop start). v1 and v2 files open and **sound bit-identical** (tested against renders from the build that saved them). Atomic saves, autosave and crash recovery, global undo (1000 steps). Projects, MIDI and WAV files can be dropped on the window or passed on the command line. The three importers survived 10,000 damaged files each without a crash. |
 | **Engine** | A clean-room 2A03 + VRC6 emulator, band-limited synthesis, the NES and Famicom output filters, and a lock-free real-time audio thread. |
 
 | | |
@@ -53,7 +53,8 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 | 2026-11-24 | **Real-time engine**: a clean-room 2A03 + VRC6 emulator, written from hardware docs only | **0 dropouts** over 15 stress runs and 3.5 h of playback. Edits are heard within one console frame (≤ 16.6 ms). Picture-to-sound sync is 0.3 ms. 58 hardware-behaviour tests. | [ENGINE.md](ENGINE.md) |
 | 2026-11-24/25 | **Piano roll**, undo, file format, autosave | Songs can be written end to end: 1000-step undo, crash recovery. | [PIANOROLL.md](PIANOROLL.md) |
 | 2026-11-25 | **Redesign** to the designer's prototype | Pixel-sampled palette, gradient strokes, 4 px grid, clip-launcher-style editing. | [DESIGN.md](DESIGN.md) |
-| 2026-11-25 | **Product pass** (this one) | Instruments, presets, layouts, browser, instrument editor, drum kits, DPCM import, MIDI import, WAV export. | this file |
+| 2026-11-25 | **Product pass** | Instruments, presets, layouts, browser, instrument editor, drum kits, DPCM import, MIDI import, WAV export. | this file |
+| 2026-11-25 | **Stabilize v1.1** | Asset provenance, re-measurement with instruments on, parser hardening, UX conflicts resolved, per-clip instruments (format v3), game export (seamless loops, stems). | [STABILIZE.md](STABILIZE.md) |
 
 Earlier states are kept as branches: `backup/pre-prototype-ui` (before the redesign) and
 `backup/pre-product-pass` (before this pass).
