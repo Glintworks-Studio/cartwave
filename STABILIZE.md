@@ -1,6 +1,6 @@
 # STABILIZE: v1.1 (stabilize, per-clip instruments, game export)
 
-*Unattended run, 2026-11-25, 07:44–10:30 · branch `stabilize/v1.1` (from `product/v1`) · Windows 11,
+*Unattended run, 2026-11-25, 07:44–10:26 · branch `stabilize/v1.1` (from `product/v1`) · Windows 11,
 Ryzen 7 9800X3D, RTX 4070 SUPER, 59.951 Hz display · the brief: STABILIZE_PROMPT.md · every decision,
 with its time: [docs/RUNLOG.md](docs/RUNLOG.md).*
 
@@ -9,14 +9,14 @@ with its time: [docs/RUNLOG.md](docs/RUNLOG.md).*
 | Gate (§4) | Result |
 |---|---|
 | 1. Tests and clippy | **PASS**: 153 tests (chip 71, engine 10, UI 72), clippy clean, release build 0 warnings |
-| 2. Stress matrix A, B, C, G: 0 loopback dropouts | **PASS**: 0 in all 16 runs on the pre-B build (A, B, C, G × 3 sizes + D + H), and FINAL_MATRIX on the final build |
+| 2. Stress matrix A, B, C, G: 0 loopback dropouts | **PASS**: 0 in all 16 runs on the pre-B build (A, B, C, G × 3 sizes + D + H), and **0 in A, B, C, G and H on the final build** |
 | 3. PERF.md targets in every UI scenario | **PASS, one at the line**: demo playback ~10.2% vs ≤ 10% (same as before this pass in an A/B, within PERF.md's noise). A real regression in piano-roll dragging (33%) was found and **fixed** (8%) |
 | 4. Loop-export identity (C1) | **PASS**: `intro + loop × 3` = continuous render, sample for sample, at 44.1/48 kHz × 16/24 bit, showcase and test song |
 | 5. v1/v2 → v3 migration bit-identical | **PASS**: the v1 golden song and 9 v2 files saved by the old build, both render paths, hashes from the old build |
 | 6. ASSETS.md complete | **PASS**: every non-code file, including two generated assets proved by byte-identical regeneration |
 | 7. No parser panics | **PASS**: 10,000 inputs per parser (release and debug), 0 panics or hangs, after fixing 6 crash bugs |
 
-**Merged into `main`: MERGE_STATUS**
+**Merged into `main`: not yet. Every gate passes and the merge is ready** (a fast-forward; decision D18 in RUNLOG covers gate 3's demo figure), but this session's automatic permission check blocked merging and pushing `main`. To merge: `git checkout main && git merge --ff-only stabilize/v1.1 && git push origin main`.
 
 **Fixed:**
 - 6 parser crash bugs (overflows, a byte-slice panic, a terabyte allocation, NaN samples) and 3 data
@@ -73,12 +73,12 @@ Famicom filter, which became the VRC6 default after ENGINE.md's matrix. The defa
 
 | Stress test (600 s / 120 s) | ENGINE.md | v1.1 pre-B build (3 buffer sizes) | v1.1 final build |
 |---|---|---|---|
-| A. Demo playing | 0 dropouts; cost 0.22 / 0.6 / 3.5% | **0**; 0.21 / 0.6 / 3.5–3.8% | FINAL_A |
-| B. 200 clips + edits every tick | 0; 0.08 / 0.3 / 3.1% | **0**; 0.08 / 0.3 / 1.3–3.1%; 141k edits, edit → tick ≤ 16.64 ms | FINAL_B |
-| C. 250 ms UI stall every 2 s | 0; 0.22 / 0.6 / 3.5% | **0**; 0.21 / 0.6 / 0.9–3.3%; 60 stalls each | FINAL_C |
-| G. A/V sync | 0; −10.97 ms, sd 0.10 | **0**; −10.29 … −10.33 ms, sd 0.10 (HDMI: 10 ms period) | FINAL_G |
+| A. Demo playing | 0 dropouts; cost 0.22 / 0.6 / 3.5% | **0**; 0.21 / 0.6 / 3.5–3.8% | **0**; 0.22 / 0.6 / 3.3% |
+| B. 200 clips + edits every tick | 0; 0.08 / 0.3 / 3.1% | **0**; 0.08 / 0.3 / 1.3–3.1%; 141k edits, edit → tick ≤ 16.64 ms | **0**; 0.08 / 0.3 / 3.3%; 141k edits |
+| C. 250 ms UI stall every 2 s | 0; 0.22 / 0.6 / 3.5% | **0**; 0.21 / 0.6 / 0.9–3.3%; 60 stalls each | **0**; 0.21 / 0.6 / 0.7%; 60 stalls |
+| G. A/V sync | 0; −10.97 ms, sd 0.10 | **0**; −10.29 … −10.33 ms, sd 0.10 (HDMI: 10 ms period) | **0**; −10.34 ms, sd 0.11 |
 | D. Resize churn | 0; sd 0.23–0.45 | **0**; sd 0.43–0.58 ms; no crash on external resizes | — |
-| H. Heavy macros (new) | — | **0**; 0.35 / 1.3 / 3.7% | FINAL_H |
+| H. Heavy macros (new) | — | **0**; 0.35 / 1.3 / 3.7% | **0**; 0.35 / 1.4 / 3.1% |
 | E. Default-device switch | gap ~0.4 s | **skipped**: only one output device present | — |
 
 Costs are callback mean / p99 / max as % of the period. Every run: 0 allocations on the audio
