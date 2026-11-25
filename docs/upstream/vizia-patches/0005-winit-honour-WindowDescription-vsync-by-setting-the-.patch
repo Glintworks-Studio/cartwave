@@ -1,0 +1,98 @@
+From 70faa4caec0c47f9b67faae1839d491f6357c404 Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 21:28:20 -0600
+Subject: [PATCH 05/11] winit: honour WindowDescription::vsync by setting the
+ swap interval
+
+The `vsync` window option (default `true`) had no effect: the call to
+`set_swap_interval` was commented out, so the swap interval was whatever
+the driver defaulted to (and users can override that globally, e.g. in
+the NVIDIA control panel). Set `SwapInterval::Wait(1)` or `DontWait`
+explicitly when creating the window surface; log a warning instead of
+panicking if the platform lacks swap control.
+
+With vsync on, `swap_buffers` now blocks until the next vblank, so apps
+can pace animation by presented frames instead of free-running timers
+(which drift against the display refresh and periodically drop or double
+a frame).
+
+Tested (Windows 11, RTX 4070 SUPER, 59.951 Hz display) with a 1440x900
+app animating continuously, 30 s per run, measuring desktop updates via
+DXGI desktop duplication (ffmpeg ddagrab, dup_frames=0):
+- vsync on, 8 ms or 4 ms redraw timer: 1801 updates, 0 missed vblanks,
+  max gap 17.6 ms, CPU unchanged (swap blocks ~14.7 ms, no spinning
+  once redundant make-current calls are avoided)
+- previous behaviour with a 16.8 ms timer: 3 missed vblanks / 30 s
+- vsync off, 8 ms timer: 125 fps rendered, 2x CPU
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_winit/src/application.rs |  8 +++++++-
+ crates/vizia_winit/src/window.rs      | 18 ++++++++++++------
+ 2 files changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/crates/vizia_winit/src/application.rs b/crates/vizia_winit/src/application.rs
+index ff8a52c8..139e40b0 100644
+--- a/crates/vizia_winit/src/application.rs
++++ b/crates/vizia_winit/src/application.rs
+@@ -181,7 +181,13 @@ impl Application {
+         #[allow(unused_mut)]
+         let mut window_attributes = apply_window_description(window_description);
+ 
+-        let window_state = WinState::new(event_loop, window_entity, window_attributes, owner)?;
++        let window_state = WinState::new(
++            event_loop,
++            window_entity,
++            window_attributes,
++            owner,
++            window_description.vsync,
++        )?;
+         let window = window_state.window.clone();
+ 
+         if let Some(position) = window_description.position {
+diff --git a/crates/vizia_winit/src/window.rs b/crates/vizia_winit/src/window.rs
+index 30758897..ecb76bef 100644
+--- a/crates/vizia_winit/src/window.rs
++++ b/crates/vizia_winit/src/window.rs
+@@ -25,7 +25,7 @@ use glutin::{
+     context::{ContextApi, ContextAttributesBuilder},
+     display::GetGlDisplay,
+     prelude::*,
+-    surface::{SurfaceAttributesBuilder, WindowSurface},
++    surface::{SurfaceAttributesBuilder, SwapInterval, WindowSurface},
+ };
+ 
+ use skia_safe::{
+@@ -68,6 +68,7 @@ impl WinState {
+         entity: Entity,
+         #[allow(unused_mut)] mut window_attributes: WindowAttributes,
+         #[allow(unused_variables)] owner: Option<Arc<winit::window::Window>>,
++        vsync: bool,
+     ) -> Result<Self, Box<dyn Error>> {
+         #[cfg(target_os = "windows")]
+         let (window, gl_config) = {
+@@ -138,11 +139,16 @@ impl WinState {
+ 
+         let gl_context = not_current_gl_context.make_current(&gl_surface).unwrap();
+ 
+-        // if window_description.vsync {
+-        //     gl_surface
+-        //         .set_swap_interval(&gl_context, SwapInterval::Wait(NonZeroU32::new(1).unwrap()))
+-        //         .expect("Failed to set vsync");
+-        // }
++        // Apply the requested swap interval explicitly rather than relying on the
++        // driver default (which users can override, e.g. in the NVIDIA control panel).
++        let interval = if vsync {
++            SwapInterval::Wait(NonZeroU32::new(1).unwrap())
++        } else {
++            SwapInterval::DontWait
++        };
++        if let Err(err) = gl_surface.set_swap_interval(&gl_context, interval) {
++            log::warn!("Failed to set swap interval ({interval:?}): {err}");
++        }
+ 
+         // Build skia renderer
+         gl::load_with(|s| {
+-- 
+2.55.0.windows.2
+

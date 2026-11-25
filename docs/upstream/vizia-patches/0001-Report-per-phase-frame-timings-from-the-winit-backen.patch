@@ -1,0 +1,338 @@
+From 75d0a9b7064fc26c065de28f8b020ff1cf1944fc Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 20:47:52 -0600
+Subject: [PATCH 01/11] Report per-phase frame timings from the winit backend
+
+Add `FrameTimings` / `FramePhase` (vizia_core::context) so apps and tools
+can see where frame time goes: events (incl. timers), style, layout,
+make-current, draw traversal, Skia flush and present. Backends report
+phases with `BackendContext::record_frame_phase` and mark a presented
+frame with `finish_frame`; apps read the last completed frame via
+`Context::frame_timings()` / `EventContext::frame_timings()`.
+
+The winit backend now records all phases; `WinState::swap_buffers`
+returns the flush and present durations. Overhead is a handful of
+`Instant::now()` calls per loop iteration.
+
+Tested: ChipDAW GUI prototype F3 overlay and per-frame CSV log show
+plausible, stable values (e.g. 43-clip demo: draw 2.5 ms, flush 1.3 ms).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_core/src/context/backend.rs      | 12 +++
+ crates/vizia_core/src/context/event.rs        |  9 ++
+ .../vizia_core/src/context/frame_timings.rs   | 89 +++++++++++++++++++
+ crates/vizia_core/src/context/mod.rs          | 12 +++
+ crates/vizia_core/src/lib.rs                  |  2 +-
+ crates/vizia_winit/src/application.rs         | 22 ++++-
+ crates/vizia_winit/src/window.rs              |  6 +-
+ 7 files changed, 148 insertions(+), 4 deletions(-)
+ create mode 100644 crates/vizia_core/src/context/frame_timings.rs
+
+diff --git a/crates/vizia_core/src/context/backend.rs b/crates/vizia_core/src/context/backend.rs
+index d5d90667..aa0ab92d 100644
+--- a/crates/vizia_core/src/context/backend.rs
++++ b/crates/vizia_core/src/context/backend.rs
+@@ -124,6 +124,18 @@ impl BackendContext {
+         &mut self.0
+     }
+ 
++    /// Records the duration of one phase of the frame currently being produced.
++    /// Event, style and layout time accumulate until [`finish_frame`](Self::finish_frame).
++    pub fn record_frame_phase(&mut self, phase: FramePhase, duration: Duration) {
++        self.0.frame_timings.pending.add(phase, duration);
++    }
++
++    /// Marks the frame being produced as presented. Its timings become available
++    /// through `frame_timings()` on the contexts.
++    pub fn finish_frame(&mut self, presented_at: Instant) {
++        self.0.frame_timings.finish_frame(presented_at);
++    }
++
+     /// Calls the draw system.
+     pub fn draw(
+         &mut self,
+diff --git a/crates/vizia_core/src/context/event.rs b/crates/vizia_core/src/context/event.rs
+index 0f2b871a..51113e60 100644
+--- a/crates/vizia_core/src/context/event.rs
++++ b/crates/vizia_core/src/context/event.rs
+@@ -87,6 +87,7 @@ pub struct EventContext<'a> {
+     clipboard: &'a mut Box<dyn ClipboardProvider>,
+     pub(crate) event_proxy: &'a mut Option<Box<dyn crate::context::EventProxy>>,
+     pub(crate) drop_data: &'a mut Option<DropData>,
++    pub(crate) frame_timings: &'a FrameTimings,
+     pub windows: &'a mut HashMap<Entity, WindowState>,
+ }
+ 
+@@ -139,6 +140,7 @@ impl<'a> EventContext<'a> {
+             clipboard: &mut cx.clipboard,
+             event_proxy: &mut cx.event_proxy,
+             drop_data: &mut cx.drop_data,
++            frame_timings: &cx.frame_timings.last,
+             windows: &mut cx.windows,
+         }
+     }
+@@ -172,6 +174,7 @@ impl<'a> EventContext<'a> {
+             clipboard: &mut cx.clipboard,
+             event_proxy: &mut cx.event_proxy,
+             drop_data: &mut cx.drop_data,
++            frame_timings: &cx.frame_timings.last,
+             windows: &mut cx.windows,
+         }
+     }
+@@ -276,6 +279,12 @@ impl<'a> EventContext<'a> {
+         self.style.dpi_factor as f32
+     }
+ 
++    /// Returns per-phase timings of the most recently presented frame, as
++    /// reported by the windowing backend. All zero if the backend does not report them.
++    pub fn frame_timings(&self) -> FrameTimings {
++        *self.frame_timings
++    }
++
+     /// Converts logical points to physical pixels.
+     pub fn logical_to_physical(&self, logical: f32) -> f32 {
+         self.style.logical_to_physical(logical)
+diff --git a/crates/vizia_core/src/context/frame_timings.rs b/crates/vizia_core/src/context/frame_timings.rs
+new file mode 100644
+index 00000000..19ca6328
+--- /dev/null
++++ b/crates/vizia_core/src/context/frame_timings.rs
+@@ -0,0 +1,89 @@
++//! Per-phase timings of rendered frames, for profiling overlays and diagnostics.
++
++use web_time::{Duration, Instant};
++
++/// A phase of producing one frame. Used by windowing backends to report how
++/// long each phase took via [`BackendContext::record_frame_phase`](crate::backend::BackendContext::record_frame_phase).
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++pub enum FramePhase {
++    /// Dispatching queued events to models and views (including timers).
++    Events,
++    /// Restyling (selector matching, transitions).
++    Style,
++    /// Layout, text layout and other visual updates.
++    Layout,
++    /// Making the window's graphics context current before drawing.
++    MakeCurrent,
++    /// Recording draw commands for dirty views (the draw-tree traversal).
++    Draw,
++    /// Flushing recorded GPU work to the graphics driver.
++    Flush,
++    /// Presenting the frame (e.g. swapping buffers).
++    Present,
++}
++
++/// Wall-clock durations of each phase of a rendered frame.
++///
++/// `events`, `style` and `layout` accumulate over all event-loop iterations
++/// since the previous frame was presented, so they include work that led to
++/// the frame but happened before the redraw was requested.
++#[derive(Debug, Clone, Copy, Default, PartialEq)]
++pub struct FrameTimings {
++    pub events: Duration,
++    pub style: Duration,
++    pub layout: Duration,
++    pub make_current: Duration,
++    pub draw: Duration,
++    pub flush: Duration,
++    pub present: Duration,
++    /// When the backend finished presenting this frame.
++    pub presented_at: Option<Instant>,
++    /// Time between this frame's `presented_at` and the previous frame's.
++    pub interval: Option<Duration>,
++    /// Number of frames presented so far, including this one.
++    pub frame_count: u64,
++}
++
++impl FrameTimings {
++    /// Sum of all phase durations, i.e. CPU-side time spent on the frame on the UI thread.
++    pub fn total(&self) -> Duration {
++        self.events
++            + self.style
++            + self.layout
++            + self.make_current
++            + self.draw
++            + self.flush
++            + self.present
++    }
++
++    pub(crate) fn add(&mut self, phase: FramePhase, duration: Duration) {
++        let slot = match phase {
++            FramePhase::Events => &mut self.events,
++            FramePhase::Style => &mut self.style,
++            FramePhase::Layout => &mut self.layout,
++            FramePhase::MakeCurrent => &mut self.make_current,
++            FramePhase::Draw => &mut self.draw,
++            FramePhase::Flush => &mut self.flush,
++            FramePhase::Present => &mut self.present,
++        };
++        *slot += duration;
++    }
++}
++
++/// Accumulates the in-progress frame and keeps the last completed one.
++#[derive(Debug, Default)]
++pub(crate) struct FrameTimingState {
++    pub(crate) pending: FrameTimings,
++    pub(crate) last: FrameTimings,
++}
++
++impl FrameTimingState {
++    pub(crate) fn finish_frame(&mut self, presented_at: Instant) {
++        let mut done = std::mem::take(&mut self.pending);
++        done.interval =
++            self.last.presented_at.map(|prev| presented_at.saturating_duration_since(prev));
++        done.presented_at = Some(presented_at);
++        done.frame_count = self.last.frame_count + 1;
++        self.last = done;
++    }
++}
+diff --git a/crates/vizia_core/src/context/mod.rs b/crates/vizia_core/src/context/mod.rs
+index 7cd5c391..79e48bfa 100644
+--- a/crates/vizia_core/src/context/mod.rs
++++ b/crates/vizia_core/src/context/mod.rs
+@@ -5,6 +5,7 @@ mod access;
+ pub mod backend;
+ mod draw;
+ mod event;
++mod frame_timings;
+ mod proxy;
+ mod resource;
+ 
+@@ -31,6 +32,8 @@ use hashbrown::{HashMap, HashSet, hash_map::Entry};
+ pub use access::*;
+ pub use draw::*;
+ pub use event::*;
++pub(crate) use frame_timings::FrameTimingState;
++pub use frame_timings::{FramePhase, FrameTimings};
+ pub use proxy::*;
+ pub use resource::*;
+ 
+@@ -130,6 +133,8 @@ pub struct Context {
+     pub ime_state: ImeState,
+ 
+     pub(crate) drop_data: Option<DropData>,
++
++    pub(crate) frame_timings: FrameTimingState,
+ }
+ 
+ impl Default for Context {
+@@ -214,6 +219,7 @@ impl Context {
+             ime_state: Default::default(),
+ 
+             drop_data: None,
++            frame_timings: FrameTimingState::default(),
+         };
+ 
+         result.tree.set_window(Entity::root(), true);
+@@ -267,6 +273,12 @@ impl Context {
+         self.style.dpi_factor as f32
+     }
+ 
++    /// Returns per-phase timings of the most recently presented frame, as
++    /// reported by the windowing backend. All zero if the backend does not report them.
++    pub fn frame_timings(&self) -> FrameTimings {
++        self.frame_timings.last
++    }
++
+     /// Mark the application as needing to rerun the draw method
+     pub fn needs_redraw(&mut self, entity: Entity) {
+         if self.entity_manager.is_alive(entity) {
+diff --git a/crates/vizia_core/src/lib.rs b/crates/vizia_core/src/lib.rs
+index e116737d..a883228d 100644
+--- a/crates/vizia_core/src/lib.rs
++++ b/crates/vizia_core/src/lib.rs
+@@ -76,7 +76,7 @@ pub mod prelude {
+     pub use super::animation::{Animation, AnimationBuilder, KeyframeBuilder};
+     pub use super::context::{
+         AccessContext, AccessNode, Context, ContextProxy, DataContext, DrawContext, EmitContext,
+-        EventContext, ProxyEmitError, WindowState,
++        EventContext, FramePhase, FrameTimings, ProxyEmitError, WindowState,
+     };
+     pub use super::entity::Entity;
+     pub use super::environment::{Environment, EnvironmentEvent, ThemeMode};
+diff --git a/crates/vizia_winit/src/application.rs b/crates/vizia_winit/src/application.rs
+index 40e972ab..ff8a52c8 100644
+--- a/crates/vizia_winit/src/application.rs
++++ b/crates/vizia_winit/src/application.rs
+@@ -730,10 +730,20 @@ impl ApplicationHandler<UserEvent> for Application {
+             winit::event::WindowEvent::Occluded(_) => {}
+             winit::event::WindowEvent::RedrawRequested => {
+                 for window in self.windows.values_mut() {
++                    let start = Instant::now();
+                     window.make_current();
++                    let current = Instant::now();
++                    self.cx.record_frame_phase(FramePhase::MakeCurrent, current - start);
+                     //self.cx.needs_refresh(window.entity);
+-                    if self.cx.draw(window.entity, &mut window.surface, &mut window.dirty_surface) {
+-                        window.swap_buffers();
++                    let drew =
++                        self.cx.draw(window.entity, &mut window.surface, &mut window.dirty_surface);
++                    let drawn = Instant::now();
++                    self.cx.record_frame_phase(FramePhase::Draw, drawn - current);
++                    if drew {
++                        let (flush, present) = window.swap_buffers();
++                        self.cx.record_frame_phase(FramePhase::Flush, flush);
++                        self.cx.record_frame_phase(FramePhase::Present, present);
++                        self.cx.finish_frame(Instant::now());
+                     }
+ 
+                     // Un-cloak
+@@ -757,9 +767,12 @@ impl ApplicationHandler<UserEvent> for Application {
+ 
+         event_loop.set_control_flow(self.control_flow);
+ 
++        let start = Instant::now();
+         Runtime::drain_pending_work();
+ 
+         self.event_manager.flush_events(self.cx.context(), |_| {});
++        let events_done = Instant::now();
++        self.cx.record_frame_phase(FramePhase::Events, events_done - start);
+ 
+         self.cx.process_style_updates();
+ 
+@@ -768,8 +781,11 @@ impl ApplicationHandler<UserEvent> for Application {
+                 window.window().request_redraw();
+             }
+         }
++        let style_done = Instant::now();
++        self.cx.record_frame_phase(FramePhase::Style, style_done - events_done);
+ 
+         self.cx.process_visual_updates();
++        self.cx.record_frame_phase(FramePhase::Layout, style_done.elapsed());
+ 
+         #[cfg(feature = "accesskit")]
+         {
+@@ -879,7 +895,9 @@ impl ApplicationHandler<UserEvent> for Application {
+     }
+ 
+     fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: winit::event::StartCause) {
++        let start = Instant::now();
+         self.cx.process_timers();
++        self.cx.record_frame_phase(FramePhase::Events, start.elapsed());
+         self.cx.emit_scheduled_events();
+     }
+ 
+diff --git a/crates/vizia_winit/src/window.rs b/crates/vizia_winit/src/window.rs
+index 5be5714f..7e694e4a 100644
+--- a/crates/vizia_winit/src/window.rs
++++ b/crates/vizia_winit/src/window.rs
+@@ -252,9 +252,13 @@ impl WinState {
+         );
+     }
+ 
+-    pub fn swap_buffers(&mut self) {
++    /// Flushes Skia's GPU work and presents. Returns the time spent in each step.
++    pub fn swap_buffers(&mut self) -> (Duration, Duration) {
++        let start = Instant::now();
+         self.gr_context.flush_and_submit();
++        let flushed = Instant::now();
+         self.gl_surface.swap_buffers(&self.gl_context).expect("Failed to swap buffers");
++        (flushed - start, flushed.elapsed())
+     }
+ }
+ 
+-- 
+2.55.0.windows.2
+

@@ -1,0 +1,105 @@
+From 54766d7744fe9c2da8f11da1dd6f499cb69554fb Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Tue, 24 Nov 2026 15:12:41 -0600
+Subject: [PATCH 08/11] winit (macOS): pin the window's colour space to sRGB
+
+Problem
+-------
+AppKit tags a window with the colour space of the display it is on. A
+GL window moved to a display with a different colour profile kept being
+colour-matched inconsistently: some frames for the old display, some for
+the new one. The whole window flickered between two tints (users see
+"slightly flashing" content). A resize on the new display cleared it,
+calling NSOpenGLContext.update() on the move did not.
+
+Measured (macOS 26.6, Apple M1, 320 Hz wide-gamut main display and a
+60 Hz display, ScreenCaptureKit capture, frames whose whole content
+changes and reverts in the next frame, 20 s windows):
+  before: 38-67 flips at a 60 fps cap, ~975 uncapped (vsync on)
+  after:  0 in every case, after repeated moves both ways
+
+Fix
+---
+Set NSWindow.colorSpace = NSColorSpace.sRGBColorSpace when the window is
+created, through the Objective-C runtime (no new dependency). Skia
+already renders into an sRGB surface, so this states the truth: the
+window server now converts sRGB to each display's profile consistently.
+Side effect: on wide-gamut displays colours are converted instead of
+shown slightly oversaturated (e.g. one clip colour 90,42,59 -> 81,47,59
+on the 320 Hz panel; unchanged on an sRGB-like panel).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_winit/src/window.rs | 52 ++++++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+diff --git a/crates/vizia_winit/src/window.rs b/crates/vizia_winit/src/window.rs
+index ecb76bef..a53f2bdc 100644
+--- a/crates/vizia_winit/src/window.rs
++++ b/crates/vizia_winit/src/window.rs
+@@ -193,6 +193,9 @@ impl WinState {
+             .new_surface_with_dimensions((inner_size.width as i32, inner_size.height as i32))
+             .unwrap();
+ 
++        #[cfg(target_os = "macos")]
++        pin_srgb_color_space(&window);
++
+         // Build our window
+         Ok(WinState {
+             entity,
+@@ -806,3 +809,52 @@ impl WindowModifiers for Handle<'_, Window> {
+         self
+     }
+ }
++
++/// Tags the window's backing store as sRGB, the space Skia renders in.
++///
++/// Otherwise AppKit tags the window with the colour space of the display it is
++/// on. After the window moved to a display with a different profile, the
++/// window server colour-matched some frames for the old display and some for
++/// the new one, so the whole window flickered between two tints (measured on
++/// macOS 26 / M1: 38-67 whole-window flips per 20 s at 60 fps, ~975 uncapped;
++/// 0 with this; a resize on the new display also cleared it). Pinning sRGB also
++/// makes colours consistent across displays (on a wide-gamut display they are
++/// now converted instead of shown slightly oversaturated).
++///
++/// `[[view window] setColorSpace:[NSColorSpace sRGBColorSpace]]` through the
++/// Objective-C runtime, so no new dependency.
++#[cfg(target_os = "macos")]
++fn pin_srgb_color_space(window: &winit::window::Window) {
++    use std::ffi::{c_char, c_void};
++    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
++
++    #[link(name = "objc", kind = "dylib")]
++    unsafe extern "C" {
++        fn objc_getClass(name: *const c_char) -> *mut c_void;
++        fn sel_registerName(name: *const c_char) -> *mut c_void;
++        fn objc_msgSend();
++    }
++    #[link(name = "AppKit", kind = "framework")]
++    unsafe extern "C" {}
++
++    let Ok(handle) = window.window_handle() else { return };
++    let RawWindowHandle::AppKit(h) = handle.as_raw() else { return };
++    // SAFETY: AppKit calls on the main thread (windows are created there),
++    // with objc_msgSend cast to each method's exact signature.
++    unsafe {
++        let send0: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void =
++            std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
++        let send1: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void) =
++            std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
++        let view = h.ns_view.as_ptr();
++        let ns_window = send0(view, sel_registerName(c"window".as_ptr()));
++        let class = objc_getClass(c"NSColorSpace".as_ptr());
++        if ns_window.is_null() || class.is_null() {
++            return;
++        }
++        let srgb = send0(class, sel_registerName(c"sRGBColorSpace".as_ptr()));
++        if !srgb.is_null() {
++            send1(ns_window, sel_registerName(c"setColorSpace:".as_ptr()), srgb);
++        }
++    }
++}
+-- 
+2.55.0.windows.2
+

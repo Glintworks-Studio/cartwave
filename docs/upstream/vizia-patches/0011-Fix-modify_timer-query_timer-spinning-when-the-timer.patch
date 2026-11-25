@@ -1,0 +1,133 @@
+From 159bbe5546228f70f053e03b7469c53b028df623 Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Tue, 24 Nov 2026 23:46:11 -0600
+Subject: [PATCH 11/11] Fix modify_timer / query_timer spinning when the timer
+ isn't next due
+
+Problem: both looped `while let Some(t) = running_timers.peek()` and only
+popped when the heap's top was the requested timer. With any other running
+timer due sooner (e.g. a focused Textbox's caret blink), the loop never
+advanced and the UI thread spun forever. Seen in ChipDAW: changing the
+animation pump's interval while typing in a text field froze the app at
+100% of a core.
+
+Fix: search the whole heap; modify_timer edits the matching entries and
+rebuilds the heap (the change can move a timer's due time); query_timer reads
+it in place. Context and EventContext both fixed.
+
+Tested: new unit test (two running timers, modify/query the later one; hung
+before), vizia_core lib tests 52/52, ChipDAW's scripted UI scenario.
+---
+ crates/vizia_core/src/context/event.rs | 29 ++++++------------
+ crates/vizia_core/src/context/mod.rs   | 42 ++++++++++++++++++++------
+ 2 files changed, 43 insertions(+), 28 deletions(-)
+
+diff --git a/crates/vizia_core/src/context/event.rs b/crates/vizia_core/src/context/event.rs
+index a677a825..a7f98b5a 100644
+--- a/crates/vizia_core/src/context/event.rs
++++ b/crates/vizia_core/src/context/event.rs
+@@ -1303,16 +1303,15 @@ impl<'a> EventContext<'a> {
+ 
+     /// Modifies the state of an existing timer with the provided `Timer` id.
+     pub fn modify_timer(&mut self, timer: Timer, timer_function: impl Fn(&mut TimerState)) {
+-        while let Some(next_timer_state) = self.running_timers.peek() {
+-            if next_timer_state.id == timer {
+-                let mut timer_state = self.running_timers.pop().unwrap();
+-
+-                (timer_function)(&mut timer_state);
+-
+-                self.running_timers.push(timer_state);
+-
+-                return;
++        // The running timers are a heap ordered by due time: the timer may be
++        // anywhere in it, and modifying it can change its place, so rebuild.
++        if self.running_timers.iter().any(|t| t.id == timer) {
++            let mut timers = std::mem::take(&mut *self.running_timers).into_vec();
++            for timer_state in timers.iter_mut().filter(|t| t.id == timer) {
++                (timer_function)(timer_state);
+             }
++            *self.running_timers = timers.into();
++            return;
+         }
+ 
+         for pending_timer in self.timers.iter_mut() {
+@@ -1327,16 +1326,8 @@ impl<'a> EventContext<'a> {
+         timer: Timer,
+         timer_function: impl Fn(&TimerState) -> T,
+     ) -> Option<T> {
+-        while let Some(next_timer_state) = self.running_timers.peek() {
+-            if next_timer_state.id == timer {
+-                let timer_state = self.running_timers.pop().unwrap();
+-
+-                let t = (timer_function)(&timer_state);
+-
+-                self.running_timers.push(timer_state);
+-
+-                return Some(t);
+-            }
++        if let Some(timer_state) = self.running_timers.iter().find(|t| t.id == timer) {
++            return Some((timer_function)(timer_state));
+         }
+ 
+         for pending_timer in self.timers.iter() {
+diff --git a/crates/vizia_core/src/context/mod.rs b/crates/vizia_core/src/context/mod.rs
+index 3323da41..02e45725 100644
+--- a/crates/vizia_core/src/context/mod.rs
++++ b/crates/vizia_core/src/context/mod.rs
+@@ -766,16 +766,15 @@ impl Context {
+ 
+     /// Modifies the state of an existing timer with the provided `Timer` id.
+     pub fn modify_timer(&mut self, timer: Timer, timer_function: impl Fn(&mut TimerState)) {
+-        while let Some(next_timer_state) = self.running_timers.peek() {
+-            if next_timer_state.id == timer {
+-                let mut timer_state = self.running_timers.pop().unwrap();
+-
+-                (timer_function)(&mut timer_state);
+-
+-                self.running_timers.push(timer_state);
+-
+-                return;
++        // The running timers are a heap ordered by due time: the timer may be
++        // anywhere in it, and modifying it can change its place, so rebuild.
++        if self.running_timers.iter().any(|t| t.id == timer) {
++            let mut timers = std::mem::take(&mut self.running_timers).into_vec();
++            for timer_state in timers.iter_mut().filter(|t| t.id == timer) {
++                (timer_function)(timer_state);
+             }
++            self.running_timers = timers.into();
++            return;
+         }
+ 
+         for pending_timer in self.timers.iter_mut() {
+@@ -1226,3 +1225,28 @@ impl EmitContext for Context {
+             self.event_schedule.drain().filter(|item| item.ident != handle).collect();
+     }
+ }
++
++#[cfg(test)]
++mod timer_tests {
++    use super::*;
++
++    /// `modify_timer` / `query_timer` on a running timer that isn't the next
++    /// one due used to spin forever (they only looked at the heap's top).
++    #[test]
++    fn modify_and_query_a_timer_that_is_not_next_due() {
++        let cx = &mut Context::default();
++        let soon = cx.add_timer(Duration::from_millis(10), None, |_, _| {});
++        let later = cx.add_timer(Duration::from_millis(500), None, |_, _| {});
++        cx.start_timer(soon);
++        cx.start_timer(later);
++        cx.modify_timer(later, |t| {
++            t.set_interval(Duration::from_millis(4));
++        });
++        let mut ecx = EventContext::new(cx);
++        ecx.modify_timer(later, |t| {
++            t.set_interval(Duration::from_millis(5));
++        });
++        assert_eq!(ecx.query_timer(later, |t| t.interval), Some(Duration::from_millis(5)));
++        assert_eq!(ecx.query_timer(soon, |t| t.interval), Some(Duration::from_millis(10)));
++    }
++}
+-- 
+2.55.0.windows.2
+

@@ -3,6 +3,7 @@ pub mod browser;
 pub mod chrome;
 pub mod clip;
 pub mod dial;
+pub mod export_dialog;
 pub mod gfx;
 pub mod instrument;
 pub mod overlay;

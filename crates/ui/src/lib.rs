@@ -43,6 +43,9 @@ use crate::views::{
     ruler::Ruler,
 };
 
+/// A running export: its progress / cancel flags and its worker thread.
+type ExportJob = (std::sync::Arc<game_export::Control>, std::thread::JoinHandle<Result<game_export::Report, String>>);
+
 /// All reactive application state. Signals are cheap `Copy` handles.
 #[derive(Clone, Copy)]
 pub struct Signals {
@@ -106,6 +109,8 @@ pub struct Signals {
     pub browser_sel: Signal<Option<usize>>,
     /// A preset being dragged out of the browser.
     pub drag_preset: Signal<Option<PresetDrag>>,
+    /// The export dialog, while it is open.
+    pub export_dlg: Signal<Option<views::export_dialog::ExportDialog>>,
     /// The user's saved presets (browser indices after the factory presets).
     pub user_presets: Signal<Vec<user_presets::UserPreset>>,
 }
@@ -178,6 +183,8 @@ pub struct AppState {
     pending_audition: Option<(usize, u8)>,
     /// The lane the current audition plays on.
     audition_lane: Option<usize>,
+    /// A running export: its progress / cancel flags and worker thread.
+    export_job: Option<ExportJob>,
 }
 
 pub enum AppEvent {
@@ -253,6 +260,12 @@ pub enum AppEvent {
     ImportMidi,
     /// Render the song to a WAV file (Ctrl+Shift+R).
     ExportWav,
+    /// Export dialog: a choice, a lane's stem group, start, cancel, close.
+    ExportPick(views::export_dialog::Pick),
+    ExportGroup(usize),
+    ExportGo,
+    ExportCancel,
+    ExportClose,
     /// Native open dialog for a WAV file, converted into a DPCM sample.
     ImportAudio,
     RemoveSample(usize),
@@ -531,7 +544,36 @@ impl Model for AppState {
                     self.send(Command::Preview { lane, note });
                 }
             }
-            AppEvent::ExportWav => self.export_wav(),
+            AppEvent::ExportWav => {
+                if self.s.export_dlg.with_untracked(|d| d.is_none()) {
+                    let sel = self.s.time_sel.get_untracked().is_some();
+                    self.s.export_dlg.set(Some(views::export_dialog::ExportDialog::new(sel)));
+                }
+            }
+            AppEvent::ExportPick(p) => {
+                let sel = self.s.time_sel.get_untracked().map(|t| (t.start, t.end));
+                self.s.export_dlg.update(|d| {
+                    if let Some(d) = d {
+                        d.pick(*p, sel);
+                    }
+                });
+            }
+            AppEvent::ExportGroup(lane) => self.s.export_dlg.update(|d| {
+                if let Some(d) = d {
+                    d.group_of[*lane] = (d.group_of[*lane] + 1) % 4;
+                }
+            }),
+            AppEvent::ExportGo => self.export_go(),
+            AppEvent::ExportCancel => {
+                if let Some((c, _)) = &self.export_job {
+                    c.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            AppEvent::ExportClose => {
+                if self.export_job.is_none() {
+                    self.s.export_dlg.set(None);
+                }
+            }
             AppEvent::SaveProjectAs => {
                 if let Some(path) = self.file_dialog().save_file() {
                     self.s.file_path.set(path.display().to_string());
@@ -1015,6 +1057,7 @@ impl AppState {
     /// arrangement, free old snapshots, follow the selected lane, update the
     /// audio stats, and run the test hooks.
     fn sync_engine(&mut self) {
+        self.poll_export();
         // Selected lane follows the first selected clip.
         if let Some(l) = self
             .s
@@ -1337,6 +1380,7 @@ pub fn build_ui(cx: &mut Context) {
         browser_sel: Signal::new(None),
         drag_preset: Signal::new(None),
         user_presets: Signal::new(user_presets::load()),
+        export_dlg: Signal::new(None),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1389,6 +1433,7 @@ pub fn build_ui(cx: &mut Context) {
         clip_looping: false,
         last_load: None,
         pending_audition: None,
+        export_job: None,
         audition_lane: None,
     };
     if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
@@ -1443,6 +1488,7 @@ pub fn build_ui(cx: &mut Context) {
         });
         notice(cx, s);
         context_menu(cx, s);
+        views::export_dialog::build(cx, s);
     })
     .class("shell");
 
@@ -2038,7 +2084,13 @@ impl AppState {
         self.set_status(format!("Imported {name}: {}", imp.report));
     }
 
-    fn export_wav(&mut self) {
+    /// Asks where to save (the base name of every file), then renders on a
+    /// worker thread: never on the UI thread, never on the audio thread.
+    fn export_go(&mut self) {
+        let Some(dlg) = self.s.export_dlg.get_untracked() else { return };
+        if self.export_job.is_some() {
+            return;
+        }
         let cur = file::with_extension(&self.s.file_path.get_untracked());
         let stem = cur.file_stem().and_then(|n| n.to_str()).filter(|n| !n.is_empty()).unwrap_or("song");
         let mut d = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).set_file_name(format!("{stem}.wav"));
@@ -2046,17 +2098,61 @@ impl AppState {
             d = d.set_directory(dir);
         }
         let Some(path) = d.save_file() else { return };
+        let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let base = path.file_stem().and_then(|n| n.to_str()).unwrap_or("song").to_string();
+        let project = self.project();
+        let opts = dlg.options();
+        let ctl = std::sync::Arc::new(game_export::Control::default());
+        let c2 = ctl.clone();
         let t0 = Instant::now();
-        let audio = export::render(&self.project());
-        match export::write_wav(&audio, &path) {
-            Ok(()) => self.set_status(format!(
-                "Exported {:.1} s of audio to {} in {} ms",
-                audio.len() as f32 / export::SAMPLE_RATE as f32,
-                path.display(),
-                t0.elapsed().as_millis()
-            )),
-            Err(e) => self.set_status(e),
+        let handle = std::thread::Builder::new()
+            .name("export".into())
+            .spawn(move || {
+                game_export::export(&project, &opts, &dir, &base, &c2).map(|mut r| {
+                    r.notes.push(format!("{} file(s) in {:.1} s", r.files.len(), t0.elapsed().as_secs_f32()));
+                    r
+                })
+            })
+            .expect("export thread");
+        self.export_job = Some((ctl, handle));
+        self.s.export_dlg.update(|d| {
+            if let Some(d) = d {
+                d.running = Some(0);
+                d.result.clear();
+            }
+        });
+    }
+
+    /// Pump tick: export progress, and the result when the worker is done.
+    fn poll_export(&mut self) {
+        let Some((ctl, h)) = &self.export_job else { return };
+        let pm = ctl.permille.load(std::sync::atomic::Ordering::Relaxed);
+        if !h.is_finished() {
+            // Redraw on whole-percent changes only.
+            if self.s.export_dlg.with_untracked(|d| d.as_ref().and_then(|d| d.running)).map(|p| p / 10) != Some(pm / 10) {
+                self.s.export_dlg.update(|d| {
+                    if let Some(d) = d {
+                        d.running = Some(pm);
+                    }
+                });
+            }
+            return;
         }
+        let Some((_, h)) = self.export_job.take() else { return };
+        let msg = match h.join() {
+            Ok(Ok(r)) => {
+                let first = r.files.first().map(|f| f.display().to_string()).unwrap_or_default();
+                format!("Exported {} ({}). {}", first, r.files.len(), r.notes.join(" · "))
+            }
+            Ok(Err(e)) => e,
+            Err(_) => "The export failed.".into(),
+        };
+        self.s.export_dlg.update(|d| {
+            if let Some(d) = d {
+                d.running = None;
+                d.result = msg.clone();
+            }
+        });
     }
 
     fn file_dialog(&self) -> rfd::FileDialog {

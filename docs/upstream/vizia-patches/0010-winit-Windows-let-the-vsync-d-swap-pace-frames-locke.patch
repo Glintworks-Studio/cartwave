@@ -1,0 +1,70 @@
+From 1693f265756d77daebed5bd9340593a926a1ef2b Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Tue, 24 Nov 2026 21:26:08 -0600
+Subject: [PATCH 10/11] winit (Windows): let the vsync'd swap pace frames
+ locked 1:1 to the display
+
+Problem: with a frame-rate limit, frame slots run at `frame_slot_rate`, which
+locks to the display's measured rate (DWM, since the previous commit) when the
+cap is at or above it. On Windows, WGL's vsync'd SwapBuffers already blocks
+until vblank, so the slots add nothing there, and their phase against vblank is
+arbitrary (set when the limiter starts, then drifting by the ~30 ppm jitter of
+DWM's rate). When the slots settle just before vblank, the frame drawn at the
+slot misses it: on a 59.951 Hz display, one 30 s drag run in four showed 11
+refreshes without a new frame (DXGI desktop duplication) and present times of
+1.35 ms instead of ~15 ms.
+
+Fix: on Windows, when vsync is on and the slots would be locked 1:1
+(`frame_slot_vblanks() == Some(1)`), don't defer redraws; the swap paces them,
+as it did before the limit existed. Other ratios (e.g. 60 on 144 Hz) and macOS,
+where flushBuffer doesn't lock to vblank, are unchanged.
+
+Tested: Windows 11, RTX 4070 SUPER, 59.951 Hz, cap 60, 30 s DXGI pacing runs:
+demo / 200 clips / 200-clip drag, 3 runs each: 0 refreshes without a new
+frame in all 9 (before: 11 in one drag run of four); present back to
+15.3-15.6 ms blocked in the swap; CPU 9.5-11.9%, unchanged.
+---
+ crates/vizia_winit/src/application.rs | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/crates/vizia_winit/src/application.rs b/crates/vizia_winit/src/application.rs
+index 742d2e10..448c763c 100644
+--- a/crates/vizia_winit/src/application.rs
++++ b/crates/vizia_winit/src/application.rs
+@@ -133,6 +133,24 @@ impl EventProxy for WinitEventProxy {
+ }
+ 
+ impl Application {
++    /// Time between frame slots, or `None` when this backend doesn't need them.
++    ///
++    /// On Windows a vsync'd `SwapBuffers` (WGL) blocks until vblank, so when the
++    /// slots would be locked 1:1 to the display (`frame_slot_vblanks() == Some(1)`)
++    /// the swap already presents exactly one frame per refresh. Slots at the
++    /// measured rate on top of it add nothing, and their phase against vblank is
++    /// arbitrary: when it settles just before vblank, frames miss it (measured on
++    /// a 59.951 Hz display: 11 refreshes without a new frame in 30 s, in one of
++    /// four runs). Frames then wait for the swap instead, as before the limit
++    /// existed. macOS keeps the slots: `flushBuffer` doesn't lock to vblank there.
++    fn frame_slot_interval(&self) -> Option<Duration> {
++        #[cfg(target_os = "windows")]
++        if self.window_description.vsync && self.cx.frame_slot_vblanks() == Some(1) {
++            return None;
++        }
++        self.cx.min_frame_interval()
++    }
++
+     pub fn new<F>(content: F) -> Self
+     where
+         F: 'static + FnOnce(&mut Context),
+@@ -875,7 +893,7 @@ impl ApplicationHandler<UserEvent> for Application {
+         let mut deferred_until = None;
+         if wants_redraw {
+             let now = Instant::now();
+-            match (self.cx.min_frame_interval(), self.next_frame_due) {
++            match (self.frame_slot_interval(), self.next_frame_due) {
+                 // Allow a little early: wake-ups are late more often than early,
+                 // and the swap still waits for vblank.
+                 (Some(_), Some(due)) if now + FRAME_SLOT_SLACK < due => deferred_until = Some(due),
+-- 
+2.55.0.windows.2
+

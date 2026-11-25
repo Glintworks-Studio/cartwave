@@ -1,0 +1,154 @@
+From 2ba6f6eb77e5b25a2db40a64d86be0edd36ff6d8 Mon Sep 17 00:00:00 2001
+From: Jeffrey Frederick <5095066+jeffreyfrederick@users.noreply.github.com>
+Date: Mon, 23 Nov 2026 21:20:52 -0600
+Subject: [PATCH 04/11] Apply nested clips as separate shapes so rect/rrect
+ clips stay analytic
+
+`clipping_system` intersects each view's overflow clip with its parent's
+clip using `SkPathOps`, so a rounded container nested in the window (or a
+rect container nested in a rounded one) ends up with a generic path, e.g.
+the window rect intersected with a 10 px-radius panel. Skia's GPU backend
+cannot apply such a clip analytically and falls back to a software clip
+mask: rasterized on the CPU and uploaded as a new texture for every draw,
+every frame (the masks are tied to the frame's clip-stack state, so they
+are never reused across frames). Every view inside a rounded panel paid
+for this.
+
+Keep the clip of each entity also as the list of shapes it is the
+intersection of (`CachedData::clip_shapes`, ancestors first, shared via
+`Rc` with children that add no clip of their own) and apply them one by
+one with `clip_rect` / `clip_rrect` (falling back to `clip_path` for
+other shapes such as smoothed corners). The combined `clip_path` is still
+computed for `DrawContext::clip_path()`.
+
+Tested on the ChipDAW GUI prototype (all content inside a 10 px-radius
+panel), Windows/NVIDIA, 60 Hz: dragging a clip in a 200-clip
+arrangement went from ~53% to ~17% process CPU; before, ~85% of that
+was `ClipStack::GetSWMaskFP` -> texture upload, on a 1420x568 mask.
+Pixel diff of a static frame: 9 px differ (anti-aliasing at a panel
+corner), apart from the window border.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ crates/vizia_core/src/cache.rs            |  7 +++++++
+ crates/vizia_core/src/systems/clipping.rs | 17 +++++++++++++++++
+ crates/vizia_core/src/systems/draw.rs     | 22 ++++++++++++++++++++--
+ 3 files changed, 44 insertions(+), 2 deletions(-)
+
+diff --git a/crates/vizia_core/src/cache.rs b/crates/vizia_core/src/cache.rs
+index e8ac195b..c0aed559 100644
+--- a/crates/vizia_core/src/cache.rs
++++ b/crates/vizia_core/src/cache.rs
+@@ -1,6 +1,8 @@
+ //! The cache is a store for intermediate data produced while computing state, notably layout
+ //! results. The main type here is CachedData, usually accessed via `cx.cache`.
+ 
++use std::rc::Rc;
++
+ use crate::prelude::*;
+ use skia_safe::{Matrix, Paint, Path};
+ use vizia_storage::SparseSet;
+@@ -17,6 +19,10 @@ pub struct CachedData {
+     pub(crate) geo_changed: SparseSet<GeoChanged>,
+     pub(crate) transform: SparseSet<Matrix>,
+     pub(crate) clip_path: SparseSet<Option<Path>>,
++    /// The clip of each entity as the list of shapes it is the intersection of
++    /// (ancestors first). Drawing applies these one by one so that rect and
++    /// rounded-rect clips stay analytic on the GPU; see `clipping_system`.
++    pub(crate) clip_shapes: SparseSet<Option<Rc<[Path]>>>,
+     pub(crate) path: SparseSet<Path>,
+     pub(crate) shadows: SparseSet<ShadowCache>,
+ }
+@@ -56,6 +62,7 @@ impl CachedData {
+         self.geo_changed.remove(entity);
+         self.transform.remove(entity);
+         self.clip_path.remove(entity);
++        self.clip_shapes.remove(entity);
+         self.path.remove(entity);
+         self.shadows.remove(entity);
+     }
+diff --git a/crates/vizia_core/src/systems/clipping.rs b/crates/vizia_core/src/systems/clipping.rs
+index fe27439f..8d1c5ebf 100644
+--- a/crates/vizia_core/src/systems/clipping.rs
++++ b/crates/vizia_core/src/systems/clipping.rs
+@@ -5,6 +5,8 @@ use skia_safe::{
+ };
+ use vizia_storage::LayoutTreeIterator;
+ 
++use std::rc::Rc;
++
+ use crate::prelude::*;
+ 
+ /// Computes the clipping path for each entity in the layout tree.
+@@ -24,6 +26,7 @@ pub(crate) fn clipping_system(cx: &mut Context) {
+ 
+         if entity == Entity::root() {
+             let clip_path = build_clip_path(cx, Entity::root(), bounds);
++            cx.cache.clip_shapes.insert(entity, Some(Rc::from([clip_path.clone()])));
+             cx.cache.clip_path.insert(entity, Some(clip_path));
+             continue;
+         }
+@@ -97,6 +100,20 @@ pub(crate) fn clipping_system(cx: &mut Context) {
+             cx.cache.clip_path.get(parent).cloned().flatten()
+         };
+ 
++        let parent_shapes = if cx.tree.is_window(entity) {
++            None
++        } else {
++            cx.cache.clip_shapes.get(parent).cloned().flatten()
++        };
++        let shapes = match (&clip_path, parent_shapes) {
++            (Some(own), Some(parent)) => {
++                Some(parent.iter().cloned().chain(std::iter::once(own.clone())).collect())
++            }
++            (Some(own), None) => Some(Rc::from([own.clone()])),
++            (None, parent) => parent,
++        };
++        cx.cache.clip_shapes.insert(entity, shapes);
++
+         match (clip_path, parent_clip_path) {
+             (Some(clip_path), Some(parent_clip_path)) => {
+                 let path_intersection =
+diff --git a/crates/vizia_core/src/systems/draw.rs b/crates/vizia_core/src/systems/draw.rs
+index b4ed96ee..eedd7e09 100644
+--- a/crates/vizia_core/src/systems/draw.rs
++++ b/crates/vizia_core/src/systems/draw.rs
+@@ -170,6 +170,24 @@ pub(crate) fn draw_system(
+     true
+ }
+ 
++/// Applies a view's clip as the intersection of its shapes.
++///
++/// Pre-intersecting nested clips into a single path (e.g. a rounded panel
++/// clipped by the window rect) produces a generic path, which the GPU backend
++/// can only apply through a software-rasterized, per-frame clip mask. Rects and
++/// rounded rects applied individually stay analytic.
++fn apply_clip_shapes(canvas: &Canvas, shapes: &[skia_safe::Path]) {
++    for shape in shapes {
++        if let Some(rect) = shape.is_rect() {
++            canvas.clip_rect(rect.0, ClipOp::Intersect, true);
++        } else if let Some(rrect) = shape.is_rrect() {
++            canvas.clip_rrect(rrect, ClipOp::Intersect, true);
++        } else {
++            canvas.clip_path(shape, ClipOp::Intersect, true);
++        }
++    }
++}
++
+ fn union_dirty_rect(dirty_rect: &mut Option<BoundingBox>, bounds: BoundingBox) {
+     if bounds.w <= 0.0 || bounds.h <= 0.0 {
+         return;
+@@ -252,8 +270,8 @@ fn draw_entity(
+     };
+ 
+     canvas.save();
+-    if let Some(Some(clip_path)) = cx.cache.clip_path.get(current) {
+-        canvas.clip_path(clip_path, ClipOp::Intersect, true);
++    if let Some(Some(shapes)) = cx.cache.clip_shapes.get(current) {
++        apply_clip_shapes(canvas, shapes);
+     }
+ 
+     if let Some(transform) = cx.cache.transform.get(current) {
+-- 
+2.55.0.windows.2
+
