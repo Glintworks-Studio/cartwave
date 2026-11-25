@@ -1,14 +1,18 @@
 //! Platform input conventions, kept in one place.
 //!
-//! | Action                 | Windows / Linux | macOS          |
-//! |------------------------|-----------------|----------------|
-//! | Command (select all)   | Ctrl            | Cmd            |
-//! | Duplicate while drag   | Ctrl            | Option         |
-//! | Bypass snap while drag | Alt             | Cmd            |
-//! | Zoom with the wheel    | Ctrl or Cmd     | Cmd or Ctrl    |
+//! | Action                                   | Windows / Linux      | macOS                |
+//! |------------------------------------------|----------------------|----------------------|
+//! | Command (select all, copy, undo, save…)  | Ctrl                 | Cmd                  |
+//! | Duplicate while dragging (clips, notes)  | Ctrl                 | Option               |
+//! | Bypass snap while dragging / drawing     | Alt                  | Cmd                  |
+//! | Zoom with the wheel                      | Ctrl or Cmd          | Cmd or Ctrl          |
+//! | Marquee in the piano roll                | Shift-drag           | Shift-drag           |
+//! | Redo                                     | Ctrl+Shift+Z, Ctrl+Y | Cmd+Shift+Z, Cmd+Y   |
 //!
 //! The macOS column follows the common convention for DAWs on the Mac
-//! (Option-drag copies, Cmd suspends the grid).
+//! (Option-drag copies, Cmd suspends the grid). Every shortcut in the app
+//! goes through `command` / `duplicate_drag` / `bypass_snap` / `zoom_wheel`;
+//! the full map is in PIANOROLL.md §2.
 
 use vizia::prelude::Modifiers;
 

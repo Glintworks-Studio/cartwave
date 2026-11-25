@@ -1,10 +1,10 @@
-# usage: pacing.ps1 [-Label run] [-Scenario demo|stress|drag] [-Secs 30] [-Env "K=V;..."] [-Exe .\target\release\app.exe] [-Repo <repo>] [-Work <dir>]
+# usage: pacing.ps1 [-Label run] [-Scenario demo|stress|drag|pr|prdrag] [-Secs 30] [-Env "K=V;..."] [-Exe .\target\release\app.exe] [-Repo <repo>] [-Work <dir>]
 # Needs ffmpeg (with ddagrab) and python on PATH. -Exe is relative to -Repo.
 # Defaults: -Repo = this script's repo; -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf.
 # Set $env:CHIPDAW_REFRESH_HZ to the display refresh rate (default 59.951) for pacing_analyze.py.
 param(
   [string]$Label = "run",
-  [ValidateSet("demo", "stress", "drag")][string]$Scenario = "demo",
+  [ValidateSet("demo", "stress", "drag", "pr", "prdrag")][string]$Scenario = "demo",
   [int]$Secs = 30,
   [string]$Env = "",
   [string]$Exe = ".\target\release\app.exe",
@@ -27,7 +27,8 @@ Start-Sleep -Seconds 3
 . "$PSScriptRoot\input.ps1"
 Move-To 1430 890
 Key 0x20
-if ($Scenario -ne "demo") { Key 0x73 }
+# pr / prdrag: the piano-roll benchmark (PIANOROLL.md §8); pass its project via -Env.
+if ($Scenario -in "stress", "drag") { Key 0x73 }
 Start-Sleep -Seconds 2
 $ff = Start-Process ffmpeg -ArgumentList "-hide_banner -loglevel info -f lavfi -i ddagrab=framerate=240:dup_frames=0:draw_mouse=0 -t $Secs -vf showinfo -f null -" -PassThru -NoNewWindow -RedirectStandardError "$S\pace_showinfo.txt"
 $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew()
@@ -35,6 +36,13 @@ if ($Scenario -eq "drag") {
   Move-To 300 160; Down
   $i = 0
   while (-not $ff.HasExited) { Move-To (300 + [int](120 * [Math]::Sin($i / 12.0))) (160 + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
+  Up
+}
+if ($Scenario -eq "prdrag") {
+  # The handle note (C4, bar 1) of piano_bench.chipdaw at 32 px per bar.
+  Move-To 98 591; Down
+  $i = 0
+  while (-not $ff.HasExited) { Move-To (98 + [int](12 * [Math]::Sin($i / 12.0))) (591 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
   Up
 }
 $ff.WaitForExit()

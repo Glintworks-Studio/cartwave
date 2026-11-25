@@ -74,9 +74,15 @@ struct Map {
 
 impl Map {
     fn new(p: &PianoState, geo: Geo, kind: RowKind) -> Self {
-        let visible = (geo.grid_y1 - geo.grid_y0) / p.row_h;
+        // Noise (16 rows) and DPCM (4) rows grow to fill the panel.
+        const MAX_ROW_H: f32 = 32.0;
+        let row_h = match kind {
+            RowKind::Piano { .. } => p.row_h,
+            _ => ((geo.grid_y1 - geo.grid_y0) / kind.rows() as f32).clamp(p.row_h, MAX_ROW_H),
+        };
+        let visible = (geo.grid_y1 - geo.grid_y0) / row_h;
         let max_top = (kind.rows() as f32 - visible).max(0.0);
-        Self { geo, kind, ppt: p.px_per_tick, scroll: p.scroll_ticks, row_h: p.row_h, top: p.top.clamp(0.0, max_top) }
+        Self { geo, kind, ppt: p.px_per_tick, scroll: p.scroll_ticks, row_h, top: p.top.clamp(0.0, max_top) }
     }
 
     fn x_of(&self, tick: f64) -> f32 {
@@ -922,9 +928,12 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         let line = if octave { Rgba::white(0.08) } else { Rgba::black(0.35) };
         canvas.draw_rect(vg::Rect::from_xywh(gx0, (y + rh - s).round(), w - gx0, s), &gfx::fill(line));
         // Keys / labels.
+        let piano = matches!(kind, RowKind::Piano { .. });
         let key_col = match (playable, black) {
             (false, _) => Rgba::hex(0x0E0F13),
             (true, true) => Rgba::hex(0x202330),
+            // Noise / DPCM rows are labels, not keys: dark, light text.
+            (true, false) if !piano => Rgba::hex(0x22252E),
             (true, false) => Rgba::hex(0xC9CCD6),
         };
         let kx1 = if black { gx0 * 0.62 } else { gx0 - s };
@@ -937,10 +946,11 @@ fn draw_static(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &
         if let (Some(l), true) = (label, rh >= 8.0 * s) {
             let ink = match (playable, black) {
                 (false, _) => TEXT_LO.with_alpha(0.5),
-                (true, false) if matches!(kind, RowKind::Piano { .. }) => Rgba::hex(0x30333D),
+                (true, false) if piano => Rgba::hex(0x30333D),
                 _ => TEXT_HI,
             };
-            gfx::draw_text(canvas, &l, gx0 - px(30.0), gfx::baseline_for_center(&label_font, y + rh * 0.5), &label_font, ink);
+            let lx = if piano { gx0 - px(30.0) } else { px(6.0) };
+            gfx::draw_text(canvas, &l, lx, gfx::baseline_for_center(&label_font, y + rh * 0.5), &label_font, ink);
         }
     }
     canvas.restore();
