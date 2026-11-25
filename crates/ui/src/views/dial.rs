@@ -96,6 +96,8 @@ impl View for Dial {
                 self.last_y = cx.mouse().cursor_y;
                 cx.capture();
                 cx.set_active(true);
+                // One undo step per drag.
+                cx.emit(AppEvent::GestureBegin);
                 meta.consume();
             }
             WindowEvent::MouseMove(_, y) if self.dragging => {
@@ -114,6 +116,7 @@ impl View for Dial {
                 self.dragging = false;
                 cx.release();
                 cx.set_active(false);
+                cx.emit(AppEvent::GestureEnd);
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                 cx.emit(AppEvent::SetDial(self.index, self.spec.default));

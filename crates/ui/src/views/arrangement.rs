@@ -94,6 +94,7 @@ impl Arrangement {
         .width(Stretch(1.0))
         .bind(s.arrangement, |mut h| h.needs_redraw())
         .bind(s.transport, |mut h| h.needs_redraw())
+        .bind(s.lane_h, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -113,14 +114,14 @@ impl Arrangement {
         )
     }
 
-    fn hit_test(a: &state::Arrangement, x: f32, y: f32) -> Option<(u32, Zone)> {
-        let lane = (y / LANE_HEIGHT).floor();
+    fn hit_test(a: &state::Arrangement, x: f32, y: f32, lane_h: f32) -> Option<(u32, Zone)> {
+        let lane = (y / lane_h).floor();
         if lane < 0.0 {
             return None;
         }
         let lane = lane as usize;
-        let ly = y - lane as f32 * LANE_HEIGHT;
-        if !(CLIP_V_INSET..=LANE_HEIGHT - CLIP_V_INSET).contains(&ly) {
+        let ly = y - lane as f32 * lane_h;
+        if !(CLIP_V_INSET..=lane_h - CLIP_V_INSET).contains(&ly) {
             return None;
         }
         // Topmost first: clips are drawn in list order.
@@ -154,7 +155,8 @@ impl Arrangement {
         let (mx, my) = Self::local_mouse(cx);
         let mods = *cx.modifiers();
         let arr = self.s.arrangement;
-        let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my));
+        let lane_h = self.s.lane_h.get_untracked();
+        let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
 
         let Some((id, zone)) = hit else {
             if !mods.shift() {
@@ -236,6 +238,7 @@ impl Arrangement {
             a.editing = ids.clone();
         });
 
+        cx.emit(crate::AppEvent::GestureBegin);
         self.drag = Some(Drag {
             mode,
             press: (mx, my),
@@ -287,7 +290,7 @@ impl Arrangement {
                         .min()
                         .unwrap_or(0);
                     delta = delta.max(-min_start);
-                    let mut dlane = (dy / LANE_HEIGHT).round() as i64;
+                    let mut dlane = (dy / self.s.lane_h.get_untracked()).round() as i64;
                     let (lo, hi) = drag
                         .origins
                         .iter()
@@ -342,6 +345,7 @@ impl Arrangement {
     fn on_release(&mut self, cx: &mut EventContext) {
         if let Some(drag) = self.drag.take() {
             cx.release();
+            cx.emit(crate::AppEvent::GestureEnd);
             // Drop: the moved/resized/duplicated clips win and trim (or split)
             // whatever they overlap in their lane.
             self.s.arrangement.update(|a| {
@@ -360,10 +364,11 @@ impl Arrangement {
 
     fn update_hover(&mut self, cx: &mut EventContext) {
         let (mx, my) = Self::local_mouse(cx);
+        let lane_h = self.s.lane_h.get_untracked();
         let hit = self
             .s
             .arrangement
-            .with_untracked(|a| Self::hit_test(a, mx, my));
+            .with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
         if hit.map(|h| h.0) != self.hover.map(|h| h.0) {
             cx.needs_redraw();
         }
@@ -387,7 +392,7 @@ impl Arrangement {
     ) {
         let view = a.view;
         let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
-        let lane_h = LANE_HEIGHT * s;
+        let lane_h = self.s.lane_h.get_untracked() * s;
         // Lane backgrounds: subtle alternation plus a hairline.
         for (i, lane) in a.lanes.iter().enumerate() {
             let y = rect.top + i as f32 * lane_h;
@@ -459,6 +464,32 @@ impl View for Arrangement {
                 self.on_press(cx);
                 meta.consume();
             }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                // On a clip: open it in the piano roll. On empty lane space: a
+                // new 1-bar clip at the snapped position (it wins overlaps).
+                let (mx, my) = Self::local_mouse(cx);
+                let lane_h = self.s.lane_h.get_untracked();
+                let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+                match hit {
+                    Some((id, _)) => cx.emit(crate::AppEvent::OpenPiano(id)),
+                    None => {
+                        let lane = (my / lane_h).floor();
+                        let no_snap = crate::input::bypass_snap(cx.modifiers());
+                        let lanes = self.s.arrangement.with_untracked(|a| a.lanes.len());
+                        if lane >= 0.0 && (lane as usize) < lanes {
+                            self.s.arrangement.update(|a| {
+                                let t = a.view.x_to_tick(mx as f64).max(0.0) as i64;
+                                let g = a.snap.ticks() as i64;
+                                let start = if no_snap { t } else { t.div_euclid(g) * g };
+                                let id = a.add_clip(lane as usize, start as u32, TICKS_PER_BAR);
+                                a.selection = vec![id];
+                            });
+                            cx.emit(crate::AppEvent::Commit);
+                        }
+                    }
+                }
+                meta.consume();
+            }
             WindowEvent::MouseMove(_, _) => {
                 if self.drag.is_some() {
                     self.on_drag(cx);
@@ -502,11 +533,22 @@ impl View for Arrangement {
                 // unidentified (e.g. remote desktop, injected input).
                 _ if matches!(key, Some(Key::Delete | Key::Backspace)) => {
                     self.s.arrangement.update(|a| a.delete_selected());
+                    cx.emit(crate::AppEvent::Commit);
                     meta.consume();
                 }
                 Code::Delete | Code::Backspace => {
                     self.s.arrangement.update(|a| a.delete_selected());
+                    cx.emit(crate::AppEvent::Commit);
                     meta.consume();
+                }
+                Code::Enter | Code::NumpadEnter => {
+                    let one = self.s.arrangement.with_untracked(|a| {
+                        (a.selection.len() == 1).then(|| a.selection[0])
+                    });
+                    if let Some(id) = one {
+                        cx.emit(crate::AppEvent::OpenPiano(id));
+                        meta.consume();
+                    }
                 }
                 Code::Escape => self.s.arrangement.update(|a| a.selection.clear()),
                 Code::KeyA if crate::input::command(cx.modifiers()) => {
@@ -541,7 +583,7 @@ impl View for Arrangement {
         self.s.arrangement.with_untracked(|a| {
             let view = a.view;
             let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
-            let lane_h = LANE_HEIGHT * s;
+            let lane_h = self.s.lane_h.get_untracked() * s;
 
             let lanes_bottom = rect.top + a.lanes.len() as f32 * lane_h;
             let loop_end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
@@ -781,7 +823,7 @@ impl LaneBadge {
         Self { s, lane }
             .build(cx, |_| {})
             .width(Pixels(14.0))
-            .height(Pixels(38.0))
+            .height(s.lane_h.map(|h| Pixels((h - 26.0).max(10.0))))
             .hoverable(false)
             .bind(s.meters, |mut h| h.needs_redraw())
     }
@@ -856,6 +898,8 @@ pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
                     .on_press(move |cx| cx.emit(crate::AppEvent::ToggleSolo(i)));
             })
             .class("track-header")
+            .height(s.lane_h.map(|h| Pixels(*h)))
+            .toggle_class("compact", s.lane_h.map(|h| *h < state::LANE_H_NORMAL))
             .toggle_class("selected", selected_lane);
         }
     })

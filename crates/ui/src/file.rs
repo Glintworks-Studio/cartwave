@@ -430,7 +430,9 @@ mod tests {
     }
 
     /// The parts of a project that are saved (view, selection: not).
-    fn saved_parts(p: &Project) -> (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, u32, u8, u8, Params) {
+    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, u32, u8, u8, Params);
+
+    fn saved_parts(p: &Project) -> SavedParts {
         (
             p.arrangement.clips.clone(),
             p.arrangement.next_id,

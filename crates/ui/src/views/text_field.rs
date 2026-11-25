@@ -86,6 +86,8 @@ impl View for ScrubField {
                 };
                 cx.capture();
                 cx.set_active(true);
+                // One undo step per drag.
+                cx.emit(AppEvent::GestureBegin);
                 meta.consume();
             }
             WindowEvent::MouseMove(x, y) if self.dragging => {
@@ -114,6 +116,7 @@ impl View for ScrubField {
                 self.dragging = false;
                 cx.release();
                 cx.set_active(false);
+                cx.emit(AppEvent::GestureEnd);
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                 match self.kind {

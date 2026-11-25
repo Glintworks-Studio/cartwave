@@ -19,9 +19,10 @@ pub enum Span {
     Glyphs,
     Badges,
     Overlay,
+    PianoRoll,
 }
 
-pub const SPANS: [(Span, &str); 9] = [
+pub const SPANS: [(Span, &str); 10] = [
     (Span::Arrangement, "arrange"),
     (Span::Ruler, "ruler"),
     (Span::Meters, "meters"),
@@ -31,6 +32,7 @@ pub const SPANS: [(Span, &str); 9] = [
     (Span::Glyphs, "glyphs"),
     (Span::Badges, "badges"),
     (Span::Overlay, "overlay"),
+    (Span::PianoRoll, "piano"),
 ];
 
 thread_local! {

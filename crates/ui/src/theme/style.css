@@ -269,3 +269,36 @@ label {
     height: 120px;
     cursor: ns-resize;
 }
+
+/* ───────────── Piano roll (plain, functional: a redesign is under way) ───────────── */
+
+.piano-panel {
+    height: 1s;
+    padding: 8px;
+    gap: 6px;
+    layout-type: column;
+}
+
+.piano-header {
+    height: 30px;
+    gap: 8px;
+    alignment: left;
+    layout-type: row;
+}
+
+.mono-info {
+    font-family: "JetBrains Mono";
+    font-size: 11;
+    color: var(--text-hi);
+}
+
+.status-msg {
+    color: var(--text-hi);
+    max-width: 260px;
+    text-overflow: ellipsis;
+    text-wrap: false;
+}
+
+.track-header.compact .chipname {
+    display: none;
+}

@@ -418,6 +418,8 @@ pub struct Transport {
     pub playhead_ticks: f64,
     /// Loop end in ticks; playhead wraps here.
     pub loop_end_ticks: f64,
+    /// Loop start in ticks (0 unless "loop this clip" is on).
+    pub loop_start_ticks: f64,
 }
 
 impl Transport {
@@ -598,7 +600,7 @@ pub struct FrameStats {
     /// Smoothed per-phase UI-thread time, ms, in `PHASE_NAMES` order.
     pub phases_ms: [f32; 7],
     /// Smoothed per-view custom draw time, ms, in `perf::SPANS` order.
-    pub spans_ms: [f32; 9],
+    pub spans_ms: [f32; crate::perf::SPANS.len()],
     /// Process CPU, % of one core (all threads, incl. the GL driver's).
     pub cpu_percent: f32,
     pub clip_count: usize,
@@ -784,3 +786,62 @@ mod tests {
         assert_ne!(a.content_key(), k);
     }
 }
+
+/// The piano roll's state: which clip is open, its view, and the note
+/// selection. Not part of undo or the file.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PianoState {
+    /// The open clip (`None`: the device panel is shown).
+    pub clip: Option<u32>,
+    pub grid: crate::notes::Grid,
+    /// Page the view along with the playhead while playing.
+    pub follow: bool,
+    /// Playback loops over the open clip.
+    pub loop_clip: bool,
+    /// Selected note ids (in the open clip).
+    pub sel: Vec<u32>,
+    /// Logical px per tick.
+    pub px_per_tick: f64,
+    /// Tick (relative to the clip start) at the grid's left edge.
+    pub scroll_ticks: f64,
+    /// Row height, logical px.
+    pub row_h: f32,
+    /// Rows scrolled down from the top row.
+    pub top: f32,
+    /// Grid width in logical px (written by the view; used to follow).
+    pub width_px: f32,
+    /// Hover read-out: the row's note, period and tuning error.
+    pub hover: String,
+    /// The lane's Volume control, drawn for notes without their own volume.
+    pub lane_volume: u8,
+}
+
+impl Default for PianoState {
+    fn default() -> Self {
+        Self {
+            clip: None,
+            grid: crate::notes::Grid::Sixteenth,
+            follow: true,
+            loop_clip: false,
+            sel: Vec::new(),
+            // One bar = 256 logical px.
+            px_per_tick: 256.0 / TICKS_PER_BAR as f64,
+            scroll_ticks: 0.0,
+            row_h: 12.0,
+            top: 0.0,
+            width_px: 800.0,
+            hover: String::new(),
+            lane_volume: 12,
+        }
+    }
+}
+
+impl PianoState {
+    pub const MIN_PX_PER_BAR: f64 = 32.0;
+    pub const MAX_PX_PER_BAR: f64 = 4096.0;
+}
+
+/// Lane height in the arrangement: normal, and compact while the piano roll
+/// is open (so the piano roll gets the room; PIANOROLL.md §2).
+pub const LANE_H_NORMAL: f32 = 64.0;
+pub const LANE_H_COMPACT: f32 = 36.0;

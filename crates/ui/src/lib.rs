@@ -14,13 +14,17 @@ pub mod views;
 
 use vizia::prelude::*;
 
-use engine::{Command, Engine, EngineConfig, FilterMode, Params};
+use engine::{Command, Engine, EngineConfig, FilterMode, ParamId, Params};
 
+use crate::file::{Project, Recovery};
+use crate::history::{Doc, History};
 use crate::mock::Rng;
+use crate::notes::{Note, RowKind};
 use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
     dial::Dial,
+    piano_roll::PianoRoll,
     meter::MeterBank,
     overlay::StatsOverlay,
     ruler::Ruler,
@@ -50,6 +54,18 @@ pub struct Signals {
     /// Incremented once per animation tick; views that animate bind to it.
     pub frame: Signal<u64>,
     pub stress: Signal<bool>,
+    /// The piano roll: open clip, view and note selection.
+    pub piano: Signal<PianoState>,
+    /// The bottom panel shows the piano roll (else the device panel).
+    pub piano_open: Signal<bool>,
+    /// Arrangement lane height (compact while the piano roll is open).
+    pub lane_h: Signal<f32>,
+    /// The project file path field.
+    pub file_path: Signal<String>,
+    /// Short status line (saved, errors); clears itself.
+    pub status: Signal<String>,
+    /// The last session crashed and left a recovery file.
+    pub recovery_offer: Signal<bool>,
 }
 
 pub struct AppState {
@@ -93,6 +109,21 @@ pub struct AppState {
     /// Playhead clock source counts for the F3 overlay: (audio, local) frames
     /// in the current second, and when that second started.
     clock_counts: (u32, u32, Instant),
+    /// Global undo (arrangement + piano roll + tempo + lane parameters).
+    history: History,
+    /// Mouse gestures in progress (a drag is one undo step).
+    gesture_depth: u32,
+    /// Notes copied in the piano roll (starts relative to the first note).
+    clipboard: Vec<Note>,
+    recovery: Option<Recovery>,
+    last_autosave: Instant,
+    /// The document last written to the recovery file.
+    autosaved: Option<Doc>,
+    status_until: Option<Instant>,
+    /// Loop end to restore when "loop this clip" is switched off.
+    loop_end_saved: f64,
+    /// The engine is looping over the open clip.
+    clip_looping: bool,
 }
 
 pub enum AppEvent {
@@ -113,6 +144,33 @@ pub enum AppEvent {
     ToggleMute(usize),
     ToggleSolo(usize),
     CycleFilter,
+    /// Open a clip in the piano roll / close it.
+    OpenPiano(u32),
+    ClosePiano,
+    CyclePianoGrid,
+    TogglePianoFollow,
+    ToggleLoopClip,
+    /// Audition while stopped (`None` releases).
+    Preview { lane: usize, note: Option<(u8, Option<u8>)> },
+    /// A mouse gesture started / ended (one undo step per gesture).
+    GestureBegin,
+    GestureEnd,
+    /// A discrete edit finished: record an undo step.
+    Commit,
+    Undo,
+    Redo,
+    NewProject,
+    /// Save to the path in the file field (Ctrl+S).
+    SaveProject,
+    /// Load the project at the path in the file field.
+    OpenProject,
+    /// Ctrl+Shift+S / Ctrl+O: put the cursor in the file field.
+    FocusFileField,
+    SetFilePath(String),
+    CopyNotes { cut: bool },
+    PasteNotes,
+    RecoverAccept,
+    RecoverDiscard,
 }
 
 impl Model for AppState {
@@ -219,13 +277,77 @@ impl Model for AppState {
                     self.s.transport.update(|t| t.playing = true);
                 }
             }
-            AppEvent::RenameSelected(name) => self.s.arrangement.update(|a| {
-                if let Some(id) = a.selection.first().copied() {
-                    if let Some(c) = a.clip_mut(id) {
-                        c.name = name.clone();
+            AppEvent::RenameSelected(name) => {
+                self.s.arrangement.update(|a| {
+                    if let Some(id) = a.selection.first().copied() {
+                        if let Some(c) = a.clip_mut(id) {
+                            c.name = name.clone();
+                        }
+                    }
+                });
+                self.commit();
+            }
+            AppEvent::OpenPiano(id) => self.open_piano(*id),
+            AppEvent::ClosePiano => self.close_piano(),
+            AppEvent::CyclePianoGrid => self.s.piano.update(|p| p.grid = p.grid.next()),
+            AppEvent::TogglePianoFollow => self.s.piano.update(|p| p.follow = !p.follow),
+            AppEvent::ToggleLoopClip => {
+                self.s.piano.update(|p| p.loop_clip = !p.loop_clip);
+                self.sync_loop();
+            }
+            AppEvent::Preview { lane, note } => {
+                // No audition during playback (the engine ignores it too).
+                let playing = self.s.transport.with_untracked(|t| t.playing);
+                if !playing || note.is_none() {
+                    self.send(Command::Preview { lane: *lane as u8, note: *note });
+                }
+            }
+            AppEvent::GestureBegin => self.gesture_depth += 1,
+            AppEvent::GestureEnd => {
+                self.gesture_depth = self.gesture_depth.saturating_sub(1);
+                self.commit();
+            }
+            AppEvent::Commit => self.commit(),
+            AppEvent::Undo => self.undo(false),
+            AppEvent::Redo => self.undo(true),
+            AppEvent::NewProject => {
+                self.load_project(Project::new_empty());
+                self.s.file_path.set(String::new());
+                self.set_status("New project".into());
+            }
+            AppEvent::SaveProject => self.save_project(),
+            AppEvent::OpenProject => {
+                let path = file::with_extension(&self.s.file_path.get_untracked());
+                match file::load(&path) {
+                    Ok(p) => {
+                        self.load_project(p);
+                        self.s.file_path.set(path.display().to_string());
+                        self.set_status(format!("Opened {}", path.display()));
+                    }
+                    Err(e) => self.set_status(e),
+                }
+            }
+            AppEvent::FocusFileField => {
+                self.set_status("Type a path in FILE, then press Enter (save) or Open".into());
+            }
+            // Only on a real change: the field is bound to this signal, and setting
+            // it unchanged re-fires the field's edit event (an endless loop).
+            AppEvent::SetFilePath(p) => self.s.file_path.set_if_changed(p.clone()),
+            AppEvent::CopyNotes { cut } => self.copy_notes(*cut),
+            AppEvent::PasteNotes => self.paste_notes(),
+            AppEvent::RecoverAccept => {
+                self.s.recovery_offer.set(false);
+                if let Some(path) = self.recovery.as_ref().map(|r| r.file()) {
+                    match file::load(&path) {
+                        Ok(p) => {
+                            self.load_project(p);
+                            self.set_status("Recovered the last session (unsaved: use Save)".into());
+                        }
+                        Err(e) => self.set_status(e),
                     }
                 }
-            }),
+            }
+            AppEvent::RecoverDiscard => self.s.recovery_offer.set(false),
         });
 
         event.map(|we, meta| {
@@ -239,12 +361,39 @@ impl Model for AppState {
                 self.last_activity = Instant::now();
                 self.set_pump(cx, true);
             }
+            if let WindowEvent::WindowClose = we {
+                // Clean quit: autosave once more and clear the session marker.
+                if let Some(r) = self.recovery.as_ref() {
+                    if !self.s.recovery_offer.get_untracked() {
+                        r.end_session(&self.project());
+                    }
+                }
+            }
             if let WindowEvent::KeyDown(code, _) = we {
+                let mods = *cx.modifiers();
+                if input::command(&mods) {
+                    let ev = match code {
+                        Code::KeyZ if mods.shift() => Some(AppEvent::Redo),
+                        Code::KeyZ => Some(AppEvent::Undo),
+                        Code::KeyY => Some(AppEvent::Redo),
+                        Code::KeyS if mods.shift() => Some(AppEvent::FocusFileField),
+                        Code::KeyS => Some(AppEvent::SaveProject),
+                        Code::KeyO => Some(AppEvent::FocusFileField),
+                        Code::KeyN => Some(AppEvent::NewProject),
+                        _ => None,
+                    };
+                    if let Some(ev) = ev {
+                        cx.emit(ev);
+                        meta.consume();
+                        return;
+                    }
+                }
                 match code {
                     Code::Space => {
                         cx.emit(AppEvent::TogglePlay);
                         meta.consume();
                     }
+                    Code::Escape if self.s.piano_open.get_untracked() => cx.emit(AppEvent::ClosePiano),
                     Code::F3 => cx.emit(AppEvent::ToggleStats),
                     Code::F4 => cx.emit(AppEvent::ToggleStress),
                     Code::F5 => cx.emit(WindowEvent::ReloadStyles),
@@ -267,6 +416,7 @@ impl AppState {
     /// drift (and periodic dropped/doubled frame) of a free-running clock.
     fn tick(&mut self, cx: &mut EventContext) {
         self.tests.maybe_stall();
+        self.idle_housekeeping();
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -331,12 +481,15 @@ impl AppState {
                     // No audio (or a command in flight): integrate locally.
                     let ticks_per_sec = tr.bpm as f64 / 60.0 * PPQ as f64;
                     tr.playhead_ticks += ticks_per_sec * dt as f64;
-                    if tr.playhead_ticks >= tr.loop_end_ticks {
-                        tr.playhead_ticks -= tr.loop_end_ticks;
-                    }
+                    tr.playhead_ticks = engine::chip::player::wrap_loop(
+                        tr.playhead_ticks,
+                        tr.loop_start_ticks,
+                        tr.loop_end_ticks,
+                    );
                 }
             }
             self.s.transport.set(tr);
+            self.follow_playhead(tr.playhead_ticks);
         }
         self.tests
             .av_frame(ft.frame_count, ft.presented_at, tr.playhead_ticks);
@@ -400,6 +553,7 @@ impl AppState {
         if lane == self.s.lane_sel.get_untracked() {
             self.s.dials.update(|d| d[slot] = v);
         }
+        self.sync_piano_lane_volume();
     }
 
     fn dial_values(&self, lane: usize) -> [f32; MAX_DIALS] {
@@ -676,6 +830,7 @@ pub fn build_ui(cx: &mut Context) {
             bpm: 150.0,
             playhead_ticks: 0.0,
             loop_end_ticks: (32 * TICKS_PER_BAR) as f64,
+            loop_start_ticks: 0.0,
         }),
         meters: Signal::new(Meters::default()),
         dials: Signal::new([0.0; MAX_DIALS]),
@@ -688,6 +843,12 @@ pub fn build_ui(cx: &mut Context) {
         stats: Signal::new(FrameStats::default()),
         frame: Signal::new(0),
         stress: Signal::new(false),
+        piano: Signal::new(PianoState::default()),
+        piano_open: Signal::new(false),
+        lane_h: Signal::new(LANE_H_NORMAL),
+        file_path: Signal::new(String::new()),
+        status: Signal::new(String::new()),
+        recovery_offer: Signal::new(false),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -728,8 +889,21 @@ pub fn build_ui(cx: &mut Context) {
         device_notice: None,
         tests,
         clock_counts: (0, 0, Instant::now()),
+        history: History::new(Doc::of(&s.arrangement.get_untracked(), 150.0, Params::default())),
+        gesture_depth: 0,
+        clipboard: Vec::new(),
+        recovery: Recovery::new(),
+        last_autosave: Instant::now(),
+        autosaved: None,
+        status_until: None,
+        loop_end_saved: (32 * TICKS_PER_BAR) as f64,
+        clip_looping: false,
     };
+    if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
+        state.s.recovery_offer.set(true);
+    }
     state.start_engine();
+    state.apply_test_project();
     state.build(cx);
 
     VStack::new(cx, |cx| {
@@ -744,9 +918,23 @@ pub fn build_ui(cx: &mut Context) {
             .overflow(Overflow::Hidden);
         })
         .class("panel")
-        .height(Stretch(1.0))
+        .height(s.lane_h.map(|h| {
+            if *h < LANE_H_NORMAL {
+                // Compact lanes: the arrangement takes what it needs and the
+                // piano roll gets the rest.
+                Pixels(theme::tokens::RULER_HEIGHT + 8.0 * *h)
+            } else {
+                Stretch(1.0)
+            }
+        }))
         .overflow(Overflow::Hidden);
-        device_panel(cx, s);
+        Binding::new(cx, s.piano_open, move |cx| {
+            if s.piano_open.get() {
+                piano_panel(cx, s);
+            } else {
+                device_panel(cx, s);
+            }
+        });
     })
     .padding(Pixels(10.0))
     .gap(Pixels(10.0));
@@ -843,10 +1031,53 @@ fn transport_bar(cx: &mut Context, s: Signals) {
             .width(Pixels(60.0))
             .on_press(|cx| cx.emit(AppEvent::CycleSnap));
 
+        Element::new(cx).class("divider-v");
+
+        // File: a path field (no native dialogs yet; PIANOROLL.md §5).
+        Label::new(cx, "FILE").class("field-label");
+        HStack::new(cx, |cx| {
+            Textbox::new(cx, s.file_path)
+                .placeholder("path\\to\\song.chipdaw")
+                .on_edit(|cx, t| cx.emit(AppEvent::SetFilePath(t)))
+                .on_submit(|cx, t, enter| {
+                    cx.emit(AppEvent::SetFilePath(t));
+                    if enter {
+                        cx.emit(AppEvent::SaveProject);
+                    }
+                })
+                .class("path-field");
+        })
+        .class("field")
+        .width(Pixels(170.0));
+        for (label, ev) in [("New", 0u8), ("Open", 1), ("Save", 2)] {
+            Button::new(cx, move |cx| Label::new(cx, label))
+                .class("btn")
+                .width(Pixels(46.0))
+                .on_press(move |cx| {
+                    cx.emit(match ev {
+                        0 => AppEvent::NewProject,
+                        1 => AppEvent::OpenProject,
+                        _ => AppEvent::SaveProject,
+                    })
+                });
+        }
+        Label::new(cx, s.status).class("field-label").class("status-msg");
+        Binding::new(cx, s.recovery_offer, move |cx| {
+            if s.recovery_offer.get() {
+                Label::new(cx, "Last session didn't close cleanly:").class("field-label");
+                Button::new(cx, |cx| Label::new(cx, "Recover"))
+                    .class("btn")
+                    .on_press(|cx| cx.emit(AppEvent::RecoverAccept));
+                Button::new(cx, |cx| Label::new(cx, "Discard"))
+                    .class("btn")
+                    .on_press(|cx| cx.emit(AppEvent::RecoverDiscard));
+            }
+        });
+
         Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
 
         ChannelLights::new(cx, s)
-            .width(Pixels(220.0))
+            .width(Pixels(200.0))
             .height(Pixels(32.0));
 
         Element::new(cx).class("divider-v");
@@ -944,4 +1175,417 @@ fn device_panel(cx: &mut Context, s: Signals) {
     })
     .class("panel")
     .class("device");
+}
+
+/// The bottom panel while a clip is open: a header row and the piano roll.
+fn piano_panel(cx: &mut Context, s: Signals) {
+    VStack::new(cx, |cx| {
+        HStack::new(cx, |cx| {
+            let title = s.piano.map(move |p| {
+                let Some(id) = p.clip else { return String::new() };
+                s.arrangement.with_untracked(|a| {
+                    a.clip(id)
+                        .map(|c| format!("PIANO ROLL  ·  {}  ·  {}", c.name, a.lanes[c.lane].name.to_uppercase()))
+                        .unwrap_or_default()
+                })
+            });
+            Label::new(cx, title).class("section-title");
+            Label::new(cx, "GRID").class("field-label");
+            let grid = s.piano.map(|p| p.grid.label());
+            Button::new(cx, |cx| Label::new(cx, grid))
+                .class("btn")
+                .width(Pixels(58.0))
+                .on_press(|cx| cx.emit(AppEvent::CyclePianoGrid));
+            let follow = s.piano.map(|p| p.follow);
+            Button::new(cx, |cx| Label::new(cx, "Follow"))
+                .class("btn")
+                .toggle_class("checked", follow)
+                .on_press(|cx| cx.emit(AppEvent::TogglePianoFollow));
+            let looping = s.piano.map(|p| p.loop_clip);
+            Button::new(cx, |cx| Label::new(cx, "Loop clip"))
+                .class("btn")
+                .toggle_class("checked", looping)
+                .on_press(|cx| cx.emit(AppEvent::ToggleLoopClip));
+            let hover = s.piano.map(|p| p.hover.clone());
+            Label::new(cx, hover).class("field-label").class("mono-info");
+            Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
+            Label::new(cx, "Shift-drag select · Ctrl-drag copy · Alt no snap · Q quantize · Esc close")
+                .class("field-label");
+            Button::new(cx, |cx| Label::new(cx, "Close"))
+                .class("btn")
+                .on_press(|cx| cx.emit(AppEvent::ClosePiano));
+        })
+        .class("piano-header");
+        PianoRoll::new(cx, s);
+    })
+    .class("panel")
+    .class("piano-panel");
+}
+
+impl AppState {
+    /// The undoable document as it is now.
+    fn doc(&self) -> Doc {
+        let bpm = self.s.transport.with_untracked(|t| t.bpm);
+        self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, self.params))
+    }
+
+    /// Records an undo step if the document changed (dropped while a gesture
+    /// is still in progress).
+    fn commit(&mut self) {
+        let busy = self.gesture_depth > 0
+            || self.s.arrangement.with_untracked(|a| !a.editing.is_empty() || a.editing_notes.is_some());
+        if !busy {
+            let d = self.doc();
+            self.history.commit(d);
+        }
+    }
+
+    fn undo(&mut self, redo: bool) {
+        if self.gesture_depth > 0 {
+            return;
+        }
+        let now = self.doc();
+        let d = if redo { self.history.redo(now) } else { self.history.undo(now) };
+        match d {
+            Some(d) => self.apply_doc(&d),
+            None => self.set_status(if redo { "Nothing to redo" } else { "Nothing to undo" }.into()),
+        }
+    }
+
+    /// Puts a document into the model and the engine (through the usual
+    /// snapshot path: the content key changes, `sync_engine` sends it).
+    fn apply_doc(&mut self, d: &Doc) {
+        self.s.arrangement.update(|a| d.apply_to(a));
+        if self.s.transport.with_untracked(|t| t.bpm) != d.bpm {
+            self.send(Command::Bpm(d.bpm as f64));
+            self.s.transport.update(|t| t.bpm = d.bpm);
+        }
+        if self.params != d.params {
+            self.params = d.params;
+            self.send_all_params();
+            let lane = self.s.lane_sel.get_untracked();
+            if lane < engine::LANES {
+                self.s.dials.set(self.dial_values(lane));
+            }
+            self.sync_piano_lane_volume();
+        }
+        // The open clip may be gone; notes that no longer exist leave the selection.
+        let alive = self.s.piano.with_untracked(|p| p.clip).and_then(|id| {
+            self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.notes.iter().map(|n| n.id).collect::<Vec<_>>()))
+        });
+        match alive {
+            Some(ids) => self.s.piano.update(|p| p.sel.retain(|id| ids.contains(id))),
+            None if self.s.piano_open.get_untracked() => self.close_piano(),
+            None => {}
+        }
+    }
+
+    fn send_all_params(&mut self) {
+        for lane in 0..engine::LANES {
+            for &id in ParamId::for_lane(lane) {
+                let value = self.params.get(lane, id) as i8;
+                self.send(Command::Param { lane: lane as u8, id, value });
+            }
+        }
+    }
+
+    fn project(&self) -> Project {
+        let tr = self.s.transport.get_untracked();
+        Project {
+            arrangement: self.s.arrangement.get_untracked(),
+            bpm: tr.bpm,
+            chip: self.s.chip.get_untracked(),
+            filter: self.filter,
+            filter_auto: !self.filter_manual,
+            loop_end_ticks: if self.clip_looping {
+                self.loop_end_saved
+            } else {
+                tr.loop_end_ticks
+            } as u32,
+            mute: self.s.mute.get_untracked(),
+            solo: self.s.solo.get_untracked(),
+            params: self.params,
+        }
+    }
+
+    /// Replaces the whole project (New, Open, Recover): stops playback,
+    /// closes the piano roll and clears the undo history.
+    fn load_project(&mut self, p: Project) {
+        self.close_piano();
+        self.send(Command::Stop);
+        self.send(Command::Seek(0.0));
+        let mut a = p.arrangement;
+        a.view = self.s.arrangement.with_untracked(|cur| cur.view);
+        a.snap = self.s.arrangement.with_untracked(|cur| cur.snap);
+        self.s.arrangement.set(a);
+        self.s.stress.set(false);
+        self.s.transport.update(|t| {
+            t.playing = false;
+            t.playhead_ticks = 0.0;
+            t.bpm = p.bpm;
+            t.loop_end_ticks = p.loop_end_ticks as f64;
+            t.loop_start_ticks = 0.0;
+        });
+        self.loop_end_saved = p.loop_end_ticks as f64;
+        self.clip_looping = false;
+        self.send(Command::Bpm(p.bpm as f64));
+        self.send(Command::LoopStart(0.0));
+        self.send(Command::LoopEnd(p.loop_end_ticks as f64));
+        self.s.chip.set(p.chip);
+        self.send(Command::Vrc6(p.chip == SoundChip::WithVrc6));
+        self.filter = p.filter;
+        self.filter_manual = !p.filter_auto;
+        self.send(Command::Filter(self.filter));
+        self.s.mute.set(p.mute);
+        self.s.solo.set(p.solo);
+        self.send(Command::Mute(p.mute));
+        self.send(Command::Solo(p.solo));
+        self.params = p.params;
+        self.send_all_params();
+        let lane = self.s.lane_sel.get_untracked();
+        if lane < engine::LANES {
+            self.s.dials.set(self.dial_values(lane));
+        }
+        let d = self.doc();
+        self.history.reset(d);
+        self.last_audio_stats = None;
+    }
+
+    fn save_project(&mut self) {
+        let text = self.s.file_path.get_untracked();
+        if text.trim().is_empty() {
+            self.set_status("Type a path in FILE first (e.g. C:\\songs\\demo.chipdaw)".into());
+            return;
+        }
+        let path = file::with_extension(&text);
+        match file::save(&self.project(), &path) {
+            Ok(()) => {
+                self.s.file_path.set(path.display().to_string());
+                self.set_status(format!("Saved {}", path.display()));
+            }
+            Err(e) => self.set_status(e),
+        }
+    }
+
+    fn set_status(&mut self, msg: String) {
+        self.s.status.set(msg);
+        self.status_until = Some(Instant::now() + Duration::from_secs(6));
+    }
+
+    fn open_piano(&mut self, id: u32) {
+        let Some((lane, notes_mid)) = self.s.arrangement.with_untracked(|a| {
+            a.clip(id).map(|c| {
+                let kind = RowKind::for_lane(c.lane);
+                let rows: Vec<u32> = c.audible_notes().map(|n| kind.row_of(n.pitch)).collect();
+                let mid = if rows.is_empty() {
+                    match kind {
+                        RowKind::Piano { .. } => kind.row_of(60),
+                        _ => kind.rows() / 2,
+                    }
+                } else {
+                    (rows.iter().min().unwrap() + rows.iter().max().unwrap()) / 2
+                };
+                (c.lane, (kind, mid))
+            })
+        }) else {
+            return;
+        };
+        let (kind, mid) = notes_mid;
+        self.s.arrangement.update(|a| a.selection = vec![id]);
+        let lane_volume = self.params.get(lane, ParamId::Volume) as u8;
+        self.s.piano.update(|p| {
+            if p.clip != Some(id) {
+                p.sel.clear();
+                p.scroll_ticks = 0.0;
+            }
+            p.clip = Some(id);
+            p.lane_volume = lane_volume;
+            // Centre the notes (or middle C) vertically; the view clamps.
+            const ROWS_SHOWN_GUESS: f32 = 22.0;
+            p.top = ((kind.rows() - 1 - mid) as f32 - ROWS_SHOWN_GUESS / 2.0).max(0.0);
+        });
+        self.s.lane_h.set(LANE_H_COMPACT);
+        self.s.piano_open.set(true);
+        self.sync_loop();
+    }
+
+    fn close_piano(&mut self) {
+        if !self.s.piano_open.get_untracked() {
+            return;
+        }
+        self.s.piano.update(|p| {
+            p.clip = None;
+            p.sel.clear();
+            p.loop_clip = false;
+            p.hover.clear();
+        });
+        self.sync_loop();
+        self.s.piano_open.set(false);
+        self.s.lane_h.set(LANE_H_NORMAL);
+    }
+
+    fn sync_piano_lane_volume(&mut self) {
+        let Some(id) = self.s.piano.with_untracked(|p| p.clip) else { return };
+        let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) else { return };
+        let v = self.params.get(lane, ParamId::Volume) as u8;
+        if self.s.piano.with_untracked(|p| p.lane_volume) != v {
+            self.s.piano.update(|p| p.lane_volume = v);
+        }
+    }
+
+    /// "Loop clip": playback loops over the open clip (follows its edits);
+    /// off restores the song loop.
+    fn sync_loop(&mut self) {
+        let p = self.s.piano.get_untracked();
+        let want = if p.loop_clip {
+            p.clip.and_then(|id| {
+                self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| (c.start_ticks as f64, c.end_ticks() as f64)))
+            })
+        } else {
+            None
+        };
+        if want.is_none() && !self.clip_looping {
+            return;
+        }
+        let tr = self.s.transport.get_untracked();
+        let entering = want.is_some() && !self.clip_looping;
+        if entering {
+            // Remember the song loop to restore it afterwards.
+            self.loop_end_saved = tr.loop_end_ticks;
+        }
+        self.clip_looping = want.is_some();
+        let (start, end) = want.unwrap_or((0.0, self.loop_end_saved));
+        if (tr.loop_start_ticks, tr.loop_end_ticks) != (start, end) {
+            self.send(Command::LoopStart(start));
+            self.send(Command::LoopEnd(end));
+            let outside = tr.playhead_ticks < start || tr.playhead_ticks >= end;
+            self.s.transport.update(|t| {
+                t.loop_start_ticks = start;
+                t.loop_end_ticks = end;
+            });
+            if want.is_some() && outside {
+                self.s.transport.update(|t| t.playhead_ticks = start);
+                self.send(Command::Seek(start));
+            }
+        }
+    }
+
+    /// Pages the piano roll along with the playhead while playing.
+    fn follow_playhead(&mut self, playhead: f64) {
+        let p = self.s.piano.get_untracked();
+        let (true, Some(id)) = (p.follow, p.clip) else { return };
+        let Some((start, len)) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| (c.start_ticks, c.len_ticks))) else {
+            return;
+        };
+        let rel = playhead - start as f64;
+        if rel < 0.0 || rel > len as f64 {
+            return;
+        }
+        let visible = p.width_px as f64 / p.px_per_tick;
+        if rel < p.scroll_ticks || rel > p.scroll_ticks + visible * 0.95 {
+            let to = (rel - visible * 0.05).max(0.0);
+            self.s.piano.update(|p| p.scroll_ticks = to);
+        }
+    }
+
+    fn copy_notes(&mut self, cut: bool) {
+        let p = self.s.piano.get_untracked();
+        let Some(id) = p.clip else { return };
+        let Some(clip) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| notes::copy(&c.notes, &p.sel))) else {
+            return;
+        };
+        if clip.is_empty() {
+            return;
+        }
+        self.clipboard = clip;
+        if cut {
+            self.s.arrangement.update(|a| {
+                if let Some(c) = a.clip_mut(id) {
+                    notes::delete(&mut c.notes, &p.sel);
+                }
+            });
+            self.s.piano.update(|p| p.sel.clear());
+            self.commit();
+        }
+    }
+
+    /// Ctrl+V: after the selection when there is one (repeated pastes chain),
+    /// else at the playhead if it is inside the clip, else at the clip start.
+    fn paste_notes(&mut self) {
+        if self.clipboard.is_empty() {
+            return;
+        }
+        let p = self.s.piano.get_untracked();
+        let Some(id) = p.clip else { return };
+        let playhead = self.s.transport.with_untracked(|t| t.playhead_ticks);
+        let clipboard = self.clipboard.clone();
+        let mut new = Vec::new();
+        self.s.arrangement.update(|a| {
+            let Some(c) = a.clip_mut(id) else { return };
+            let kind = RowKind::for_lane(c.lane);
+            let rel = playhead - c.start_ticks as f64;
+            let at = if let Some((_, end)) = notes::span(&c.notes, &p.sel) {
+                end
+            } else if rel >= 0.0 && rel < c.len_ticks as f64 {
+                rel as u32
+            } else {
+                0
+            };
+            if at >= c.len_ticks {
+                return;
+            }
+            let mut next = c.next_note_id;
+            new = notes::paste(&mut c.notes, &mut next, &clipboard, at, kind);
+            c.next_note_id = next;
+        });
+        if !new.is_empty() {
+            self.s.piano.update(|p| p.sel = new);
+            self.commit();
+        }
+    }
+
+    /// Once per pump tick: commit finished edits, keep the clip loop in step,
+    /// autosave, expire the status line.
+    fn idle_housekeeping(&mut self) {
+        self.commit();
+        if self.s.piano.with_untracked(|p| p.loop_clip) {
+            self.sync_loop();
+        }
+        let now = Instant::now();
+        if self.status_until.is_some_and(|t| now >= t) {
+            self.status_until = None;
+            self.s.status.set(String::new());
+        }
+        if now - self.last_autosave >= file::AUTOSAVE_INTERVAL && !self.s.recovery_offer.get_untracked() {
+            self.last_autosave = now;
+            let d = self.doc();
+            if self.autosaved.as_ref().is_none_or(|a| !a.same_as(&d)) {
+                self.autosaved = Some(d);
+                if let Some(path) = self.recovery.as_ref().map(|r| r.file()) {
+                    // Serialising a big song takes milliseconds: off the UI thread.
+                    let p = self.project();
+                    std::thread::spawn(move || {
+                        let _ = file::save(&p, &path);
+                    });
+                }
+            }
+        }
+    }
+
+    /// `CHIPDAW_PROJECT=path` opens a project at start (tests, benchmarks);
+    /// `CHIPDAW_OPEN_CLIP=id` then opens that clip in the piano roll.
+    fn apply_test_project(&mut self) {
+        if let Ok(path) = std::env::var("CHIPDAW_PROJECT") {
+            match file::load(std::path::Path::new(&path)) {
+                Ok(p) => {
+                    self.load_project(p);
+                    self.s.file_path.set(path);
+                }
+                Err(e) => eprintln!("CHIPDAW_PROJECT: {e}"),
+            }
+        }
+        if let Some(id) = std::env::var("CHIPDAW_OPEN_CLIP").ok().and_then(|v| v.parse().ok()) {
+            self.open_piano(id);
+        }
+    }
 }
