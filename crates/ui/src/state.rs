@@ -1,6 +1,7 @@
 //! The arrangement model: lanes, clips (with their notes), selection and view.
 //! Notes and their editing operations live in `notes.rs`.
 
+use crate::instruments::{self, default_instruments, LaneInstrument};
 use crate::notes::{self, Note};
 use crate::theme::tokens::{self, Rgba};
 use engine::{ClipInput, ParamId, SongSnapshot};
@@ -290,6 +291,10 @@ pub struct Arrangement {
     /// Notes being dragged in the piano roll: (clip, note ids). Like
     /// `editing`, the engine hears them winning while the drag lasts.
     pub editing_notes: Option<(u32, Vec<u32>)>,
+    /// One instrument per lane (part of the document: undo, files).
+    pub instruments: Vec<LaneInstrument>,
+    /// A preset being auditioned from the browser (not part of the document).
+    pub audition: Option<LaneInstrument>,
 }
 
 impl Arrangement {
@@ -304,6 +309,8 @@ impl Arrangement {
             next_id: 1,
             editing: Vec::new(),
             editing_notes: None,
+            instruments: default_instruments(),
+            audition: None,
         }
     }
 
@@ -451,6 +458,8 @@ impl Arrangement {
         }
         self.editing.hash(&mut h);
         self.editing_notes.hash(&mut h);
+        self.instruments.hash(&mut h);
+        self.audition.hash(&mut h);
         h.finish()
     }
 
@@ -461,6 +470,7 @@ impl Arrangement {
             .iter()
             .map(|c| c.audible_notes().map(|n| (n.start, n.len, n.pitch, n.volume)).collect())
             .collect();
+        let (bank, lane_inst, preview) = instruments::bank(&self.instruments, self.audition.as_ref());
         SongSnapshot::build(
             clips.iter().zip(&notes).map(|(c, n)| ClipInput {
                 lane: c.lane,
@@ -470,6 +480,7 @@ impl Arrangement {
             }),
             version,
         )
+        .with_instruments(bank, lane_inst, preview)
     }
 }
 

@@ -12,13 +12,15 @@ use std::sync::Arc;
 use engine::{FilterMode, ParamId, Params, LANES};
 use serde::{Deserialize, Serialize};
 
+use crate::instruments::{KitPiece, LaneInstrument};
 use crate::notes::{self, Note};
+use chip::instrument::{Instrument, Seq, Vibrato, KIT_ZONES, NONE, SEQ_LEN};
 use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const EXTENSION: &str = "chipdaw";
 
 /// Everything a project file stores.
@@ -82,6 +84,124 @@ struct LaneV1 {
     /// Only the controls this lane's hardware has; missing ones are the defaults.
     #[serde(default)]
     params: BTreeMap<String, i32>,
+    /// Version 2: the lane's instrument. Missing: the raw channel (v1 sound).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    instrument: Option<InstV2>,
+}
+
+/// An instrument. Sequences are text in tracker style: values separated by
+/// spaces, `|` before the loop point and `/` before the release point, e.g.
+/// `"4 8 | 12 11 / 6 3 0"`.
+#[derive(Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct InstV2 {
+    name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    edited: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    volume: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    arpeggio: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pitch: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    duty: String,
+    /// [depth cents, period frames, delay frames]
+    #[serde(default, skip_serializing_if = "is_zero3")]
+    vibrato: [u8; 3],
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    kit: Vec<KitV2>,
+}
+
+fn is_zero3(v: &[u8; 3]) -> bool {
+    *v == [0; 3]
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KitV2 {
+    /// Highest pitch of the zone.
+    top: u8,
+    /// Fixed pitch, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pitch: Option<u8>,
+    inst: InstV2,
+}
+
+fn seq_text(q: &Seq) -> String {
+    let mut out = String::new();
+    for (i, v) in q.values().iter().enumerate() {
+        if i as u8 == q.loop_at {
+            out.push_str("| ");
+        }
+        out.push_str(&v.to_string());
+        out.push(' ');
+        if i as u8 == q.release_at {
+            out.push_str("/ ");
+        }
+    }
+    out.trim_end().to_string()
+}
+
+fn seq_parse(t: &str) -> Result<Seq, String> {
+    let (mut vals, mut lp, mut rel) = (Vec::new(), NONE, NONE);
+    for tok in t.split_whitespace() {
+        match tok {
+            "|" => lp = vals.len().min(254) as u8,
+            "/" => rel = vals.len().saturating_sub(1).min(254) as u8,
+            n => vals.push(n.parse::<i8>().map_err(|_| format!("Bad sequence value \"{n}\" in \"{t}\"."))?),
+        }
+    }
+    if vals.len() > SEQ_LEN {
+        return Err(format!("A sequence has {} steps; the most is {SEQ_LEN}.", vals.len()));
+    }
+    Ok(Seq::new(&vals, lp, rel))
+}
+
+fn inst_to_file(name: &str, edited: bool, i: &Instrument) -> InstV2 {
+    InstV2 {
+        name: name.into(),
+        edited,
+        volume: seq_text(&i.volume),
+        arpeggio: seq_text(&i.arp),
+        pitch: seq_text(&i.pitch),
+        duty: seq_text(&i.duty),
+        vibrato: [i.vibrato.depth, i.vibrato.period, i.vibrato.delay],
+        kit: Vec::new(),
+    }
+}
+
+fn inst_from_file(f: &InstV2) -> Result<Instrument, String> {
+    Ok(Instrument {
+        volume: seq_parse(&f.volume)?,
+        arp: seq_parse(&f.arpeggio)?,
+        pitch: seq_parse(&f.pitch)?,
+        duty: seq_parse(&f.duty)?,
+        vibrato: Vibrato { depth: f.vibrato[0], period: f.vibrato[1], delay: f.vibrato[2] },
+        ..Instrument::PLAIN
+    })
+}
+
+fn lane_inst_to_file(l: &LaneInstrument) -> InstV2 {
+    let mut f = inst_to_file(&l.name, l.edited, &l.inst);
+    f.kit = l
+        .kit
+        .iter()
+        .map(|k| KitV2 { top: k.top, pitch: (k.pitch != NONE).then_some(k.pitch), inst: inst_to_file(&k.name, false, &k.inst) })
+        .collect();
+    f
+}
+
+fn lane_inst_from_file(f: &InstV2) -> Result<LaneInstrument, String> {
+    let kit = f
+        .kit
+        .iter()
+        .take(KIT_ZONES)
+        .map(|k| {
+            Ok(KitPiece { top: k.top, name: k.inst.name.clone(), inst: inst_from_file(&k.inst)?, pitch: k.pitch.unwrap_or(NONE) })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(LaneInstrument { name: f.name.clone(), inst: inst_from_file(f)?, kit, edited: f.edited })
 }
 
 #[derive(Serialize, Deserialize)]
@@ -140,6 +260,7 @@ pub fn to_string(p: &Project) -> String {
                 .iter()
                 .map(|&id| (param_key(id).to_string(), p.params.get(lane, id)))
                 .collect(),
+            instrument: p.arrangement.instruments.get(lane).map(lane_inst_to_file),
         })
         .collect();
     let clips = p
@@ -227,7 +348,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         return Err("Not a ChipDAW project (no \"format\": \"chipdaw\" field).".into());
     }
     match h.version {
-        Some(VERSION) => {}
+        Some(1 | VERSION) => {}
         Some(v) if v > VERSION => {
             return Err(format!(
                 "This project was saved by a newer ChipDAW (file format version {v}). \
@@ -272,6 +393,11 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         }
     }
     let mut arrangement = Arrangement::empty();
+    arrangement.instruments = f
+        .lanes
+        .iter()
+        .map(|l| l.instrument.as_ref().map_or(Ok(LaneInstrument::plain()), lane_inst_from_file))
+        .collect::<Result<_, _>>()?;
     let mut seen = std::collections::HashSet::new();
     for c in f.clips {
         if c.lane >= LANES {
@@ -469,7 +595,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 1,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 2,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -479,9 +605,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 1,", "\"version\": 2,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 2,", "\"version\": 3,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 2"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 3"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);
@@ -489,6 +615,30 @@ mod tests {
         assert!(err.contains("damaged") && err.contains("arp"), "{err}");
         assert!(from_str("{\"hello\": 1}").unwrap_err().contains("Not a ChipDAW project"));
         assert!(from_str("not json").unwrap_err().contains("Not a ChipDAW project"));
+    }
+
+    #[test]
+    fn instruments_round_trip_and_v1_files_load_raw() {
+        let mut p = sample_project();
+        p.arrangement.instruments[0] = LaneInstrument::named("Cello");
+        p.arrangement.instruments[0].inst.vibrato.depth = 33;
+        p.arrangement.instruments[0].edited = true;
+        p.arrangement.instruments[3] = LaneInstrument::named("Tight Kit");
+        let text = to_string(&p);
+        assert!(text.contains("\"volume\": \"4 6 8 9 10 11 12 12 / 11 9 7 5 3 2 1 0\""), "{text}");
+        let back = from_str(&text).unwrap();
+        assert_eq!(back.arrangement.instruments, p.arrangement.instruments);
+        // A version 1 file (no instruments) plays the raw channels, as it did.
+        let v1: String = {
+            let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
+            v["version"] = 1.into();
+            for l in v["lanes"].as_array_mut().unwrap() {
+                l.as_object_mut().unwrap().remove("instrument");
+            }
+            v.to_string()
+        };
+        let old = from_str(&v1).unwrap();
+        assert!(old.arrangement.instruments.iter().all(|i| *i == LaneInstrument::plain()));
     }
 
     #[test]

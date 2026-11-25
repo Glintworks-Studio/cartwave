@@ -261,7 +261,7 @@ mod tests {
         let notes = [Note::new(960, 1920, 69)];
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
-        let song = Song { lanes };
+        let song = Song::plain(lanes);
         p.play();
         let mut buf = vec![0f32; 48];
         let mut on_at = None;

@@ -2,7 +2,10 @@
 //! inside a plugin window (baseview) as well as the standalone app.
 
 pub mod file;
+pub mod export;
 pub mod history;
+pub mod midi;
+pub mod instruments;
 pub mod input;
 pub mod mock;
 pub mod notes;
@@ -25,11 +28,13 @@ use crate::notes::{Note, RowKind};
 use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
+    browser::{browser, DragGhost, PresetDrag},
     chrome::{
         ContextMenu, Key, KeyAction, MenuBackdrop, PillKind, SpectrumBox, SplitHandle, StatPill,
         TimeCapsule,
     },
     dial::Dial,
+    instrument::InstrumentView,
     piano_roll::PianoRoll,
     meter::MeterBank,
     overlay::StatsOverlay,
@@ -88,6 +93,13 @@ pub struct Signals {
     pub loop_on: Signal<bool>,
     /// The bottom inspector (device panel) is open: a clip is selected.
     pub inspector: Signal<bool>,
+    /// The browser sidebar is shown (Ctrl+Alt+B).
+    pub browser_open: Signal<bool>,
+    pub browser_query: Signal<String>,
+    /// The preset highlighted in the browser.
+    pub browser_sel: Signal<Option<usize>>,
+    /// A preset being dragged out of the browser.
+    pub drag_preset: Signal<Option<PresetDrag>>,
 }
 
 /// Loop end sent to the engine while looping is off: far past any song.
@@ -153,6 +165,11 @@ pub struct AppState {
     clip_looping: bool,
     /// When the CPU / kHz pills were last refreshed.
     last_load: Option<Instant>,
+    /// A browser audition note to send once the song carrying the audition
+    /// instrument is on its way: (lane, pitch).
+    pending_audition: Option<(usize, u8)>,
+    /// The lane the current audition plays on.
+    audition_lane: Option<usize>,
 }
 
 pub enum AppEvent {
@@ -213,6 +230,23 @@ pub enum AppEvent {
     PasteNotes,
     RecoverAccept,
     RecoverDiscard,
+    /// Draw on an instrument macro: lane, macro (0 volume, 1 arpeggio,
+    /// 2 pitch, 3 duty), step, value. Undo groups a whole drag.
+    EditMacro { lane: usize, which: usize, step: usize, value: i8 },
+    /// Native open dialog for a .mid file; it becomes a new project (Ctrl+I).
+    ImportMidi,
+    /// Render the song to a WAV file (Ctrl+Shift+R, as in Ableton).
+    ExportWav,
+    /// Show / hide the browser sidebar.
+    ToggleBrowser,
+    /// Highlight a preset in the browser.
+    BrowserSelect(Option<usize>),
+    /// Hear a preset (`None` releases it).
+    Audition(Option<usize>),
+    /// Load a preset onto a lane (`None`: the selected lane, or the first that fits).
+    AssignPreset { lane: Option<usize>, preset: usize },
+    /// Load a whole channel layout (chip + every lane's instrument).
+    ApplyLayout(usize),
 }
 
 impl Model for AppState {
@@ -262,21 +296,33 @@ impl Model for AppState {
                 self.set_param(lane, *i, *v);
             }
             AppEvent::CycleChip => {
-                self.s.chip.update(|c| {
-                    *c = match c {
-                        SoundChip::Base2A03 => SoundChip::WithVrc6,
-                        SoundChip::WithVrc6 => SoundChip::Base2A03,
+                let next = match self.s.chip.get_untracked() {
+                    SoundChip::Base2A03 => SoundChip::WithVrc6,
+                    SoundChip::WithVrc6 => SoundChip::Base2A03,
+                };
+                self.set_chip(next);
+            }
+            AppEvent::EditMacro { lane, which, step, value } => {
+                self.s.arrangement.update(|a| {
+                    if let Some(i) = a.instruments.get_mut(*lane) {
+                        let q = match which {
+                            0 => &mut i.inst.volume,
+                            1 => &mut i.inst.arp,
+                            2 => &mut i.inst.pitch,
+                            _ => &mut i.inst.duty,
+                        };
+                        if *step < q.len as usize && q.data[*step] != *value {
+                            q.data[*step] = *value;
+                            i.edited = true;
+                        }
                     }
                 });
-                let on = self.s.chip.get_untracked() == SoundChip::WithVrc6;
-                self.send(Command::Vrc6(on));
-                if !self.filter_manual {
-                    self.filter = FilterMode::default_for(on);
-                    self.send(Command::Filter(self.filter));
-                    self.s.filter_label.set(self.filter.label());
-                    self.last_audio_stats = None;
-                }
             }
+            AppEvent::ToggleBrowser => self.s.browser_open.update(|o| *o = !*o),
+            AppEvent::BrowserSelect(p) => self.s.browser_sel.set(*p),
+            AppEvent::Audition(p) => self.audition(*p),
+            AppEvent::AssignPreset { lane, preset } => self.assign_preset(*lane, *preset),
+            AppEvent::ApplyLayout(i) => self.apply_layout(*i),
             AppEvent::ToggleMute(i) => {
                 self.s.mute.update(|m| *m ^= 1 << *i);
                 let m = self.s.mute.get_untracked();
@@ -381,6 +427,8 @@ impl Model for AppState {
                 self.set_status("New project".into());
             }
             AppEvent::SaveProject => self.save_project(),
+            AppEvent::ImportMidi => self.import_midi(),
+            AppEvent::ExportWav => self.export_wav(),
             AppEvent::SaveProjectAs => {
                 if let Some(path) = self.file_dialog().save_file() {
                     self.s.file_path.set(path.display().to_string());
@@ -445,6 +493,8 @@ impl Model for AppState {
                         Code::KeyZ => Some(AppEvent::Undo),
                         Code::KeyY => Some(AppEvent::Redo),
                         Code::KeyS if mods.shift() => Some(AppEvent::SaveProjectAs),
+                        Code::KeyR if mods.shift() => Some(AppEvent::ExportWav),
+                        Code::KeyI => Some(AppEvent::ImportMidi),
                         Code::KeyS => Some(AppEvent::SaveProject),
                         Code::KeyO => Some(AppEvent::OpenProject),
                         Code::KeyN => Some(AppEvent::NewProject),
@@ -452,6 +502,8 @@ impl Model for AppState {
                         Code::KeyL => Some(AppEvent::Menu(MenuAction::LoopSelection)),
                         Code::KeyD => Some(AppEvent::Menu(MenuAction::Duplicate)),
                         Code::KeyM if mods.shift() => Some(AppEvent::Menu(MenuAction::InsertClip)),
+                        // Ableton: Ctrl+Alt+B shows / hides the browser.
+                        Code::KeyB if mods.alt() => Some(AppEvent::ToggleBrowser),
                         _ => None,
                     };
                     if let Some(ev) = ev {
@@ -608,6 +660,101 @@ impl AppState {
 }
 
 impl AppState {
+    /// The lane a preset goes to: `want` if given (and it fits), else the
+    /// selected lane if it fits, else the first lane that fits (VRC6 lanes
+    /// only with the VRC6 on).
+    fn lane_for(&self, preset: usize, want: Option<usize>) -> Option<usize> {
+        let p = &chip::presets::PRESETS[preset];
+        let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
+        let ok = |l: usize| p.fits(l) && (vrc6 || l < chip::driver::LANE_V1);
+        if let Some(l) = want {
+            return p.fits(l).then_some(l);
+        }
+        let sel = self.s.lane_sel.get_untracked();
+        if sel < engine::LANES && ok(sel) {
+            return Some(sel);
+        }
+        (0..engine::LANES).find(|&l| ok(l))
+    }
+
+    fn audition(&mut self, preset: Option<usize>) {
+        if let Some(lane) = self.audition_lane.take() {
+            self.send(Command::Preview { lane: lane as u8, note: None });
+        }
+        let Some(p) = preset else { return };
+        if self.s.transport.with_untracked(|t| t.playing) {
+            return;
+        }
+        let Some(lane) = self.lane_for(p, None) else { return };
+        let pr = &chip::presets::PRESETS[p];
+        self.s
+            .arrangement
+            .update(|a| a.audition = Some(instruments::LaneInstrument::from_preset(pr)));
+        let pitch = match lane {
+            chip::driver::LANE_TRI => 48,
+            chip::driver::LANE_NOISE => 56,
+            _ => 60,
+        };
+        self.pending_audition = Some((lane, pitch));
+        self.audition_lane = Some(lane);
+    }
+
+    /// Loads preset `p` on a lane, with its channel controls; one undo step.
+    fn assign_preset(&mut self, lane: Option<usize>, p: usize) {
+        let pr = &chip::presets::PRESETS[p];
+        let Some(lane) = self.lane_for(p, lane) else {
+            self.set_status(format!("{} can't play on that channel.", pr.name));
+            return;
+        };
+        self.load_preset_on(lane, pr);
+        self.commit();
+        let name = state::default_lanes()[lane].name;
+        self.set_status(format!("{} loaded on {name}", pr.name));
+    }
+
+    fn load_preset_on(&mut self, lane: usize, pr: &chip::presets::Preset) {
+        self.s.arrangement.update(|a| {
+            if let Some(slot) = a.instruments.get_mut(lane) {
+                *slot = instruments::LaneInstrument::from_preset(pr);
+            }
+        });
+        for &(id, v) in pr.params {
+            self.params.set(lane, id, v as i32);
+            let value = self.params.get(lane, id) as i8;
+            self.send(Command::Param { lane: lane as u8, id, value });
+        }
+        if lane == self.s.lane_sel.get_untracked() {
+            self.s.dials.set(self.dial_values(lane));
+        }
+    }
+
+    fn apply_layout(&mut self, i: usize) {
+        let Some(l) = chip::presets::LAYOUTS.get(i) else { return };
+        let want = if l.vrc6 { SoundChip::WithVrc6 } else { SoundChip::Base2A03 };
+        if self.s.chip.get_untracked() != want {
+            self.set_chip(want);
+        }
+        for (lane, name) in l.lanes.iter().enumerate() {
+            if let Some(pr) = chip::presets::find(name) {
+                self.load_preset_on(lane, pr);
+            }
+        }
+        self.commit();
+        self.set_status(format!("Layout: {}", l.name));
+    }
+
+    fn set_chip(&mut self, chip: SoundChip) {
+        self.s.chip.set(chip);
+        let on = chip == SoundChip::WithVrc6;
+        self.send(Command::Vrc6(on));
+        if !self.filter_manual {
+            self.filter = FilterMode::default_for(on);
+            self.send(Command::Filter(self.filter));
+            self.s.filter_label.set(self.filter.label());
+            self.last_audio_stats = None;
+        }
+    }
+
     /// The loop end the engine should use: the song's, or none while the
     /// loop light is off (a clip loop in the piano roll always loops).
     fn engine_loop_end(&self, end: f64) -> f64 {
@@ -698,6 +845,10 @@ impl AppState {
             let v = self.song_version;
             let snap = self.s.arrangement.with_untracked(|a| a.song_snapshot(v));
             e.send_song(snap);
+        }
+        // After the song that carries the audition instrument.
+        if let Some((lane, pitch)) = self.pending_audition.take() {
+            e.send(Command::Preview { lane: lane as u8, note: Some((pitch, None)) });
         }
         // Status: a few times a second is plenty.
         let now = Instant::now();
@@ -960,6 +1111,10 @@ pub fn build_ui(cx: &mut Context) {
         filter_label: Signal::new(""),
         loop_on: Signal::new(true),
         inspector: Signal::new(false),
+        browser_open: Signal::new(true),
+        browser_query: Signal::new(String::new()),
+        browser_sel: Signal::new(None),
+        drag_preset: Signal::new(None),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1011,6 +1166,8 @@ pub fn build_ui(cx: &mut Context) {
         loop_start_saved: 0.0,
         clip_looping: false,
         last_load: None,
+        pending_audition: None,
+        audition_lane: None,
     };
     if state.recovery.as_ref().is_some_and(|r| r.start_session()) {
         state.s.recovery_offer.set(true);
@@ -1023,6 +1180,10 @@ pub fn build_ui(cx: &mut Context) {
     VStack::new(cx, |cx| {
         top_bar(cx, s);
         HStack::new(cx, |cx| {
+            browser(cx, s);
+            Element::new(cx)
+                .class("col-divider")
+                .display(s.browser_open.map(|o| if *o { Display::Flex } else { Display::None }));
             track_headers(cx, s);
             Element::new(cx).class("col-divider");
             VStack::new(cx, |cx| {
@@ -1064,6 +1225,7 @@ pub fn build_ui(cx: &mut Context) {
     .class("shell");
 
     StatsOverlay::new(cx, s);
+    DragGhost::new(cx, s);
 }
 
 impl AppState {
@@ -1125,7 +1287,8 @@ impl AppState {
 /// - height: top bar + ruler + eight full lanes + the inspector panel.
 pub const MIN_WINDOW_SIZE: (u32, u32) = (
     // Two paddings and three gaps (the last one before the spacer).
-    INSPECTOR_PAD * 5 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + CHANNELS_SECTION_W as u32,
+    INSPECTOR_PAD * 5 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + CHANNELS_SECTION_W as u32
+        + INSTRUMENT_SECTION_MIN_W as u32,
     (theme::tokens::TOPBAR_HEIGHT + theme::tokens::RULER_HEIGHT + 8.0 * LANE_H_NORMAL) as u32
         + INSPECTOR_HEIGHT,
 );
@@ -1136,6 +1299,8 @@ const INSPECTOR_PAD: u32 = 16;
 /// they never squeeze; the CLIP section takes what's left.
 const DIALS_SECTION_W: f32 = MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0;
 const CLIP_SECTION_MIN_W: u32 = 240;
+/// The INSTRUMENT section's smallest width (its four graphs stay readable).
+const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
 const CLIP_SECTION_MAX_W: f32 = 480.0;
 /// One meter column: well, light and label (logical px).
 const METER_COL_W: f32 = 40.0;
@@ -1206,6 +1371,8 @@ const PILL_CHIP_W: f32 = 132.0;
 const PILL_STAT_LABEL_W: f32 = 32.0;
 /// Word keys in the top bar (logical px).
 const WORD_KEY_W: f32 = 44.0;
+/// The import / export keys (longer labels).
+const WIDE_KEY_W: f32 = 56.0;
 
 /// The top bar: file keys and project pills on the left, the transport
 /// capsule centred, the spectrum and CPU / kHz pills on the right.
@@ -1217,6 +1384,12 @@ fn top_bar(cx: &mut Context, s: Signals) {
             for (label, action) in [("NEW", KeyAction::New), ("OPEN", KeyAction::Open), ("SAVE", KeyAction::Save)] {
                 Key::new(cx, s, label, action)
                     .width(Pixels(WORD_KEY_W))
+                    .height(Pixels(KEY_SIZE));
+            }
+            Element::new(cx).class("bar-gap");
+            for (label, action) in [("MIDI IN", KeyAction::ImportMidi), ("EXPORT", KeyAction::ExportWav)] {
+                Key::new(cx, s, label, action)
+                    .width(Pixels(WIDE_KEY_W))
                     .height(Pixels(KEY_SIZE));
             }
             Element::new(cx).class("bar-gap");
@@ -1324,22 +1497,46 @@ fn device_panel(cx: &mut Context, s: Signals) {
                     .on_submit(|cx, text, _| cx.emit(AppEvent::RenameSelected(text)));
             })
             .class("field");
-            Label::new(cx, "SEARCH").class("section-title");
-            let query = Signal::new(String::new());
-            HStack::new(cx, |cx| {
-                Textbox::new(cx, query)
-                    .placeholder("Search clips, instruments…")
-                    .on_edit(move |_cx, t| query.set(t));
-            })
-            .class("field");
+            Label::new(cx, "VIBRATO").class("section-title");
+            Label::new(
+                cx,
+                s.arrangement.map(move |a| {
+                    let lane = s.lane_sel.get_untracked();
+                    match a.instruments.get(lane) {
+                        Some(i) if i.is_kit() => "Kit: each drum has its own envelope".to_string(),
+                        Some(i) if i.inst.vibrato.depth > 0 => {
+                            let v = i.inst.vibrato;
+                            format!(
+                                "{}c · {:.1}Hz · {}ms",
+                                v.depth,
+                                60.1 / v.period.max(1) as f32,
+                                (v.delay as f32 * 16.6) as u32
+                            )
+                        }
+                        _ => "Off".to_string(),
+                    }
+                }),
+            )
+            .class("mono-info");
         })
         .class("device-section")
         .width(Stretch(1.0))
         .min_width(Pixels(CLIP_SECTION_MIN_W as f32))
         .max_width(Pixels(CLIP_SECTION_MAX_W));
 
-        // Spare width goes here, so the channels sit at the right edge.
-        Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
+        // The lane's instrument: its macros, editable.
+        VStack::new(cx, |cx| {
+            let title = s.arrangement.map(move |a| {
+                let lane = s.lane_sel.get_untracked();
+                let name = a.instruments.get(lane).map(|i| i.label()).unwrap_or_default();
+                format!("INSTRUMENT  ·  {}", name.to_uppercase())
+            });
+            Label::new(cx, title).class("section-title");
+            InstrumentView::new(cx, s).width(Stretch(1.0)).height(Stretch(1.0));
+        })
+        .class("device-section")
+        .width(Stretch(1.0))
+        .min_width(Pixels(INSTRUMENT_SECTION_MIN_W));
 
         // Meters
         VStack::new(cx, |cx| {
@@ -1533,6 +1730,57 @@ impl AppState {
     /// Native file dialog (rfd), filtered to projects, starting in the
     /// current project's folder. Modal: it blocks the UI thread while open
     /// (the audio thread keeps running).
+    fn import_midi(&mut self) {
+        let Some(path) = rfd::FileDialog::new().add_filter("MIDI file", &["mid", "midi"]).pick_file() else {
+            return;
+        };
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(e) => return self.set_status(format!("Can't open {}: {e}", path.display())),
+        };
+        let song = match midi::parse(&bytes) {
+            Ok(s) => s,
+            Err(e) => return self.set_status(e),
+        };
+        let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
+        let imp = midi::arrange(&song, vrc6);
+        let mut p = self.project();
+        let instruments = p.arrangement.instruments.clone();
+        p.arrangement = imp.arrangement;
+        p.arrangement.instruments = instruments;
+        if let Some(bpm) = imp.bpm {
+            p.bpm = bpm.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
+        }
+        p.loop_end_ticks = imp.loop_end;
+        p.mute = 0;
+        p.solo = 0;
+        self.load_project(p);
+        self.s.file_path.set(String::new());
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        self.set_status(format!("Imported {name}: {}", imp.report));
+    }
+
+    fn export_wav(&mut self) {
+        let cur = file::with_extension(&self.s.file_path.get_untracked());
+        let stem = cur.file_stem().and_then(|n| n.to_str()).filter(|n| !n.is_empty()).unwrap_or("song");
+        let mut d = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).set_file_name(format!("{stem}.wav"));
+        if let Some(dir) = cur.parent().filter(|d| d.is_dir()) {
+            d = d.set_directory(dir);
+        }
+        let Some(path) = d.save_file() else { return };
+        let t0 = Instant::now();
+        let audio = export::render(&self.project());
+        match export::write_wav(&audio, &path) {
+            Ok(()) => self.set_status(format!(
+                "Exported {:.1} s of audio to {} in {} ms",
+                audio.len() as f32 / export::SAMPLE_RATE as f32,
+                path.display(),
+                t0.elapsed().as_millis()
+            )),
+            Err(e) => self.set_status(e),
+        }
+    }
+
     fn file_dialog(&self) -> rfd::FileDialog {
         let mut d = rfd::FileDialog::new().add_filter("ChipDAW project", &[file::EXTENSION]);
         let cur = file::with_extension(&self.s.file_path.get_untracked());

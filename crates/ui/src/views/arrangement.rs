@@ -156,6 +156,7 @@ impl Arrangement {
         .bind(s.lane_scroll, |mut h| h.needs_redraw())
         .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
         .bind(s.time_sel, |mut h| h.needs_redraw())
+        .bind(s.drag_preset, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
         .bind(s.frame, move |mut h| {
             // Note: NOT `Handle::modify` here, it emits a full-window redraw.
@@ -1166,6 +1167,27 @@ impl View for Arrangement {
                 canvas.draw_rrect(gfx::rrect(thumb, rad), &gfx::fill(Rgba::white(alpha)));
             }
         });
+
+        // Dragging a preset from the browser: dim lanes it can't play on,
+        // tint the one it would land on.
+        if self.s.drag_preset.with_untracked(|d| d.is_some()) {
+            for lane in 0..8 {
+                let (Some((fits, target)), Some((y0, y1))) =
+                    (super::browser::drag_state(&self.s, lane), super::browser::lane_span(lane))
+                else {
+                    continue;
+                };
+                let band = vg::Rect::from_ltrb(rect.left, y0.max(rect.top), rect.right, y1.min(rect.bottom));
+                if band.height() <= 0.0 {
+                    continue;
+                }
+                if !fits {
+                    canvas.draw_rect(band, &gfx::fill(Rgba::black(0.55)));
+                } else if target {
+                    canvas.draw_rect(band, &gfx::fill(ACCENT.with_alpha(0.06)));
+                }
+            }
+        }
 
         // Top edge inner shadow under the ruler for depth.
         canvas.draw_rect(

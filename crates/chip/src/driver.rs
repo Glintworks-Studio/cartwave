@@ -8,6 +8,7 @@
 //! - Only controls the hardware has: see `ParamId` and `ENGINE.md`.
 //! - No allocation: writes go into a fixed-size `Writes` buffer.
 
+use crate::instrument::{duty_2a03, duty_vrc6, scale_volume, Frame, Instrument, MacroState, NONE};
 use crate::pitch::{self, Osc};
 use crate::samples::{SampleRef, SAMPLE_COUNT, START_LEVEL};
 
@@ -51,10 +52,46 @@ pub const fn saw_rate_for_volume(v: u8) -> u8 {
 #[derive(Clone, Copy, Debug)]
 pub struct Song<'a> {
     pub lanes: [&'a [Note]; LANES],
+    /// The instrument bank.
+    pub instruments: &'a [Instrument],
+    /// Each lane's instrument (bank index; `NONE` = plain channel controls).
+    pub lane_inst: [u8; LANES],
+    /// Instrument for audition notes (`Driver::preview`); `NONE` = the lane's.
+    pub preview_inst: u8,
 }
 
-impl Song<'_> {
-    pub const EMPTY: Song<'static> = Song { lanes: [&[]; LANES] };
+impl<'a> Song<'a> {
+    pub const EMPTY: Song<'static> = Song { lanes: [&[]; LANES], instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE };
+
+    /// Notes only; every lane plays its plain channel controls.
+    pub const fn plain(lanes: [&'a [Note]; LANES]) -> Self {
+        Song { lanes, instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE }
+    }
+
+    pub fn instrument(&self, idx: u8) -> &Instrument {
+        self.instruments.get(idx as usize).unwrap_or(&Instrument::PLAIN)
+    }
+
+    /// The instrument and pitch that play `pitch` on `lane`: a kit picks its
+    /// zone's instrument (and maybe a fixed pitch); a kit without a zone for
+    /// the pitch plays it plain.
+    pub fn resolve(&self, lane: usize, pitch: u8) -> (u8, u8) {
+        self.resolve_with(self.lane_inst[lane], pitch)
+    }
+
+    /// Like `resolve`, starting from bank entry `idx`.
+    pub fn resolve_with(&self, idx: u8, pitch: u8) -> (u8, u8) {
+        let inst = self.instrument(idx);
+        if !inst.is_kit() {
+            return (idx, pitch);
+        }
+        match inst.zone(pitch) {
+            Some(z) if !self.instrument(z.inst).is_kit() => {
+                (z.inst, if z.fixed_pitch == NONE { pitch } else { z.fixed_pitch })
+            }
+            _ => (NONE, pitch),
+        }
+    }
 }
 
 /// Hardware envelope use for pulse and noise: the `L` and `C` bits.
@@ -174,14 +211,14 @@ impl Params {
 
 /// Register writes produced by one tick, applied in order.
 pub struct Writes {
-    buf: [(u16, u8); 64],
+    buf: [(u16, u8); 96],
     len: usize,
 }
 
 impl Default for Writes {
     fn default() -> Self {
         Self {
-            buf: [(0, 0); 64],
+            buf: [(0, 0); 96],
             len: 0,
         }
     }
@@ -216,7 +253,15 @@ struct LaneState {
     vol: Option<u8>,
     /// Shadow of the side-effect-free control register last written.
     ctl: Option<u8>,
+    /// Pulse: sweep register. Noise: period register.
     sweep: Option<u8>,
+    /// Period last written.
+    period: Option<u16>,
+    /// Bank index of the sounding instrument.
+    inst: u8,
+    /// Pitch actually played (a kit zone can fix it).
+    play_pitch: u8,
+    mac: MacroState,
 }
 
 pub struct Driver {
@@ -313,26 +358,56 @@ impl Driver {
         for lane in 0..LANES {
             let vrc6_lane = lane >= LANE_V1;
             let chip_present = !vrc6_lane || self.vrc6;
-            let want = if playing && self.audible(lane) && chip_present {
-                Self::note_at(song.lanes[lane], prev, pos)
-                    .filter(|n| self.playable(lane, n.pitch))
+            let audible = self.audible(lane) && chip_present;
+            let (want, base) = if playing && audible {
+                (Self::note_at(song.lanes[lane], prev, pos), song.lane_inst[lane])
             } else if !playing && chip_present {
-                self.preview[lane].filter(|n| self.playable(lane, n.pitch))
+                let base = if song.preview_inst != NONE { song.preview_inst } else { song.lane_inst[lane] };
+                (self.preview[lane], base)
             } else {
-                None
+                (None, NONE)
             };
-            if let Some(n) = want {
-                self.lanes[lane].vol = n.volume;
-            }
+            // Resolve the instrument (a kit picks one by pitch).
+            let want = want.and_then(|n| {
+                let (inst, pitch) = song.resolve_with(base, n.pitch);
+                self.playable(lane, pitch).then_some((n, inst, pitch))
+            });
             let cur = self.lanes[lane].note;
             match want {
-                Some(n) if cur != Some((n.start, n.pitch)) => {
-                    self.note_on(lane, n.pitch, w);
+                Some((n, inst, pitch)) if cur != Some((n.start, n.pitch)) => {
+                    self.lanes[lane].vol = n.volume;
+                    self.lanes[lane].inst = inst;
+                    self.lanes[lane].play_pitch = pitch;
+                    self.lanes[lane].mac = MacroState::note_on(song.instrument(inst));
+                    self.note_on(lane, song, w);
                     self.lanes[lane].note = Some((n.start, n.pitch));
                     self.note_ons[lane] = self.note_ons[lane].wrapping_add(1);
                 }
-                Some(_) => self.sustain(lane, w),
-                None if cur.is_some() => self.note_off(lane, w),
+                Some((n, _, _)) => {
+                    self.lanes[lane].vol = n.volume;
+                    let inst = *song.instrument(self.lanes[lane].inst);
+                    self.lanes[lane].mac.advance(&inst);
+                    self.sustain(lane, song, w);
+                }
+                None if cur.is_some() => {
+                    let inst = *song.instrument(self.lanes[lane].inst);
+                    let st = &mut self.lanes[lane].mac;
+                    // A release tail plays out unless the lane was silenced.
+                    if audible && inst.has_release() && lane != LANE_DMC {
+                        if st.released {
+                            st.advance(&inst);
+                        } else {
+                            st.release(&inst);
+                        }
+                        if st.done(&inst) {
+                            self.note_off(lane, w);
+                        } else {
+                            self.sustain(lane, song, w);
+                        }
+                    } else {
+                        self.note_off(lane, w);
+                    }
+                }
                 None => {}
             }
             if self.lanes[lane].note.is_some() {
@@ -342,14 +417,18 @@ impl Driver {
         self.sounding = sounding;
     }
 
-    fn playable(&self, lane: usize, pitch: u8) -> bool {
+    fn osc(lane: usize) -> Option<Osc> {
         match lane {
-            LANE_P1 | LANE_P2 => pitch::period_for(Osc::Pulse, pitch).is_some(),
-            LANE_TRI => pitch::period_for(Osc::Triangle, pitch).is_some(),
-            LANE_V1 | LANE_V2 => pitch::period_for(Osc::Vrc6Pulse, pitch).is_some(),
-            LANE_SAW => pitch::period_for(Osc::Saw, pitch).is_some(),
-            _ => true,
+            LANE_P1 | LANE_P2 => Some(Osc::Pulse),
+            LANE_TRI => Some(Osc::Triangle),
+            LANE_V1 | LANE_V2 => Some(Osc::Vrc6Pulse),
+            LANE_SAW => Some(Osc::Saw),
+            _ => None,
         }
+    }
+
+    fn playable(&self, lane: usize, pitch: u8) -> bool {
+        Self::osc(lane).is_none_or(|o| pitch::period_for(o, pitch).is_some())
     }
 
     /// V for `lane`: the sounding note's volume, else the lane's parameter.
@@ -366,18 +445,21 @@ impl Driver {
             .map_or(self.params.get(lane, ParamId::Rate) as u8, saw_rate_for_volume)
     }
 
-    fn env_bits(&self, lane: usize) -> u8 {
-        let p = &self.params;
+    /// Envelope bits + V for pulse/noise. A volume macro needs constant volume.
+    fn env_bits(&self, lane: usize, f: &Frame, macro_vol: bool) -> u8 {
         let v = self.volume(lane);
-        match p.get(lane, ParamId::Envelope) {
+        if macro_vol {
+            return 0x30 | scale_volume(v, f.volume);
+        }
+        match self.params.get(lane, ParamId::Envelope) {
             0 => 0x30 | v, // halt length, constant volume
             1 => v,        // length runs (254 half frames), decay
             _ => 0x20 | v, // halt length + loop, decay
         }
     }
 
-    fn pulse_ctl(&self, lane: usize) -> u8 {
-        ((self.params.get(lane, ParamId::Duty) as u8) << 6) | self.env_bits(lane)
+    fn pulse_duty(&self, lane: usize, f: &Frame) -> u8 {
+        f.duty.map_or(self.params.get(lane, ParamId::Duty) as u8, duty_2a03)
     }
 
     fn pulse_sweep(&self, lane: usize) -> u8 {
@@ -391,143 +473,175 @@ impl Driver {
         }
     }
 
-    fn vrc6_ctl(&self, lane: usize) -> u8 {
-        let d = self.params.get(lane, ParamId::Duty);
+    fn vrc6_ctl(&self, lane: usize, f: &Frame, macro_vol: bool) -> u8 {
         let v = self.volume(lane);
-        if d >= 8 {
-            0x80 | 0x70 | v
-        } else {
-            ((d as u8) << 4) | v
+        let v = if macro_vol { scale_volume(v, f.volume) } else { v };
+        match f.duty {
+            Some(d) => (duty_vrc6(d) << 4) | v,
+            None => {
+                let d = self.params.get(lane, ParamId::Duty);
+                if d >= 8 {
+                    0x80 | 0x70 | v
+                } else {
+                    ((d as u8) << 4) | v
+                }
+            }
         }
     }
 
-    fn noise_period(&self, pitch: u8) -> u8 {
+    fn noise_period(&self, lane: usize, f: &Frame) -> u8 {
         let p = self.params.get(LANE_NOISE, ParamId::NoisePeriod);
-        let mode = (self.params.get(LANE_NOISE, ParamId::NoiseMode) as u8) << 7;
-        mode | if p < 0 { pitch::noise_index_for(pitch) } else { p as u8 }
+        let short = f.duty.map_or(self.params.get(LANE_NOISE, ParamId::NoiseMode) != 0, |d| d != 0);
+        let base = if p < 0 { pitch::noise_index_for(self.lanes[lane].play_pitch) as i32 } else { p };
+        ((short as u8) << 7) | (base - f.arp).clamp(0, 15) as u8
     }
 
-    fn note_on(&mut self, lane: usize, pitch: u8, w: &mut Writes) {
+    /// The period for the current frame (pitch + arpeggio + fine pitch).
+    fn period(&self, lane: usize, f: &Frame) -> Option<u16> {
+        let osc = Self::osc(lane)?;
+        let st = &self.lanes[lane];
+        if f.arp == 0 && f.fine == 0.0 {
+            return pitch::period_for(osc, st.play_pitch);
+        }
+        pitch::period_for_f(osc, st.play_pitch as f64 + f.arp as f64 + f.fine)
+    }
+
+    /// Writes the period: low byte when it changed, high byte only when its
+    /// bits changed (a high write resets the 2A03 pulse phase: a click).
+    fn write_period(&mut self, lane: usize, t: u16, first: bool, w: &mut Writes) {
+        const LEN: u8 = 1 << 3;
+        let (lo_addr, hi_addr, hi_flags) = match lane {
+            LANE_P1 | LANE_P2 => (0x4002 + 4 * lane as u16, 0x4003 + 4 * lane as u16, LEN),
+            LANE_TRI => (0x400A, 0x400B, LEN),
+            LANE_V1 => (0x9001, 0x9002, 0x80),
+            LANE_V2 => (0xA001, 0xA002, 0x80),
+            _ => (0xB001, 0xB002, 0x80),
+        };
+        let old = self.lanes[lane].period;
+        if first || old.map(|o| o as u8) != Some(t as u8) {
+            w.push(lo_addr, t as u8);
+        }
+        if first || old.map(|o| o >> 8) != Some(t >> 8) {
+            w.push(hi_addr, hi_flags | (t >> 8) as u8);
+        }
+        self.lanes[lane].period = Some(t);
+    }
+
+    fn note_on(&mut self, lane: usize, song: &Song, w: &mut Writes) {
+        self.lanes[lane].period = None;
+        self.lanes[lane].ctl = None;
+        self.lanes[lane].sweep = None;
+        self.apply(lane, song, true, w);
+    }
+
+    fn sustain(&mut self, lane: usize, song: &Song, w: &mut Writes) {
+        self.apply(lane, song, false, w);
+    }
+
+    /// Writes this frame's registers for `lane` (`first`: note-on).
+    fn apply(&mut self, lane: usize, song: &Song, first: bool, w: &mut Writes) {
         // Length index 1 = 254 half frames (2.1 s): only matters in decay mode,
         // where the envelope reaches 0 within 1 s anyway.
         const LEN: u8 = 1 << 3;
-        match lane {
-            LANE_P1 | LANE_P2 => {
-                let base = 0x4000 + 4 * lane as u16;
-                let t = pitch::period_for(Osc::Pulse, pitch).unwrap_or(0);
-                let ctl = self.pulse_ctl(lane);
-                let sweep = self.pulse_sweep(lane);
-                w.push(base, ctl);
-                w.push(base + 1, sweep);
-                w.push(base + 2, t as u8);
-                // Restarts the envelope and resets the duty phase, like a real driver's note-on.
-                w.push(base + 3, LEN | (t >> 8) as u8);
-                self.lanes[lane].ctl = Some(ctl);
-                self.lanes[lane].sweep = Some(sweep);
-            }
-            LANE_TRI => {
-                let t = pitch::period_for(Osc::Triangle, pitch).unwrap_or(0);
-                // Control set + reload 127: the linear counter never runs out.
-                w.push(0x4008, 0xFF);
-                w.push(0x400A, t as u8);
-                w.push(0x400B, LEN | (t >> 8) as u8);
-            }
-            LANE_NOISE => {
-                let ctl = self.env_bits(lane);
-                w.push(0x400C, ctl);
-                w.push(0x400E, self.noise_period(pitch));
-                w.push(0x400F, LEN);
-                self.lanes[lane].ctl = Some(ctl);
-            }
-            LANE_DMC => {
-                let sel = self.params.get(lane, ParamId::Sample);
-                let idx = if sel < 0 { pitch as usize % SAMPLE_COUNT } else { sel as usize };
-                let s = self.samples[idx];
-                let rate = self.params.get(lane, ParamId::Rate) as u8;
-                let lp = (self.params.get(lane, ParamId::Loop) as u8) << 6;
-                w.push(0x4010, lp | rate);
-                w.push(0x4011, START_LEVEL);
-                w.push(0x4012, s.addr_reg);
-                w.push(0x4013, s.len_reg);
-                // Clear D first so setting it restarts even mid-sample.
-                w.push(0x4015, 0x0F);
-                w.push(0x4015, 0x1F);
-                self.lanes[lane].ctl = Some(lp | rate);
-            }
-            LANE_V1 | LANE_V2 => {
-                let base = if lane == LANE_V1 { 0x9000 } else { 0xA000 };
-                let t = pitch::period_for(Osc::Vrc6Pulse, pitch).unwrap_or(0);
-                let ctl = self.vrc6_ctl(lane);
-                w.push(base, ctl);
-                w.push(base + 1, t as u8);
-                w.push(base + 2, 0x80 | (t >> 8) as u8);
-                self.lanes[lane].ctl = Some(ctl);
-            }
-            _ => {
-                let t = pitch::period_for(Osc::Saw, pitch).unwrap_or(0);
-                let rate = self.saw_rate(lane);
-                w.push(0xB000, rate);
-                w.push(0xB001, t as u8);
-                w.push(0xB002, 0x80 | (t >> 8) as u8);
-                self.lanes[lane].ctl = Some(rate);
-            }
-        }
-    }
-
-    /// While a note holds: apply parameter changes (no phase reset).
-    fn sustain(&mut self, lane: usize, w: &mut Writes) {
+        let inst = *song.instrument(self.lanes[lane].inst);
+        let f = self.lanes[lane].mac.frame(&inst);
+        let macro_vol = !inst.volume.is_empty();
         let st = self.lanes[lane];
         match lane {
             LANE_P1 | LANE_P2 => {
                 let base = 0x4000 + 4 * lane as u16;
-                let ctl = self.pulse_ctl(lane);
-                if st.ctl != Some(ctl) {
+                let Some(t) = self.period(lane, &f) else { return };
+                let ctl = (self.pulse_duty(lane, &f) << 6) | self.env_bits(lane, &f, macro_vol);
+                if first || st.ctl != Some(ctl) {
                     w.push(base, ctl);
                     self.lanes[lane].ctl = Some(ctl);
                 }
                 let sweep = self.pulse_sweep(lane);
-                if st.sweep != Some(sweep) {
+                if first || st.sweep != Some(sweep) {
                     w.push(base + 1, sweep);
                     self.lanes[lane].sweep = Some(sweep);
                 }
+                // A note-on writes the high byte: restarts the envelope and
+                // resets the duty phase, like a real driver's note-on.
+                self.write_period(lane, t, first, w);
+            }
+            LANE_TRI => {
+                let Some(t) = self.period(lane, &f) else { return };
+                // Control set + reload 127: the linear counter never runs out;
+                // reload 0 silences it (a volume macro step of 0).
+                let ctl = if f.volume == 0 { 0x80 } else { 0xFF };
+                let unmute = st.ctl == Some(0x80) && ctl == 0xFF;
+                if first || st.ctl != Some(ctl) {
+                    w.push(0x4008, ctl);
+                    self.lanes[lane].ctl = Some(ctl);
+                }
+                // The linear counter reloads only after a $400B write.
+                if unmute {
+                    self.lanes[lane].period = None;
+                }
+                self.write_period(lane, t, first, w);
             }
             LANE_NOISE => {
-                let ctl = self.env_bits(lane);
-                if st.ctl != Some(ctl) {
+                let ctl = self.env_bits(lane, &f, macro_vol);
+                if first || st.ctl != Some(ctl) {
                     w.push(0x400C, ctl);
                     self.lanes[lane].ctl = Some(ctl);
                 }
-            }
-            LANE_V1 | LANE_V2 => {
-                let ctl = self.vrc6_ctl(lane);
-                if st.ctl != Some(ctl) {
-                    w.push(if lane == LANE_V1 { 0x9000 } else { 0xA000 }, ctl);
-                    self.lanes[lane].ctl = Some(ctl);
+                let per = self.noise_period(lane, &f);
+                if first || st.sweep != Some(per) {
+                    w.push(0x400E, per);
+                    self.lanes[lane].sweep = Some(per);
                 }
-            }
-            LANE_SAW => {
-                let rate = self.saw_rate(lane);
-                if st.ctl != Some(rate) {
-                    w.push(0xB000, rate);
-                    self.lanes[lane].ctl = Some(rate);
+                if first {
+                    w.push(0x400F, LEN);
                 }
             }
             LANE_DMC => {
                 let ctl = ((self.params.get(lane, ParamId::Loop) as u8) << 6)
                     | self.params.get(lane, ParamId::Rate) as u8;
-                if st.ctl != Some(ctl) {
+                if first {
+                    let sel = self.params.get(lane, ParamId::Sample);
+                    let idx = if sel < 0 { st.play_pitch as usize % SAMPLE_COUNT } else { sel as usize };
+                    let s = self.samples[idx];
+                    w.push(0x4010, ctl);
+                    w.push(0x4011, START_LEVEL);
+                    w.push(0x4012, s.addr_reg);
+                    w.push(0x4013, s.len_reg);
+                    // Clear D first so setting it restarts even mid-sample.
+                    w.push(0x4015, 0x0F);
+                    w.push(0x4015, 0x1F);
+                    self.lanes[lane].ctl = Some(ctl);
+                } else if st.ctl != Some(ctl) {
                     w.push(0x4010, ctl);
                     self.lanes[lane].ctl = Some(ctl);
                 }
             }
-            _ => {}
+            LANE_V1 | LANE_V2 => {
+                let Some(t) = self.period(lane, &f) else { return };
+                let ctl = self.vrc6_ctl(lane, &f, macro_vol);
+                if first || st.ctl != Some(ctl) {
+                    w.push(if lane == LANE_V1 { 0x9000 } else { 0xA000 }, ctl);
+                    self.lanes[lane].ctl = Some(ctl);
+                }
+                self.write_period(lane, t, first, w);
+            }
+            _ => {
+                let Some(t) = self.period(lane, &f) else { return };
+                let base = self.saw_rate(lane) as u32;
+                let rate = if macro_vol { ((base * f.volume as u32 + 7) / 15) as u8 } else { base as u8 };
+                if first || st.ctl != Some(rate) {
+                    w.push(0xB000, rate);
+                    self.lanes[lane].ctl = Some(rate);
+                }
+                self.write_period(lane, t, first, w);
+            }
         }
     }
 
     fn note_off(&mut self, lane: usize, w: &mut Writes) {
         match lane {
             LANE_P1 | LANE_P2 => {
-                let duty = (self.params.get(lane, ParamId::Duty) as u8) << 6;
+                let duty = self.lanes[lane].ctl.map_or(0, |c| c & 0xC0);
                 w.push(0x4000 + 4 * lane as u16, duty | 0x30);
             }
             // Reloads the linear counter with 0 at the next quarter frame.
@@ -540,7 +654,7 @@ impl Driver {
                 }
             }
             LANE_V1 | LANE_V2 => {
-                let ctl = self.vrc6_ctl(lane) & 0xF0;
+                let ctl = self.lanes[lane].ctl.unwrap_or(0) & 0xF0;
                 w.push(if lane == LANE_V1 { 0x9000 } else { 0xA000 }, ctl);
             }
             _ => w.push(0xB002, 0x00), // clear E: accumulator held at 0
@@ -549,6 +663,8 @@ impl Driver {
         self.lanes[lane].vol = None;
         self.lanes[lane].ctl = None;
         self.lanes[lane].sweep = None;
+        self.lanes[lane].period = None;
+        self.lanes[lane].mac = MacroState::default();
     }
 }
 
@@ -587,7 +703,7 @@ mod tests {
         let notes = [Note::new(0, 960, 69)];
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
-        let song = Song { lanes };
+        let song = Song::plain(lanes);
         let mut w = Writes::default();
         d.tick(&song, None, 0.0, true, &mut w);
         let all = writes_of(&w);
@@ -615,7 +731,7 @@ mod tests {
     fn mute_and_solo() {
         let mut d = drv();
         let notes = [Note::new(0, 960, 40)];
-        let song = Song { lanes: [&notes; LANES] };
+        let song = Song::plain([&notes; LANES]);
         let mut w = Writes::default();
         d.mute = 1 << LANE_TRI;
         d.tick(&song, None, 0.0, true, &mut w);
@@ -639,10 +755,10 @@ mod tests {
         let mut w = Writes::default();
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &a;
-        d.tick(&Song { lanes }, None, 10.0, true, &mut w);
+        d.tick(&Song::plain(lanes), None, 10.0, true, &mut w);
         w.clear();
         lanes[0] = &b;
-        d.tick(&Song { lanes }, Some(10.0), 50.0, true, &mut w);
+        d.tick(&Song::plain(lanes), Some(10.0), 50.0, true, &mut w);
         assert!(w.as_slice().is_empty());
         assert_eq!(d.note_ons[0], 1);
     }
@@ -655,7 +771,7 @@ mod tests {
         {
             let mut lanes: [&[Note]; LANES] = [&[]; LANES];
             lanes[0] = &notes;
-            d.tick(&Song { lanes }, None, 0.0, true, &mut w);
+            d.tick(&Song::plain(lanes), None, 0.0, true, &mut w);
         }
         assert!(w.as_slice().contains(&(0x4000, 0x80 | 0x30 | 3)));
         // Editing the volume of the sounding note: no retrigger, new V.
@@ -663,7 +779,7 @@ mod tests {
         w.clear();
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
-        d.tick(&Song { lanes }, Some(0.0), 40.0, true, &mut w);
+        d.tick(&Song::plain(lanes), Some(0.0), 40.0, true, &mut w);
         assert_eq!(writes_of(&w), [(0x4000, 0x80 | 0x30 | 9)]);
         assert_eq!(d.note_ons[0], 1);
         assert_eq!(saw_rate_for_volume(15), 42);

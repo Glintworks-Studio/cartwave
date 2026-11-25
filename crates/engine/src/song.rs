@@ -1,12 +1,19 @@
 //! Immutable song snapshots, built on the UI thread and handed to the engine.
 
 use chip::driver::{Note, Song, LANES};
+use chip::instrument::{Instrument, NONE};
 
 /// The engine's own copy of the arrangement: per lane, notes in absolute
 /// ticks, sorted and non-overlapping.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SongSnapshot {
     pub lanes: [Vec<Note>; LANES],
+    /// The instrument bank (kits reference other entries by index).
+    pub instruments: Vec<Instrument>,
+    /// Each lane's bank index (`NONE`: plain channel controls).
+    pub lane_inst: [u8; LANES],
+    /// Bank index for audition notes (`NONE`: the lane's instrument).
+    pub preview_inst: u8,
     /// Increases with every edit (for latency measurement and tests).
     pub version: u64,
     /// When the UI sent it (ns since the engine epoch; 0 if unknown).
@@ -25,10 +32,19 @@ pub struct ClipInput<'a> {
     pub notes: &'a [NoteInput],
 }
 
+impl Default for SongSnapshot {
+    fn default() -> Self {
+        Self::build(core::iter::empty(), 0)
+    }
+}
+
 impl SongSnapshot {
     pub fn view(&self) -> Song<'_> {
         Song {
             lanes: core::array::from_fn(|i| self.lanes[i].as_slice()),
+            instruments: &self.instruments,
+            lane_inst: self.lane_inst,
+            preview_inst: self.preview_inst,
         }
     }
 
@@ -71,9 +87,20 @@ impl SongSnapshot {
         }
         Self {
             lanes,
+            instruments: Vec::new(),
+            lane_inst: [NONE; LANES],
+            preview_inst: NONE,
             version,
             sent_ns: 0,
         }
+    }
+
+    /// Sets the instrument bank and the lanes' instruments.
+    pub fn with_instruments(mut self, bank: Vec<Instrument>, lane_inst: [u8; LANES], preview_inst: u8) -> Self {
+        self.instruments = bank;
+        self.lane_inst = lane_inst;
+        self.preview_inst = preview_inst;
+        self
     }
 
     pub fn note_count(&self) -> usize {

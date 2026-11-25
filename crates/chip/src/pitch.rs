@@ -55,6 +55,18 @@ pub fn period_for(osc: Osc, note: u8) -> Option<u16> {
     }
 }
 
+/// Period for a fractional note (instrument macros and vibrato), clamped to
+/// the oscillator's range; `None` only if `note` is below the range.
+pub fn period_for_f(osc: Osc, note: f64) -> Option<u16> {
+    let t = math::round(CPU_HZ_NTSC / (osc.divisor() * midi_hz(note)) - 1.0);
+    let (lo, hi) = osc.period_range();
+    if t > hi as f64 {
+        None
+    } else {
+        Some(t.max(lo as f64) as u16)
+    }
+}
+
 /// Signed tuning error of `period` against `note`, in cents.
 pub fn cents_error(osc: Osc, note: u8, period: u16) -> f64 {
     1200.0 * math::log2(osc.frequency(period) / midi_hz(note as f64))

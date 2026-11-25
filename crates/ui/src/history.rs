@@ -17,6 +17,7 @@
 //! the step after it. The history keeps at most [`MAX_STEPS`] steps and
 //! [`MAX_BYTES`]; the oldest steps go first.
 
+use crate::instruments::LaneInstrument;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -37,11 +38,12 @@ pub struct Doc {
     pub next_id: u32,
     pub bpm: f32,
     pub params: Params,
+    pub instruments: Vec<LaneInstrument>,
 }
 
 impl Doc {
     pub fn of(a: &Arrangement, bpm: f32, params: Params) -> Self {
-        Self { clips: a.clips.clone(), next_id: a.next_id, bpm, params }
+        Self { clips: a.clips.clone(), next_id: a.next_id, bpm, params, instruments: a.instruments.clone() }
     }
 
     /// Writes the document into an arrangement; selection and view stay,
@@ -49,6 +51,7 @@ impl Doc {
     pub fn apply_to(&self, a: &mut Arrangement) {
         a.clips = self.clips.clone();
         a.next_id = self.next_id;
+        a.instruments = self.instruments.clone();
         a.editing.clear();
         a.editing_notes = None;
         let ids: Vec<u32> = a.clips.iter().map(|c| c.id).collect();
@@ -60,6 +63,7 @@ impl Doc {
         self.next_id == o.next_id
             && self.bpm == o.bpm
             && self.params == o.params
+            && self.instruments == o.instruments
             && self.clips.len() == o.clips.len()
             && self.clips.iter().zip(&o.clips).all(|(a, b)| Arc::ptr_eq(a, b) || a == b)
     }

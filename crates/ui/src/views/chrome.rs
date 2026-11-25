@@ -49,6 +49,8 @@ pub enum KeyAction {
     Save,
     Recover,
     Discard,
+    ImportMidi,
+    ExportWav,
 }
 
 impl KeyAction {
@@ -61,6 +63,8 @@ impl KeyAction {
             KeyAction::Save => AppEvent::SaveProject,
             KeyAction::Recover => AppEvent::RecoverAccept,
             KeyAction::Discard => AppEvent::RecoverDiscard,
+            KeyAction::ImportMidi => AppEvent::ImportMidi,
+            KeyAction::ExportWav => AppEvent::ExportWav,
         }
     }
 }
@@ -1177,6 +1181,9 @@ const BADGE_Y: f32 = 32.0;
 const BADGE_W: f32 = 52.0;
 const BADGE_H: f32 = 16.0;
 const BADGE_PX: f32 = 9.0;
+/// Instrument name in the track row, and the room kept free for the M/S keys.
+const INST_PX: f32 = 11.0;
+const INST_RIGHT_RESERVE: f32 = 80.0;
 /// The big italic lane number: size, centre x and baseline (logical px).
 const WATERMARK_PX: f32 = 48.0;
 const WATERMARK_X: f32 = 180.0;
@@ -1194,7 +1201,7 @@ pub struct TrackRow {
 
 impl TrackRow {
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
-        let selected = Cell::new(false);
+        let seen = RefCell::new((false, String::new()));
         Self { s, lane }
         .build(cx, move |cx| {
             Key::new(cx, s, "M", KeyAction::Mute(lane));
@@ -1203,11 +1210,16 @@ impl TrackRow {
         .class("track-row")
         .bind(s.meters, |mut h| h.needs_redraw())
         .bind(s.lane_h, |mut h| h.needs_redraw())
+        .bind(s.drag_preset, |mut h| h.needs_redraw())
         .bind(s.arrangement, move |mut h| {
-            let sel = s
-                .arrangement
-                .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(lane));
-            if selected.replace(sel) != sel {
+            let now = s.arrangement.with_untracked(|a| {
+                (
+                    a.first_selected().map(|c| c.lane) == Some(lane),
+                    a.instruments.get(lane).map(|i| i.label()).unwrap_or_default(),
+                )
+            });
+            if *seen.borrow() != now {
+                *seen.borrow_mut() = now;
                 h.needs_redraw();
             }
         })
@@ -1236,6 +1248,7 @@ impl View for TrackRow {
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let _perf = crate::perf::scope(crate::perf::Span::Rows);
         let b = cx.bounds();
+        super::browser::register_lane_row(self.lane, b);
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
         // Below this there's no room for the badge under the name.
@@ -1340,6 +1353,35 @@ impl View for TrackRow {
                 &bf,
                 if selected { TEXT_LO } else { TEXT_GHOST },
             );
+        }
+
+        // The lane's instrument, after the name (or the badge).
+        let inst = self
+            .s
+            .arrangement
+            .with_untracked(|a| a.instruments.get(self.lane).map(|i| (i.label(), i.is_kit())));
+        if let Some((label, kit)) = inst {
+            let fi = gfx::font(Face::Medium, INST_PX * s);
+            let (ix, ib) = if compact {
+                (x + gfx::text_width(&f, name) + 12.0 * s, base)
+            } else {
+                (x + BADGE_W * s + 8.0 * s, gfx::baseline_for_center(&fi, r.top + (BADGE_Y + BADGE_H * 0.5) * s))
+            };
+            // Stop before the M/S keys.
+            let max_w = r.right - INST_RIGHT_RESERVE * s - ix;
+            let text = if kit { format!("{label}  (kit)") } else { label };
+            gfx::draw_text_clipped(canvas, &text, ix.round(), ib.round(), max_w, &fi, if selected { ACCENT } else { TEXT_LO });
+        }
+
+        // Dragging a preset from the browser: dim the lanes it can't play
+        // on, outline the one it would land on.
+        if let Some((fits, target)) = super::browser::drag_state(&self.s, self.lane) {
+            if !fits {
+                canvas.draw_rect(body, &gfx::fill(Rgba::black(0.62)));
+            } else if target {
+                canvas.draw_rect(body, &gfx::fill(ACCENT.with_alpha(0.08)));
+                gfx::ring(canvas, &gfx::rrect(body, 0.0), 2.0 * s, &gfx::fill(ACCENT.with_alpha(0.8)));
+            }
         }
     }
 }

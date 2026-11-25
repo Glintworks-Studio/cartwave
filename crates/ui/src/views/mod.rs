@@ -1,8 +1,10 @@
 pub mod arrangement;
+pub mod browser;
 pub mod chrome;
 pub mod clip;
 pub mod dial;
 pub mod gfx;
+pub mod instrument;
 pub mod meter;
 pub mod overlay;
 pub mod piano_roll;
