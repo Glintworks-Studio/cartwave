@@ -4,6 +4,7 @@
 pub mod file;
 pub mod dpcm;
 pub mod export;
+pub mod game_export;
 pub mod history;
 pub mod midi;
 pub mod instruments;

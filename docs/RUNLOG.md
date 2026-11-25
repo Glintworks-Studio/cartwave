@@ -124,7 +124,7 @@ Times are local (CST). Each decision taken without the user lists the options an
   `crates/ui/tests/migration.rs`: **all 9 exact files render bit-identically after migration to v3
   (both hashes)**, and again after a v3 save and reload. The inexact case is reported in
   `load_report` and does differ. This was checked before the Part B refactor, so B must keep it.
-- **Part B (08:17–08:30).** Started before the A2 UI benchmarks and the A3 UI scenarios, which need
+- **Part B (08:17–08:26).** Started before the A2 UI benchmarks and the A3 UI scenarios, which need
   the matrix finished (the matrix's app windows take focus). **Decision D12:** do B's offline code
   in that time; A5's must-fix check is re-run once the A2/A3 runs are in, and anything found is
   fixed before C ships.
@@ -150,3 +150,28 @@ Times are local (CST). Each decision taken without the user lists the options an
   - Undo: the property test now mixes 5 instrument operations (lane default, clip override, make
     unique, shared edit incl. loop point, back to lane) with the old ones, and checks every
     reference stays valid. 40 seeds pass. Unused instruments are pruned at each undo commit.
+- **Part C core (08:27–08:36).** `crates/ui/src/game_export.rs`, `tests/export_loop.rs`.
+  - **Decision D14: how a loop is made exactly periodic.** An emulator never repeats itself: its
+    60.1 Hz driver clock, the LFSR and oscillator phases run on, so pass 3 of a free-running render
+    differs from pass 2. The export renders the intro and pass 1 normally, **clones the whole
+    emulator at the start of pass 2** (`Player: Clone`; never on the audio thread) and plays every
+    later pass from that clone. `intro.wav` therefore runs up to pass 2 (intro + pass 1), because
+    pass 1's start follows the intro and can't carry the loop-end tails; `loop.wav` is pass 2. The
+    single file and the JSON give the same points. Alternative: a pure-intro file. Rejected: its
+    junction to the loop would be wrong by construction (cut intro tails, wrong loop-end tails).
+  - **Gate C1 passes:** intro + loop × 3 read back from the files equals one continuous render
+    sample for sample. Covered: the showcase (8-bar intro + 8-bar loop) and the test song (whole
+    song), 44.1 and 48 kHz, 16 and 24 bit. The single file's data and `smpl` points match, and so
+    does the JSON.
+  - **44.1 kHz renders natively** (the step synthesis and filters take the rate). Pulse A4 counts
+    the period formula's frequency ±1 Hz at both rates. No `rubato`.
+  - **Measured:** free-running playback (the app's live loop) vs the exported loop over passes 3–4:
+    +3.1 dB RMS. The showcase loop is 824.21 driver frames, so each live pass shifts the frame phase
+    by 0.21 frame and some notes land one frame (16.6 ms) apart from pass to pass. The export
+    keeps pass 2's timing. Reported as a known gap, not changed in the engine.
+  - **C2 stems** (showcase, 48 kHz): 8 channel stems summed vs the mix: **−11.3 dB RMS** relative
+    to the mix, peak error **−20.3 dBFS**. Groups melody/bass/drums: **−11.5 dB RMS**, peak
+    **−19.3 dBFS**. This is the non-linear 2A03 mixer. Every stem has the loop's length and points.
+  - Loudness: authentic (default), peak to −1 dBFS, or LUFS integrated via `ebur128` 0.1.11 (MIT,
+    pre-approved) with a true-peak ceiling. One gain from the mix, applied to the mix and every
+    stem, so stems keep their balance and the loop stays exact.

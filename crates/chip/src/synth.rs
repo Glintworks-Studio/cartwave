@@ -32,6 +32,7 @@ const V1: u8 = 1 << 5;
 const V2: u8 = 1 << 6;
 const SAW: u8 = 1 << 7;
 
+#[derive(Clone)]
 pub struct Synth {
     pub pulse1: Pulse,
     pub pulse2: Pulse,

@@ -213,6 +213,7 @@ impl Params {
 }
 
 /// Register writes produced by one tick, applied in order.
+#[derive(Clone)]
 pub struct Writes {
     buf: [(u16, u8); 96],
     len: usize,
@@ -271,6 +272,7 @@ struct LaneState {
     mac: MacroState,
 }
 
+#[derive(Clone)]
 pub struct Driver {
     pub params: Params,
     /// Bit per lane.

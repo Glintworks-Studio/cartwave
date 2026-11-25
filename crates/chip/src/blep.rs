@@ -45,6 +45,7 @@ const FRAC_BITS: u32 = 32;
 /// Bits of interpolation between neighbouring phases.
 const INTERP_BITS: u32 = 16;
 
+#[derive(Clone)]
 pub struct Kernel {
     /// Row `ph` is the kernel for a step at fraction `ph / PHASES` of a sample;
     /// row `PHASES` (fraction 1) closes the interpolation interval.
@@ -93,6 +94,7 @@ impl Kernel {
     }
 }
 
+#[derive(Clone)]
 pub struct Blep {
     kernel: Kernel,
     buf: [i64; MAX_FRAMES + TAPS + 1],

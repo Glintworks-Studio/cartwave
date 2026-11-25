@@ -30,6 +30,9 @@ pub fn wrap_loop(t: f64, start: f64, end: f64) -> f64 {
     start + (t - start) % (end - start)
 }
 
+/// `Clone` copies the whole emulator state (the seamless-loop export latches
+/// it at the start of the second loop pass and replays every later pass from it).
+#[derive(Clone)]
 pub struct Player {
     pub synth: Synth,
     pub driver: Driver,
