@@ -4,8 +4,9 @@
 > tests whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom,
 > premium-looking DAW interface drawn entirely with stylesheets and procedural drawing (no
 > bitmap images). It now plays the arrangement in real time through a clean-room NES 2A03 +
-> VRC6 emulator (`crates/chip`, `crates/engine`; see [ENGINE.md](ENGINE.md)). The clips and
-> notes are still demo data.
+> VRC6 emulator (`crates/chip`, `crates/engine`; see [ENGINE.md](ENGINE.md)), and has a
+> piano roll, global undo and `.chipdaw` save/load, so songs can be written in it (see
+> [PIANOROLL.md](PIANOROLL.md), including the full keyboard and mouse map).
 
 ![Arrangement view at 200% scaling](docs/screens/main-200.png)
 
@@ -24,7 +25,8 @@ cargo run --release -p app -- --size 1200x800   # initial logical window size
 
 Vizia is pulled from a fork, pinned by commit in `[patch.crates-io]` in `Cargo.toml`:
 [jeffreyfrederick/vizia @ `chipdaw-perf`](https://github.com/jeffreyfrederick/vizia/tree/chipdaw-perf)
-(tag 0.4.0 plus six focused performance fixes, described in [PERF.md](PERF.md) §8). The first
+(tag 0.4.0 plus focused fixes: performance, frame pacing, macOS colour, a timer hang; see
+[PERF.md](PERF.md) §8, [PERF-macos.md](PERF-macos.md) §11 and [PIANOROLL.md](PIANOROLL.md)). The first
 build compiles Skia through `skia-safe`, which downloads prebuilt binaries when they are
 available for your target.
 
