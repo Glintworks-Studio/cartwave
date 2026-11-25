@@ -78,7 +78,7 @@ impl View for StatsOverlay {
                 format!(
                     "cap    {:<7} display {}",
                     st.cap.label(),
-                    st.display_hz.map_or("?".into(), |hz| format!("{hz:.0} Hz"))
+                    st.display_hz.map_or("?".into(), |hz| format!("{hz:.2} Hz"))
                 ),
                 TEXT_HI,
             ),

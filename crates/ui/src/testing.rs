@@ -382,7 +382,7 @@ impl Tests {
             "{extra},{:.1},{},{},{:.2}",
             self.tick_gap_max.as_secs_f64() * 1e3,
             self.playhead_local_frames,
-            self.display_hz.map_or(String::new(), |h| format!("{h:.0}")),
+            self.display_hz.map_or(String::new(), |h| format!("{h:.3}")),
             sh.max_gap_ns.load(Relaxed) as f64 / 1e6,
         );
         self.tick_gap_max = Duration::ZERO;
