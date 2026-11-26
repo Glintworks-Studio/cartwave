@@ -148,7 +148,9 @@ impl View for Key {
             c.borrow_mut()
                 .entry(key)
                 .or_insert_with(|| {
-                    let mut surface = vg::surfaces::raster_n32_premul((key.4.max(1), key.5.max(1)))?;
+                    // A surface like the window's (GPU): the cached key looks
+                    // exactly like one drawn in place.
+                    let mut surface = canvas.new_surface(&vg::ImageInfo::new_n32_premul((key.4.max(1), key.5.max(1)), None), None)?;
                     let lc = surface.canvas();
                     lc.clear(vg::Color::TRANSPARENT);
                     self.draw_key(lc, vg::Rect::from_xywh(0.0, 0.0, key.4 as f32, key.5 as f32), s);
@@ -165,10 +167,12 @@ impl View for Key {
     }
 }
 
+/// A key look: (label, lit, hover, pressed, w, h, scale×100).
+type KeyLookKey = (&'static str, bool, bool, bool, i32, i32, u32);
+
 thread_local! {
     /// Rendered key looks: (label, lit, hover, pressed, w, h, scale×100).
-    static KEY_IMAGES: RefCell<std::collections::HashMap<(&'static str, bool, bool, bool, i32, i32, u32), Option<vg::Image>>> =
-        RefCell::new(std::collections::HashMap::new());
+    static KEY_IMAGES: RefCell<std::collections::HashMap<KeyLookKey, Option<vg::Image>>> = RefCell::new(std::collections::HashMap::new());
 }
 
 impl Key {
@@ -976,9 +980,7 @@ fn render_row_text(lane: usize, k: &RowTextKey, s: f32) -> Option<vg::Image> {
     let canvas = surface.canvas();
     canvas.clear(vg::Color::TRANSPARENT);
     let r = vg::Rect::from_xywh(0.0, 0.0, k.w as f32, k.h as f32);
-    // The pan slider (where its view sits; see TrackRow::new).
-    let pan_left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W + FADER_W + SLIDER_GAP - THUMB_W * 0.5;
-    draw_pan(canvas, gfx::snap(vg::Rect::from_xywh(pan_left * s, SLIDER_VIEW_TOP * s, (PAN_W + THUMB_W) * s, THUMB_H * s)), s);
+
     let hl = gfx::hairline(s);
     let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
     let (selected, name) = (k.selected, &k.name);
@@ -1200,6 +1202,10 @@ impl View for TrackRow {
             }
         }
         let bb = (r.top + BADGE_BASELINE * s).round();
+        // The disabled pan slider, where its (hit-only) view sits: drawn here
+        // so a row repaint is one view, not two.
+        let pan_left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W + FADER_W + SLIDER_GAP - THUMB_W * 0.5;
+        draw_pan(canvas, gfx::snap(vg::Rect::from_xywh(r.left + pan_left * s, r.top + SLIDER_VIEW_TOP * s, (PAN_W + THUMB_W) * s, THUMB_H * s)), s);
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
         if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {

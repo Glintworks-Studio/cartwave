@@ -169,7 +169,9 @@ impl View for Dial {
         let value = self.value();
         let target = self.spec.to_norm(value);
         // While dragging show the value immediately; otherwise ease (e.g. double-click reset).
-        let n = if self.dragging {
+        // `CHIPDAW_FROZEN_METERS=1` (dev, the regression screenshots): no
+        // easing, so the pointer lands on its value whatever the frame timing.
+        let n = if self.dragging || crate::dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") {
             target
         } else {
             gfx::approach(self.shown_norm.get(), target, dt, 0.06)
