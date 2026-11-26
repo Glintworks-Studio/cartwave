@@ -368,7 +368,7 @@ impl View for SpectrumBox {
         let r = gfx::snap(b.into());
         let dt = gfx::frame_dt(&self.last_draw);
         self.animating.set(self.step(dt));
-        gfx::well(canvas, r, RADIUS_KEY_BIG * s, s);
+        gfx::well_cached(canvas, r, RADIUS_KEY_BIG * s, s);
         let style = SpectrumStyle::from_key(&self.s.settings.with_untracked(|st| st.spectrum_style.clone()));
 
         let st = self.st.borrow();
@@ -854,6 +854,72 @@ pub struct TrackRow {
     s: Signals,
     lane: usize,
     hover: bool,
+    /// The lit strip, pre-rendered: (colour, height, scale) and the image.
+    lit: LitCache,
+    /// The row's text and badge, pre-rendered.
+    text: RefCell<Option<(RowTextKey, vg::Image)>>,
+}
+
+/// The lit strip: (colour, height, scale) and its image.
+type LitCache = RefCell<Option<((u32, i32, u32), vg::Image)>>;
+
+/// What a row's text layer shows.
+#[derive(Clone, Debug, PartialEq)]
+struct RowTextKey {
+    selected: bool,
+    name: String,
+    inst: Option<String>,
+    w: i32,
+    h: i32,
+    s: u32,
+}
+
+/// A row's number, name, profile badge and preset on a transparent layer
+/// (grayscale-antialiased text composites exactly as if drawn in place).
+fn render_row_text(lane: usize, k: &RowTextKey, s: f32) -> Option<vg::Image> {
+    let mut surface = vg::surfaces::raster_n32_premul((k.w.max(1), k.h.max(1)))?;
+    let canvas = surface.canvas();
+    canvas.clear(vg::Color::TRANSPARENT);
+    let r = vg::Rect::from_xywh(0.0, 0.0, k.w as f32, k.h as f32);
+    let hl = gfx::hairline(s);
+    let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
+    let (selected, name) = (k.selected, &k.name);
+        // The channel number.
+        let nf = gfx::font(Face::HeavyItalic, NUMBER_PX * s);
+        let num = format!("{}", lane + 1);
+        let ntr = NUMBER_TRACKING * NUMBER_PX * s;
+        let nw = gfx::tracked_width(&num, &nf, ntr);
+        let (nx, ny) = at(NUMBER_X + NUMBER_W * 0.5, NUMBER_TOP);
+        let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
+        gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
+
+        // Name.
+        let f = gfx::font(Face::SemiBold, NAME_PX * s);
+        let (x, y) = at(NAME_X, NAME_TOP);
+        let (_, m) = f.metrics();
+        // Skia's hinting puts the ink a pixel higher than the browser's.
+        let base = (y - m.ascent).round() + s.round();
+        let max_w = (NAME_RIGHT - NAME_X) * s;
+        gfx::draw_text_clipped(canvas, name, x.round(), base, max_w, &f, TEXT_HI);
+
+        // The profile badge and the preset.
+        let chip = if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
+        let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
+        let bw = gfx::text_width(&bf, chip);
+        let (bx, by) = at(NAME_X, BADGE_Y);
+        let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
+        gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
+        let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
+        draw_lock(canvas, lock_o, s, BADGE_INK);
+        let bb = (r.top + BADGE_BASELINE * s).round();
+        gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
+        if let Some(text) = &k.inst {
+            let fi = gfx::font(Face::Medium, PRESET_PX * s);
+            let ix = badge.right + PRESET_GAP * s;
+            gfx::draw_text_clipped(canvas, text, ix.round(), bb, r.left + NAME_RIGHT * s - ix, &fi, if selected { TEXT_MID } else { TEXT_LO });
+        }
+
+    Some(surface.image_snapshot())
 }
 
 impl TrackRow {
@@ -861,7 +927,7 @@ impl TrackRow {
         let seen = RefCell::new((false, String::new()));
         // Redraw on this lane's light only (PERF.md: only what changed).
         let light = Cell::new(0u8);
-        Self { s, lane, hover: false }
+        Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None) }
             .build(cx, move |cx| {
                 let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
                 let left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W;
@@ -977,7 +1043,6 @@ impl View for TrackRow {
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
         let hl = gfx::hairline(s);
-        let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
         let selected = self
             .s
             .arrangement
@@ -993,15 +1058,11 @@ impl View for TrackRow {
         // The colour strip: full height, square, light left edge → dark
         // right edge; lit by note-ons (inner glow and a soft spill).
         let strip = vg::Rect::from_ltrb(r.left, body.top, (r.left + LANE_STRIP_W * s).round(), body.bottom);
-        let (fill, edge_l, edge_r) = strip_colours(color, light);
-        if light > 0.01 {
-            let mut spill = gfx::fill(color.with_alpha(STRIP_SPILL_A * light));
-            spill.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, STRIP_GLOW_R * 0.5 * s, false));
-            canvas.save();
-            canvas.clip_rect(body, None, None);
-            canvas.draw_rect(strip, &spill);
-            canvas.restore();
-        }
+        // The unlit strip, then the lit look over it at `light`: the lit
+        // fill, edges, inner glow and spill are rendered once per colour,
+        // height and scale, and blending them at `light` is exactly
+        // mix(unlit, lit, light). No blur runs per frame (PERF.md).
+        let (fill, edge_l, edge_r) = strip_colours(color, 0.0);
         canvas.draw_rect(
             strip,
             &gfx::shaded(gfx::linear((strip.left, strip.top), (strip.right, strip.top), &fill, Some(&[0.0, 0.55, 1.0]))),
@@ -1009,46 +1070,35 @@ impl View for TrackRow {
         canvas.draw_rect(vg::Rect::from_xywh(strip.left, strip.top, hl, strip.height()), &gfx::fill(edge_l));
         canvas.draw_rect(vg::Rect::from_xywh(strip.right - hl, strip.top, hl, strip.height()), &gfx::fill(edge_r));
         if light > 0.01 {
-            let pad = gfx::rrect(strip.with_inset((hl, 0.0)), 0.0);
-            gfx::css_inset_shadow(canvas, &pad, 0.0, 0.0, STRIP_GLOW_R * s, 0.0, Rgba::white(STRIP_GLOW_A * light));
+            let key = (crate::state::rgb_hex(color), strip.height().round() as i32, (s * 100.0).round() as u32);
+            let mut lit = self.lit.borrow_mut();
+            if lit.as_ref().is_none_or(|(k, _)| *k != key) {
+                *lit = render_lit_strip(color, strip.width(), strip.height(), s).map(|img| (key, img));
+            }
+            if let Some((_, img)) = lit.as_ref() {
+                let mut p = vg::Paint::default();
+                p.set_alpha_f(light.clamp(0.0, 1.0));
+                canvas.save();
+                canvas.clip_rect(body, None, None);
+                canvas.draw_image(img, (strip.left, strip.top), Some(&p));
+                canvas.restore();
+            }
         }
 
-        // The channel number.
-        let nf = gfx::font(Face::HeavyItalic, NUMBER_PX * s);
-        let num = format!("{}", self.lane + 1);
-        let ntr = NUMBER_TRACKING * NUMBER_PX * s;
-        let nw = gfx::tracked_width(&num, &nf, ntr);
-        let (nx, ny) = at(NUMBER_X + NUMBER_W * 0.5, NUMBER_TOP);
-        let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
-        gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
-
-        // Name.
-        let f = gfx::font(Face::SemiBold, NAME_PX * s);
-        let (x, y) = at(NAME_X, NAME_TOP);
-        let (_, m) = f.metrics();
-        // Skia's hinting puts the ink a pixel higher than the browser's.
-        let base = (y - m.ascent).round() + s.round();
-        let max_w = (NAME_RIGHT - NAME_X) * s;
-        gfx::draw_text_clipped(canvas, &name, x.round(), base, max_w, &f, TEXT_HI);
-
-        // The profile badge and the preset.
-        let chip = if self.lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
-        let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-        let bw = gfx::text_width(&bf, chip);
-        let (bx, by) = at(NAME_X, BADGE_Y);
-        let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
-        gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
-        let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
-        draw_lock(canvas, lock_o, s, BADGE_INK);
+        // The number, name, badge and preset: one image per content and
+        // scale (a row redraws every frame while its strip or meter moves).
+        let inst = self.s.arrangement.with_untracked(|a| a.instruments.lane(self.lane).map(|i| if i.is_kit() { format!("{}  (kit)", i.label()) } else { i.label() }));
+        let key = RowTextKey { selected, name: name.clone(), inst: inst.clone(), w: r.width().round() as i32, h: r.height().round() as i32, s: (s * 100.0).round() as u32 };
+        {
+            let mut text = self.text.borrow_mut();
+            if text.as_ref().is_none_or(|(k, _)| *k != key) {
+                *text = render_row_text(self.lane, &key, s).map(|img| (key, img));
+            }
+            if let Some((_, img)) = text.as_ref() {
+                canvas.draw_image(img, (r.left, r.top), None);
+            }
+        }
         let bb = (r.top + BADGE_BASELINE * s).round();
-        gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
-        let inst = self.s.arrangement.with_untracked(|a| a.instruments.lane(self.lane).map(|i| (i.label(), i.is_kit())));
-        if let Some((label, kit)) = inst {
-            let fi = gfx::font(Face::Medium, PRESET_PX * s);
-            let ix = badge.right + PRESET_GAP * s;
-            let text = if kit { format!("{label}  (kit)") } else { label };
-            gfx::draw_text_clipped(canvas, &text, ix.round(), bb, r.left + NAME_RIGHT * s - ix, &fi, if selected { TEXT_MID } else { TEXT_LO });
-        }
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
         if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {
@@ -1074,6 +1124,27 @@ impl View for TrackRow {
             }
         }
     }
+}
+
+/// The fully lit strip (fill, edges, inner glow) plus its spill to the
+/// right, as an image whose top-left is the strip's.
+fn render_lit_strip(color: Rgba, w: f32, h: f32, s: f32) -> Option<vg::Image> {
+    let spill_pad = (2.0 * STRIP_GLOW_R * s).ceil();
+    let mut surface = vg::surfaces::raster_n32_premul(((w + spill_pad).ceil() as i32, h.ceil().max(1.0) as i32))?;
+    let c = surface.canvas();
+    c.clear(vg::Color::TRANSPARENT);
+    let strip = vg::Rect::from_xywh(0.0, 0.0, w, h);
+    let hl = gfx::hairline(s);
+    let mut spill = gfx::fill(color.with_alpha(STRIP_SPILL_A));
+    spill.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, STRIP_GLOW_R * 0.5 * s, false));
+    c.draw_rect(strip, &spill);
+    let (fill, edge_l, edge_r) = strip_colours(color, 1.0);
+    c.draw_rect(strip, &gfx::shaded(gfx::linear((0.0, 0.0), (w, 0.0), &fill, Some(&[0.0, 0.55, 1.0]))));
+    c.draw_rect(vg::Rect::from_xywh(0.0, 0.0, hl, h), &gfx::fill(edge_l));
+    c.draw_rect(vg::Rect::from_xywh(w - hl, 0.0, hl, h), &gfx::fill(edge_r));
+    let pad = gfx::rrect(strip.with_inset((hl, 0.0)), 0.0);
+    gfx::css_inset_shadow(c, &pad, 0.0, 0.0, STRIP_GLOW_R * s, 0.0, Rgba::white(STRIP_GLOW_A));
+    Some(surface.image_snapshot())
 }
 
 /// The badge's lock (the mockup's 9 × 11 icon).
@@ -1118,6 +1189,9 @@ pub struct VolumeFader {
 impl VolumeFader {
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
         let shown = Cell::new((u16::MAX, 0u16, false));
+        // `CHIPDAW_FROZEN_METERS=1` (dev): the meters don't follow the level
+        // (the performance attribution in DESIGNPASS.md §6).
+        let frozen = crate::dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1");
         Self { s, lane, drag: false, hover: false, wheel: Default::default() }
             .build(cx, |_| {})
             .class("fader")
@@ -1125,7 +1199,7 @@ impl VolumeFader {
             .height(Pixels(THUMB_H))
             .bind(s.meters, move |mut h| {
                 let v = Self::state(&s, lane);
-                if shown.get() != v {
+                if !frozen && shown.get() != v {
                     shown.set(v);
                     h.needs_redraw();
                 }

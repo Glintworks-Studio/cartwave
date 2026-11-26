@@ -448,3 +448,92 @@ Branch `app-shell/batch-3` from `main` @ fb2d632. Unattended; decisions are numb
 - **Gates:** all pass on the final build (17/17 Batch 3 ATs, 9/9 AT-01…19, 179 tests, clippy and
   release build clean, contrast ≥ 4.66:1). Merge follows.
 - **Merge.** `main` fast-forwarded from fb2d632 to 7d0d18e (`app-shell/batch-3`), plus this note; pushed with the branch. The vizia fork's `chipdaw-perf` was pushed earlier (159bbe55..5a3b035a).
+
+## Design pass (DESIGN_PASS_PROMPT.md, Option D), 2026-11-25
+
+Branch `design/option-d` from `main` 23b5da9. Report: [DESIGNPASS.md](../DESIGNPASS.md); spec:
+[docs/design/VISUAL-SPEC.md](design/VISUAL-SPEC.md). Not merged (§6: the CEO approves the
+comparison screenshots first). Every decision below was taken alone, as the prompt asked.
+
+- **DP-D1 (rendering the mockup).** `mockup-D.dc.html` loads a `support.js` runtime that wasn't
+  supplied. `docs/design/tools/support.js` is a small stand-in (expands `<sc-for>`, `<sc-if>` and
+  `{{…}}` from the file's own `renderVals()`); headless Chrome renders it at 1440×400 with the
+  Google Fonts the file links. Its `?measure` mode dumps every element's box
+  (`mockup-boxes.jsonl`), which is where every position below comes from.
+- **DP-D2 (JetBrains Mono 600).** The prompt and the file's CSS both ask for weight 600, but the
+  file's font link loads only 500 and 700, so the browser draws 700. We use 600 as specified and
+  added `JetBrainsMono-SemiBold.ttf` from the same 2.304 release (its Medium is byte-identical to
+  ours); ASSETS.md updated.
+- **DP-D3 (file over prompt, logged as asked).** Row pitch 73 (72 + a content-box hairline);
+  badge 18 px outer (16 + borders); clips inset 2 px on all four sides (the prompt: top and
+  bottom); the key sheen sits on the row inside the border, not on it; the strip's lit look keeps
+  the mockup's 10 px spill (§3.5 said "no outer glow"; the old 48 px row spill is gone); the
+  selected view icon's glow is 55% (the indicators' 65%); the display's cell group starts at
+  17 px (the mockup's 17.5, floored, which is where its dividers land).
+- **DP-D4 (not in the mockup: kept).** Clip note previews, clip selection glow, drag shadows,
+  the browser's layout, the inspector's layout. **Changed because the mockup shows otherwise:** no
+  dimming outside the loop while looping, no shade under the ruler, the four mockup track colours
+  (Pulse `#C9D24A`, Triangle `#7F86E0`, Noise `#B5AC98`, VRC6 Pulse `#D9579A`; the Colour ▸ palette's
+  first entries follow).
+- **DP-D5 (fader).** "Today's lane volume" is the channel Volume (0–15) on the pulses, noise and
+  VRC6 pulses, and the saw's accumulator Rate (0–63). The triangle and DPCM have no volume
+  control: their faders are disabled with the reason; so is a fader whose Envelope is a decay (the
+  register is then the decay speed). Same value as the inspector dial: undoable, saved. The meter
+  is the engine's post-fader level on the fader's scale, clamped at the thumb's centre
+  (`state::meter_fill`, unit-tested).
+- **DP-D6 (indicators).** The format indicators are "active" while the audio output runs; without
+  output (CHIPDAW_AUDIO=0, no device) they are dim like a stopped Play.
+- **DP-D7 (project format).** Project Settings had no sample rate (the device rate is in Settings >
+  Audio), so the project's format gets both: Sample rate (44.1 / 48 kHz) and Bit depth (16 / 24).
+  File format **v5** (`rate`, `bits`); v1–4 files open as 48 kHz / 16-bit (the export default they
+  had), new projects 48 kHz / 24-bit (the mockup). Migration test: a v4 corpus written by the
+  pre-run build (`docs/songs/v4`, hashes in HASHES.txt) renders bit-identically.
+- **DP-D8 (export default).** The export dialog now opens on the project's rate and bit depth; its
+  other choices are still remembered (E4). AT-28's "remembered" check was changed to that rule.
+- **DP-D9 (TAP).** Shortcut **T** (free in the table; ours), in both editors. A tap counts on the
+  press. One sequence is one undo step: the second tap commits, later taps amend that step
+  (`History::amend`); tempo rounded to 0.01 BPM.
+- **DP-D10 (BPM in the display).** Drag 0.25 BPM per px (Shift ×0.1), wheel ±1, double-click types
+  in the rename field (a comma works as the decimal point); shown with two decimals.
+- **DP-D11 (positions).** The display's POSITION and START are 1-based and unpadded ("17.2.3", the
+  mockup), LENGTH 0-based ("2.0.0"); a value too wide for its cell (bar 100+) shrinks to fit.
+- **DP-D12 (clock format retired).** View > Clock Shows Bars and Settings > Clock shows did nothing
+  once the display shows both (principle 3); removed. The settings field stays so old files read
+  the same.
+- **DP-D13 (Play / Stop).** Play starts playback and does nothing while playing (the manual's
+  restart behaviour is unverified, so not copied); Stop is today's Stop (again: to the start).
+- **DP-D14 (MEM).** Private bytes from `K32GetProcessMemoryInfo` (documented), once a second; on
+  macOS "--" until it's implemented there (out of scope). The CPU / MEM grid is a fixed 84 px so
+  the three groups don't move as the numbers change. AT-02's pixel diff leaves the MEM read-out
+  out (it is live, like a clock).
+- **DP-D15 (spectrum).** The existing whole-mix spectrum (channel levels spread into bands), now
+  neutral in a 216×56 well; styles in settings.json (`spectrum_style`). Its menu opens to the left
+  near the window's edge.
+- **DP-D16 (Preview key).** Neutral in both states (lime is listed for other places only); 28×16
+  to fit the 16 px browser header without changing its layout; remembered (`preview_on_select`).
+  ↑/↓ in the preset list move the selection and audition for 600 ms.
+- **DP-D17 (lime removed).** Playhead, ruler marker, focus rings, caret and text selection, dial
+  arcs, checked buttons, the rename field's border, drag-target outlines, the in-app menu's
+  highlight, the split handle's grip, the snap-guide pill, the getting-started title, the dev
+  overlay. The lime audit (`docs/screens/design-pass/lime-audit.md`): 0 violations over 9 scenes.
+- **DP-D18 (dithering).** Every drawn gradient (`gfx::shaded` and each shader site) sets
+  `Paint::dither`; the stylesheet's gradients are dithered by vizia fork commit 60907aad (pin
+  updated in all nine `[patch.crates-io]` entries). Dev-only `CHIPDAW_NO_DITHER=1` turns the drawn
+  ones off for the A/B.
+- **DP-D19 (fork bug fixed on the way).** With the browser closed, the app panicked at start
+  ("capacity overflow"): the fork's textbox accessibility code subtracted past zero on the hidden,
+  empty search field. Same commit 60907aad (`saturating_sub`). The pre-run build has the same bug.
+- **DP-D20 (minimum window).** 1272×920 logical (was 1140×812): the top bar's three groups need
+  1269 px; the height keeps the rule "eight full lanes plus the inspector" at the new 73 px pitch.
+  Open item: 920 doesn't fit a 1080p display at 125%.
+- **DP-D21 (dark menus).** Built by a sub-agent on its own worktree and merged
+  (docs/design/DARK-MENUS.md): owner-drawn popups, documented APIs only, live, default off. It
+  added no undocumented call; muda's existing dark menu *bar* (WM_UAHDRAWMENU, undocumented,
+  cosmetic, falls back to light) is unchanged. `windows-sys` became a direct, optional,
+  Windows-only dependency: already in the tree at the same version (0.61.2), so no new crate.
+- **DP-D22 (harnesses).** AT coordinates moved to the new layout (top bar 76, ruler 28, rows 73,
+  headers 380); the piano-roll bench takes `-NoteY` (591 now, 535 before).
+- **DP-D23 (owner, mid-run: clip gaps).** The mockup's 2 px inset at both ends of a clip (DP-D3)
+  is reverted at the owner's request: a clip starts on its grid line and ends 1 px short, so
+  abutting clips show a 1 px gap, as in the reference DAW. Top and bottom stay 2 px in from the
+  row. The pixel comparison lists this as an intended deviation.

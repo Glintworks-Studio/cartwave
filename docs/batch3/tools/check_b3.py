@@ -251,7 +251,7 @@ if "t28_open" in obs:
     check(A, o("t28_open") is True and os.path.exists(os.path.join(work, "at28_dialog.png")), "Ctrl+Shift+R opens the dialog over a backdrop (screenshot)")
     check(A, o("t28_after_esc") is False, "Esc closes it")
     st = json.load(open(os.path.join(work, "at28_settings.json"), encoding="utf-8")) if os.path.exists(os.path.join(work, "at28_settings.json")) else {}
-    # Design pass (DP-D?): the project's format is the export default, so a
+    # Design pass (DP-D8): the project's format is the export default, so a
     # reopened dialog starts from the project's 16-bit (the v4 fixture), not
     # the 24-bit picked before; the other choices are still remembered.
     ex = st.get("export", [])

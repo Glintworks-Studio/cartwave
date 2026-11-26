@@ -84,7 +84,7 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Zoom Back | X | X | (R31) | M | ✓ · **done** (B3) |
 | Zoom to Fit | (double-click the ruler) | same | Whole song (R32) | M | ✓ · **done** (B3) |
 | Draw Mode | B | B | Toggle (R5) | M | ✓ · **done** (B3) |
-| Clock: Bars / Time | — | — | Replaces the click-on-clock toggle (F-38); Home rewinds | S | ✓ |
+| Clock: Bars / Time | — | — | Replaces the click-on-clock toggle (F-38); Home rewinds | S | ✓ · **retired** (design pass): the display shows TIME and POSITION together |
 | Automation Mode | A | A | (R104) | L | ✓ |
 
 ### Help
@@ -113,7 +113,8 @@ Support/ChipDAW`). Every field has a default, unknown fields are ignored (today'
 | | Sample rate | 48 kHz (44.1 / 48 / 96) | M | ✓ |
 | Display | Frame-rate cap (replaces F6) | **60 fps** (options 60 / 120; Off in dev mode only) | S | ✓ |
 | | Interface scale | 100% (follows the OS) | S | ✓ · **done** (B3): 75–200%, live |
-| | Clock shows | Time (m:ss.cc) | S | ✓ |
+| | Clock shows | Time (m:ss.cc) | S | ✓ · **retired** (design pass): both are shown |
+| | Dark menus (Windows) | **Off** (owner-drawn dropdowns; docs/design/DARK-MENUS.md) | S | design pass: built, waits for the CEO's approval to default on |
 | Editing | Default arrangement grid | 1/16 | S | ✓ |
 | | Default piano-roll grid | 1/16 | S | ✓ |
 | | Follow playhead | On | S | ✓ |
@@ -128,7 +129,7 @@ split height.
 
 ## 3. Project Settings
 
-Stored **in the project file** (v4).
+Stored **in the project file** (v5 since the design pass).
 
 | Setting | Default | Notes | Pri | CEO |
 |---|---|---|---|---|
@@ -137,6 +138,7 @@ Stored **in the project file** (v4).
 | Tempo | — | **Not here: it lives in the top bar** (decision 1, R116) | — | ✓ |
 | Time signature | — | **Not here: the top bar**, next to tempo (decision 1, R116) | L | ✓ |
 | Root and scale | Off | VISION "Scales" | L | ✓ |
+| Sample rate, Bit depth | 48 kHz, 24-bit (files before v5: 48 kHz, 16-bit) | The project's format: the display's indicators show it and Export Audio starts from it. The output device's rate stays in Settings > Audio | S | design pass · **done** |
 
 ## 4. Redundancy decisions (one home each)
 
@@ -151,6 +153,23 @@ Stored **in the project file** (v4).
 | Loop on/off | Capsule loop light (+ Ctrl+L sets and enables) | — |
 | Rewind | Home key / Stop when stopped | Clock double-click |
 | Debug tools | `CHIPDAW_DEV=1` builds only | F3–F7 in release |
+
+## 4b. The top bar (design pass, Option D)
+
+See [docs/design/VISUAL-SPEC.md](docs/design/VISUAL-SPEC.md) §2.
+
+| # | Control | Does | Pri | Status |
+|---|---|---|---|---|
+| TB1 | Arrangement / Mixer keys | Arrangement is the only view; Mixer is disabled with its reason (Batch 4) | S | done |
+| TB2 | Play, Stop, Record, Loop | Play starts (does nothing while playing, ours); Stop stops, again goes to the start; Record disabled ("Recording arrives with MIDI input"); Loop switches the song loop. The keys never light: the display shows the state | M | done |
+| TB3 | The display | Read-only: indicators (playing, looping, the project's rate and bit depth, lime while active), TIME, POSITION, START and LENGTH (the time selection or the selected clips' span), BPM. **BPM**: drag (Shift: finer) or wheel; double-click to type | M | done |
+| TB4 | TAP (key **T**, ours) | Each tap sets BPM from the average of the last 4 intervals; taps more than 2 s apart start over; one sequence is one undo step | S | done |
+| TB5 | The spectrum | The mix; right-click: Bars, LED Segments, Line, Peak Dots (remembered in settings.json) | S | done |
+| TB6 | CPU / MEM | The audio callback's load (OFF without output); the process's private memory | S | done |
+
+**Text-size exception (design pass, CEO-approved mockup):** the display's labels (TIME,
+POSITION, START, LENGTH, BPM) are Inter 600 **10 px**, below the 11 px minimum for informative text
+(F-39). They are uppercase, tracked .1em, and `#808080` on `#151515` is 4.6:1, above 4.5:1.
 
 ## 5. Behaviour tables
 
@@ -190,6 +209,9 @@ Stored **in the project file** (v4).
 | T5 | M / S | Mute / solo (today); Cmd-click solo adds (R143) | S | ✓ · **done** (B3) |
 | T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ |
 | T7 | Click 🔒 | Unlock: becomes a studio track that sounds the same (VISION) | L | ✓ |
+| T8 | Volume meter-fader | Drag or wheel: the channel volume (the inspector's Volume: undoable, saved); its fill is the post-fader level and never passes the thumb. Disabled with the reason on the triangle and DPCM (no volume control) and in the decay envelopes | S | design pass · **done** |
+| T9 | Pan | Drawn, disabled: "Pan arrives with stereo mixing (Batch 4)" | L | design pass · drawn |
+| T10 | Strip | Lights on each note-on and fades over ~250 ms | S | design pass · **done** |
 
 ### 5.3 Piano roll
 | # | Action | Result | Pri | CEO |
@@ -216,6 +238,7 @@ Stored **in the project file** (v4).
 | B4 | Click layout | Select only; double-click or drag loads (F-36). A layout is a template: if it needs another hardware profile, it asks first (decision 5) | S | ✓ · **done** (B3) |
 | B5 | Right-click user preset | Rename, Delete, Show in Explorer/Finder | S | ✓ · **done** (B3) |
 | B6 | Authentic preset row | Shows 🔒 + profile; loading it locks the track (VISION) | L | ✓ |
+| B7 | Preview on select | Selecting a preset (click or ↑/↓) auditions it while stopped; the header's Preview key (headphones) turns it off and on (on by default, remembered); while playing it says why it's silent | S | design pass · **done** |
 
 ### 5.5 Inspector
 | # | Action | Result | Pri | CEO |
@@ -279,6 +302,17 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | AT-30 (§1 menus) | The Edit, View and Help menus show the Batch 3 items (screenshots); the shortcut sheet lists them |
 | AT-31 (B5, I3) | Save as Preset (a visible button) writes a user preset; its browser menu offers Rename, Delete, Show in Explorer |
 | [unit] (A9–A12, F-22, P7, P9, R46, R47, format v4) | `state::edit_tests`, `notes::tests::batch3_note_ops`, the undo property test (split, consolidate, time commands, paste, rename, colour), `tests/migration.rs` (v3 → v4 hashes), `tests/robustness.rs` (v4 names and colours) |
+
+| DP-01 (TB4) | Four taps 500 ms apart → 120 BPM; one Ctrl+Z restores the tempo; the TAP key taps too |
+| DP-02 (TB5) | The spectrum style chosen from its menu is in settings.json and back after a restart |
+| DP-03 (B7) | A click and ↓ each audition a preset; with the Preview key off a click is silent; while playing it says why |
+| DP-04 (TB1, TB2, T8, T9) | The Mixer and Record keys, the pan slider and the triangle's fader show their reasons on hover |
+| DP-05 (§3) | Project Settings' Bit depth is saved (format v5) and shown in the display |
+| [unit] (design pass) | `tap::tests` (120 BPM, last four intervals, restart), `state::fader_tests` (the meter never passes the thumb; fader rules), `topbar::tests`, `tests/migration.rs` (v4 → v5 hashes) |
+
+Design pass results: DP-01…DP-05 pass in `docs/design/tools/at_dp.ps1` (checker
+`check_dp.py`); AT-01…AT-19 and AT-07…AT-31 still pass with the harness coordinates moved to the
+new layout. See [DESIGNPASS.md](DESIGNPASS.md).
 
 Batch 3 results: AT-07…AT-12, AT-14, AT-22 and AT-23…AT-31 pass in
 `docs/batch3/tools/at_b3.ps1` (checker `check_b3.py`); AT-01…AT-19 still pass in

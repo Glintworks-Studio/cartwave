@@ -3,7 +3,8 @@
 # (2,000 visible notes, 32 px per bar): playing, then dragging the handle note
 # while playing. Same method as docs/perf/tools/bench.ps1. Generate the project
 # first: cargo run --release -p ui --example make_songs -- <Work>
-param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\app.exe",
+# -NoteY: the handle note's client y (535 up to Batch 3; 591 in the design pass's layout).
+param([string]$Label = "run", [int]$Secs = 12, [int]$NoteY = 535, [string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
 $env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
@@ -21,8 +22,8 @@ function Cpu([scriptblock]$during) {
 }
 Move-To 700 300; Key 0x20; Start-Sleep -Seconds 2
 $play = Cpu { param($t) Start-Sleep -Seconds $Secs }
-Move-To 88 535; Down   # the C4 handle note (layout since the redesign; was 98, 591)
-$drag = Cpu { param($t) $i = 0; while ($t.Elapsed.TotalSeconds -lt $Secs) { Move-To (88 + [int](12 * [Math]::Sin($i / 12.0))) (535 + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 } }
+Move-To 88 $NoteY; Down   # the C4 handle note (layout since the redesign; was 98, 591)
+$drag = Cpu { param($t) $i = 0; while ($t.Elapsed.TotalSeconds -lt $Secs) { Move-To (88 + [int](12 * [Math]::Sin($i / 12.0))) ($NoteY + [int](48 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 } }
 Up
 Stop-Process -Id $p.Id -Force
 Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_OPEN_CLIP, Env:CHIPDAW_PIANO_ZOOM, Env:CHIPDAW_DATA_DIR

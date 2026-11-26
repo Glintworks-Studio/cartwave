@@ -356,7 +356,7 @@ pub fn length_text(ticks: u32) -> String {
 
 /// The sample-rate indicator: "48k", "44.1k".
 pub fn rate_text(hz: u32) -> String {
-    if hz % 1000 == 0 {
+    if hz.is_multiple_of(1000) {
         format!("{}k", hz / 1000)
     } else {
         format!("{:.1}k", hz as f32 / 1000.0)
@@ -400,6 +400,76 @@ pub struct DisplayWell {
     wheel: crate::input::WheelSteps,
     hover_bpm: bool,
     overhang: RefCell<Option<Overhang>>,
+    /// The indicators cell, pre-rendered per state and scale.
+    indicators: RefCell<Option<(IndKey, vg::Image)>>,
+    /// The well, dividers and labels, pre-rendered per size and scale.
+    static_layer: gfx::ImageCache,
+}
+
+/// The display's static layer: the well, the cell dividers and the labels.
+fn render_display_static(w: i32, h: i32, s: f32) -> Option<vg::Image> {
+    let hl = gfx::hairline(s);
+    let mut surface = vg::surfaces::raster_n32_premul((w, h + hl as i32))?;
+    let canvas = surface.canvas();
+    canvas.clear(vg::Color::TRANSPARENT);
+    let r = vg::Rect::from_xywh(0.0, 0.0, w as f32, h as f32);
+    gfx::well(canvas, r, RADIUS_KEY_BIG * s, s);
+    let lefts = DisplayWell::cell_lefts();
+    for l in &lefts[1..] {
+        let x = ((l - DIVIDER_MARGIN - 1.0) * s).round();
+        let y = (r.center_y() - DIVIDER_H * 0.5 * s).round();
+        canvas.draw_rect(vg::Rect::from_xywh(x, y, hl, DIVIDER_H * s), &gfx::fill(CELL_DIVIDER));
+    }
+    let lf = gfx::font(Face::SemiBold, LABEL_PX * s);
+    let ltr = LABEL_TRACKING * LABEL_PX * s;
+    let lb = (LABEL_BASELINE * s).round();
+    for (k, label) in ["TIME", "POSITION", "START", "LENGTH", "BPM"].into_iter().enumerate() {
+        let cx_ = (lefts[k + 1] + CELL_W[k + 1] * 0.5) * s;
+        let lw = gfx::tracked_width(label, &lf, ltr);
+        gfx::draw_text_tracked(canvas, label, (cx_ - lw * 0.5).round(), lb, &lf, ltr, TEXT_LO);
+    }
+    Some(surface.image_snapshot())
+}
+
+/// What the indicators cell shows: playing, looping, format lit, rate,
+/// bits, scale (×100).
+type IndKey = (bool, bool, bool, String, String, u32);
+
+/// Room around the indicators cell for its glows (logical px).
+const IND_PAD: f32 = 8.0;
+
+/// The indicators cell (its 72 px plus `IND_PAD` on each side, the well's
+/// height): the play and loop icons over the rate and bit depth, lime and
+/// glowing while active, `#4A4A4A` while not.
+fn render_indicators(t: &DisplayText, h: f32, s: f32) -> Option<vg::Image> {
+    let pad = (IND_PAD * s).round();
+    let mut surface = vg::surfaces::raster_n32_premul(((CELL_W[0] * s + 2.0 * pad).ceil() as i32, h.ceil() as i32))?;
+    let canvas = surface.canvas();
+    canvas.clear(vg::Color::TRANSPARENT);
+    let x0 = pad;
+    let tf = gfx::font(Face::Bold, IND_TEXT_PX * s);
+    let (rw, bw) = (gfx::text_width(&tf, &t.rate), gfx::text_width(&tf, &t.bits));
+    let (pw, lw) = (Icon::Play.size().0, Icon::Loop.size().0);
+    let c1 = (rw / s).max(pw);
+    let c2 = (bw / s).max(lw);
+    let gx = x0 + (CELL_W[0] - c1 - IND_GAP - c2) * 0.5 * s;
+    let col = [gx, gx + (c1 + IND_GAP) * s];
+    let cw = [c1, c2];
+    let iy = (IND_ICON_TOP * s).round();
+    for (k, (icon, on)) in [(Icon::Play, t.playing), (Icon::Loop, t.looping)].into_iter().enumerate() {
+        let w = icon.size().0;
+        let o = ((col[k] + (cw[k] - w) * 0.5 * s).round(), iy);
+        icon.draw(canvas, o, s, if on { ACCENT } else { INDICATOR_OFF }, on.then_some(ICON_GLOW_A));
+    }
+    let lb = (LABEL_BASELINE * s).round();
+    for (k, (text, w)) in [(&t.rate, rw), (&t.bits, bw)].into_iter().enumerate() {
+        let x = (col[k] + (cw[k] * s - w) * 0.5).round();
+        if t.format_on {
+            canvas.draw_str(text, (x, lb), &tf, &glow(ACCENT.with_alpha(IND_TEXT_GLOW_A), IND_TEXT_GLOW_R * s));
+        }
+        gfx::draw_text(canvas, text, x, lb, &tf, if t.format_on { ACCENT } else { INDICATOR_OFF });
+    }
+    Some(surface.image_snapshot())
 }
 
 impl DisplayWell {
@@ -413,7 +483,7 @@ impl DisplayWell {
             }
         };
         let (r2, r3, r4, r5, r6) = (redraw.clone(), redraw.clone(), redraw.clone(), redraw.clone(), redraw.clone());
-        Self { s, scrub: None, wheel: Default::default(), hover_bpm: false, overhang: RefCell::new(None) }
+        Self { s, scrub: None, wheel: Default::default(), hover_bpm: false, overhang: RefCell::new(None), indicators: RefCell::new(None), static_layer: RefCell::new(None) }
             .build(cx, |_| {})
             .class("display")
             .id("display")
@@ -534,11 +604,9 @@ impl View for DisplayWell {
                 }
                 meta.consume();
             }
-            WindowEvent::MouseLeave => {
-                if self.hover_bpm {
-                    self.hover_bpm = false;
-                    cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
-                }
+            WindowEvent::MouseLeave if self.hover_bpm => {
+                self.hover_bpm = false;
+                cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
             }
             _ => {}
         });
@@ -548,49 +616,43 @@ impl View for DisplayWell {
         let _perf = crate::perf::scope(crate::perf::Span::Chrome);
         let s = cx.scale_factor();
         let r = gfx::snap(cx.bounds().into());
-        gfx::well(canvas, r, RADIUS_KEY_BIG * s, s);
+        // The well, its dividers and the labels: one image per size and scale.
+        {
+            let key = (r.width().round() as i32, r.height().round() as i32, (s * 100.0).round() as u32);
+            let mut cache = self.static_layer.borrow_mut();
+            if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+                *cache = render_display_static(key.0, key.1, s).map(|img| (key, img));
+            }
+            match cache.as_ref() {
+                Some((_, img)) => {
+                    canvas.draw_image(img, (r.left, r.top), None);
+                }
+                None => gfx::well(canvas, r, RADIUS_KEY_BIG * s, s),
+            }
+        }
         let t = DisplayText::of(&self.s);
         let lefts = Self::cell_lefts();
         let vb = (r.top + VALUE_BASELINE * s).round();
-        let lb = (r.top + LABEL_BASELINE * s).round();
-        let lf = gfx::font(Face::SemiBold, LABEL_PX * s);
-        let ltr = LABEL_TRACKING * LABEL_PX * s;
 
-        // Dividers.
-        for l in &lefts[1..] {
-            let x = (r.left + (l - DIVIDER_MARGIN - 1.0) * s).round();
-            let y = (r.center_y() - DIVIDER_H * 0.5 * s).round();
-            canvas.draw_rect(vg::Rect::from_xywh(x, y, gfx::hairline(s), DIVIDER_H * s), &gfx::fill(CELL_DIVIDER));
-        }
-
-        // 1. Indicators: play and loop icons over the format.
+        // 1. Indicators: play and loop icons over the format. Their glows are
+        // blurs, so the cell is rendered once per state, not per time tick.
         {
-            let x0 = r.left + lefts[0] * s;
-            let tf = gfx::font(Face::Bold, IND_TEXT_PX * s);
-            let (rw, bw) = (gfx::text_width(&tf, &t.rate), gfx::text_width(&tf, &t.bits));
-            let (pw, lw) = (Icon::Play.size().0, Icon::Loop.size().0);
-            let c1 = (rw / s).max(pw);
-            let c2 = (bw / s).max(lw);
-            let gx = x0 + (CELL_W[0] - c1 - IND_GAP - c2) * 0.5 * s;
-            let col = [gx, gx + (c1 + IND_GAP) * s];
-            let cw = [c1, c2];
-            let iy = (r.top + IND_ICON_TOP * s).round();
-            for (k, (icon, on)) in [(Icon::Play, t.playing), (Icon::Loop, t.looping)].into_iter().enumerate() {
-                let w = icon.size().0;
-                let o = ((col[k] + (cw[k] - w) * 0.5 * s).round(), iy);
-                icon.draw(canvas, o, s, if on { ACCENT } else { INDICATOR_OFF }, on.then_some(ICON_GLOW_A));
+            let key = (t.playing, t.looping, t.format_on, t.rate.clone(), t.bits.clone(), (s * 100.0).round() as u32);
+            let mut cache = self.indicators.borrow_mut();
+            if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+                *cache = render_indicators(&t, r.height(), s).map(|img| (key, img));
             }
-            for (k, (text, w)) in [(&t.rate, rw), (&t.bits, bw)].into_iter().enumerate() {
-                let x = (col[k] + (cw[k] * s - w) * 0.5).round();
-                if t.format_on {
-                    canvas.draw_str(text, (x, lb), &tf, &glow(ACCENT.with_alpha(IND_TEXT_GLOW_A), IND_TEXT_GLOW_R * s));
-                }
-                gfx::draw_text(canvas, text, x, lb, &tf, if t.format_on { ACCENT } else { INDICATOR_OFF });
+            if let Some((_, img)) = cache.as_ref() {
+                let pad = (IND_PAD * s).round();
+                canvas.draw_image(img, ((r.left + lefts[0] * s).round() - pad, r.top), None);
             }
         }
 
         // 2–6. Value over label.
         let inter = gfx::font(Face::SemiBold, VALUE_PX * s);
+        let mono_font = gfx::font(Face::MonoSemiBold, MONO_PX * s);
+        // The widest digit, once per face (tabular figures).
+        let (inter_cell, mono_cell) = (digit_cell(&inter), digit_cell(&mono_font));
         let cells: [(&str, &str, bool); 5] = [
             (&t.time, "TIME", false),
             (&t.position, "POSITION", true),
@@ -602,18 +664,18 @@ impl View for DisplayWell {
             let (cl, cw) = (r.left + lefts[k + 1] * s, CELL_W[k + 1] * s);
             let cx_ = cl + cw * 0.5;
             // Tabular figures: every digit in the widest digit's cell.
-            let mut f = if mono { gfx::font(Face::MonoSemiBold, MONO_PX * s) } else { inter.clone() };
+            let (mut f, mut cell) = if mono { (mono_font.clone(), mono_cell) } else { (inter.clone(), inter_cell) };
             // A long position (bar 100+) shrinks to fit its cell and margins.
             let room = cw + DIVIDER_MARGIN * s;
-            let mut w = tabular_width(&f, value);
+            let mut w = tabular_width(&f, cell, value);
             if w > room {
                 f.set_size(f.size() * room / w);
-                w = tabular_width(&f, value);
+                cell = digit_cell(&f);
+                w = tabular_width(&f, cell, value);
             }
             let ink = if k == 4 && (self.scrub.is_some() || self.hover_bpm) { Rgba::white(1.0) } else { TEXT_VALUE };
-            draw_tabular(canvas, value, cx_ - w * 0.5, vb, &f, ink);
-            let lw = gfx::tracked_width(label, &lf, ltr);
-            gfx::draw_text_tracked(canvas, label, (cx_ - lw * 0.5).round(), lb, &lf, ltr, TEXT_LO);
+            draw_tabular(canvas, value, cx_ - w * 0.5, vb, &f, cell, ink);
+            let _ = label;
         }
 
         // The overhang, over the values (inside the border).
@@ -628,13 +690,11 @@ fn digit_cell(f: &vg::Font) -> f32 {
     ('0'..='9').map(|d| gfx::text_width(f, d.encode_utf8(&mut [0; 4]))).fold(0.0f32, f32::max)
 }
 
-fn tabular_width(f: &vg::Font, text: &str) -> f32 {
-    let cell = digit_cell(f);
+fn tabular_width(f: &vg::Font, cell: f32, text: &str) -> f32 {
     text.chars().map(|c| if c.is_ascii_digit() { cell } else { gfx::text_width(f, c.encode_utf8(&mut [0; 4])) }).sum()
 }
 
-fn draw_tabular(canvas: &Canvas, text: &str, x: f32, base: f32, f: &vg::Font, ink: Rgba) {
-    let cell = digit_cell(f);
+fn draw_tabular(canvas: &Canvas, text: &str, x: f32, base: f32, f: &vg::Font, cell: f32, ink: Rgba) {
     let mut x = x;
     let mut buf = [0u8; 4];
     for c in text.chars() {

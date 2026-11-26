@@ -772,3 +772,35 @@ pub fn svg_path(d: &str, origin: (f32, f32), s: f32) -> vg::Path {
     let p = vg::Path::from_svg(d).unwrap_or_default();
     p.make_transform(&vg::Matrix::scale_translate((s, s), origin))
 }
+
+thread_local! {
+    static WELLS: RefCell<std::collections::HashMap<(i32, i32, u32), Option<vg::Image>>> = RefCell::new(std::collections::HashMap::new());
+}
+
+/// [`well`], rendered once per size and scale and blitted after (the
+/// spectrum redraws every frame while it moves).
+pub fn well_cached(canvas: &vg::Canvas, r: vg::Rect, radius: f32, s: f32) {
+    let key = (r.width().round() as i32, r.height().round() as i32, (s * 100.0).round() as u32);
+    let img = WELLS.with(|c| {
+        c.borrow_mut()
+            .entry(key)
+            .or_insert_with(|| {
+                let hl = hairline(s);
+                let mut surface = vg::surfaces::raster_n32_premul((key.0, key.1 + hl as i32))?;
+                let lc = surface.canvas();
+                lc.clear(vg::Color::TRANSPARENT);
+                well(lc, vg::Rect::from_xywh(0.0, 0.0, key.0 as f32, key.1 as f32), radius, s);
+                Some(surface.image_snapshot())
+            })
+            .clone()
+    });
+    match img {
+        Some(img) => {
+            canvas.draw_image(&img, (r.left, r.top), None);
+        }
+        None => well(canvas, r, radius, s),
+    }
+}
+
+/// A pre-rendered layer and what it was rendered for (size and scale).
+pub type ImageCache = std::cell::RefCell<Option<((i32, i32, u32), vg::Image)>>;

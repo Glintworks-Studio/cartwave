@@ -1030,15 +1030,14 @@ impl View for Arrangement {
                         return None;
                     }
                     let y = lanes_top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
-                    // Snap edges to device pixels for crisp borders. Clips
-                    // sit 2 px in from every edge of their span and row (the
-                    // mockup), so abutting clips show a 4 px gap; a short
-                    // clip keeps at least 2 px.
-                    let inset = (CLIP_V_INSET * s).min(((x1 - x0) * 0.25).max(0.0)).round();
+                    // Snap edges to device pixels for crisp borders. A clip
+                    // starts on its grid line and ends 1 px short, so abutting
+                    // clips show a 1 px gap (the owner's call over the
+                    // mockup's 2 px inset on both ends, DP-D23).
                     let r = vg::Rect::from_ltrb(
-                        x0.round() + inset,
+                        x0.round(),
                         y.round(),
-                        (x1.round() - inset).max(x0.round() + inset + s),
+                        (x1.round() - gfx::hairline(s)).max(x0.round() + s),
                         (y + lane_h - gfx::hairline(s) - 2.0 * CLIP_V_INSET * s).round(),
                     );
                     // Lift dragged clips by a pixel as they "float".

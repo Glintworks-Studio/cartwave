@@ -32,7 +32,9 @@ function CpuDrag($name) {
   Up
   $global:Res[$name] = [math]::Round($pct, 1)
 }
-Move-To 700 40
+# Park the mouse on empty canvas under the lanes (both layouts). Until the design pass it was
+# (700, 40): empty top bar before, but over the display now, where an open tooltip costs CPU.
+Move-To 1300 800
 Cpu "idle"
 Key 0x20; Start-Sleep -Seconds 2
 Cpu "demo_playing"
