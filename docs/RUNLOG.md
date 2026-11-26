@@ -1071,3 +1071,15 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   injected (non-extended) Delete arrives as the numpad's. The editors already match the logical
   key for that reason (remote desktop, injected input); the root now does the same. A header click
   also takes the keyboard focus (a text field kept Delete), and so does the end of a header drag.
+- **B4A-D19 (autoplay with a test project; a pre-existing bug).** The audio gate's first smoke
+  run measured silence: `start_engine()` sent Play, then the test project loaded and
+  `load_project` sent Stop, so `CHIPDAW_AUTOPLAY` with `CHIPDAW_PROJECT` never played (earlier
+  passes only autoplayed the demo song). The hooks that play now start the transport again after
+  the test project loads. Found because the live callback cost (0.8%) disagreed with the offline
+  render of the same project (4.2% of real time): a third measurement (a screenshot: time 0:00.00,
+  PEAK −inf) settled it.
+- **B4A-D20 (the Main row and the piano roll).** With the piano roll open, the split's pane now
+  holds the lanes *and* the Main row: the lanes give up its 73 px, the piano roll keeps its height
+  (the first build shrank the piano roll instead; the regression gate's piano_roll state caught it).
+  PEAK above full scale shows its sign ("+33.6": 512 studio voices summed linearly at full volume;
+  the faders and the Main gain are the user's level controls).

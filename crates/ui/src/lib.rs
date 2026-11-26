@@ -3538,6 +3538,12 @@ impl AppState {
                     eprintln!("dev: CHIPDAW_PROJECT {path} ({n} clips)");
                     self.s.file_path.set(path);
                     self.mark_saved();
+                    // Loading stops the transport: the test hooks that play start
+                    // it again (they used to play only the demo song; B4A-D19).
+                    if self.tests.autoplay || self.tests.stress {
+                        self.send(Command::Play);
+                        self.s.transport.update(|t| t.playing = true);
+                    }
                 }
                 Err(e) => eprintln!("CHIPDAW_PROJECT: {e}"),
             }

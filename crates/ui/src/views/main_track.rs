@@ -58,7 +58,8 @@ pub fn peak_text(peak: f32) -> String {
         "\u{2212}inf".into()
     } else {
         let db = 20.0 * peak.log10();
-        let t = format!("{:.1}", db);
+        // Over full scale it says so: "+3.2".
+        let t = if db > 0.0 { format!("+{db:.1}") } else { format!("{db:.1}") };
         t.replace('-', "\u{2212}")
     }
 }

@@ -1,0 +1,4 @@
+dev: mode on; test hooks: [pilot, autoplay, audiolog, quit_after]; buffer Some(256); filter None
+dev: project format 48000 24
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\songs\stress64.chipdaw (64 clips)
+dev: spectrum style bars (settings)
