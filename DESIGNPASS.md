@@ -38,7 +38,8 @@ from 25.3 px to 2.0 px; on the drawn canvas gradient from 32.3 px to 2.0 px. Ban
 
 **Tests** (§5): DP-01…05 pass; AT-01…19 and AT-07…31 pass; `cargo test --workspace` (golden
 render, the new v4 → v5 migration hashes) passes; clippy clean; release build 0 warnings.
-**Performance** (§6): see the table; no regression.
+**Performance** (§6): demo and 200-clip playback at or below the pre-run build's CPU; dragging
+clips +1.3 points (the display's START/LENGTH now follow the drag); pacing clean everywhere.
 
 **Decisions taken alone**: DP-D1…D22 in RUNLOG. The big ones: where the prompt and the file
 disagreed the file won (row pitch 73, badge 18 px, the strip's spill,
@@ -133,7 +134,36 @@ start on the grid line with a 1 px gap to the next clip (DP-D23).
   `docs/screens/design-pass/lime/`): stopped, playing, loop off, loop on, solo, mute, inspector,
   Project Settings: 0 lime pixels outside the allowed places.
 
-PERF_PLACEHOLDER
+## 6. Performance (§4.7)
+
+Release builds, the 60 fps cap, this machine (ViewSonic 60 Hz, MOTU output). `bench.ps1` A/B,
+interleaved with `main` 23b5da9 (`../prerun-dp`), 3 rounds each; process CPU, % of one core:
+
+| Scenario | Before (mean of 3) | Design pass (mean of 3) |
+|---|---|---|
+| Idle | 0.8 | 0.7 |
+| Demo playing | 9.1 | 8.6 |
+| 200 clips playing | 9.5 | 9.2 |
+| 200 clips, dragging | 10.8 | 12.1 |
+
+Pacing (`pacing.ps1`, 30 s each, design build): demo, 200 clips and drag: **0 frames over 20 ms,
+0 stalls**, 60.0 display updates per second (p99 interval 16.9–17.6 ms). Piano roll, 2,000 notes
+(`bench_pr.ps1`): playing 5.6%, dragging 7.0% (before: 8.4%, 8.3%, but the old build doesn't print
+the dev line that proves its scenario ran, so those runs are flagged "not reached").
+
+How it got there:
+- The first measurement showed about +2 points everywhere. Part of that was the harness:
+  `bench.ps1` parked the mouse at (700, 40), empty top bar before but the new display now, holding
+  its tooltip open the whole run (10.9% vs 7.5% with the mouse there). It now parks on empty canvas.
+- The rest was per-frame blurs and text: the lit strips' glow and spill, the display's glowing
+  indicators, its labels and well, and the track rows' text, which redrew every frame because the
+  new meters' dirty region covers every row (freezing the meters with the dev-only
+  `CHIPDAW_FROZEN_METERS=1` removed 0.7 points). All are now pre-rendered once per state and
+  scale, and blitted (strip lighting stays exact: the lit layer is blended at the light level).
+- **Remaining: dragging +1.3 points.** While clips are dragged, START and LENGTH follow them, so the
+  display redraws on every mouse move; the old capsule showed no selection. Frames stay on time.
+  Open item: if it matters, START/LENGTH could update once per frame instead of per move.
+
 
 ## 7. Screenshots
 
@@ -149,6 +179,7 @@ PERF_PLACEHOLDER
 - The popups' 1 px frame stays light with Dark menus on (Windows draws it; DARK-MENUS.md).
 - MEM reads "--" on macOS until it's implemented there.
 - The spectrum's bars reach the top often on the dense demo (the level mapping is today's).
+- Dragging clips costs +1.3 points of CPU (§6).
 
 ## 9. Merge (after the CEO's OK)
 
