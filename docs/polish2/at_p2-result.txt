@@ -49,6 +49,7 @@ PASS P2-10: hover help for the CPU/MEM
 PASS P2-10: hover help for the ruler
 PASS P2-10: hover help for the Overview
 PASS P2-10: a click on the problem icon lists the problems
+PASS P2-10: and the list stays on screen (the area above the icon changed: (12, 155, 274, 230))
 PASS P2-11: lo: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
 PASS P2-11: lo: S on track 2 solos it ([False, True, False, False, False, False, False, False])
 PASS P2-11: lo: the dB value of track 3 (-6.0)

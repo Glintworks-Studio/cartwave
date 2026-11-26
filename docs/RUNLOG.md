@@ -705,3 +705,20 @@ Every decision below was taken alone, as the prompt asked.
   the original `.col-divider` view on the lanes' side, so every scale rounds as before (gate passes
   at 100% and 150%). Consequence: where the board's strip by the clips covers the hairline, ours
   stops 1 px short of the lanes, at the divider (within gate 2's 1 px).
+- **P2-D20 (what the new gestures are measured against).** The baseline has no row resize,
+  header-width drag, ruler zoom or Overview. Each is compared with the baseline's own gesture
+  that does the same kind of work (`docs/polish2/tools/bench_p2.ps1` runs these on both builds):
+  ruler zoom, Overview zoom and row resize redraw the whole lane layer every frame, like the
+  baseline's **Ctrl+wheel zoom**; the Overview drag scrolls, like the baseline's **time-scrollbar
+  drag**; the header-width drag changes the lanes' width every frame, like a **window resize**.
+  The POLISH.md scenarios (idle, demo, 200 clips playing, 200-clip drag) are compared directly;
+  where 3 interleaved rounds were within noise of the +0.3 budget, a dedicated 5-round A/B
+  decided (the polish pass's method).
+- **P2-D21 (performance fixes the gate drove).** (1) The OVERVIEW label cell redrew on every
+  arrangement change (a separate damage rect, so a renderer pass, per scroll frame): now only when
+  the song's length changes. (2) Each fader's height was bound with `map` to the whole
+  arrangement, so every scroll re-applied eight heights (eight relayouts and damage rects): now a
+  memo. Scrollbar drag A/B: +0.76 → +0.04. (3) The Overview's clip layer waits for the drop
+  while clips are dragged, and the Overview redraws only when what it shows changes (not on a
+  note edit): piano-roll drag A/B +0.64 → +0.08. (4) The lane layer's surface keeps 256 px of
+  slack, so a width drag doesn't reallocate it every frame.

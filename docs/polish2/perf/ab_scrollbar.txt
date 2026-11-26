@@ -1,0 +1,10 @@
+base-1           scrollbar_drag  12.7%  stress set reached
+p2-1             scrollbar_drag  13.4%  stress set reached
+base-2           scrollbar_drag  12.3%  stress set reached
+p2-2             scrollbar_drag  13.9%  stress set reached
+base-3           scrollbar_drag  14.5%  stress set reached
+p2-3             scrollbar_drag  14.4%  stress set reached
+base-4           scrollbar_drag  13.4%  stress set reached
+p2-4             scrollbar_drag  11.6%  stress set reached
+base-5           scrollbar_drag  13.9%  stress set reached
+p2-5             scrollbar_drag  13.7%  stress set reached

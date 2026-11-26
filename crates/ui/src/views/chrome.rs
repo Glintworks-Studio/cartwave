@@ -1477,7 +1477,10 @@ impl VolumeFader {
             .build(cx, |_| {})
             .class("fader")
             .width(Pixels(COL_B_W))
-            .height(s.arrangement.map(move |a| Pixels(row::db_value_y(a.lanes[lane].height))))
+            // A memo: only a height change re-applies it (a scroll or zoom updates
+            // the arrangement every frame; re-applying would relayout and redraw
+            // eight faders as eight separate damage rects).
+            .height(Memo::new(move |_| s.arrangement.with(|a| row::db_value_y(a.lanes[lane].height))).map(|h| Pixels(*h)))
             .bind(s.meters, move |mut h| {
                 let v = Self::state(&s, lane);
                 if !frozen && shown.get() != v {

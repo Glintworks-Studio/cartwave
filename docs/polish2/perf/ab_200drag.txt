@@ -1,0 +1,10 @@
+base-1           200drag  11.8%  stress set reached
+p2-1             200drag  11.6%  stress set reached
+base-2           200drag    12%  stress set reached
+p2-2             200drag  12.2%  stress set reached
+base-3           200drag  11.8%  stress set reached
+p2-3             200drag  12.2%  stress set reached
+base-4           200drag  11.4%  stress set reached
+p2-4             200drag  11.3%  stress set reached
+base-5           200drag  12.7%  stress set reached
+p2-5             200drag  11.6%  stress set reached

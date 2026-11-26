@@ -1,0 +1,18 @@
+exe: .\target\release\app.exe
+[p2-demo/demo] cpu 8.2%  frames 1799 in 30s
+  submit interval ms: mean 16.68  p50 16.68  p99 16.89  max 17.81  >20ms: 0
+  display updates: 1800 over 30.0s = 59.99/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 17.5 ms
+  ui-thread ms/frame: events 0.12  style 0.02  layout 0.00  make_current 0.00  draw 0.54  flush 0.32  present 15.58  custom 0.28
+scenario demo reached
+exe: .\target\release\app.exe
+[p2-stress/stress] cpu 9.2%  frames 1799 in 30s
+  submit interval ms: mean 16.68  p50 16.68  p99 16.89  max 17.21  >20ms: 0
+  display updates: 1800 over 30.0s = 59.99/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 18.5 ms
+  ui-thread ms/frame: events 0.13  style 0.03  layout 0.00  make_current 0.00  draw 0.54  flush 0.31  present 15.58  custom 0.29
+scenario stress reached
+exe: .\target\release\app.exe
+[p2-drag/drag] cpu 11.8%  frames 1799 in 30s
+  submit interval ms: mean 16.68  p50 16.68  p99 16.97  max 19.72  >20ms: 0
+  display updates: 1801 over 30.0s = 60.01/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 17.6 ms
+  ui-thread ms/frame: events 0.18  style 0.03  layout 0.00  make_current 0.00  draw 0.76  flush 0.45  present 15.09  custom 0.45
+scenario drag reached

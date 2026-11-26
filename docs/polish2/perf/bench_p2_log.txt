@@ -1,0 +1,6 @@
+base-1           idle   0.3%  demo   8.1%  200   9.4%  200drag  11.7%  zoom_wheel  18.4%  scrollbar_drag   8.4%  window_resize    34%  stress set reached
+p2-1             idle   0.1%  demo   7.7%  200   8.2%  200drag  12.1%  zoom_wheel  17.6%  scrollbar_drag   8.1%  window_resize  39.4%  row_resize  13.1%  header_width    27%  ruler_zoom  15.3%  overview_drag   8.9%  overview_zoom   8.8%  stress set reached
+base-2           idle   0.3%  demo   8.5%  200   8.5%  200drag  11.8%  zoom_wheel  16.9%  scrollbar_drag   9.9%  window_resize  35.9%  stress set reached
+p2-2             idle   0.7%  demo   8.1%  200   8.7%  200drag  12.1%  zoom_wheel    18%  scrollbar_drag   9.8%  window_resize  36.5%  row_resize  13.4%  header_width  24.5%  ruler_zoom  13.4%  overview_drag   8.7%  overview_zoom   9.4%  stress set reached
+base-3           idle   0.3%  demo   7.8%  200   7.4%  200drag  10.3%  zoom_wheel  16.4%  scrollbar_drag   9.2%  window_resize  34.8%  stress set reached
+p2-3             idle   0.3%  demo   7.7%  200   8.7%  200drag  10.9%  zoom_wheel    17%  scrollbar_drag   9.6%  window_resize    37%  row_resize    16%  header_width  25.8%  ruler_zoom  16.1%  overview_drag   8.7%  overview_zoom   9.1%  stress set reached

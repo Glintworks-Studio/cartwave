@@ -155,6 +155,9 @@ const BAR_HIT: f32 = 12.0;
 const BAR_MIN_THUMB: f32 = 24.0;
 const SONG_TAIL_BARS: u32 = 4;
 
+/// Extra px the retained layer's surface is allocated with (see `draw`).
+const LAYER_SLACK: i32 = 256;
+
 #[derive(Default)]
 struct StaticLayer {
     surface: Option<vg::Surface>,
@@ -1097,11 +1100,15 @@ impl View for Arrangement {
             let mut layer = self.layer.borrow_mut();
             if layer.image.is_none() || layer.key != key {
                 layer.image = None;
+                // Room to grow by a few hundred px (a header-width drag or a
+                // window resize changes the width every frame): keep the
+                // surface while it fits, so it isn't reallocated per frame.
                 let (w, h) = (rect.width().ceil() as i32, rect.height().ceil() as i32);
                 let reuse = layer
                     .surface
                     .as_ref()
-                    .is_some_and(|sf| sf.width() == w && sf.height() == h);
+                    .is_some_and(|sf| sf.width() >= w && sf.height() >= h && sf.width() <= w + 2 * LAYER_SLACK && sf.height() <= h + 2 * LAYER_SLACK);
+                let (w, h) = (w + LAYER_SLACK, h + LAYER_SLACK);
                 if !reuse {
                     layer.surface =
                         canvas.new_surface(&vg::ImageInfo::new_n32_premul((w, h), None), None);
@@ -1516,11 +1523,27 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
     HeaderColumn { s }
         .build(cx, move |cx| {
             if overview {
+                // Redraw only when the song's length changes: a scroll or zoom
+                // mustn't add this cell's damage rect (a renderer pass) per frame.
+                let bars = Rc::new(Cell::new(0u32));
+                let b2 = bars.clone();
                 OverviewCell { s }
                     .build(cx, |_| {})
                     .height(Pixels(OVERVIEW_HEIGHT))
-                    .bind(s.arrangement, |mut h| h.needs_redraw())
-                    .bind(s.transport, |mut h| h.needs_redraw())
+                    .bind(s.arrangement, move |mut h| {
+                        let n = super::overview::song_bars(&s);
+                        if bars.get() != n {
+                            bars.set(n);
+                            h.needs_redraw();
+                        }
+                    })
+                    .bind(s.transport, move |mut h| {
+                        let n = super::overview::song_bars(&s);
+                        if b2.get() != n {
+                            b2.set(n);
+                            h.needs_redraw();
+                        }
+                    })
                     .bind(s.header, |mut h| h.needs_redraw());
             }
             TracksCell { s }.build(cx, |_| {}).class("band-cell").bind(s.header, |mut h| h.needs_redraw());

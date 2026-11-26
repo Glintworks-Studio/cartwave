@@ -70,6 +70,24 @@ pub fn row_plan(tracks: usize, band_h: f32) -> (f32, usize, usize) {
     (1.0, per, n.div_ceil(per))
 }
 
+/// A hash of what the Overview shows from the arrangement.
+fn shown_key(a: &crate::state::Arrangement) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    a.view.px_per_tick.to_bits().hash(&mut h);
+    a.view.scroll_ticks.to_bits().hash(&mut h);
+    a.view_w.to_bits().hash(&mut h);
+    a.lanes.len().hash(&mut h);
+    for l in &a.lanes {
+        crate::state::rgb_hex(l.color).hash(&mut h);
+    }
+    for c in &a.clips {
+        (c.id, c.lane, c.start_ticks, c.len_ticks, c.color.map(crate::state::rgb_hex)).hash(&mut h);
+    }
+    a.editing.is_empty().hash(&mut h);
+    h.finish()
+}
+
 // ───────────────────────────── Navigation drag ─────────────────────────────
 
 /// A navigation drag on the ruler or the Overview: one code path (§7.3).
@@ -127,7 +145,18 @@ impl Overview {
         Self { s, drag: None, cache: RefCell::new(None) }
             .build(cx, |_| {})
             .height(Pixels(OVERVIEW_HEIGHT))
-            .bind(s.arrangement, |mut h| h.needs_redraw())
+            // Only what it shows: clip places and colours, the track count and
+            // the view (a note edit in the piano roll mustn't redraw it).
+            .bind(s.arrangement, {
+                let seen = std::cell::Cell::new(0u64);
+                move |mut h| {
+                    let k = s.arrangement.with_untracked(shown_key);
+                    if seen.get() != k {
+                        seen.set(k);
+                        h.needs_redraw();
+                    }
+                }
+            })
             .bind(s.transport, |mut h| h.needs_redraw())
             .bind(s.loop_on, |mut h| h.needs_redraw())
     }
@@ -241,8 +270,11 @@ impl View for Overview {
             }
             h.finish()
         });
+        // While clips are being dragged (moved or resized) the layer waits for
+        // the drop instead of re-rendering 200 clips every frame.
+        let dragging = self.s.arrangement.with_untracked(|a| !a.editing.is_empty());
         let mut cache = self.cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k0, _)| *k0 != key) {
+        if cache.as_ref().is_none_or(|(k0, _)| *k0 != key && !dragging) {
             let (iw, ih) = (r.width().ceil() as i32, r.height().ceil() as i32);
             *cache = canvas.new_surface(&vg::ImageInfo::new_n32_premul((iw, ih), None), None).map(|mut surface| {
                 let c = surface.canvas();
