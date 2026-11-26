@@ -320,7 +320,13 @@ impl ShadowMasks {
                 Some(&paint),
             );
         } else {
-            let (w, h) = (q(r.width()) as f32 / 4.0, q(r.height()) as f32 / 4.0);
+            // Sizes round up to 4 px (radius to 1 px) and the mask is
+            // stretched onto the rect: a clip being resized reuses a few masks
+            // instead of rendering a CPU blur (~12 ms) on every frame
+            // (polish pass: a narrow resize showed it).
+            let up4 = |v: f32| ((v / 4.0).ceil() * 4.0).max(4.0);
+            let (w, h) = (up4(r.width()), up4(r.height()));
+            let radius = radius.round().min(w.min(h) * 0.5);
             let key = MaskKey {
                 w4: q(w),
                 h4: q(h),
@@ -330,12 +336,7 @@ impl ShadowMasks {
             let Some(img) = Self::get(key, || Self::render(w, h, radius, sigma)) else {
                 return false;
             };
-            let dst = vg::Rect::from_xywh(
-                r.left - m,
-                r.top - m,
-                img.width() as f32,
-                img.height() as f32,
-            );
+            let dst = r.with_outset((m, m));
             let sampling = vg::SamplingOptions::from(vg::FilterMode::Linear);
             canvas.draw_image_rect_with_sampling_options(&img, None, dst, sampling, &paint);
         }

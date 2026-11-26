@@ -537,3 +537,55 @@ comparison screenshots first). Every decision below was taken alone, as the prom
   is reverted at the owner's request: a clip starts on its grid line and ends 1 px short, so
   abutting clips show a 1 px gap, as in the reference DAW. Top and bottom stay 2 px in from the
   row. The pixel comparison lists this as an intended deviation.
+
+## Polish pass (POLISH_PROMPT.md), 2026-11-25
+
+Branch `polish/option-d` from `design/option-d` 23afc3c. Report: [POLISH.md](../POLISH.md).
+Every decision below was taken alone, as the prompt asked.
+
+- **PL-D1 (regression gate baseline).** "Before" is `design/option-d` plus one commit of dev
+  hooks only (5262ae9: `CHIPDAW_FROZEN_METERS` freezes every level, the spectrum, the strips and
+  MEM; `CHIPDAW_PLAYHEAD` pins the playhead), built in `../before-polish`. Fixed states at
+  1440 × 920 (`--size`), audio off. The diff compares the client area only (the window frame is
+  the OS's) and leaves out the window's rounded bottom corners (Windows 11 shows what's behind
+  them; two identical "before" runs differed only there). Threshold: > 2 levels.
+- **PL-D2 (browser title).** "BROWSER" already had the inspector titles' class
+  (`.section-title`): ink measured identical (11 px caps, `#9A9A9A`). The header row grows to
+  24 px for the 24 px Preview key; the browser's top padding drops 12 → 4 so the search field
+  and list don't move (the gate allows only the header to change).
+- **PL-D3 (minimum window).** 1296 × 720: the top bar's groups need 1269 px; at 1272 they
+  touched, so 12 px (their own gap) on each side. 1280 isn't possible without the groups
+  touching. 720 keeps five lanes above the inspector. The start size stays 1440 × 920 (the
+  design pass's effective size) so nothing else moves.
+- **PL-D4 (palette and lime).** The prompt asks both for "today's lane colours stay" and "nothing
+  near the toggle lime". Today's pulse colour `#C9D24A` (the approved mockup's) is ΔE 0.012 from
+  lime. Existing projects win: it stays, as the one exception (unit-tested and audited as such);
+  automatic picks never choose it (`auto_candidates` excludes it). Every other colour is ≥ 0.068
+  from lime (threshold 0.06).
+- **PL-D5 (palette grid order).** Columns are hues, rows lightness; the 12 legacy colours sit in
+  their nearest cells, so two greys (Sand `#B5AC98`, Slate `#8C98A8`) sit in the orange and teal
+  columns. Kept: moving them would change existing projects' colours.
+- **PL-D6 (clip header text).** Dark `#111111` whenever it reaches 4.5:1 (all of today's colours
+  keep it: pixel-identical), else light `#F2F2F2`. The header is flat (VISUAL-SPEC), so its
+  lightest and darkest stops are one colour; hover and selection lighten it, so the palette was
+  generated to keep ≥ 4.6:1 in every state (tested on all 70).
+- **PL-D7 (colour grid).** Built into the existing context menu (`MenuItem::grid`): Colour ▸
+  opens the 70 swatches in the menu's swatch material; hovering previews by changing the model
+  without an undo step and puts the colours back when the menu closes without a pick; a click
+  applies to every selected clip, or every selected track when the menu's track is one of them.
+  There is no inspector swatch to wire.
+- **PL-D8 (colour settings defaults).** The manual (Live 12 §2.3.2) gives no defaults. Ours:
+  Auto-assign on; Default track colour `#7F86E0` (the triangle's periwinkle, neutral-cool and
+  far from lime); Reduced off (on: the palette's middle row, 14 hues); **New clip colour: Track
+  colour** (today's behaviour, so new clips look as they do now).
+- **PL-D9 (picking).** `next_track_color` maximises the smallest OKLab ΔE to the neighbouring
+  tracks and the last three picks, prefers unused colours, breaks ties by palette order
+  (deterministic). Clips: the same against the clips before and after on the track and the
+  track's colour.
+- **PL-D10 (START / LENGTH per frame).** The display samples its text on the frame counter (once
+  per presented frame, or the 50 ms idle tick) instead of six model bindings.
+- **PL-D11 (dark menus on).** As DESIGNPASS.md §9: the default is on; an older settings file
+  without the field gets on too; turning it off is kept.
+- **PL-D12 (harness).** With dark menus on, an open popup can be the process's "main window":
+  `shot.ps1` now picks the titled window (this had made AT-06/30 fail and, by moving the popup,
+  AT-18). AT-26 clicks the colour grid. A new suite: PL-01…05.

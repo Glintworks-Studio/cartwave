@@ -6,6 +6,10 @@ param(
   [string]$Label = "run",
   [ValidateSet("demo", "stress", "drag", "pr", "prdrag")][string]$Scenario = "demo",
   [int]$Secs = 30,
+  # Where the drag scenario grabs a clip (client px). 720,130 is 28 px into a clip in
+  # the layout up to Batch 3; since the design pass bars start at x 621 + 92k, so the
+  # same grab is 760,140 (720,130 there is a clip's left resize zone).
+  [int]$DragX = 720, [int]$DragY = 130,
   [string]$Env = "",
   [string]$Exe = ".\target\release\app.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
@@ -34,9 +38,9 @@ Start-Sleep -Seconds 2
 $ff = Start-Process ffmpeg -ArgumentList "-hide_banner -loglevel info -f lavfi -i ddagrab=framerate=240:dup_frames=0:draw_mouse=0 -t $Secs -vf showinfo -f null -" -PassThru -NoNewWindow -RedirectStandardError "$S\pace_showinfo.txt"
 $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew()
 if ($Scenario -eq "drag") {
-  Move-To 720 130; Down   # a clip in the 200-clip view (300, 160 is a track header since the redesign)
+  Move-To $DragX $DragY; Down   # a clip in the 200-clip view (300, 160 is a track header since the redesign)
   $i = 0
-  while (-not $ff.HasExited) { Move-To (720 + [int](120 * [Math]::Sin($i / 12.0))) (130 + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
+  while (-not $ff.HasExited) { Move-To ($DragX + [int](120 * [Math]::Sin($i / 12.0))) ($DragY + [int](64 * [Math]::Sin($i / 30.0))); $i++; Start-Sleep -Milliseconds 8 }
   Up
 }
 if ($Scenario -eq "prdrag") {

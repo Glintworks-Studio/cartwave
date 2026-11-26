@@ -49,9 +49,10 @@ dividers 1×32 `#2A2A2A` with 8 px margins.
 - Every value sits on one baseline (27 px below the well's top), every label on another (43 px):
   Inter 600 10, line 12, tracking .1em, `#808080` (the 10 px exception, UX.md). Each cell's ink
   (value top to label baseline) centres on the well within ±0.5 px (measured, DESIGNPASS.md §2).
-- The overhang, over the values only: black at 78% (0 px), 50% (8), 28% (18), 12% (26), 0 (34),
-  plus `inset 0 14px 16px -10px rgba(0,0,0,.95)`, inside the border (radius 7). Rendered once per
-  size and scale.
+- The overhang, over the values only: black at 62% (0 px), 40% (8), 22% (18), 10% (26), 0 (34),
+  plus `inset 0 14px 16px -10px rgba(0,0,0,.8)`, inside the border (radius 7): the mockup's
+  (78 / 50 / 28 / 12 %, inset .95) toned to ~80% by the CEO in the polish pass, same 34 px
+  reach. Rendered once per size and scale. The spectrum well has none.
 
 **Right** (gap 12): the spectrum well 216×56 (no overhang): 24 square bars 4 px wide, 4 px apart,
 12 px side padding, 8 px bottom padding; bar gradient `#4A4A4A → #9A9A9A (60%) → #D6D6D6`; a 2 px
@@ -99,7 +100,33 @@ grid shows through), a 16 px header in the track colour inside the border with I
 `rgba(255,255,255,.045)` with 14% edges. No shade under the ruler, no dimming outside the loop
 **(file)**.
 
-## 6. Default track colours (file)
+## 6. The browser header (polish pass)
+
+A 24 px title row inside the browser's 4 px top padding: "BROWSER" in the inspector's
+section-title style (Inter 600 11, `#9A9A9A`), the 24 × 24 Preview key (plain hairline tier)
+centred on the row, 8 px to the shortcut text, 12 px in from both edges like the list. The
+search field and the list stay where they were.
+
+## 7. Colours (polish pass)
+
+- **Palette:** `crates/ui/src/theme/palette.rs`, 70 base colours (5 rows light → dark × 14
+  OKLCh hues), ours; nothing within OKLab ΔE 0.06 of the toggle lime except the legacy pulse
+  `#C9D24A`.
+- **Recipes** (the only way a surface gets a palette colour's shades): `strip` (unlit
+  `mix(black .62) → mix(black .35)`, lit `c → mix(white .35) → mix(white .7)`, edges),
+  `clip` (header; body 22% → 10%; border 50%; notes `mix(white .12)` at 92%; hover and
+  selection lighten), `marker` (browser: `c → mix(black .35)`), `graph_bar` / `graph_fill`
+  (inspector macros), `swatch` (menus: `mix(white .08) → mix(black .12)`).
+- **Clip header text:** `#111111`, or `#F2F2F2` when the dark text wouldn't reach 4.5:1.
+- **Colour grid:** inside the context menu: 16 px swatches on a 20 px pitch, 14 to a row, 8 px
+  in; the current colour has a 2 px `#E6E6E6` ring, the hovered one a 1 px `#9A9A9A` ring.
+
+## 8. Window
+
+Start size 1440 × 920; minimum **1296 × 720** (the top bar's groups need 1269 px; the lanes
+scroll when they don't fit, above the inspector too). A 1080p laptop at 125% (1536 × 816) fits.
+
+## 9. Default track colours (file)
 
 Pulse `#C9D24A`, Triangle `#7F86E0`, Noise `#B5AC98`, VRC6 Pulse `#D9579A` (the mockup's tracks);
 DPCM `#E39A42` and Saw `#3CC4A6` unchanged.

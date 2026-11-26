@@ -6,6 +6,8 @@
 param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\app.exe", [string]$Env = "",
   # Where the drag starts (client px): on a clip in the 200-clip view. (300, 160) was right before
   # the redesign; since then it is a track header, so that "drag" moved nothing (STABILIZE.md A2).
+  # Since the design pass's layout (bars from x 621) the same grab is 760,140: 720,130 there
+  # is a clip's left resize zone, which resized the clip instead (POLISH.md §perf).
   [int]$DragX = 720, [int]$DragY = 130,
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))

@@ -226,6 +226,8 @@ impl CpuMeter {
 /// Optional CSV frame log, enabled with `CHIPDAW_FRAMELOG=<path>`.
 pub struct FrameLog {
     out: Option<std::io::BufWriter<std::fs::File>>,
+    /// Per-view span times, one line per frame (`<log>.spans`).
+    spans_out: Option<std::io::BufWriter<std::fs::File>>,
     t0: Instant,
     last_frame: u64,
     lines: u32,
@@ -241,15 +243,26 @@ impl FrameLog {
             );
             w
         });
+        let spans_out = crate::dev::var_os("CHIPDAW_FRAMELOG").and_then(|p| {
+            let mut p = std::path::PathBuf::from(p);
+            p.set_extension("spans");
+            std::fs::File::create(p).ok()
+        }).map(|f| {
+            let mut w = std::io::BufWriter::new(f);
+            let _ = writeln!(w, "{}", SPANS.iter().map(|(_, n)| *n).collect::<Vec<_>>().join(","));
+            w
+        });
         Self {
             out,
+            spans_out,
             t0: Instant::now(),
             last_frame: 0,
             lines: 0,
         }
     }
 
-    pub fn log(&mut self, ft: &FrameTimings, custom: Duration, playhead: f64) {
+    pub fn log(&mut self, ft: &FrameTimings, spans: &[Duration], playhead: f64) {
+        let custom: Duration = spans.iter().sum();
         let Some(w) = self.out.as_mut() else { return };
         if ft.frame_count == self.last_frame {
             return;
@@ -277,8 +290,16 @@ impl FrameLog {
             us(custom),
             playhead
         );
+        // Per-view spans on a side file (`<log>.spans`), one line per frame.
+        if let Some(sw) = self.spans_out.as_mut() {
+            let _ = writeln!(sw, "{}", spans.iter().map(|d| d.as_micros().to_string()).collect::<Vec<_>>().join(","));
+        }
         self.lines += 1;
         if self.lines.is_multiple_of(30) {
+            if let Some(sw) = self.spans_out.as_mut() {
+                let _ = sw.flush();
+            }
+            let Some(w) = self.out.as_mut() else { return };
             let _ = w.flush();
         }
     }

@@ -1626,7 +1626,8 @@ impl AppState {
         self.last_frame_seen = ft.frame_count;
         let spans = perf::take_spans();
         let custom: Duration = spans.iter().sum();
-        self.frame_log.log(ft, custom, playhead);
+        let _ = custom;
+        self.frame_log.log(ft, &spans, playhead);
 
         let now = Instant::now();
         let interval_ms = ft.interval.map(|d| d.as_secs_f32() * 1000.0).unwrap_or(0.0);
