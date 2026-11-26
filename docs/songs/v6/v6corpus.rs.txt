@@ -1,0 +1,75 @@
+//! Writes the version 6 corpus (docs/songs/v6) and prints its hashes.
+//! Run in the LAST version 6 build (main 0e669ac, worktree ../before-batch4a) as
+//! `crates/ui/examples/v6corpus.rs`:
+//!   cargo run --release -p ui --example v6corpus -- <repo>/docs/songs/v5 <repo>/docs/songs/v6
+//! Every v5 corpus file is opened and saved as version 6; four files exercise what version 6
+//! added and what the version 7 migration must handle:
+//! - `v6_rows_pan_mute`: tall rows, a pan, a muted and a soloed track (all keep the sound);
+//! - `v6_vrc6_unused`: a 2A03 + VRC6 song whose VRC6 lanes are empty (opens as NES; its
+//!   automatic filter was the Famicom stage, kept);
+//! - `v6_2a03_vrc6_clips`: the 2A03 profile with clips on the VRC6 lanes (silent before, silent
+//!   after: locked to channels the profile lacks);
+//! - `v6_fader_minus3`: a track at -3 dB (locked tracks play at 0 dB: reported, not hidden).
+use ui::{export, file, render};
+
+fn secs(p: &file::Project) -> f64 {
+    p.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / p.bpm as f64 + 1.0
+}
+
+fn main() {
+    let a: Vec<String> = std::env::args().collect();
+    let (src, dst) = (std::path::PathBuf::from(&a[1]), std::path::PathBuf::from(&a[2]));
+    std::fs::create_dir_all(&dst).unwrap();
+    let mut names: Vec<String> = std::fs::read_dir(&src)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.ends_with(".chipdaw"))
+        .collect();
+    names.sort();
+    let mut out = Vec::new();
+    let save = |name: &str, p: &file::Project, out: &mut Vec<String>| {
+        file::save(p, &dst.join(format!("{name}.chipdaw"))).unwrap();
+        let again = file::load(&dst.join(format!("{name}.chipdaw"))).unwrap();
+        let r = render::hash(&render::render(&again, secs(&again)));
+        let e = render::hash(&export::render(&again));
+        out.push(format!("{name:<22} {r:#018x} {e:#018x}"));
+    };
+    for n in &names {
+        let p = file::load(&src.join(n)).unwrap();
+        save(n.trim_end_matches(".chipdaw"), &p, &mut out);
+    }
+    let demo = file::load(&src.join("demo_band.chipdaw")).unwrap();
+    // Rows, pan, mute, solo.
+    let mut p = demo.clone();
+    p.arrangement.lanes[0].height = 144.0;
+    p.arrangement.lanes[3].height = 96.0;
+    p.arrangement.lanes[1].pan = -25;
+    p.mute = 1 << 2;
+    p.solo = 0;
+    save("v6_rows_pan_mute", &p, &mut out);
+    // 2A03 + VRC6 with no VRC6 clips.
+    let mut p = demo.clone();
+    p.arrangement.clips.retain(|c| c.lane < 5);
+    p.chip = ui::state::SoundChip::WithVrc6;
+    p.filter_auto = true;
+    p.filter = engine::FilterMode::default_for(true);
+    save("v6_vrc6_unused", &p, &mut out);
+    // 2A03 with clips on the VRC6 lanes.
+    let mut p = demo.clone();
+    p.chip = ui::state::SoundChip::Base2A03;
+    p.filter_auto = true;
+    p.filter = engine::FilterMode::default_for(false);
+    assert!(p.arrangement.clips.iter().any(|c| c.lane >= 5), "the demo has VRC6 clips");
+    save("v6_2a03_vrc6_clips", &p, &mut out);
+    // A track at -3 dB.
+    let mut p = demo.clone();
+    p.arrangement.lanes[0].vol_db = -3.0;
+    save("v6_fader_minus3", &p, &mut out);
+    let text = format!(
+        "Version 6 corpus (Batch 4a, 2026-11-26): the version 5 corpus (docs/songs/v5) opened and saved by\nmain 0e669ac, the last version 6 build, plus four files for what version 6 added (v6corpus.rs.txt).\nHashes printed by that build: (file, render::render hash, export::render hash).\n{}\n",
+        out.join("\n")
+    );
+    std::fs::write(dst.join("HASHES.txt"), &text).unwrap();
+    print!("{text}");
+}

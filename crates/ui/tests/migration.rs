@@ -260,3 +260,100 @@ fn heights_pan_and_volume_are_saved_from_version_6() {
     let odd = saved.replacen("\"height\": 144.0", "\"height\": 1000.0", 1);
     assert_eq!(file::from_str(&odd).unwrap().arrangement.lanes[0].height, 300.0);
 }
+
+/// Format v6 files written by the last version 6 build (main 0e669ac, with
+/// docs/songs/v6/v6corpus.rs.txt), and their hashes from that build
+/// (docs/songs/v6/HASHES.txt). Version 7 (Batch 4a §4.2): tracks are
+/// instruments; a v6 file opens with every track locked to its channel and
+/// must sound exactly as before.
+const V6: &[(&str, u64, u64)] = &[
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64),
+    ("layout_0", 0xf32404eae4b93fa2, 0xc56c98aeea4a3098),
+    ("layout_1", 0x99fb04b277dac084, 0x57720d21669d5fd0),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd),
+    ("layout_3", 0xbbfece4fdee90c11, 0x3b7264132f74366f),
+    ("layout_4", 0x43621e26f83e83e3, 0x1297fa4fcc0f77b7),
+    ("raw_volumes", 0x9ce78c6f9d53c5d2, 0x2f45a89d297f00f8),
+    ("saw_rate_50_inexact", 0x1343b5eec2e8d720, 0xcad8f3a659155ded),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8),
+    ("volumes_mixed", 0xe1840708a7c60272, 0xd8359071fd0824f9),
+    ("v6_rows_pan_mute", 0x73345965db691eee, 0xe88cde08b31d97df),
+    ("v6_vrc6_unused", 0xa3faf8f55fe930af, 0xb5afeb969a8693ec),
+    ("v6_2a03_vrc6_clips", 0xf32404eae4b93fa2, 0xc56c98aeea4a3098),
+];
+
+fn v6_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v6")
+}
+
+#[test]
+fn version_6_files_render_bit_identically_in_version_7() {
+    use ui::state::SoundChip;
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e) in V6 {
+        let text = std::fs::read_to_string(v6_dir().join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 6"), "{name} is a version 6 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.load_report.is_empty(), "{name}: v6 -> v7 changes nothing audible: {:?}", p.load_report);
+        // Every track with clips (or in the profile) is locked to its own channel.
+        let vrc6_clips = p.arrangement.clips.iter().any(|c| c.lane >= 5);
+        for (i, l) in p.arrangement.lanes.iter().enumerate() {
+            let has_clips = p.arrangement.clips.iter().any(|c| c.lane == i);
+            if p.chip.has_channel(i) || has_clips {
+                assert_eq!(l.lock, Some(i), "{name}: track {i} locked to its channel");
+            } else {
+                assert_eq!(l.lock, None, "{name}: an empty VRC6 track under NES is a studio track");
+            }
+        }
+        if text.contains("\"chip\": \"2A03+VRC6\"") {
+            assert_eq!(p.chip, if vrc6_clips { SoundChip::WithVrc6 } else { SoundChip::Base2A03 }, "{name}: the profile");
+        } else {
+            assert_eq!(p.chip, SoundChip::Base2A03, "{name}");
+        }
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let e = render::hash(&export::render(&p));
+        if (r, e) != (want_r, want_e) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
+        }
+        // Saved as version 7 and reloaded: still the same sound and tracks.
+        let v7 = file::to_string(&p);
+        assert!(v7.contains("\"version\": 7") && v7.contains("\"tracks\""), "{name}");
+        let again = file::from_str(&v7).unwrap();
+        assert_eq!(again.arrangement.lanes, p.arrangement.lanes, "{name}");
+        assert_eq!((again.chip, again.filter, again.filter_auto), (p.chip, p.filter, p.filter_auto), "{name}");
+        assert_eq!((&again.mute, &again.solo), (&p.mute, &p.solo), "{name}");
+        assert_eq!(render::hash(&export::render(&again)), e, "{name}: v7 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A 2A03 + VRC6 song with empty VRC6 lanes opens as NES; its automatic
+/// filter (the Famicom stage) is kept as an explicit choice so it sounds the
+/// same.
+#[test]
+fn an_unused_vrc6_opens_as_nes_with_its_filter_kept() {
+    let p = file::load(&v6_dir().join("v6_vrc6_unused.chipdaw")).unwrap();
+    assert_eq!(p.chip, ui::state::SoundChip::Base2A03);
+    assert_eq!((p.filter, p.filter_auto), (engine::FilterMode::Famicom, false));
+    assert!(p.arrangement.lanes[5..].iter().all(|l| l.lock.is_none()));
+    assert!(!ui::tracks::budget(&p.arrangement, p.chip).over());
+    // 2A03 with VRC6 clips: locked to channels the profile lacks (over budget).
+    let q = file::load(&v6_dir().join("v6_2a03_vrc6_clips.chipdaw")).unwrap();
+    assert!(ui::tracks::budget(&q.arrangement, q.chip).over());
+    assert!(ui::state::lane_off(q.chip, &q.arrangement, 5));
+}
+
+/// A v6 track at -3 dB is locked like every other, so it plays at the chip's
+/// level now: the load report says so and unlocking brings -3 dB back.
+#[test]
+fn a_v6_fader_is_reported_and_restored_on_unlock() {
+    let p = file::load(&v6_dir().join("v6_fader_minus3.chipdaw")).unwrap();
+    assert!(p.load_report.iter().any(|l| l.contains("Lead") && l.contains("−3.0 dB")), "{:?}", p.load_report);
+    assert_eq!((p.arrangement.lanes[0].vol_db, p.arrangement.lanes[0].before_lock), (0.0, Some((-3.0, 0))));
+    // It renders as the 0 dB song (the demo) now.
+    assert_eq!(render::hash(&export::render(&p)), 0x5080530f47f64c64);
+    let mut q = p.clone();
+    q.arrangement.unlock_track(0);
+    assert_eq!(q.arrangement.lanes[0].vol_db, -3.0);
+}

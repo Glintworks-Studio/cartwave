@@ -765,12 +765,14 @@ fn legacy_tracks(p: &mut Project, params: &Params, mute: u8, solo: u8) {
             l.lock = None;
             l.short = crate::tracks::short_for(l);
         } else if l.vol_db != 0.0 || l.pan != 0 {
-            p.load_report.push(format!(
-                "{}: locked to its channel, so its fader and pan are at 0 dB and centre now (they were {} and {}); unlock it to get them back.",
-                l.name,
-                crate::state::format_db(l.vol_db),
-                crate::state::format_pan(l.pan)
-            ));
+            // Pan isn't heard yet (Batch 4b): only a fader changes the sound.
+            if l.vol_db != 0.0 {
+                p.load_report.push(format!(
+                    "{}: locked to its channel, so it plays at the chip's level now (its fader was at {}); unlock it to get that back.",
+                    l.name,
+                    crate::state::format_db(l.vol_db)
+                ));
+            }
             l.before_lock = Some((l.vol_db, l.pan));
             l.vol_db = 0.0;
             l.pan = 0;

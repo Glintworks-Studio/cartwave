@@ -949,3 +949,53 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   The earlier suites' Shift-clicks select two neighbouring clips, the same with either rule.
   Tests: `selection_tests::shift_click_selects_the_range`, B4A-03 (toggle on, toggle off, range,
   Ctrl-drag still copies).
+- **B4A-D6 (the engine: one emulator, two mixes).** Locked tracks drive the existing console
+  (`chip::Player`: the full 2A03 + VRC6 emulator, its non-linear mixer, filter and frame-tick
+  driver), unchanged, so they are bit-identical by construction. Studio voices (`chip::voice`) are
+  the same channel units (`Pulse`, `Triangle`, `Noise`, `Dmc`, the VRC6 pulse and saw) driven by
+  the same driver code: `Driver::tick` was split into `tick_init` + `tick_lane` (identical writes,
+  identical hashes) and a voice runs `tick_lane` for its one lane. Each voice has its own frame
+  counter. **Mixing decision:** each voice through its own channel's DAC curve *alone*
+  (`pulse_out(v, 0)`, `tnd_out(t, 0, 0)` …, VRC6 linear and inverted), summed linearly into one
+  shared studio step buffer (`Blep::add`, new: order-independent steps) and one output filter, times
+  the track's gain. A lone studio pulse note measures within 0.1 dB of the same note on the console
+  (`voice::tests::a_lone_voice_matches_the_consoles_pulse`); BATCH4A.md has the comparison. The
+  rack (`engine::studio`) is built on the UI thread, sent with `Command::Rack`, adopted on the audio
+  thread by swapping or copying the voices (plain data), and the old rack goes back through the
+  garbage queue (`Garbage::Rack`). `engine::Mixdown` = console + studio bus + Main gain is used by
+  the engine, `render`, `export` and the game export alike; with no studio tracks and Main at 0 dB
+  it is `Player::render` exactly (test `no_studio_tracks_is_the_console_bit_for_bit`).
+- **B4A-D7 (pool, allocator, stealing).** Pool size = the most notes a studio track's clips sound
+  at once ×1.5 + 4, at least 8, in steps of 8, capped by the Voices setting (`pool_size`). At each
+  frame tick a voice keeps its note while it sounds; other sounding notes take free voices; a note
+  **that has just started** steals the quietest voice not given a note this tick (release tails
+  first, then the lowest DAC level, then the oldest). A note that lost its voice doesn't steal it
+  back (the first version ping-ponged: 21 steals for one). Tests: chords on 8 voices, stealing the
+  volume-4 note of five on four voices, the Voices cap, growth keeping the sounding voices, all in
+  `engine::mixdown::tests`; `core::studio_rack_plays_and_grows_without_allocating` runs it inside
+  `process` under the allocation checker.
+- **B4A-D8 (migration to v7; three decisions).** Every pre-v7 file opens as eight tracks, each
+  locked to its channel (`legacy_tracks`). (1) **Profile:** the old chip; a 2A03 + VRC6 file whose
+  VRC6 lanes have no clips becomes **NES** (the prompt's rule). Its "auto" filter was the Famicom
+  stage, so the filter is kept as an explicit choice: bit-identical, and the user can change it.
+  (2) **Empty VRC6 lanes under NES** become studio tracks (names and colours kept): a lock onto a
+  channel the profile lacks would show as a problem in every such project. A 2A03 file *with* VRC6
+  clips keeps them locked to the VRC6 channels: silent as before, and a status-bar problem. (3) A v6
+  track whose **fader wasn't at 0 dB** is locked like the others, so it plays at the chip's level;
+  the old value is kept for unlocking and the load report names the track (`a_v6_fader_is_reported_
+  and_restored_on_unlock`). Pan isn't heard yet (4b): it is kept for unlocking, without a report.
+  The **v6 corpus** (`docs/songs/v6`, written and hashed by the baseline build with
+  `v6corpus.rs.txt`): the v5 corpus plus rows/pan/mute, an unused VRC6, 2A03 with VRC6 clips, and
+  the −3 dB case. Every hash v2…v6 → v7 and the golden render are unchanged.
+- **B4A-D9 (File > New).** VISION.md: studio tracks are the default and authenticity is opt-in, so
+  a new project has **no hardware profile** and four studio tracks (Pulse 1, Pulse 2, Triangle 1,
+  Noise 1) on the default band's presets and colours; the output filter follows the profile (None:
+  Off, UX.md §3). The legacy eight locked lanes remain as `Project::new_legacy()` for the demo
+  songs, tools and tests that build a song lane by lane.
+- **B4A-D10 (the model in the UI).** A track keeps its id, voice type, lock, Voices setting, the
+  fader/pan from before locking and its own channel controls (they moved off `Project.params`);
+  the instrument table's per-track defaults are a Vec kept in step with the tracks; mute and solo
+  are sets of track ids (they follow a track that moves). Studio clips use a polyphonic note rule
+  (a pitch never overlaps itself: `notes::resolve_poly`), set for the length of an edit with
+  `notes::rule_scope` so the existing note operations keep their signatures. Identical instruments
+  share one engine bank entry, and the table holds 128 (was 32). Stems are per track.
