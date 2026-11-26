@@ -288,6 +288,140 @@ impl MenuState {
     }
 }
 
+/// Layout of the dark (owner-drawn) dropdown rows, in physical pixels for a
+/// DPI. Platform-free so it is unit-tested everywhere; drawn by `dark`.
+/// Distances are in 96-DPI pixels on the 4 px grid.
+pub mod dark_layout {
+    /// Row height of an item (at least; a taller menu font grows it).
+    pub const ROW_H: i32 = 24;
+    /// Space above and below the text inside a row.
+    pub const TEXT_PAD_V: i32 = 4;
+    /// Height of a separator row (a 1 px line in its middle).
+    pub const SEP_H: i32 = 8;
+    /// The left column holding the check mark.
+    pub const GUTTER: i32 = 32;
+    /// Minimum gap between an item's text and its shortcut.
+    pub const ACCEL_GAP: i32 = 32;
+    /// The right column holding the submenu arrow (also the right padding).
+    pub const ARROW_COL: i32 = 24;
+    /// The hover wash is inset this much from the popup's sides...
+    pub const WASH_INSET: i32 = 4;
+    /// ...with this corner radius.
+    pub const WASH_RADIUS: i32 = 4;
+    /// The check mark and the arrow are drawn in a square this big...
+    pub const GLYPH: i32 = 16;
+    /// ...whose left edge is this far into the gutter (centred: (32-16)/2).
+    pub const GLYPH_X: i32 = 8;
+
+    /// 0x00BBGGRR, as GDI wants it.
+    pub const fn rgb(r: u8, g: u8, b: u8) -> u32 {
+        r as u32 | (g as u32) << 8 | (b as u32) << 16
+    }
+    /// Colours: a dark neutral background, light text, a neutral light-grey
+    /// wash for the hovered row (white at ~12 % over the background; ~6 % on
+    /// a disabled row), separators. No accent colour.
+    pub const BG: u32 = rgb(0x1A, 0x1A, 0x1A);
+    pub const TEXT: u32 = rgb(0xE6, 0xE6, 0xE6);
+    pub const TEXT_DISABLED: u32 = rgb(0x80, 0x80, 0x80);
+    pub const WASH: u32 = rgb(0x35, 0x35, 0x35);
+    pub const WASH_DISABLED: u32 = rgb(0x27, 0x27, 0x27);
+    pub const SEPARATOR: u32 = rgb(0x32, 0x32, 0x32);
+
+    /// A 96-DPI distance at `dpi` (rounded; 0 DPI counts as 96).
+    pub fn px(v: i32, dpi: u32) -> i32 {
+        let dpi = if dpi == 0 { 96 } else { dpi as i32 };
+        (v * dpi + 48) / 96
+    }
+
+    /// The stroke width of the check mark and arrow (1.5 px at 96 DPI, at
+    /// least 1).
+    pub fn stroke(dpi: u32) -> i32 {
+        (px(3, dpi) / 2).max(1)
+    }
+
+    /// Item text and shortcut as muda stores them: "Label\tShortcut".
+    pub fn split_text(s: &str) -> (&str, &str) {
+        match s.split_once('\t') {
+            Some((a, b)) => (a, b),
+            None => (s, ""),
+        }
+    }
+
+    /// The size WM_MEASUREITEM reports for a row. `text_w` / `accel_w` /
+    /// `text_h` are the measured text extents; `check_allowance` is what
+    /// the system adds to an owner-drawn item's width on its own (the menu
+    /// check-mark width minus one, SM_CXMENUCHECK - 1), taken back off so
+    /// the popup isn't wider than drawn.
+    pub fn item_size(separator: bool, text_w: i32, accel_w: i32, text_h: i32, check_allowance: i32, dpi: u32) -> (u32, u32) {
+        if separator {
+            return (0, px(SEP_H, dpi) as u32);
+        }
+        let h = px(ROW_H, dpi).max(text_h + 2 * px(TEXT_PAD_V, dpi));
+        let mut w = px(GUTTER, dpi) + text_w + px(ARROW_COL, dpi);
+        if accel_w > 0 {
+            w += px(ACCEL_GAP, dpi) + accel_w;
+        }
+        ((w - check_allowance.max(0)).max(0) as u32, h as u32)
+    }
+
+    /// The check mark's polyline in a row (`left`, `top`, height `h`).
+    pub fn check_points(left: i32, top: i32, h: i32, dpi: u32) -> [(i32, i32); 3] {
+        let g = px(GLYPH, dpi);
+        let x0 = left + px(GLYPH_X, dpi);
+        let y0 = top + (h - g) / 2;
+        // In a 16-unit box: (3.5, 8.5) -> (6.5, 11.5) -> (12.5, 4.5).
+        let p = |x: i32, y: i32| (x0 + px(x, dpi) / 2, y0 + px(y, dpi) / 2);
+        [p(7, 17), p(13, 23), p(25, 9)]
+    }
+
+    /// The submenu arrow (a chevron) at a row's right end.
+    pub fn arrow_points(right: i32, top: i32, h: i32, dpi: u32) -> [(i32, i32); 3] {
+        let g = px(GLYPH, dpi);
+        let x0 = right - px(ARROW_COL, dpi) + (px(ARROW_COL, dpi) - g) / 2;
+        let y0 = top + (h - g) / 2;
+        let p = |x: i32, y: i32| (x0 + px(x, dpi), y0 + px(y, dpi));
+        [p(6, 4), p(10, 8), p(6, 12)]
+    }
+
+    /// The key a row answers to while its menu is open: the letter after a
+    /// single '&', else the first character (what the system does for a
+    /// string item). Lower-cased.
+    pub fn mnemonic(label: &str) -> Option<char> {
+        let mut it = label.chars().peekable();
+        while let Some(c) = it.next() {
+            if c == '&' {
+                match it.next() {
+                    Some('&') => continue,
+                    Some(m) => return m.to_lowercase().next(),
+                    None => break,
+                }
+            }
+        }
+        label.chars().find(|c| !c.is_whitespace() && *c != '&').and_then(|c| c.to_lowercase().next())
+    }
+
+    /// WM_MENUCHAR: which row a key picks among `keys` (each row's mnemonic,
+    /// `None` for separators and rows that can't be picked), starting after
+    /// the highlighted row. `Some((row, unique))`: unique rows execute,
+    /// shared ones only move the highlight.
+    pub fn menu_char(keys: &[Option<char>], key: char, hilite: Option<usize>) -> Option<(usize, bool)> {
+        let key = key.to_lowercase().next()?;
+        let hits: Vec<usize> = (0..keys.len()).filter(|&i| keys[i] == Some(key)).collect();
+        match hits.len() {
+            0 => None,
+            1 => Some((hits[0], true)),
+            _ => {
+                let next = hits.iter().copied().find(|&i| hilite.is_some_and(|h| i > h)).unwrap_or(hits[0]);
+                Some((next, false))
+            }
+        }
+    }
+}
+
+#[cfg(all(windows, feature = "menus"))]
+#[path = "menus_dark.rs"]
+mod dark;
+
 #[cfg(feature = "menus")]
 pub use native::NativeMenus;
 
@@ -385,12 +519,30 @@ mod native {
             me
         }
 
-        /// Windows: attaches the bar to the main window's HWND.
+        /// Windows: attaches the bar to the main window's HWND, and the
+        /// owner-draw hook for the dark dropdowns (`dark`; it does nothing
+        /// while Dark menus is off).
         #[cfg(target_os = "windows")]
         pub fn attach_hwnd(&self, hwnd: isize) -> Result<(), String> {
             // SAFETY: `hwnd` is the live main window; the menu (owned by the
             // app model) outlives it.
-            unsafe { self.menu.init_for_hwnd_with_theme(hwnd, muda::MenuTheme::Dark) }.map_err(|e| e.to_string())
+            unsafe { self.menu.init_for_hwnd_with_theme(hwnd, muda::MenuTheme::Dark) }.map_err(|e| e.to_string())?;
+            // SAFETY: as above; installed after muda's subclass, so it sees
+            // the menu messages first and passes on everything it doesn't own.
+            if !unsafe { super::dark::install(hwnd) } {
+                eprintln!("dark menus: SetWindowSubclass failed; dropdowns stay light");
+            }
+            Ok(())
+        }
+
+        /// Settings > Display > Dark menus. Windows: applies the next time a
+        /// dropdown opens (each popup is re-flagged as it opens). Elsewhere
+        /// nothing (macOS draws its own menus).
+        pub fn set_dark(&self, on: bool) {
+            #[cfg(target_os = "windows")]
+            super::dark::set_enabled(on);
+            #[cfg(not(target_os = "windows"))]
+            let _ = on;
         }
 
         /// macOS: the app's menu bar, replacing winit's default one. Call
@@ -477,6 +629,77 @@ mod tests {
         assert_eq!(mac[0].title, "ChipDAW");
         assert!(mac.iter().any(|m| m.title == "Window"));
         assert!(!mac[1].entries.contains(&Entry::Item(Cmd::Action(Action::Quit))));
+    }
+
+    /// The dark rows' measuring: DPI scaling, the shortcut column, the
+    /// system's check allowance, separators, a tall font.
+    #[test]
+    fn dark_row_layout() {
+        use dark_layout::*;
+        assert_eq!((px(24, 96), px(24, 144), px(24, 192), px(24, 0)), (24, 36, 48, 24));
+        // 96 DPI, 60 px text, 40 px shortcut, 16 px font, allowance 12.
+        let (w, h) = item_size(false, 60, 40, 16, 12, 96);
+        assert_eq!(w as i32, GUTTER + 60 + ACCEL_GAP + 40 + ARROW_COL - 12);
+        assert_eq!(h as i32, ROW_H);
+        // No shortcut: no gap.
+        assert_eq!(item_size(false, 60, 0, 16, 0, 96).0 as i32, GUTTER + 60 + ARROW_COL);
+        // 150 %: every fixed distance scales, the text is measured as is.
+        let (w, h) = item_size(false, 90, 60, 24, 0, 144);
+        assert_eq!((w, h), ((48 + 90 + 48 + 60 + 36) as u32, 36));
+        // A tall menu font grows the row.
+        assert_eq!(item_size(false, 10, 0, 30, 0, 96).1 as i32, 30 + 2 * TEXT_PAD_V);
+        // Separators: their own height, no width of their own.
+        assert_eq!(item_size(true, 99, 99, 99, 12, 120), (0, 10));
+        // Every 96-DPI distance is on the 4 px grid.
+        for d in [ROW_H, TEXT_PAD_V, SEP_H, GUTTER, ACCEL_GAP, ARROW_COL, WASH_INSET, WASH_RADIUS, GLYPH, GLYPH_X] {
+            assert_eq!(d % 4, 0, "{d}");
+        }
+        assert_eq!(split_text("Save\tCtrl+S"), ("Save", "Ctrl+S"));
+        assert_eq!(split_text("Import"), ("Import", ""));
+        assert_eq!((stroke(96), stroke(144), stroke(192)), (1, 2, 3));
+    }
+
+    /// The check mark sits in the gutter and the arrow in the right column,
+    /// both vertically inside the row, at any DPI.
+    #[test]
+    fn dark_glyphs_stay_in_their_columns() {
+        use dark_layout::*;
+        for dpi in [96, 120, 144, 192] {
+            let (top, h) = (100, px(ROW_H, dpi));
+            for (x, y) in check_points(0, top, h, dpi) {
+                assert!((0..px(GUTTER, dpi)).contains(&x), "{dpi}: {x}");
+                assert!((top..top + h).contains(&y), "{dpi}: {y}");
+            }
+            let right = 400;
+            for (x, y) in arrow_points(right, top, h, dpi) {
+                assert!((right - px(ARROW_COL, dpi)..right).contains(&x), "{dpi}: {x}");
+                assert!((top..top + h).contains(&y), "{dpi}: {y}");
+            }
+        }
+        // The colours are neutral greys (no accent): r == g == b.
+        for c in [BG, TEXT, TEXT_DISABLED, WASH, WASH_DISABLED, SEPARATOR] {
+            assert!(c & 0xFF == (c >> 8) & 0xFF && c & 0xFF == (c >> 16) & 0xFF, "{c:06x}");
+        }
+        assert_eq!(rgb(0x1A, 0x2B, 0x3C), 0x3C2B1A);
+    }
+
+    /// Letter keys in an open dark dropdown pick rows as the system does.
+    #[test]
+    fn dark_menu_letters() {
+        use dark_layout::*;
+        assert_eq!(mnemonic("&Save"), Some('s'));
+        assert_eq!(mnemonic("Save &As…"), Some('a'));
+        assert_eq!(mnemonic("Fish && Chips"), Some('f'));
+        assert_eq!(mnemonic("Undo"), Some('u'));
+        assert_eq!(mnemonic(""), None);
+        let keys = [Some('n'), Some('o'), None, Some('s'), Some('s'), Some('e')];
+        assert_eq!(menu_char(&keys, 'N', None), Some((0, true)));
+        assert_eq!(menu_char(&keys, 'e', Some(0)), Some((5, true)));
+        // Shared letters cycle through the matches without executing.
+        assert_eq!(menu_char(&keys, 's', None), Some((3, false)));
+        assert_eq!(menu_char(&keys, 's', Some(3)), Some((4, false)));
+        assert_eq!(menu_char(&keys, 's', Some(4)), Some((3, false)));
+        assert_eq!(menu_char(&keys, 'z', None), None);
     }
 
     #[test]

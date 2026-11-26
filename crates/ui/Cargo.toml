@@ -22,6 +22,19 @@ muda = { version = "0.22", default-features = false, optional = true }
 # winit, rfd and muda; MIT OR Apache-2.0 OR Zlib).
 raw-window-handle = "0.6"
 
+# Dark popup menus (Settings > Display > Dark menus; docs/design/DARK-MENUS.md):
+# owner-drawn items through documented Win32 calls. Already in the tree via
+# muda and winit (MIT OR Apache-2.0); the version muda uses.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 [features]
 default = ["menus"]
-menus = ["dep:muda"]
+menus = ["dep:muda", "dep:windows-sys"]

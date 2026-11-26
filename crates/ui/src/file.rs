@@ -762,6 +762,9 @@ pub struct Settings {
     pub export: Vec<String>,
     /// Interface scale in percent (Settings > Display; 100 = the OS scale).
     pub ui_scale: u32,
+    /// Windows: the menu bar's dropdowns are drawn dark (Settings > Display;
+    /// off by default, docs/design/DARK-MENUS.md).
+    pub dark_menus: bool,
 }
 
 /// Open Recent keeps this many projects.
@@ -786,6 +789,7 @@ impl Default for Settings {
             browser_open: true,
             export: Vec::new(),
             ui_scale: 100,
+            dark_menus: false,
         }
     }
 }
@@ -1120,6 +1124,27 @@ mod tests {
         // Unknown fields from a newer build are ignored.
         let newer: Settings = serde_json::from_str(r#"{"frame_cap": 120, "future": [1, 2]}"#).unwrap();
         assert_eq!(newer.frame_cap, 120);
+    }
+
+    /// Dark menus are off unless the user turns them on, and the choice
+    /// survives a save and load of settings.json.
+    #[test]
+    fn dark_menus_default_off_and_round_trip() {
+        assert!(!Settings::default().dark_menus);
+        let old: Settings = serde_json::from_str(r#"{"ui_scale": 125}"#).unwrap();
+        assert!(!old.dark_menus, "a file from before the setting keeps it off");
+        let on = Settings { dark_menus: true, ..Settings::default() };
+        let text = serde_json::to_string_pretty(&on).unwrap();
+        assert!(text.contains("\"dark_menus\": true"));
+        let back: Settings = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, on);
+        // Through the real file functions, in a scratch data dir.
+        let dir = std::env::temp_dir().join(format!("chipdaw-dark-menus-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(dir.join("settings.json"), &text).unwrap();
+        let read: Settings = serde_json::from_str(&std::fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();
+        assert!(read.dark_menus);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
