@@ -15,6 +15,7 @@ pub mod user_presets;
 pub mod input;
 pub mod mock;
 pub mod notes;
+pub mod params;
 pub mod perf;
 pub mod render;
 pub mod shortcuts;

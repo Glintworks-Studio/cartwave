@@ -999,3 +999,56 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   (a pitch never overlaps itself: `notes::resolve_poly`), set for the length of an edit with
   `notes::rule_scope` so the existing note operations keep their signatures. Identical instruments
   share one engine bank entry, and the table holds 128 (was 32). Stems are per track.
+- **B4A-D11 (parameter registry, studio macros).** `ui::params` lists every automatable
+  parameter per track kind (studio and locked) and for Main, with id, name, unit, range, default
+  and rate class; `docs/batch4a/parameters.md` is generated from it. **Studio macros and channel
+  controls are frame-tick**: a studio voice runs the driver's own code, which reads them once per
+  frame tick, so automating them sounds like the chip's macros; only a studio track's volume and
+  pan and the Main gain are smooth. Locked tracks have no volume/pan parameters (pinned, §5.3).
+- **B4A-D12 (a Create menu, not a Track menu).** The prompt asks for "a Track menu"; VISION.md's
+  shell lists File, Edit, Create, View, Help with "Create: Track". VISION.md wins: **Create ▸
+  Insert Track** (Ctrl+Shift+T / ⇧⌘T, Live's Insert MIDI Track, R84: a studio track of the current
+  track's type below it), **Create ▸ Insert Track ▸** Pulse … Saw, Duplicate Track, Delete Track;
+  the same in the header's context menu (T3) plus Lock ▸ and Voices ▸. Delete with a track
+  selected and no clip deletes it (R86); Ctrl+D likewise duplicates it (R87, generic Duplicate;
+  unverified for tracks in the manual). Rename stays Ctrl+R (T2). A copy of a locked track is a
+  studio track (its channel is taken). The last track can't be deleted.
+- **B4A-D13 (profile warnings: where and how).** The dialog is the native message box the app
+  already uses for conflicts; on Windows a task dialog, whose verification box is **Don't ask
+  again** (TaskDialogIndirect from the windows-sys already in the tree: no new crate); the answer
+  is remembered in `settings.silenced` as `id=choice` and Settings ▸ Warnings resets it. Note edits
+  on every track use the polyphonic rule; **`commit()` checks locked tracks for new conflicts**
+  (chords/overlaps, notes the channel can't play, DPCM rows without a sample) before recording the
+  step: Unlock track / Fit to hardware / Cancel (Cancel puts the last undo step back). One check
+  catches the piano roll, pastes, clip moves and imports alike. Conflicts already in the document
+  (an old file) never ask; an over-budget project is a status-bar problem and the badge shows a
+  warning mark. **Unlock is offered only where it fixes the conflict** (chords): a studio voice
+  has the same channel range and DPCM rows, so for range and DPCM only Fit and Cancel are offered
+  (nothing pretends). Locking a studio track with chords asks Fit-and-lock / Cancel. Switching to
+  a profile without a channel in use lists the tracks: Unlock tracks / Switch anyway (they stay
+  locked, dimmed and silent: today's AT-04 behaviour) / Cancel. "A third pulse track" can't arise:
+  the lock menu disables taken channels (§5.2) and a duplicated locked track is a studio track.
+  `CHIPDAW_WARN_ANSWER` answers the dialog in scripted tests (dev mode only).
+- **B4A-D14 (authentic presets are the layouts).** No preset carries a profile today (UX.md B6,
+  priority L). The channel layouts are whole hardware bands and already asked before changing the
+  profile (decision 5), so they are the authentic presets: loading one puts the project under its
+  profile (asking first, the "preset from a different expansion chip" warning: Switch / Load on
+  studio tracks / Cancel) and **locks the tracks** it fills, creating a locked track for a channel
+  that has none. Single instrument presets load on either kind without changing the lock.
+- **B4A-D15 (the Main track as built).** No reference board was provided (B4A-D1), so the row
+  follows the prompt's text and the E1 header grid: 72 px + a 1 px `#2E2E2E` divider on top (the
+  lanes are 73 px shorter), an 8 px soft shadow (black 0 → 28%) cast on the rows above; the strip
+  in the track strip's place (`palette::main_strip`: black → `#1C1C1C` → `#363636`, a `#4A4A4A`
+  outer edge, a 6% inner glow), "Main" in the name's place, an OUT badge in the badge's place with
+  the device name after it (`#808080`), PEAK in column A (label Inter 600 10 tracked .1em `#808080`
+  at y 16, value Inter 600 12 `#E6E6E6` at y 32, dBFS one decimal, held; a click resets it), the
+  master fader in column B (the tracks' fader, −inf … +6 dB, wheel 1 dB) with its dB value under
+  it. Typing a dB value isn't offered on Main yet (the tracks' rename field is per track). The lane:
+  `#0D0D0D`, bar and beat lines, the playhead. Placement: "the bottom end of the Arrangement View"
+  (Live 12 manual, ch. 18 Mixing, §18.4 Return Tracks and the Main track); staying put while the
+  tracks scroll is ours (the manual doesn't say). The Main gain is saved (`master_db`), applied
+  after the whole mix in the engine and every export, written to the export JSON as
+  `master_gain_db`, and skipped at 0 dB (bit-identical). It is not an undo step (like the profile's
+  filter; it marks the project unsaved).
+- **B4A-D16 (black is reserved).** `palette::black_is_reserved_for_main`: no palette colour (so no
+  grid cell and no automatic pick, reduced or not) has a brightest channel under `#40`.
