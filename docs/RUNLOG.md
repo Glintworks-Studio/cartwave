@@ -613,3 +613,17 @@ Every decision below was taken alone, as the prompt asked.
   it, and a track colour change leaves clips with their own colour alone. PL-02 now checks it.
 - **Merge.** Every gate passed: `pre-polish` tags the old `main` (23b5da9), pushed; `main`
   fast-forwarded to `polish/option-d` (48ee94b, which contains `design/option-d`) and pushed.
+
+## Polish 2 (POLISH2_PROMPT.md), 2026-11-26
+
+- **P2-D1 (pre-flight: the clip gap).** `main` was clean (only untracked prompt files and the
+  reference folder). The 1 px gap between adjacent clips is **already committed**: 0020c1d
+  "Design pass: caches for per-frame drawing, 1 px clip gaps, …" (RUNLOG DP-D23;
+  `views/arrangement.rs`: a clip starts on its grid line and ends 1 px short). Nothing to commit
+  on `main`, no wip branch.
+- **P2-D2 (pre-flight: clip corner radius).** `theme::tokens::RADIUS_CLIP = 4.0` (logical px),
+  used by `views/clip.rs`. Kept.
+- **P2-D3 (baseline).** The regression baseline is `main` at 8644ff3, built in the worktree
+  `../before-polish2` (it already has the polish pass's dev hooks: frozen meters, pinned
+  playhead). The reference pack is copied to `docs/design/polish2-ref/`; its element boxes are
+  measured with `docs/polish2/tools/measure_ref.py` (headless Chrome) into `docs/polish2/boxes/`.
