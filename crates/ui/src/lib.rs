@@ -2335,7 +2335,7 @@ pub fn build_ui(cx: &mut Context) {
                     // Piano roll open: the arrangement gets the height the split
                     // handle sets (its lanes scroll) and the piano roll the rest.
                     let ov = if s.settings.with(|st| st.show_overview) { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 };
-                    Pixels(theme::tokens::RULER_HEIGHT + ov + s.piano_pane_h.get() + views::main_track::MAIN_TOTAL_H)
+                    Pixels(theme::tokens::RULER_HEIGHT + ov + s.piano_pane_h.get())
                 } else {
                     Stretch(1.0)
                 }
@@ -3310,7 +3310,9 @@ impl AppState {
     fn clamp_lane_scroll(&mut self) {
         let content = self.s.arrangement.with_untracked(|a| a.lanes_height());
         let viewport = if self.s.piano_open.get_untracked() {
-            self.s.piano_pane_h.get_untracked()
+            // The split's pane holds the lanes and the Main row (§7: the lanes
+            // give up its height; the piano roll keeps its own).
+            self.s.piano_pane_h.get_untracked() - views::main_track::MAIN_TOTAL_H
         } else {
             let inspector = if self.s.inspector.get_untracked() { INSPECTOR_HEIGHT as f32 } else { 0.0 };
             self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector - chrome_bands(&self.s) - views::main_track::MAIN_TOTAL_H

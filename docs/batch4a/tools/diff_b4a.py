@@ -64,8 +64,15 @@ def main():
         hl = 0 if name == "browser_closed" else HL
         regs = header_regions(hl)
         my = main_row(b, scale)
+        if name in ("settings", "look_feel"):
+            # A modal's backdrop dims the divider: the Main row is where it is
+            # in the plain state.
+            my = main_row(crop(Image.open(os.path.join(after, "stopped.png")).convert("RGB"), top_a)[0], scale)
         if my is not None:
             regs.append(("Main row", hl, my - 16, 1440, my + 74))
+        # The lanes are 73 px shorter: their overlay scrollbar (at the lanes'
+        # right edge) appears or changes size.
+        regs.append(("lanes scrollbar", 1424, 100, 1440, 1000))
         if name == "settings":
             regs.append(("Settings panel", 380, 90, 1060, 900))
         regs = [(n, int(x0 * k), int(y0 * k), int(x1 * k), int(y1 * k)) for n, x0, y0, x1, y1 in regs]

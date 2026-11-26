@@ -53,7 +53,7 @@ def main():
         im = im.crop((1, top, im.width - 1, im.height - 1))
         px = im.load()
         hl = 1440 - w if right else 241
-        lanes_x = 700 if not right else 600
+        lanes_x = 1300 if not right else 600
         # The divider: scan up from the bottom at a lanes column.
         my = next((y for y in range(im.height - 1, 0, -1) if near(px[lanes_x, y], "#2E2E2E", 2)), None)
         check(name, my is not None, f"divider #2E2E2E found in the lanes (y {my})")
@@ -73,16 +73,17 @@ def main():
         # Track 1's strip and the Main strip: the same columns.
         def strip_cols(t):
             y = t + 36
-            cols = [x for x in range(hl + strip_rel - 4, hl + strip_rel + 22) if max(px[x, y]) - min(px[x, y]) > 25 or (t == main_top and px[x, y][0] < 0x50 and px[x, y][0] != px[hl + 120, y][0])]
+            cols = [x for x in range(max(0, hl + strip_rel - 4), min(im.width, hl + strip_rel + 22)) if max(px[x, y]) - min(px[x, y]) > 25 or (t == main_top and px[x, y][0] < 0x50 and px[x, y][0] != px[hl + 120, y][0])]
             return cols
-        tcol = [x for x in range(hl + strip_rel - 4, hl + strip_rel + 22) if max(px[x, row_top + 36]) - min(px[x, row_top + 36]) > 25]
+        tcol = [x for x in range(max(0, hl + strip_rel - 4), min(im.width, hl + strip_rel + 22)) if max(px[x, row_top + 36]) - min(px[x, row_top + 36]) > 25]
         outer = hl + strip_rel + (15 if mirrored and not right else 0)
-        edge_x = next((x for x in range(hl + strip_rel - 2, hl + strip_rel + 18) if near(px[x, main_top + 36], "#4A4A4A", 3)), None)
+        edge_x = next((x for x in range(max(0, hl + strip_rel - 2), min(im.width, hl + strip_rel + 18)) if near(px[x, main_top + 36], "#4A4A4A", 3)), None)
         check(name, edge_x is not None and tcol and abs(edge_x - (min(tcol) if (edge_x - min(tcol)) < 8 else max(tcol))) <= 1, f"the strip's #4A4A4A edge at x {edge_x} (track 1's strip x {tcol[:1]}…{tcol[-1:]})")
         if edge_x is not None:
             inner = edge_x + 14 if edge_x - (hl + strip_rel) < 8 else edge_x - 14
             a, b = px[edge_x + (2 if inner > edge_x else -2), main_top + 36], px[inner, main_top + 36]
-            check(name, max(a) < 0x14 and 0x26 <= b[0] <= 0x3C, f"main_strip: dark at the outer edge {a}, #363636-ish at the inner {b}")
+            # The inner end is #363636 under the 6% white inner glow (~#3D).
+            check(name, max(a) < 0x14 and 0x30 <= b[0] <= 0x44, f"main_strip: dark at the outer edge {a}, #363636 (+6% glow) at the inner {b}")
         # Name ink, badge ring, fader well: the Main row's offsets against track 1's.
         nx = hl + (w - 1 - 68 - 200 if mirrored else 68)
         def ink(t, x0, x1, y0, y1):
@@ -93,8 +94,10 @@ def main():
         else:
             check(name, False, f"name ink found ({t_name}, {m_name})")
         ring = lambda p: near(p, "#383838", 4)
-        t_badge = find(im, (hl, row_top + 36, hl + w, row_top + 62), ring)
-        m_badge = find(im, (hl, main_top + 36, hl + w, main_top + 62), ring)
+        # The name column only (the M / S keys' borders are #383838 too).
+        nx0, nx1 = (hl + 140, hl + w - 20) if mirrored else (hl + 20, hl + w - 140)
+        t_badge = find(im, (nx0, row_top + 36, nx1, row_top + 62), ring)
+        m_badge = find(im, (nx0, main_top + 36, nx1, main_top + 62), ring)
         if t_badge and m_badge:
             check(name, abs(t_badge[0] - m_badge[0]) <= 1 and abs((t_badge[1] - row_top) - (m_badge[1] - main_top)) <= 1, f"OUT badge at the badge's place ({m_badge[0]},{m_badge[1] - main_top} vs {t_badge[0]},{t_badge[1] - row_top})")
         else:
@@ -104,8 +107,14 @@ def main():
         m_well = find(im, (hl, main_top + 6, hl + w, main_top + 30), well)
         if t_well and m_well:
             # Track 1 is a studio track with a fader; the Main fader's well.
-            tw = [x for x in range(hl, hl + w) if well(px[x, row_top + 20])]
-            mw = [x for x in range(hl, hl + w) if well(px[x, main_top + 20])]
+            def well_x(t):
+                cnt = {}
+                for y in range(t + 8, t + 40):
+                    for x in range(hl, hl + w):
+                        if well(px[x, y]):
+                            cnt[x] = cnt.get(x, 0) + 1
+                return [x for x, c in cnt.items() if c >= 10]
+            tw, mw = well_x(row_top), well_x(main_top)
             check(name, tw and mw and abs(max(tw) - max(mw)) <= 1, f"the fader's well at track 1's x ({mw[-1:]} vs {tw[-1:]})")
         else:
             check(name, False, f"fader wells found ({t_well}, {m_well})")
