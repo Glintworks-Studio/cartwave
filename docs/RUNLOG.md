@@ -724,3 +724,31 @@ Every decision below was taken alone, as the prompt asked.
   slack, so a width drag doesn't reallocate it every frame.
 - **Merge.** Every gate passed on the final build: `pre-polish2` tags the old `main` (8644ff3),
   pushed; `main` fast-forwarded to `polish2/header-nav` (e09139c) and pushed.
+
+## Mac catch-up (MAC_CATCHUP_PROMPT.md), 2026-11-26
+
+Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 merged). Report:
+[MAC-CATCHUP.md](../MAC-CATCHUP.md).
+
+- **MC-D1 (start).** `main` fast-forwarded from 24c9d9c to ef2ea19 (74 commits, no conflicts); the
+  three untracked prompt files stay untracked. The vizia pin 60907aad resolves from GitHub
+  (`Cargo.lock` source line; the release build fetched and compiled it). A baseline build of
+  `main` lives in the worktree `../before-mac-catchup` for every before/after in this pass.
+- **MC-D2 (audio device).** No USB interface is connected (the MOTU is absent; `coreaudio list`
+  and `system_profiler SPAudioDataType` agree). The system default output is a Bluetooth
+  speaker (Sound Blaster GS3, 44.1 kHz only). The prompt wants the **built-in output**, and
+  changing the system default needs asking, so every run names the device in its own
+  `settings.json` (`"audio_device": "Mac mini Speakers"`, Settings ▸ Audio's own field) and the
+  system default is never touched.
+- **MC-D3 (menu key equivalents vs. F-03 and dialogs; macOS only).** On macOS a menu key
+  equivalent (⌘Z, ⌘A, ⌘C, ⌘V, ⌘D, …) is consumed by the menu bar before the window sees the
+  key, and `run_menu_cmd` applied none of the key path's context rules. Measured with real key
+  events (`docs/mac-catchup/tools/check_text_menu.sh`): typing in the browser search, ⌘Z undid
+  the song's last edit, ⌘A selected every clip, ⌘C copied clips, and the field got none of them;
+  with Settings open, ⌘Z / ⌘D reached the song. Windows has no accelerator table (its keys go
+  through the context-gated path), so it can't happen there. Fix (`#[cfg(target_os = "macos")]`
+  `mac_menu_gate`): while a text field is being edited, Cut / Copy / Paste / Select All go to the
+  field (the macOS Edit-menu convention); while a field is edited or a dialog is open, editor
+  commands do nothing; File, app and Help commands (New, Open, Save, Save As, Export, Settings,
+  Project Settings, Quit, About, the shortcut sheet) still work, as in any Mac app (⌘Q quits
+  while a field has focus). Undo / Redo in a field do nothing, as on Windows (AT-03).

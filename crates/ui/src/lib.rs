@@ -3715,6 +3715,10 @@ impl AppState {
 
     fn run_menu_cmd(&mut self, cx: &mut EventContext, c: menus::Cmd) {
         use menus::Cmd;
+        #[cfg(target_os = "macos")]
+        if !self.mac_menu_gate(cx, c) {
+            return;
+        }
         match c {
             Cmd::Action(a) => {
                 self.run_action(cx, a, true);
@@ -3730,6 +3734,50 @@ impl AppState {
             Cmd::About => self.open_modal(Modal::About),
             Cmd::ShortcutSheet => self.open_modal(Modal::Shortcuts),
         }
+    }
+
+    /// macOS: a menu key equivalent (⌘Z, ⌘A, ⌘C, …) is taken by the menu bar
+    /// before the window sees the key, so the key path's context rules (F-03:
+    /// typing never reaches the document; dialogs: only their own keys) are
+    /// applied here as well (MAC-CATCHUP.md, MC-D3). While a text field is
+    /// being edited, Cut / Copy / Paste / Select All go to the field, as Edit
+    /// menus do on macOS; while a field is edited or a dialog is open, the
+    /// editor commands (Undo, Duplicate, Delete, zoom, …) do nothing. File,
+    /// app and Help commands still work. Returns whether `c` should run.
+    #[cfg(target_os = "macos")]
+    fn mac_menu_gate(&mut self, cx: &mut EventContext, c: menus::Cmd) -> bool {
+        use menus::Cmd;
+        let text = self.text_edit.filter(|e| *e == cx.focused());
+        let modal = self.s.modal.with_untracked(|m| m.is_some()) || self.s.export_dlg.with_untracked(|d| d.is_some());
+        if text.is_none() && !modal {
+            return true;
+        }
+        if let (Some(field), Cmd::Action(a)) = (text, c) {
+            let to_field = match a {
+                Action::Cut => Some(TextEvent::Cut),
+                Action::Copy => Some(TextEvent::Copy),
+                Action::Paste => Some(TextEvent::Paste),
+                Action::SelectAll => Some(TextEvent::SelectAll),
+                _ => None,
+            };
+            if let Some(e) = to_field {
+                cx.emit_to(field, e);
+                return false;
+            }
+        }
+        // App-level commands: they don't act on the editor behind the field
+        // or the dialog.
+        matches!(
+            c,
+            Cmd::Action(Action::New | Action::Open | Action::Save | Action::SaveAs | Action::ExportAudio | Action::Quit | Action::Settings)
+                | Cmd::NewFromMidi
+                | Cmd::ImportAudio
+                | Cmd::ProjectSettings
+                | Cmd::OpenRecent(_)
+                | Cmd::ClearRecent
+                | Cmd::About
+                | Cmd::ShortcutSheet
+        )
     }
 
     /// What the menu bar shows (enabled items, check marks, Open Recent).

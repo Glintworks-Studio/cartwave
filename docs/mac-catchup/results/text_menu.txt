@@ -1,0 +1,35 @@
+== before (main ef2ea19) ==
+after Cmd+D in the arrangement: 9 clips (8 + 1)
+after Cmd+Z in the field: 8 clips (want 9)
+Duplicate before (nothing selected): disabled
+Duplicate after Cmd+A in the field: ENABLED (clips selected: wrong)
+shot /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png window 45074 (560.0, 128.0, 1440.0, 952.0)
+Paste after Cmd+C in the field: ENABLED (clips copied: wrong)
+after Cmd+V in the field: 9 clips (want 9)
+field screenshot: /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png (want 'qq')
+after Cmd+Z, Cmd+D with Settings open: 9 clips (want 9)
+== after (mac/catchup) ==
+after Cmd+D in the arrangement: 9 clips (8 + 1)
+after Cmd+Z in the field: 9 clips (want 9)
+Duplicate before (nothing selected): disabled
+Duplicate after Cmd+A in the field: disabled (no clips selected: right)
+shot /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png window 45092 (560.0, 128.0, 1440.0, 952.0)
+Paste after Cmd+C in the field: disabled (no clips copied: right)
+after Cmd+V in the field: 9 clips (want 9)
+field screenshot: /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png (want 'qq')
+after Cmd+Z, Cmd+D with Settings open: 9 clips (want 9)
+== before (main ef2ea19), dialog ==
+shot /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-settings.png window 45128 (560.0, 128.0, 1440.0, 952.0)
+after Cmd+Z, Cmd+D, Cmd+D with Settings open: 8 clips (want 9)
+== after, full ==
+after Cmd+D in the arrangement: 9 clips (8 + 1)
+after Cmd+Z in the field: 9 clips (want 9)
+Duplicate before (nothing selected): disabled
+Duplicate after Cmd+A in the field: disabled (no clips selected: right)
+shot /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png window 45146 (560.0, 128.0, 1440.0, 952.0)
+Paste after Cmd+C in the field: disabled (no clips copied: right)
+after Cmd+V in the field: 9 clips (want 9)
+field screenshot: /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-field.png (want 'qq')
+dialog test, after Cmd+D: 9 clips (9)
+shot /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//chipdaw-mac-catchup/textmenu-settings.png window 45164 (560.0, 128.0, 1440.0, 952.0)
+after Cmd+Z, Cmd+D, Cmd+D with Settings open: 9 clips (want 9)
