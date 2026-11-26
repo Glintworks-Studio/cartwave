@@ -799,14 +799,14 @@ const NAME_TOP: f32 = 14.5;
 const NAME_RIGHT: f32 = 236.0;
 /// The profile badge: 16 px inside a 1 px border (18 px), radius 4, a lock
 /// and the chip name (Inter 600 11, #A8A8A8) with 4 px padding and gap.
-const BADGE_Y: f32 = 39.0;
+const BADGE_Y: f32 = 40.0;
 const BADGE_H: f32 = 18.0;
 const BADGE_PAD: f32 = 4.0;
 const BADGE_PX: f32 = 11.0;
 const LOCK_W: f32 = 9.0;
 const LOCK_H: f32 = 11.0;
 /// Badge text and preset name share this baseline.
-const BADGE_BASELINE: f32 = 52.0;
+const BADGE_BASELINE: f32 = 53.0;
 /// The preset name: Inter 500 12, #808080, 8 px after the badge.
 const PRESET_PX: f32 = 12.0;
 const PRESET_GAP: f32 = 8.0;
@@ -864,7 +864,7 @@ impl TrackRow {
         Self { s, lane, hover: false }
             .build(cx, move |cx| {
                 let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
-                let left = TRACK_HEADER_WIDTH - 1.0 - CTRL_RIGHT - CTRL_W;
+                let left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W;
                 Key::new(cx, s, "M", KeyAction::Mute(lane))
                     .position_type(PositionType::Absolute)
                     .left(Pixels(left + CTRL_W - 2.0 * KEY_SIZE - 8.0))
@@ -1026,7 +1026,8 @@ impl View for TrackRow {
         let f = gfx::font(Face::SemiBold, NAME_PX * s);
         let (x, y) = at(NAME_X, NAME_TOP);
         let (_, m) = f.metrics();
-        let base = (y - m.ascent).round();
+        // Skia's hinting puts the ink a pixel higher than the browser's.
+        let base = (y - m.ascent).round() + s.round();
         let max_w = (NAME_RIGHT - NAME_X) * s;
         gfx::draw_text_clipped(canvas, &name, x.round(), base, max_w, &f, TEXT_HI);
 

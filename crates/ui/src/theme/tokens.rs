@@ -139,14 +139,15 @@ pub const CELL_DIVIDER: Rgba = Rgba::hex(0x2A2A2A);
 pub const RECORD_GLYPH: Rgba = Rgba::hex(0xB9534C);
 pub const RECORD: Rgba = Rgba::hex(0xE5484D);
 
-// Lanes: the bright end of each colour strip (the strip darkens to ~65% on
+// Lanes (pulse, triangle, noise and VRC6 pulse from the Option D mockup's
+// tracks; the design pass). Formerly: the bright end of each colour strip (the strip darkens to ~65% on
 // its left). Pulse lime and triangle periwinkle come from the prototype; the
 // rest are picked at the same lightness and saturation.
-pub const LANE_PULSE: Rgba = Rgba::hex(0xBAC51A);
-pub const LANE_TRI: Rgba = Rgba::hex(0x828BEE);
-pub const LANE_NOISE: Rgba = Rgba::hex(0xB3AA94);
+pub const LANE_PULSE: Rgba = Rgba::hex(0xC9D24A);
+pub const LANE_TRI: Rgba = Rgba::hex(0x7F86E0);
+pub const LANE_NOISE: Rgba = Rgba::hex(0xB5AC98);
 pub const LANE_DPCM: Rgba = Rgba::hex(0xE39A42);
-pub const LANE_VRC6_PULSE: Rgba = Rgba::hex(0xD5609E);
+pub const LANE_VRC6_PULSE: Rgba = Rgba::hex(0xD9579A);
 pub const LANE_VRC6_SAW: Rgba = Rgba::hex(0x3CC4A6);
 
 // The track volume meter-fader: cool-to-hot stops over its full 68 px

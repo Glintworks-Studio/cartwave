@@ -431,7 +431,9 @@ impl DisplayWell {
     /// as a group and snapped to whole px.
     pub fn cell_lefts() -> [f32; 6] {
         let total: f32 = CELL_W.iter().sum::<f32>() + 5.0 * (1.0 + 2.0 * DIVIDER_MARGIN);
-        let mut x = ((DISPLAY_W - total) * 0.5).round();
+        // The mockup centres the group at 17.5 px; its dividers land on
+        // the whole pixel below (floor).
+        let mut x = ((DISPLAY_W - total) * 0.5).floor();
         let mut out = [0.0; 6];
         for (i, w) in CELL_W.iter().enumerate() {
             out[i] = x;
@@ -669,6 +671,7 @@ impl CpuMem {
             .hoverable(true)
             .width(Pixels(CPU_MEM_W))
             .height(Pixels(2.0 * STAT_LINE + STAT_ROW_GAP))
+            .bind(s.mem_mb, |mut h| h.needs_redraw())
             .bind(s.audio_load, move |mut h| {
                 let v = Self::values(&s);
                 if *shown.borrow() != v {

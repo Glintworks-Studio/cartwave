@@ -240,7 +240,8 @@ pub fn step_meters(
     const DECAY_PER_SEC: f32 = 1.8;
     const PEAK_HOLD_SECS: f32 = 0.9;
     const PEAK_FALL_PER_SEC: f32 = 0.5;
-    const LIGHT_DECAY_PER_SEC: f32 = 5.0;
+    // The strip light fades over 250 ms (design pass §3.5).
+    const LIGHT_DECAY_PER_SEC: f32 = 4.0;
 
     let ph = playhead as u32;
     for lane in 0..8 {
@@ -280,7 +281,7 @@ pub fn step_meters(
             }
         }
         m.light[lane] =
-            (m.light[lane] - LIGHT_DECAY_PER_SEC * dt * m.light[lane].max(0.15)).max(0.0);
+            (m.light[lane] - LIGHT_DECAY_PER_SEC * dt).max(0.0);
 
         let lvl = &mut m.level[lane];
         if target > *lvl {
@@ -307,13 +308,14 @@ pub fn step_meters_engine(m: &mut Meters, levels: [f32; 8], note_on: [bool; 8], 
     const DECAY_PER_SEC: f32 = 1.8;
     const PEAK_HOLD_SECS: f32 = 0.9;
     const PEAK_FALL_PER_SEC: f32 = 0.5;
-    const LIGHT_DECAY_PER_SEC: f32 = 5.0;
+    // The strip light fades over 250 ms (design pass §3.5).
+    const LIGHT_DECAY_PER_SEC: f32 = 4.0;
     for lane in 0..8 {
         if note_on[lane] {
             m.light[lane] = 1.0;
         }
         m.light[lane] =
-            (m.light[lane] - LIGHT_DECAY_PER_SEC * dt * m.light[lane].max(0.15)).max(0.0);
+            (m.light[lane] - LIGHT_DECAY_PER_SEC * dt).max(0.0);
         let target = levels[lane].clamp(0.0, 1.0);
         let lvl = &mut m.level[lane];
         if target > *lvl {

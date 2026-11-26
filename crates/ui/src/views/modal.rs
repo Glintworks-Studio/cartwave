@@ -53,7 +53,6 @@ pub enum Set {
     FrameCap(u32),
     UiScale(u32),
     DarkMenus(bool),
-    ClockBars(bool),
     ArrangementGrid(String),
     PianoGrid(String),
     Follow(bool),
@@ -221,10 +220,6 @@ fn display(cx: &mut Context, st: &Settings) {
         });
         note(cx, "Draws the menu bar's dropdowns dark. Applies the next time a menu opens.");
     }
-    row(cx, "Clock shows", |cx| {
-        choice(cx, "Time (m:ss.cc)", !st.clock_bars, true, set(Set::ClockBars(false)));
-        choice(cx, "Bars (bar.beat.16th)", st.clock_bars, true, set(Set::ClockBars(true)));
-    });
 }
 
 fn editing(cx: &mut Context, st: &Settings) {
@@ -297,6 +292,20 @@ fn project_settings(cx: &mut Context, s: Signals) {
                 choice(cx, filter_name(m), !auto && m == mode, true, move || AppEvent::SetFilter(FilterPick(Some(m))));
             }
         });
+    });
+    Binding::new(cx, s.project_format, move |cx| {
+        let (rate, bits) = s.project_format.get();
+        row(cx, "Sample rate", |cx| {
+            for r in crate::file::PROJECT_RATES {
+                choice(cx, format!("{:.1} kHz", r as f32 / 1000.0), rate == r, true, move || AppEvent::SetProjectRate(r));
+            }
+        });
+        row(cx, "Bit depth", |cx| {
+            for b in crate::file::BIT_DEPTHS {
+                choice(cx, format!("{b}-bit"), bits == b, true, move || AppEvent::SetBitDepth(b));
+            }
+        });
+        note(cx, "The project's format: the display shows it, and Export Audio starts from it. The output device's rate is in Settings > Audio.");
     });
     note(cx, "Saved in the project. Tempo lives in the top bar.");
 }

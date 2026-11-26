@@ -221,6 +221,34 @@ impl View for PresetList {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
+            // Preview on select: the arrows move through the presets and
+            // audition each one (a short note), as a click does.
+            WindowEvent::KeyDown(code @ (Code::ArrowUp | Code::ArrowDown), _) if self.s.rename.with_untracked(|r| r.is_none()) => {
+                let presets: Vec<(usize, usize)> = self.items.iter().enumerate().filter_map(|(i, it)| if let Item::Preset(p) = it { Some((i, *p)) } else { None }).collect();
+                if presets.is_empty() {
+                    return;
+                }
+                let cur = self.s.browser_sel.get_untracked().and_then(|p| presets.iter().position(|(_, q)| *q == p));
+                let k = match (cur, *code == Code::ArrowDown) {
+                    (None, _) => 0,
+                    (Some(k), true) => (k + 1).min(presets.len() - 1),
+                    (Some(k), false) => k.saturating_sub(1),
+                };
+                let (i, p) = presets[k];
+                // Keep it in view.
+                let top: f32 = self.items[..i].iter().map(item_h).sum();
+                let h = item_h(&self.items[i]);
+                let view_h = cx.bounds().h / cx.scale_factor();
+                if top < self.scroll {
+                    self.scroll = top;
+                } else if top + h > self.scroll + view_h {
+                    self.scroll = top + h - view_h;
+                }
+                cx.emit(AppEvent::BrowserSelect(Some(p)));
+                cx.emit(AppEvent::AuditionBrief(p));
+                cx.needs_redraw();
+                meta.consume();
+            }
             WindowEvent::MouseScroll(_, sy) => {
                 let max = (self.content_h() - cx.bounds().h / cx.scale_factor()).max(0.0);
                 self.scroll = (self.scroll - sy * WHEEL_PX).clamp(0.0, max);
@@ -235,6 +263,8 @@ impl View for PresetList {
                         self.press = Some((i, cx.mouse().cursor_x, cx.mouse().cursor_y));
                         self.dragging = false;
                         cx.capture();
+                        // The arrow keys move the selection from here.
+                        cx.focus();
                         cx.emit(AppEvent::BrowserSelect(Some(p)));
                         cx.emit(AppEvent::Audition(Some(p)));
                     }
@@ -537,6 +567,20 @@ pub fn browser(cx: &mut Context, s: Signals) {
         HStack::new(cx, |cx| {
             Label::new(cx, "BROWSER").class("section-title");
             Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
+            PreviewKey::new(cx, s).tooltip(move |cx| {
+                let text = s.settings.map(|st| {
+                    if st.preview_on_select {
+                        "Preview is on: selecting a preset (click or the arrow keys) plays it while the song is stopped. Click to turn it off."
+                    } else {
+                        "Preview is off: selecting a preset is silent. Click to turn it on."
+                    }
+                });
+                Tooltip::new(cx, move |cx| {
+                    Label::new(cx, text).class("tip-text").class("long");
+                })
+                .class("tip")
+            });
+            Element::new(cx).width(Pixels(8.0)).height(Pixels(1.0));
             Label::new(cx, crate::shortcuts::label(crate::shortcuts::Action::ToggleBrowser)).class("browser-hint");
         })
         .class("browser-head");
@@ -622,4 +666,81 @@ pub fn drag_state(s: &Signals, lane: usize) -> Option<(bool, bool)> {
     let kinds = s.user_presets.with_untracked(|u| crate::user_presets::view(d.preset, u).map_or(0, |v| v.kinds));
     let fits = kinds & lane_kind(lane) != 0;
     Some((fits, d.target == Some(lane)))
+}
+
+/// The browser header's Preview key (design pass §3.7): a headphone glyph
+/// in a plain hairline key. On: auditions presets on select; off: silent.
+/// Neutral in both states (lime is for the listed on-states only).
+pub struct PreviewKey {
+    s: Signals,
+    hover: bool,
+}
+
+/// The key's size (logical px): fits the 16 px browser header.
+const PREVIEW_W: f32 = 28.0;
+const PREVIEW_H: f32 = 16.0;
+
+impl PreviewKey {
+    pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
+        Self { s, hover: false }
+            .build(cx, |_| {})
+            .id("preview-key")
+            .width(Pixels(PREVIEW_W))
+            .height(Pixels(PREVIEW_H))
+            .cursor(CursorIcon::Hand)
+            .bind(s.settings, |mut h| h.needs_redraw())
+    }
+}
+
+impl View for PreviewKey {
+    fn element(&self) -> Option<&'static str> {
+        Some("preview-key")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                cx.emit(AppEvent::TogglePreviewOnSelect);
+                meta.consume();
+            }
+            WindowEvent::MouseEnter => {
+                self.hover = true;
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseLeave => {
+                self.hover = false;
+                cx.needs_redraw();
+            }
+            _ => {}
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        let on = self.s.settings.with_untracked(|st| st.preview_on_select);
+        let rr = gfx::rrect(r, RADIUS_KEY * s);
+        if on {
+            canvas.draw_rrect(rr, &gfx::fill(Rgba::white(0.06)));
+        }
+        let edge = if self.hover { Rgba::hex(0x4A4A4A) } else { STROKE };
+        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(edge));
+        let ink = if on { TEXT_HI } else { TEXT_LO };
+        // A 12 × 11 headphone: the band (an arc) and two cups.
+        let o = ((r.center_x() - 6.0 * s).round(), (r.center_y() - 5.5 * s).round());
+        let band = gfx::svg_path("M1.5 7V6a4.5 4.5 0 0 1 9 0v1", o, s);
+        let mut st = gfx::stroke(ink, 1.3 * s);
+        st.set_stroke_cap(vg::PaintCap::Round);
+        canvas.draw_path(&band, &st);
+        for x in [0.5, 8.5] {
+            let cup = vg::Rect::from_xywh(o.0 + x * s, o.1 + 6.5 * s, 3.0 * s, 4.5 * s);
+            canvas.draw_rrect(gfx::rrect(cup, 1.0 * s), &gfx::fill(ink));
+        }
+        if !on {
+            // Off: a slash through the glyph.
+            let mut sl = gfx::stroke(ink, 1.3 * s);
+            sl.set_stroke_cap(vg::PaintCap::Round);
+            canvas.draw_line((o.0 + 0.5 * s, o.1 + 11.0 * s), (o.0 + 11.5 * s, o.1), &sl);
+        }
+    }
 }

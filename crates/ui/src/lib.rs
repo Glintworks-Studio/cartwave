@@ -103,8 +103,6 @@ pub struct Signals {
     pub filter_label: Signal<&'static str>,
     /// The song loops at its loop end (the capsule's loop light).
     pub loop_on: Signal<bool>,
-    /// The clock shows bars.beats.sixteenths (else m:ss.cc); remembered in settings.
-    pub clock_bars: Signal<bool>,
     /// The bottom inspector (device panel) is open: a clip is selected.
     pub inspector: Signal<bool>,
     /// The browser sidebar is shown (Ctrl+Alt+B).
@@ -273,6 +271,10 @@ pub struct AppState {
     /// The window's scale factor and logical size, as of the last tick.
     scale: f32,
     window_logical: (f32, f32),
+    /// A brief audition (arrow keys in the browser) ends then.
+    audition_until: Option<Instant>,
+    /// When MEM was last read.
+    last_mem: Option<Instant>,
     /// TAP tempo: the current tap sequence, and the undo step count right
     /// after its first commit (later taps amend that step).
     tap: tap::TapTempo,
@@ -301,14 +303,14 @@ pub enum AppEvent {
     SetSpectrumStyle(views::chrome::SpectrumStyle),
     /// The browser's Preview key: audition presets on select (remembered).
     TogglePreviewOnSelect,
+    /// Audition a preset for a moment (selected with the arrow keys).
+    AuditionBrief(usize),
     /// Project Settings: the project's bit depth (16 / 24).
     SetBitDepth(u16),
     /// Project Settings: the project's sample rate (44 100 / 48 000).
     SetProjectRate(u32),
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
-    /// Click on the clock: m:ss.cc <-> bars.beats.sixteenths (remembered).
-    ToggleClockFormat,
     /// The split handle above the piano roll: lane viewport height.
     SetPianoPaneHeight(f32),
     /// Scroll the lanes vertically by this many logical px.
@@ -599,6 +601,10 @@ impl Model for AppState {
             }
             AppEvent::BrowserSelect(p) => self.s.browser_sel.set(*p),
             AppEvent::Audition(p) => self.audition(*p),
+            AppEvent::AuditionBrief(p) => {
+                self.audition(Some(*p));
+                self.audition_until = self.audition_lane.map(|_| Instant::now() + AUDITION_BRIEF);
+            }
             AppEvent::AssignPreset { lane, preset } => self.assign_preset(*lane, *preset),
             AppEvent::AssignPresetToClip { clip, preset } => self.assign_preset_to_clip(*clip, *preset),
             AppEvent::MakeInstrumentUnique => self.make_instrument_unique(),
@@ -669,10 +675,6 @@ impl Model for AppState {
                 let v = self.s.lane_scroll.get_untracked() + dy;
                 self.s.lane_scroll.set_if_changed(v);
                 self.clamp_lane_scroll();
-            }
-            AppEvent::ToggleClockFormat => {
-                let bars = !self.s.clock_bars.get_untracked();
-                self.set_setting(cx, Set::ClockBars(bars));
             }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
@@ -793,6 +795,10 @@ impl Model for AppState {
                     let mut d = views::export_dialog::ExportDialog::new(ts.is_some());
                     // E4: the last choices.
                     d.restore(&self.settings.export, ts);
+                    // The project's format is the export default (design pass §3.2).
+                    let (rate, bits) = self.s.project_format.get_untracked();
+                    d.opts.rate = rate;
+                    d.opts.bits = bits;
                     self.s.export_dlg.set(Some(d));
                 }
             }
@@ -1081,10 +1087,15 @@ impl AppState {
     }
 
     fn audition(&mut self, preset: Option<usize>) {
+        self.audition_until = None;
         if let Some(lane) = self.audition_lane.take() {
             self.send(Command::Preview { lane: lane as u8, note: None });
         }
         let Some(p) = preset else { return };
+        // The browser's Preview key (on by default).
+        if !self.settings.preview_on_select {
+            return;
+        }
         if self.s.transport.with_untracked(|t| t.playing) {
             // B2: no preview voice yet; say why nothing plays.
             return self.set_status("Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one.".into());
@@ -1383,6 +1394,14 @@ impl AppState {
     /// audio stats, and run the test hooks.
     fn sync_engine(&mut self) {
         self.poll_export();
+        if self.audition_until.is_some_and(|t| Instant::now() >= t) {
+            self.audition(None);
+        }
+        // MEM: the process's private memory, once a second (idle stays idle).
+        if self.last_mem.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) {
+            self.last_mem = Some(Instant::now());
+            self.s.mem_mb.set_if_changed(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32));
+        }
         // Selected lane follows the first selected clip.
         if let Some(l) = self
             .s
@@ -1462,7 +1481,6 @@ impl AppState {
                 self.last_load = Some(now);
                 // At least 1% once audio runs, so the pill never reads "0%".
                 let pct = (mean.round() as u32).clamp(1, 999);
-                self.s.mem_mb.set_if_changed(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32));
                 self.s.audio_load.set_if_changed((pct, e.sample_rate()));
             }
             let running = sh.stream_running.load(Relaxed);
@@ -1628,6 +1646,8 @@ impl AppState {
 /// Animation pump interval. Must be shorter than a frame; the model still
 /// advances only once per presented frame (see `AppState::tick`).
 const ANIMATION_PUMP: Duration = Duration::from_millis(4);
+/// How long an arrow-key audition in the browser sounds.
+const AUDITION_BRIEF: Duration = Duration::from_millis(600);
 /// Pump interval while nothing animates (meter decay etc. still settles).
 const IDLE_PUMP: Duration = Duration::from_millis(50);
 
@@ -1736,7 +1756,6 @@ pub fn build_ui(cx: &mut Context) {
         audio_load: Signal::new((0, 0)),
         filter_label: Signal::new(""),
         loop_on: Signal::new(true),
-        clock_bars: Signal::new(settings.clock_bars),
         inspector: Signal::new(false),
         browser_open: Signal::new(settings.browser_open),
         browser_query: Signal::new(String::new()),
@@ -1837,6 +1856,8 @@ pub fn build_ui(cx: &mut Context) {
         preset_rename_at: (0.0, 0.0),
         scale: 1.0,
         window_logical: (MIN_WINDOW_SIZE.0 as f32, MIN_WINDOW_SIZE.1 as f32),
+        audition_until: None,
+        last_mem: None,
         tap: tap::TapTempo::default(),
         tap_step: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
@@ -1970,8 +1991,8 @@ impl AppState {
 
 /// Smallest window (logical px) that shows everything at its designed size:
 /// - width: the inspector's fixed sections (dials, channels) plus the
-///   smallest CLIP section and the panel's padding and gaps. This is wider
-///   than the top bar needs (capsule + two sides of 412: 1028);
+///   smallest CLIP section and the panel's padding and gaps, or the top
+///   bar's three groups if wider;
 /// - height: top bar + ruler + eight full lanes + the inspector panel.
 pub const MIN_WINDOW_SIZE: (u32, u32) = (
     // The inspector (two paddings and two gaps), but never narrower than
@@ -1994,8 +2015,10 @@ const CLIP_SECTION_MIN_W: u32 = 240;
 const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
 // 320, not 480: the room the CHANNELS meters left goes to the instrument editor.
 const CLIP_SECTION_MAX_W: f32 = 320.0;
-/// The narrowest window the top bar's fixed controls fit (DESIGN.md §8).
-const TOPBAR_MIN_W: u32 = 1140;
+/// The narrowest window the top bar's three groups fit (Option D: keys
+/// 297 + display and TAP 628 + spectrum and CPU/MEM 312 + 2 × 16 padding =
+/// 1269, on the 4 px grid).
+const TOPBAR_MIN_W: u32 = 1272;
 
 const fn max_u32(a: u32, b: u32) -> u32 {
     if a > b {
@@ -3031,6 +3054,15 @@ impl AppState {
             let ppb = ppb.clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
             self.s.piano.update(|p| p.px_per_tick = ppb / TICKS_PER_BAR as f64);
         }
+        // `CHIPDAW_PX_PER_BAR=100`: the arrangement's zoom (the design pass's
+        // pixel comparison uses the mockup's 100 px per bar).
+        if let Some(ppb) = crate::dev::var("CHIPDAW_PX_PER_BAR").and_then(|v| v.parse::<f64>().ok()) {
+            self.s.arrangement.update(|a| {
+                a.view.px_per_tick = ppb / TICKS_PER_BAR as f64;
+                a.view.scroll_ticks = 0.0;
+            });
+            eprintln!("dev: CHIPDAW_PX_PER_BAR {ppb}");
+        }
     }
 }
 
@@ -3294,10 +3326,6 @@ impl AppState {
                     m.set_dark(b);
                 }
             }
-            Set::ClockBars(b) => {
-                st.clock_bars = b;
-                self.s.clock_bars.set(b);
-            }
             Set::ArrangementGrid(g) => {
                 let snap = Snap::from_label(&g);
                 st.arrangement_grid = g;
@@ -3479,7 +3507,6 @@ impl AppState {
                 self.settings.recent.clear();
                 self.save_settings();
             }
-            Cmd::ClockBars => cx.emit(AppEvent::ToggleClockFormat),
             Cmd::About => self.open_modal(Modal::About),
             Cmd::ShortcutSheet => self.open_modal(Modal::Shortcuts),
         }
@@ -3501,7 +3528,6 @@ impl AppState {
             time_selection: self.s.time_sel.with_untracked(|t| t.is_some()),
             browser: self.s.browser_open.get_untracked(),
             follow: self.s.piano.with_untracked(|p| p.follow),
-            clock_bars: self.s.clock_bars.get_untracked(),
             can_paste_time: self.clip_board.is_some(),
             range: self.time_range().is_some(),
             can_rename: self.s.arrangement.with_untracked(|a| a.selection.len() == 1 || (a.selection.is_empty() && a.track_sel.len() == 1)),

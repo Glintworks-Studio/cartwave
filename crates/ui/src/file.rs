@@ -759,7 +759,8 @@ pub fn with_extension(path: &str) -> PathBuf {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
-    /// The transport clock shows bars.beats.sixteenths instead of m:ss.cc.
+    /// Retired in the design pass (the display shows time and position at
+    /// once); kept so older settings files read the same.
     pub clock_bars: bool,
     // ── Audio ──
     /// Output device name (`None`: follow the system default).

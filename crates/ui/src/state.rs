@@ -102,11 +102,11 @@ pub struct Lane {
 /// The palette offered by the Colour ▸ menus (clips and tracks): the lane
 /// colours first, then extra hues of the same lightness.
 pub const PALETTE: [(&str, u32); 12] = [
-    ("Lime", 0xBAC51A),
-    ("Periwinkle", 0x828BEE),
-    ("Sand", 0xB3AA94),
+    ("Lime", 0xC9D24A),
+    ("Periwinkle", 0x7F86E0),
+    ("Sand", 0xB5AC98),
     ("Amber", 0xE39A42),
-    ("Rose", 0xD5609E),
+    ("Rose", 0xD9579A),
     ("Teal", 0x3CC4A6),
     ("Sky", 0x4FA8E0),
     ("Coral", 0xE0705A),

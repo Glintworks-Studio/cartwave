@@ -1030,13 +1030,16 @@ impl View for Arrangement {
                         return None;
                     }
                     let y = lanes_top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
-                    // Snap edges to device pixels for crisp borders.
-                    // A 1 px gutter on the right keeps abutting clips apart.
+                    // Snap edges to device pixels for crisp borders. Clips
+                    // sit 2 px in from every edge of their span and row (the
+                    // mockup), so abutting clips show a 4 px gap; a short
+                    // clip keeps at least 2 px.
+                    let inset = (CLIP_V_INSET * s).min(((x1 - x0) * 0.25).max(0.0)).round();
                     let r = vg::Rect::from_ltrb(
-                        x0.round(),
+                        x0.round() + inset,
                         y.round(),
-                        (x1.round() - s).max(x0.round() + s),
-                        (y + lane_h - 2.0 * CLIP_V_INSET * s).round(),
+                        (x1.round() - inset).max(x0.round() + inset + s),
+                        (y + lane_h - gfx::hairline(s) - 2.0 * CLIP_V_INSET * s).round(),
                     );
                     // Lift dragged clips by a pixel as they "float".
                     let r = r.with_offset((0.0, -st.drag * 1.5 * s));
@@ -1148,7 +1151,7 @@ impl View for Arrangement {
                         x0.round(),
                         y.round(),
                         x1.round(),
-                        (y + lane_h - 2.0 * CLIP_V_INSET * s).round(),
+                        (y + lane_h - gfx::hairline(s) - 2.0 * CLIP_V_INSET * s).round(),
                     );
                     let col = a.clip(o.id).and_then(|c| c.color).unwrap_or(a.lanes[o.lane].color);
                     clip::draw_ghost(canvas, r, col, s);
@@ -1322,21 +1325,7 @@ impl View for Arrangement {
             }
         }
 
-        // Top edge inner shadow under the ruler for depth.
-        canvas.draw_rect(
-            vg::Rect::from_xywh(rect.left, rect.top, rect.width(), 8.0 * s),
-            &{
-                let mut p = vg::Paint::default();
-                p.set_dither(gfx::dither_on());
-                p.set_shader(gfx::linear(
-                    (rect.left, rect.top),
-                    (rect.left, rect.top + 8.0 * s),
-                    &[Rgba::black(0.3), Rgba::black(0.0)],
-                    None,
-                ));
-                p
-            },
-        );
+        // (No shade under the ruler: Option D has one hairline, no stacked edges.)
         canvas.restore();
     }
 }

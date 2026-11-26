@@ -26,7 +26,6 @@ pub enum Cmd {
     ProjectSettings,
     OpenRecent(usize),
     ClearRecent,
-    ClockBars,
     About,
     ShortcutSheet,
 }
@@ -40,7 +39,6 @@ impl Cmd {
             Cmd::ProjectSettings => "file.project_settings".into(),
             Cmd::OpenRecent(i) => format!("file.recent.{i}"),
             Cmd::ClearRecent => "file.recent.clear".into(),
-            Cmd::ClockBars => "view.clock_bars".into(),
             Cmd::About => "help.about".into(),
             Cmd::ShortcutSheet => "help.shortcuts".into(),
         }
@@ -55,7 +53,6 @@ impl Cmd {
             Cmd::ImportAudio,
             Cmd::ProjectSettings,
             Cmd::ClearRecent,
-            Cmd::ClockBars,
             Cmd::About,
             Cmd::ShortcutSheet,
         ];
@@ -76,7 +73,6 @@ impl Cmd {
             Cmd::ProjectSettings => "Project Settings…".into(),
             Cmd::OpenRecent(i) => format!("Recent {i}"),
             Cmd::ClearRecent => "Clear Menu".into(),
-            Cmd::ClockBars => "Clock Shows Bars".into(),
             Cmd::About => "About ChipDAW".into(),
             Cmd::ShortcutSheet => "Keyboard Shortcuts".into(),
         }
@@ -165,8 +161,6 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         a(Action::ZoomToFit),
         Separator,
         Check(Cmd::Action(Action::DrawMode)),
-        Separator,
-        Check(Cmd::ClockBars),
     ];
     let mut help = vec![Item(Cmd::ShortcutSheet), a(Action::GettingStarted)];
     if !mac {
@@ -238,7 +232,6 @@ pub struct MenuState {
     pub time_selection: bool,
     pub browser: bool,
     pub follow: bool,
-    pub clock_bars: bool,
     /// Open Recent, newest first (display text, path).
     pub recent: Vec<String>,
     /// Batch 3: something to paste in the active editor, a time range (time
@@ -282,7 +275,6 @@ impl MenuState {
             Cmd::Action(Action::ToggleBrowser) => self.browser,
             Cmd::Action(Action::Follow) => self.follow,
             Cmd::Action(Action::DrawMode) => self.draw,
-            Cmd::ClockBars => self.clock_bars,
             _ => false,
         }
     }

@@ -93,8 +93,8 @@ label {
     alignment: center;
     corner-radius: 8px;
     background-color: #151515;
-    border-width: 1px;
-    border-color: #323232;
+    /* Notices get no stroke treatment (VISUAL-SPEC.md §1). */
+    border-width: 0px;
     shadow: 0px 4px 16px 0px rgba(0, 0, 0, 0.6);
 }
 
@@ -172,9 +172,10 @@ label {
 }
 
 /* ───────────── Buttons ─────────────
-   Stylesheet twins of the procedural keys (views/chrome.rs): lit from
-   below, a #383838 stroke and a brighter top edge. CSS can't fade the top
-   edge towards the corners, so stock-button keys use a uniform top line. */
+   Option D's second tier (VISUAL-SPEC.md §1): every stylesheet button
+   (dialogs, panels, the browser) is a plain 1 px hairline: no sheen, no
+   gradient stroke. The key material belongs to the view, transport, TAP
+   and M/S keys only. */
 
 .btn {
     height: 24px;
@@ -184,22 +185,20 @@ label {
     padding-right: 12px;
     corner-radius: 4px;
     alignment: center;
-    background-color: transparent;
-    background-image: linear-gradient(to bottom, #191919, #424242);
+    background-color: #151515;
     border-width: 1px;
-    border-color: #383838;
-    shadow: 0px 1px 0px 0px rgba(153, 153, 153, 0.45) inset;
-    transition: background-image 140ms ease-out, shadow 140ms ease-out, translate 90ms ease-out;
+    border-color: #323232;
+    transition: background-color 140ms ease-out, border-color 140ms ease-out, translate 90ms ease-out;
     cursor: hand;
 }
 
 .btn:hover {
-    background-image: linear-gradient(to bottom, #202020, #4A4A4A);
+    background-color: #1C1C1C;
+    border-color: #4A4A4A;
 }
 
 .btn:active {
-    background-image: linear-gradient(to bottom, #121212, #2E2E2E);
-    shadow: 0px 1px 0px 0px rgba(153, 153, 153, 0.15) inset;
+    background-color: #101010;
     translate: 0px 1px;
 }
 
@@ -251,12 +250,13 @@ label {
 }
 
 .btn.checked label {
-    color: var(--accent);
+    color: var(--text-hi);
 }
 
+/* Checked: neutral, a brighter hairline over a faint wash. */
 .btn.checked {
-    shadow: 0px 1px 0px 0px rgba(230, 230, 230, 0.35) inset,
-            0px 0px 8px 0px rgba(230, 230, 230, 0.10);
+    background-color: #202020;
+    border-color: #9A9A9A;
 }
 
 /* ───────────── Inset text fields ─────────────
@@ -571,7 +571,7 @@ rename-box {
     corner-radius: 4px;
     background-color: #0A0A0A;
     border-width: 1px;
-    border-color: var(--accent);
+    border-color: #9A9A9A;
     shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.6);
 }
 
