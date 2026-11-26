@@ -447,3 +447,4 @@ Branch `app-shell/batch-3` from `main` @ fb2d632. Unattended; decisions are numb
   - `trace_app.ps1`: still pending (needs elevation; not attempted).
 - **Gates:** all pass on the final build (17/17 Batch 3 ATs, 9/9 AT-01…19, 179 tests, clippy and
   release build clean, contrast ≥ 4.66:1). Merge follows.
+- **Merge.** `main` fast-forwarded from fb2d632 to 7d0d18e (`app-shell/batch-3`), plus this note; pushed with the branch. The vizia fork's `chipdaw-perf` was pushed earlier (159bbe55..5a3b035a).
