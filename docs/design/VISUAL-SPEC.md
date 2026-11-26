@@ -178,3 +178,30 @@ the `overview` recipe, 1 px short of their end. The visible part: 1 px `#8C8C8C`
 with an 8% inner top highlight, y 2 … 31 (not lime). The loop: a 2 px lime line at 55% along the top,
 only while the loop is on. The playhead: 1 px `#E6E6E6` at 60%. The clip layer is cached and redrawn
 only when clips, colours, the track count or the song length change.
+
+## 12. macOS: colour management (Mac catch-up)
+
+Every token above is **sRGB**, and on macOS the window says so: vizia fork commit 8 sets the
+window's colour space to sRGB (`NSWindow.colorSpace`), so the window server converts what Skia
+draws into each display's own profile, as it does for any native AppKit view.
+
+Measured (MAC-CATCHUP.md §4.7, `docs/mac-catchup/tools/color_mac.py`): the app and a native
+AppKit window of the same sRGB colours side by side on both displays, captured and read as
+Digital Color Meter's "Display in sRGB" does (converted from the display's profile).
+
+| | 320 Hz panel (wide gamut) | 60 Hz panel (sRGB-like) |
+|---|---|---|
+| App vs native window, raw display values | identical (0 levels) on all 6 flat swatches | identical |
+| App in sRGB vs the token | ≤ 1 level (pulse header `#C8D24A` for `#C9D24A`) | 0 |
+| Lime `#C7D74E` (the display's indicator text) | `#C6D74E` | `#C7D74E` |
+| Raw values the panel gets, e.g. VRC6 `#D9579A` | `#C16598` (gamut mapping, as for native apps) | `#D9579A` |
+
+- **Check colours in sRGB mode.** On a wide-gamut display the raw (device) values differ from
+  the tokens by design; Digital Color Meter's "Display native values" shows those, "Display in
+  sRGB" shows the tokens.
+- Screenshots taken with `screencapture` carry the display's profile; convert them to sRGB
+  before comparing pixels with Windows screenshots (the Mac harness's `img` tool does).
+- Dithering (fork 60907aad) and ColorSync's conversion don't interact: banding measured on the
+  raw values and on the sRGB-converted ones is the same (`docs/mac-catchup/results/banding.md`).
+- Untested here: a Retina (P3) laptop panel, and the 2× path on a native 2× display (the 2×
+  checks ran in a HiDPI mode of an sRGB-like monitor).
