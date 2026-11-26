@@ -1,0 +1,362 @@
+{
+ "client_top": 51,
+ "deviations": [
+  {
+   "probe": "TAP text",
+   "mockup": [
+    987,
+    34,
+    1009,
+    42
+   ],
+   "app": [
+    987,
+    34,
+    1011,
+    42
+   ],
+   "delta_ltrb": [
+    0,
+    0,
+    2,
+    0
+   ]
+  },
+  {
+   "probe": "loop brace",
+   "mockup": [
+    380,
+    76,
+    1180,
+    80
+   ],
+   "app": [
+    380,
+    76,
+    1183,
+    80
+   ],
+   "delta_ltrb": [
+    0,
+    0,
+    3,
+    0
+   ]
+  },
+  {
+   "probe": "ruler hairline",
+   "mockup": [
+    21,
+    102,
+    1440,
+    105
+   ],
+   "app": [
+    0,
+    102,
+    1440,
+    105
+   ],
+   "delta_ltrb": [
+    -21,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "probe": "preset 1",
+   "mockup": [
+    130,
+    148,
+    199,
+    157
+   ],
+   "app": [
+    129,
+    148,
+    199,
+    160
+   ],
+   "delta_ltrb": [
+    -1,
+    0,
+    0,
+    3
+   ]
+  },
+  {
+   "probe": "volume thumb 1",
+   "mockup": [
+    297,
+    152,
+    305,
+    164
+   ],
+   "app": [
+    299,
+    152,
+    307,
+    164
+   ],
+   "delta_ltrb": [
+    2,
+    0,
+    2,
+    0
+   ]
+  },
+  {
+   "probe": "clip Bassline (row)",
+   "mockup": [
+    383,
+    180,
+    1177,
+    196
+   ],
+   "app": [
+    383,
+    180,
+    1177,
+    243
+   ],
+   "delta_ltrb": [
+    0,
+    0,
+    0,
+    47
+   ]
+  },
+  {
+   "probe": "clip Walk Down (row)",
+   "mockup": [
+    1183,
+    180,
+    1440,
+    196
+   ],
+   "app": [
+    1183,
+    180,
+    1440,
+    243
+   ],
+   "delta_ltrb": [
+    0,
+    0,
+    0,
+    47
+   ]
+  }
+ ],
+ "alignment": {
+  "app": [
+   {
+    "x": 400,
+    "value_ink": [
+     426,
+     22,
+     474,
+     34
+    ],
+    "label_ink": [
+     421,
+     45,
+     483,
+     53
+    ],
+    "ink_centre_offset": -0.5,
+    "value_bottom": 34
+   },
+   {
+    "x": 496,
+    "value_ink": [
+     514,
+     23,
+     592,
+     37
+    ],
+    "label_ink": [
+     540,
+     45,
+     566,
+     53
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 37
+   },
+   {
+    "x": 609,
+    "value_ink": [
+     632,
+     24,
+     684,
+     37
+    ],
+    "label_ink": [
+     631,
+     45,
+     684,
+     53
+    ],
+    "ink_centre_offset": 0.5,
+    "value_bottom": 37
+   },
+   {
+    "x": 706,
+    "value_ink": [
+     721,
+     24,
+     773,
+     37
+    ],
+    "label_ink": [
+     729,
+     45,
+     765,
+     53
+    ],
+    "ink_centre_offset": 0.5,
+    "value_bottom": 37
+   },
+   {
+    "x": 787,
+    "value_ink": [
+     802,
+     24,
+     854,
+     37
+    ],
+    "label_ink": [
+     806,
+     45,
+     850,
+     53
+    ],
+    "ink_centre_offset": 0.5,
+    "value_bottom": 37
+   },
+   {
+    "x": 868,
+    "value_ink": [
+     876,
+     23,
+     944,
+     37
+    ],
+    "label_ink": [
+     897,
+     45,
+     919,
+     53
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 37
+   }
+  ],
+  "mockup": [
+   {
+    "x": 400,
+    "value_ink": [
+     427,
+     22,
+     475,
+     34
+    ],
+    "label_ink": [
+     422,
+     45,
+     483,
+     53
+    ],
+    "ink_centre_offset": -0.5,
+    "value_bottom": 34
+   },
+   {
+    "x": 496,
+    "value_ink": [
+     519,
+     22,
+     588,
+     38
+    ],
+    "label_ink": [
+     540,
+     47,
+     565,
+     54
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 38
+   },
+   {
+    "x": 609,
+    "value_ink": [
+     627,
+     22,
+     690,
+     37
+    ],
+    "label_ink": [
+     632,
+     47,
+     684,
+     54
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 37
+   },
+   {
+    "x": 706,
+    "value_ink": [
+     722,
+     22,
+     774,
+     37
+    ],
+    "label_ink": [
+     730,
+     47,
+     764,
+     54
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 37
+   },
+   {
+    "x": 787,
+    "value_ink": [
+     803,
+     22,
+     854,
+     37
+    ],
+    "label_ink": [
+     806,
+     47,
+     849,
+     54
+    ],
+    "ink_centre_offset": 0.0,
+    "value_bottom": 37
+   },
+   {
+    "x": 868,
+    "value_ink": [
+     878,
+     14,
+     958,
+     38
+    ],
+    "label_ink": [
+     898,
+     47,
+     920,
+     54
+    ],
+    "ink_centre_offset": -4.0,
+    "value_bottom": 38
+   }
+  ]
+ }
+}

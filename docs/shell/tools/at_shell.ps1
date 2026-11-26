@@ -59,10 +59,10 @@ function Ui-Texts {
 }
 function Stop-App { if (Alive) { Stop-Process -Id $script:proc.Id -Force; Start-Sleep -Milliseconds 400 } }
 
-# Client coordinates (1440x900 at 100%): the clips "Intro Lead" and "Hook A" on Pulse 1,
+# Client coordinates (1440x920 at 100%, the Option D layout of the design pass): the clips "Intro Lead" and "Hook A" on Pulse 1,
 # empty Pulse 2 space, the browser search box, the inspector's CLIP field.
-$IntroLead = @(700, 130); $HookA = @(1100, 130); $EmptyP2 = @(700, 190)
-$Search = @(120, 110); $ClipField = @(667, 734)
+$IntroLead = @(700, 140); $HookA = @(1100, 140); $EmptyP2 = @(700, 213)
+$Search = @(120, 126); $ClipField = @(667, 754)
 
 # ─────────────────────────── AT-01 (F-01): never lose work silently ───────────────────────────
 if (Want "AT-01") {
@@ -138,7 +138,8 @@ if (Want "AT-02") {
   foreach ($vk in 0x72, 0x73, 0x74, 0x75, 0x76) { Key $vk; Start-Sleep -Milliseconds 400 }   # F3..F7
   Start-Sleep -Milliseconds 500
   Shot "at02_after"
-  $obs.t02_diff_pixels = Pixel-Diff "$Work\at02_before.png" "$Work\at02_after.png"
+  # The top bar's MEM read-out is live (the process's memory), like a clock: left out.
+  $obs.t02_diff_pixels = Pixel-Diff "$Work\at02_before.png" "$Work\at02_after.png" -Skip @(1330, 70, 1442, 115)
   $obs.t02_title = Title
   Ctrl 0x53; Start-Sleep -Milliseconds 400; Copy-Item $a "$Work\at02_after.chipdaw" -Force
   Stop-App
@@ -197,10 +198,10 @@ if (Want "AT-04") {
   # Screenshot y = client y + 51 (title bar 31, menu bar 20). VRC6 headers (lanes 6-8)
   # against the 2A03 headers (lanes 1-3), before and after.
   $obs.t04_luma = @(
-    (Mean-Luma "$Work\at04_before.png" 250 461 520 631), (Mean-Luma "$Work\at04_before.png" 250 161 520 331),
-    (Mean-Luma "$Work\at04_after.png" 250 461 520 631), (Mean-Luma "$Work\at04_after.png" 250 161 520 331))
+    (Mean-Luma "$Work\at04_before.png" 250 520 520 739), (Mean-Luma "$Work\at04_before.png" 250 155 520 374),
+    (Mean-Luma "$Work\at04_after.png" 250 520 520 739), (Mean-Luma "$Work\at04_after.png" 250 155 520 374))
   # A click on a VRC6 clip ("Saw Bass", lane 8) selects nothing; Delete removes nothing.
-  Click 800 540; DelKey
+  Click 800 650; DelKey
   Ctrl 0x53; Start-Sleep -Milliseconds 400; Copy-Item $a "$Work\at04_saved.chipdaw" -Force
   Stop-App
 }

@@ -17,14 +17,21 @@ function Read-Pixels([string]$Path) {
   $r
 }
 
-function Pixel-Diff([string]$PathA, [string]$PathB) {
+# -Skip x0,y0,x1,y1: a region left out (a live read-out, e.g. MEM).
+function Pixel-Diff([string]$PathA, [string]$PathB, [int[]]$Skip = @()) {
   # (PowerShell names are case-insensitive: $pa/$pb, not $a/$A.)
   $pa = Read-Pixels $PathA; $pb = Read-Pixels $PathB
   if ($pa.W -ne $pb.W -or $pa.H -ne $pb.H) { return -1 }
   $x = $pa.Bytes; $y = $pb.Bytes
   $diff = 0
   for ($i = 0; $i -lt $x.Length; $i += 4) {
-    if ($x[$i] -ne $y[$i] -or $x[$i + 1] -ne $y[$i + 1] -or $x[$i + 2] -ne $y[$i + 2]) { $diff++ }
+    if ($x[$i] -ne $y[$i] -or $x[$i + 1] -ne $y[$i + 1] -or $x[$i + 2] -ne $y[$i + 2]) {
+      if ($Skip.Count -eq 4) {
+        $px = ($i / 4) % $pa.W; $py = [math]::Floor(($i / 4) / $pa.W)
+        if ($px -ge $Skip[0] -and $px -lt $Skip[2] -and $py -ge $Skip[1] -and $py -lt $Skip[3]) { continue }
+      }
+      $diff++
+    }
   }
   $diff
 }

@@ -517,6 +517,9 @@ impl Model for AppState {
             AppEvent::SetSpectrumStyle(st) => {
                 self.settings.spectrum_style = st.key().into();
                 self.save_settings();
+                if dev::enabled() {
+                    eprintln!("dev: spectrum style {}", st.key());
+                }
             }
             AppEvent::TogglePreviewOnSelect => {
                 let on = !self.settings.preview_on_select;
@@ -526,10 +529,12 @@ impl Model for AppState {
             AppEvent::SetBitDepth(b) => {
                 self.s.project_format.update(|f| f.1 = *b);
                 self.update_dirty();
+                self.log_format();
             }
             AppEvent::SetProjectRate(r) => {
                 self.s.project_format.update(|f| f.0 = *r);
                 self.update_dirty();
+                self.log_format();
             }
             AppEvent::SetDial(i, v) => {
                 let lane = self.s.lane_sel.get_untracked();
@@ -1094,6 +1099,9 @@ impl AppState {
         let Some(p) = preset else { return };
         // The browser's Preview key (on by default).
         if !self.settings.preview_on_select {
+            if dev::enabled() {
+                eprintln!("dev: audition preset {p} off (Preview key)");
+            }
             return;
         }
         if self.s.transport.with_untracked(|t| t.playing) {
@@ -1110,6 +1118,9 @@ impl AppState {
         };
         self.pending_audition = Some((lane, pitch));
         self.audition_lane = Some(lane);
+        if dev::enabled() {
+            eprintln!("dev: audition preset {p} lane {lane}");
+        }
     }
 
     /// Loads preset `p` on a lane, with its channel controls; one undo step.
@@ -1340,6 +1351,13 @@ impl AppState {
             self.s.dials.update(|d| d[slot] = v);
         }
         self.sync_piano_lane_volume();
+    }
+
+    fn log_format(&self) {
+        if dev::enabled() {
+            let (r, b) = self.s.project_format.get_untracked();
+            eprintln!("dev: project format {r} {b}");
+        }
     }
 
     /// The track headers' faders follow the channel parameters.
@@ -2485,6 +2503,7 @@ impl AppState {
         self.clip_looping = false;
         self.s.loop_on.set(p.loop_on);
         self.s.project_format.set((p.rate, p.bits));
+        self.log_format();
         if !p.load_report.is_empty() {
             self.set_status(p.load_report.join(" "));
         }
@@ -3056,6 +3075,9 @@ impl AppState {
         }
         // `CHIPDAW_PX_PER_BAR=100`: the arrangement's zoom (the design pass's
         // pixel comparison uses the mockup's 100 px per bar).
+        if dev::enabled() {
+            eprintln!("dev: spectrum style {} (settings)", views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style).key());
+        }
         if let Some(ppb) = crate::dev::var("CHIPDAW_PX_PER_BAR").and_then(|v| v.parse::<f64>().ok()) {
             self.s.arrangement.update(|a| {
                 a.view.px_per_tick = ppb / TICKS_PER_BAR as f64;

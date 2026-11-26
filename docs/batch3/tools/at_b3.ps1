@@ -4,8 +4,9 @@
 # saves the project it edited, and check_b3.py checks the saved files, the dev-mode stderr
 # lines (context-menu items, zoom ranges, piano-roll bounds) and the screenshots' pixels.
 # Fixtures: fixtures.py (format v4, known clips and notes). Window 1440x900 logical, audio off.
-# Coordinates are logical client px at 100%: bar b starts at x = 600 + (b-1)*92, lane i is
-# centred at y = 131 + 60*i, the ruler is y 61..99, track names at x 300.
+# Coordinates are logical client px at 100% (Option D layout, design pass): bar b starts at
+# x = 621 + (b-1)*92, lane i is centred at y = 141 + 73*i, the ruler is y 76..103, the track
+# headers at x 241..620 (their S keys at x 597), the browser's rows 16 px lower than before.
 param([string]$Exe = ".\target\release\app.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-b3-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @(), [int]$Scale = 100)
@@ -19,8 +20,8 @@ $obs = [ordered]@{ work = $Work; scale = $Scale }
 # (-Only through `pwsh -File` arrives as one "AT-07,AT-11" string.)
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 function Want($id) { $Only.Count -eq 0 -or $Only -contains $id }
-function Bx($b) { 600 + ($b - 1) * 92 }
-function Ly($i) { 131 + 60 * $i }
+function Bx($b) { 621 + ($b - 1) * 92 }
+function Ly($i) { 141 + 73 * $i }
 function Fx($name, $as) { $p = Join-Path $Work "$as.chipdaw"; Copy-Item (Join-Path $Work "$name.chipdaw") $p -Force; $p }
 function Keep($proj, $as) { Copy-Item $proj (Join-Path $Work "$as.chipdaw") -Force }
 function DevLines($d, $pat) { @(StdErr $d | Where-Object { $_ -match $pat }) }
@@ -208,8 +209,8 @@ if (Want "AT-25") {
   $obs.t25_texts = @(Ui-Texts)
   Shot "at25_track_selected"
   $obs.t25_tip = Hover-Text "Make Unique"; Shot "at25_tooltip_disabled"
-  ClickL 577 ((Ly 0) - 1); ClickL 577 ((Ly 1) - 1)               # S on Pulse 1, then S on Pulse 2
-  CtrlClickL 577 ((Ly 2) - 1)                                   # Ctrl-click S on the triangle: adds
+  ClickL 597 ((Ly 0) - 1); ClickL 597 ((Ly 1) - 1)               # S on Pulse 1, then S on Pulse 2
+  CtrlClickL 597 ((Ly 2) - 1)                                   # Ctrl-click S on the triangle: adds
   Save; Keep $p "at25_out"; Stop-App
 }
 
@@ -271,13 +272,13 @@ if (Want "AT-28") {
 if (Want "AT-29") {
   $p = Fx "fx_basic" "at29"; $d = Join-Path $Work "d29"
   Launch -Project $p -Data $d -Scale $Scale
-  ClickL 120 110; TypeText "ab"
+  ClickL 120 126; TypeText "ab"
   $obs.t29_typed = @(Ui-Texts | Where-Object { $_ -like "field:*" })
   K 0x1B; Start-Sleep -Milliseconds 300
   $obs.t29_after_esc = @(Ui-Texts | Where-Object { $_ -like "field:*" })
-  ClickL 100 177                                                # "Classic 2A03 Band": select only
+  ClickL 100 193                                                # "Classic 2A03 Band": select only
   Save; Keep $p "at29_click"; Shot "at29_layout_selected"
-  DblL 100 177                                                  # double-click: load (it asks: 2A03)
+  DblL 100 193                                                  # double-click: load (it asks: 2A03)
   $obs.t29_dialog = Dialog-Text
   $obs.t29_keep = Press-Button "Keep 2A03 + VRC6"
   Save; Keep $p "at29_dbl"; Stop-App
@@ -303,9 +304,9 @@ if (Want "AT-31") {
   $obs.t31_save = Click-Text "Save as Preset"; Start-Sleep -Milliseconds 500
   $obs.t31_presets = Test-Path (Join-Path $d "user_presets.json")
   # Find the user preset ("Square Lead 2": a unique name) with the search.
-  ClickL 120 110; TypeText "Square Lead 2"; K 0x0D
+  ClickL 120 126; TypeText "Square Lead 2"; K 0x0D
   Shot "at31_search"
-  RightL 100 177; Shot "at31_preset_menu"; K 0x1B
+  RightL 100 193; Shot "at31_preset_menu"; K 0x1B
   $obs.t31_menu = @(DevLines $d "^dev: menu Preset")
   Stop-App
 }
