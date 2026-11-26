@@ -153,12 +153,14 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
     let view = vec![
         Check(Cmd::Action(Action::ToggleBrowser)),
         Check(Cmd::Action(Action::Follow)),
+        Check(Cmd::Action(Action::ShowOverview)),
         Separator,
         a(Action::ZoomIn),
         a(Action::ZoomOut),
         a(Action::ZoomToSelection),
         a(Action::ZoomBack),
         a(Action::ZoomToFit),
+        a(Action::FitSong),
         Separator,
         Check(Cmd::Action(Action::DrawMode)),
     ];
@@ -244,6 +246,8 @@ pub struct MenuState {
     pub can_consolidate: bool,
     pub can_zoom_back: bool,
     pub draw: bool,
+    /// View ▸ Show Overview (polish 2 §7.3).
+    pub overview: bool,
 }
 
 impl MenuState {
@@ -264,7 +268,7 @@ impl MenuState {
             Cmd::Action(Action::Consolidate) => self.can_consolidate,
             Cmd::Action(Action::ZoomBack) => self.can_zoom_back,
             Cmd::Action(Action::ZoomToSelection) => self.range || (self.piano && self.notes_selected) || self.piano,
-            Cmd::Action(Action::ZoomToFit) => !self.piano,
+            Cmd::Action(Action::ZoomToFit | Action::FitSong) => !self.piano,
             Cmd::ClearRecent => !self.recent.is_empty(),
             _ => true,
         }
@@ -274,6 +278,7 @@ impl MenuState {
         match c {
             Cmd::Action(Action::ToggleBrowser) => self.browser,
             Cmd::Action(Action::Follow) => self.follow,
+            Cmd::Action(Action::ShowOverview) => self.overview,
             Cmd::Action(Action::DrawMode) => self.draw,
             _ => false,
         }

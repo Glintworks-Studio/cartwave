@@ -11,6 +11,10 @@ use crate::{AppEvent, Signals};
 pub struct Ruler {
     s: Signals,
     scrubbing: bool,
+    /// A press away from the brace: a click (under 3 px) sets the playhead
+    /// as before; a drag navigates (polish 2 §7.1: vertical zooms, anchored
+    /// at the grabbed bar; horizontal scrolls). Shift+drag scrubs (P2-R).
+    nav: Option<super::overview::NavDrag>,
     /// Loop brace drag: what's grabbed, press x, and the loop at press.
     brace: Option<(BracePart, f32, f64, f64)>,
     /// Retained background, ticks and labels; re-rendered when the view changes.
@@ -52,6 +56,7 @@ impl Ruler {
         Self {
             s,
             scrubbing: false,
+            nav: None,
             brace: None,
             layer: Default::default(),
             handle: Default::default(),
@@ -124,6 +129,9 @@ impl Ruler {
     }
 }
 
+/// The beat-time ruler's hover help (polish 2 §6.5, §7.1).
+pub const RULER_HELP: &str = "Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit";
+
 /// Picks a bar-label step so labels never collide.
 pub fn label_step(px_per_bar: f64) -> u32 {
     [1u32, 2, 4, 8, 16]
@@ -150,9 +158,15 @@ impl View for Ruler {
                     self.brace = Some((part, x, ls, le));
                     // One brace drag is one undo step (F-33).
                     cx.emit(AppEvent::GestureBegin);
-                } else {
+                } else if cx.modifiers().shift() {
                     self.scrubbing = true;
                     self.set_from_mouse(cx);
+                } else {
+                    let s = cx.scale_factor();
+                    let b = cx.bounds();
+                    let win = (cx.mouse().cursor_x / s, cx.mouse().cursor_y / s);
+                    let view = self.s.arrangement.with_untracked(|a| a.view);
+                    self.nav = Some(super::overview::NavDrag::new(win, view, win.0 - b.x / s));
                 }
                 cx.capture();
                 meta.consume();
@@ -175,17 +189,45 @@ impl View for Ruler {
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) if self.scrubbing => self.set_from_mouse(cx),
+            WindowEvent::MouseMove(_, _) if self.nav.is_some() => {
+                let s = cx.scale_factor();
+                let b = cx.bounds();
+                let win = (cx.mouse().cursor_x / s, cx.mouse().cursor_y / s);
+                let Some(d) = self.nav.as_mut() else { return };
+                if d.update_moved(win) {
+                    // The grabbed bar stays under the mouse: content follows
+                    // it sideways; up and down zoom around it.
+                    let v = d.view(win.1 - d.press.1, win.0 - b.x / s);
+                    self.s.arrangement.update(|a| a.view = v);
+                    cx.emit(WindowEvent::SetCursor(CursorIcon::ZoomIn));
+                }
+            }
             WindowEvent::MouseMove(_, _) if self.brace.is_some() => self.drag_brace(cx),
             WindowEvent::MouseMove(_, _) => {
-                let icon = match self.brace_at(cx) {
-                    Some(BracePart::Start | BracePart::End) => CursorIcon::EwResize,
-                    Some(BracePart::Body) => CursorIcon::Grab,
-                    None => CursorIcon::Hand,
+                let (icon, help) = match self.brace_at(cx) {
+                    Some(BracePart::Start | BracePart::End) => (CursorIcon::EwResize, "Loop brace: drag an end to resize · double-click to switch the loop"),
+                    Some(BracePart::Body) => (CursorIcon::Grab, "Loop brace: drag to move · double-click to switch the loop"),
+                    // §7.1: the zoom cursor over the beat-time ruler.
+                    None => (CursorIcon::ZoomIn, RULER_HELP),
                 };
                 cx.emit(WindowEvent::SetCursor(icon));
+                cx.emit(AppEvent::HoverHelp(help.into()));
             }
-            WindowEvent::MouseLeave if self.brace.is_none() && !self.scrubbing => {
+            WindowEvent::MouseLeave if self.brace.is_none() && !self.scrubbing && self.nav.is_none() => {
                 cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
+                cx.emit(AppEvent::HoverHelp(String::new()));
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.nav.is_some() => {
+                let d = self.nav.take().unwrap();
+                cx.release();
+                if !d.moved {
+                    // A click: the playhead goes there, as before.
+                    self.set_from_mouse(cx);
+                }
+                if crate::dev::enabled() {
+                    let v = self.s.arrangement.with_untracked(|a| a.view);
+                    eprintln!("dev: ruler {} px_per_bar {:.2} scroll {:.0}", if d.moved { "drag" } else { "click" }, v.px_per_bar(), v.scroll_ticks);
+                }
             }
             WindowEvent::MouseUp(MouseButton::Left) if self.scrubbing || self.brace.is_some() => {
                 if self.brace.take().is_some() {

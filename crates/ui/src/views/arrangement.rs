@@ -1368,9 +1368,47 @@ const OFF_HINT_PX: f32 = 12.0;
 
 // ───────────────────────────── Track headers ─────────────────────────────
 
+/// The header column's surface: `#0A0A0A` and its 1 px `#1E1E1E` hairline on
+/// the lanes' side (rows and cells draw over it; a strip by the clips covers
+/// it in its row, as on the board).
+pub struct HeaderColumn {
+    s: Signals,
+}
+
+impl View for HeaderColumn {
+    fn element(&self) -> Option<&'static str> {
+        Some("track-column")
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        canvas.draw_rect(r, &gfx::fill(BG_0));
+        let l = self.s.header.get_untracked();
+        let x = (r.left + l.hairline_x() * s).round();
+        canvas.draw_rect(vg::Rect::from_xywh(x, r.top, gfx::hairline(s), r.height()), &gfx::fill(LINE_SOFT));
+    }
+}
+
 /// The cell beside the ruler: "TRACKS" (Inter 600 11, tracking .08em,
 /// #808080, 16 px in) on the ruler's #0F0F0F, over its one #1E1E1E hairline.
-pub struct TracksCell;
+pub struct TracksCell {
+    s: Signals,
+}
+
+/// A header-column cell's surface: the band colour inside the column's
+/// hairline, the hairline, and the one hairline under it.
+fn band_cell(canvas: &Canvas, r: vg::Rect, s: f32, l: &super::header_layout::HeaderLayout) {
+    let hl = gfx::hairline(s);
+    canvas.draw_rect(r, &gfx::fill(RULER_BG));
+    let x = (r.left + l.hairline_x() * s).round();
+    canvas.draw_rect(vg::Rect::from_xywh(x, r.top, hl, r.height()), &gfx::fill(LINE_SOFT));
+    canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE_SOFT));
+}
+
+/// The cells' label: 16 px in from the column's left edge, wherever the
+/// headers are (text is always left-aligned, §5.3).
+const CELL_LABEL_X: f32 = 16.0;
 
 impl View for TracksCell {
     fn element(&self) -> Option<&'static str> {
@@ -1380,34 +1418,126 @@ impl View for TracksCell {
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let s = cx.scale_factor();
         let r = gfx::snap(cx.bounds().into());
-        canvas.draw_rect(r, &gfx::fill(RULER_BG));
-        let hl = gfx::hairline(s);
-        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE_SOFT));
+        band_cell(canvas, r, s, &self.s.header.get_untracked());
         let f = gfx::font(Face::SemiBold, 11.0 * s);
         let base = (r.top + super::ruler::LABEL_BASELINE * s).round();
-        gfx::draw_text_tracked(canvas, "TRACKS", (r.left + 16.0 * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+        gfx::draw_text_tracked(canvas, "TRACKS", (r.left + CELL_LABEL_X * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
     }
 }
 
-/// Builds the track header column: the empty band cell beside the ruler,
-/// then one [`TrackRow`] per lane.
-pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
-    VStack::new(cx, |cx| {
-        TracksCell.build(cx, |_| {}).class("band-cell");
-        // The rows scroll with the lanes; the viewport clips them.
-        VStack::new(cx, |cx| {
-            VStack::new(cx, |cx| {
-                let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
-                for i in 0..lanes {
-                    TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes[i].pitch())).map(|h| Pixels(*h)));
+/// The Overview's label cell (polish 2 §7.3): "OVERVIEW" in the TRACKS
+/// style and the song's length ("24 BARS", Inter 600 10, #808080) at the
+/// right, 16 px in.
+pub struct OverviewCell {
+    s: Signals,
+}
+
+impl View for OverviewCell {
+    fn element(&self) -> Option<&'static str> {
+        Some("overview-cell")
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        band_cell(canvas, r, s, &self.s.header.get_untracked());
+        let base = (r.top + super::overview::LABEL_BASELINE * s).round();
+        let f = gfx::font(Face::SemiBold, 11.0 * s);
+        gfx::draw_text_tracked(canvas, "OVERVIEW", (r.left + CELL_LABEL_X * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+        let bars = super::overview::song_bars(&self.s);
+        let text = format!("{bars} BAR{}", if bars == 1 { "" } else { "S" });
+        let f2 = gfx::font(Face::SemiBold, 10.0 * s);
+        let tr = 0.08 * 10.0 * s;
+        let w = gfx::tracked_width(&text, &f2, tr);
+        gfx::draw_text_tracked(canvas, &text, (r.right - CELL_LABEL_X * s - w).round(), base, &f2, tr, TEXT_LO);
+    }
+}
+
+/// The boundary between the headers and the lanes (polish 2 §5.1): drag it
+/// to make the headers 380 … 600 px wide; extra width goes to the name.
+/// Saved per user when the drag ends.
+pub struct HeaderEdge {
+    s: Signals,
+    drag: Option<(f32, f32)>,
+}
+
+/// The edge's grab band inside the column (logical px).
+pub const HEADER_EDGE_GRAB: f32 = 4.0;
+
+impl View for HeaderEdge {
+    fn element(&self) -> Option<&'static str> {
+        Some("header-edge")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                let x = cx.mouse().cursor_x / cx.scale_factor();
+                self.drag = Some((x, self.s.header.get_untracked().w));
+                cx.capture();
+                meta.consume();
+            }
+            WindowEvent::MouseMove(_, _) => {
+                if let Some((x0, w0)) = self.drag {
+                    let x = cx.mouse().cursor_x / cx.scale_factor();
+                    let right = self.s.header.get_untracked().right;
+                    let w = super::header_layout::clamp_width(if right { w0 - (x - x0) } else { w0 + (x - x0) });
+                    self.s.header.update(|l| l.w = w);
                 }
+                cx.emit(crate::AppEvent::HoverHelp("Track headers: drag to make them wider or narrower (380 to 600 px)".into()));
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.drag.is_some() => {
+                self.drag = None;
+                cx.release();
+                let w = self.s.header.get_untracked().w;
+                cx.emit(crate::AppEvent::SetSetting(crate::views::modal::Set::HeaderWidth(w)));
+                meta.consume();
+            }
+            WindowEvent::MouseLeave => cx.emit(crate::AppEvent::HoverHelp(String::new())),
+            _ => {}
+        });
+    }
+}
+
+/// Builds the track header column: the Overview's label cell (when shown),
+/// the cell beside the ruler, then one [`TrackRow`] per lane, and the width
+/// edge on the lanes' side.
+pub fn track_headers(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, HeaderColumn> {
+    HeaderColumn { s }
+        .build(cx, move |cx| {
+            if overview {
+                OverviewCell { s }
+                    .build(cx, |_| {})
+                    .height(Pixels(OVERVIEW_HEIGHT))
+                    .bind(s.arrangement, |mut h| h.needs_redraw())
+                    .bind(s.transport, |mut h| h.needs_redraw())
+                    .bind(s.header, |mut h| h.needs_redraw());
+            }
+            TracksCell { s }.build(cx, |_| {}).class("band-cell").bind(s.header, |mut h| h.needs_redraw());
+            // The rows scroll with the lanes; the viewport clips them.
+            VStack::new(cx, |cx| {
+                VStack::new(cx, |cx| {
+                    let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
+                    for i in 0..lanes {
+                        TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes[i].pitch())).map(|h| Pixels(*h)));
+                    }
+                })
+                .height(Auto)
+                .position_type(PositionType::Absolute)
+                .top(s.lane_scroll.map(|v| Pixels(-*v)));
             })
-            .height(Auto)
-            .position_type(PositionType::Absolute)
-            .top(s.lane_scroll.map(|v| Pixels(-*v)));
+            .height(Stretch(1.0))
+            .overflow(Overflow::Hidden);
+            HeaderEdge { s, drag: None }
+                .build(cx, |_| {})
+                .position_type(PositionType::Absolute)
+                .left(s.header.map(|l| Pixels(if l.right { 0.0 } else { l.w - HEADER_EDGE_GRAB })))
+                .top(Pixels(0.0))
+                .width(Pixels(HEADER_EDGE_GRAB))
+                .height(Stretch(1.0))
+                .cursor(CursorIcon::EwResize);
         })
-        .height(Stretch(1.0))
-        .overflow(Overflow::Hidden);
-    })
-    .class("track-column")
+        .class("track-column")
+        .width(s.header.map(|l| Pixels(l.w)))
+        .bind(s.header, |mut h| h.needs_redraw())
 }

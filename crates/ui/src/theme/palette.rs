@@ -225,6 +225,18 @@ pub fn next_clip_color(neighbours: &[Rgba], track: Rgba, reduced: bool) -> Rgba 
     most_distinct(&auto_candidates(reduced), &avoid, neighbours)
 }
 
+/// A clip in the Overview (polish 2 §7.3): the base colour at 50% for the
+/// body and a 1 px top line in the base colour.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct OverviewColours {
+    pub body: Rgba,
+    pub top: Rgba,
+}
+
+pub fn overview(c: Rgba) -> OverviewColours {
+    OverviewColours { body: c.with_alpha(0.5), top: c.with_alpha(1.0) }
+}
+
 /// The colour swatch in menus and settings: top → bottom.
 pub fn swatch(c: Rgba) -> (Rgba, Rgba) {
     (c.lighten(0.08), c.darken(0.12))
@@ -234,6 +246,9 @@ pub fn swatch(c: Rgba) -> (Rgba, Rgba) {
 mod tests {
     use super::*;
     use crate::theme::tokens::{ROW_A, ROW_B};
+
+    /// The least OKLab distance between a lit and an unlit strip stop.
+    const STRIP_APART: f32 = 0.15;
 
     fn finite(c: Rgba) -> bool {
         [c.r, c.g, c.b, c.a].iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v))
@@ -281,6 +296,15 @@ mod tests {
             let (off, _, _) = strip(c, 0.0);
             let (on, _, _) = strip(c, 1.0);
             assert!(luminance(off[2]) < luminance(on[2]), "{hex:06X}: lit is brighter");
+            // Polish 2: the lit strip is toned down, but lit and unlit stay
+            // clearly apart at every stop.
+            for i in 0..3 {
+                let d = delta_e(off[i], on[i]);
+                assert!(d >= STRIP_APART, "{hex:06X} stop {i}: lit/unlit ΔE {d:.3}");
+            }
+            // The Overview's clips.
+            let o = overview(c);
+            assert!(finite(o.body) && finite(o.top) && (o.body.a - 0.5).abs() < 1e-6 && o.top.a == 1.0, "{hex:06X} overview");
             // Clips, in every hover and selection state.
             for (h, s) in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)] {
                 let k = clip(c, h, s);

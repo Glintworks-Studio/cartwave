@@ -139,6 +139,9 @@ pub struct Signals {
     pub header: Signal<views::header_layout::HeaderLayout>,
     /// The status bar's hover help: one line for the control under the mouse.
     pub hover_help: Signal<String>,
+    /// Persistent problems (no audio device, dropouts): the status bar's
+    /// warning icon stays while this isn't empty (polish 2 §6.4).
+    pub problems: Signal<Vec<String>>,
     /// The project's format: (sample rate Hz, bit depth). The display's
     /// indicators show it; it's the export's default (Project Settings).
     pub project_format: Signal<(u32, u16)>,
@@ -287,7 +290,13 @@ pub struct AppState {
     bpm_rename_at: (f32, f32, f32),
     /// The track gains the engine has (it starts at unity).
     sent_gains: [f32; 8],
+    /// Buffer underruns seen so far and when the count last rose (the
+    /// status bar's dropout problem).
+    underruns_seen: (u64, Option<Instant>),
 }
+
+/// A dropout problem clears after this long without another underrun.
+const DROPOUT_HOLD: Duration = Duration::from_secs(10);
 
 pub enum AppEvent {
     /// Animation pump timer.
@@ -309,6 +318,8 @@ pub enum AppEvent {
     SetLanePan(usize, i8),
     /// The status bar's hover-help line (empty: none).
     HoverHelp(String),
+    /// The status bar's warning icon was clicked (window logical x, y).
+    ShowProblems(f32, f32),
     /// A track's row height, logical px (polish 2 §4); clamped to its steps.
     SetLaneHeight(usize, f32),
     /// The spectrum's style (its right-click menu; remembered in settings.json).
@@ -530,6 +541,7 @@ impl Model for AppState {
                     self.s.arrangement.update(|a| a.lanes[*lane].pan = pan);
                 }
             }
+            AppEvent::ShowProblems(x, y) => self.open_context_menu(edit::MenuSite::Problems, *x, *y),
             AppEvent::HoverHelp(t) => {
                 if self.s.hover_help.with_untracked(|h| h != t) {
                     self.s.hover_help.set(t.clone());
@@ -1573,23 +1585,37 @@ impl AppState {
             // After a device change, say where the sound went, for a few
             // seconds (ENGINE-macos.md, test H).
             let generation = sh.generation.load(Relaxed);
+            let mut moved_to = None;
             if running && generation > self.audio_generation {
                 if self.audio_generation > 0 {
                     let dev = e.device_info();
-                    let name = dev.split(" · ").next().unwrap_or("?").to_string();
-                    self.device_notice = Some((now + Duration::from_secs(5), format!("AUDIO: now playing on {name}")));
+                    moved_to = Some(dev.split(" · ").next().unwrap_or("?").to_string());
                 }
                 self.audio_generation = generation;
             }
-            let notice = self.device_notice.as_ref().filter(|(until, _)| now < *until);
-            let msg = match sh.device_error.load(Relaxed) {
-                _ if running && notice.is_some() => notice.map(|(_, m)| m.clone()).unwrap_or_default(),
+            // Persistent problems stay on the status bar until resolved
+            // (polish 2 §6.4): no device, a device that won't open, and
+            // dropouts (until 10 s pass without one).
+            let msg: String = match sh.device_error.load(Relaxed) {
                 _ if running => String::new(),
-                engine::device_error::NO_DEVICE => "AUDIO: no output device".into(),
-                engine::device_error::REBUILDING => "AUDIO: device changed, reconnecting".into(),
-                engine::device_error::BUILD_FAILED => "AUDIO: can't open output".into(),
-                _ => "AUDIO: starting".into(),
+                engine::device_error::NO_DEVICE => "Audio: no output device. Connect one or pick another in Settings ▸ Audio.".into(),
+                engine::device_error::REBUILDING => "Audio: the device changed; reconnecting.".into(),
+                engine::device_error::BUILD_FAILED => "Audio: can't open the output device. Pick another in Settings ▸ Audio.".into(),
+                _ => "Audio: starting.".into(),
             };
+            if stats.underruns > self.underruns_seen.0 {
+                self.underruns_seen = (stats.underruns, Some(now));
+            }
+            let dropouts = self.underruns_seen.1.is_some_and(|t| now.duration_since(t) < DROPOUT_HOLD);
+            let mut problems = Vec::new();
+            if !msg.is_empty() {
+                problems.push(msg.clone());
+            }
+            if dropouts && running {
+                problems.push(format!("Audio dropouts: {} buffer underruns so far. A larger buffer (Settings ▸ Audio) helps.", self.underruns_seen.0));
+            }
+            self.s.problems.set_if_changed(problems);
+            let _ = &self.device_notice;
             // The stats change on every refresh and only the F3 overlay shows
             // them: publishing them while it is hidden would draw a frame every
             // 250 ms and keep the pump fast, so the app would never go idle.
@@ -1597,6 +1623,10 @@ impl AppState {
                 self.s.audio.set_if_changed(stats);
             }
             self.s.audio_msg.set_if_changed(msg);
+            // A non-urgent message: where the sound went after a device change.
+            if let Some(name) = moved_to {
+                self.set_status(format!("Audio: now playing on {name}"));
+            }
         }
         if let Some(e) = self.engine.as_ref() {
             self.tests.periodic(e);
@@ -1845,6 +1875,7 @@ pub fn build_ui(cx: &mut Context) {
         guide: Signal::new(false),
         header: Signal::new(views::header_layout::HeaderLayout::of(&settings)),
         hover_help: Signal::new(String::new()),
+        problems: Signal::new(Vec::new()),
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
         mem_mb: Signal::new(if dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
     };
@@ -1935,6 +1966,7 @@ pub fn build_ui(cx: &mut Context) {
         tap_step: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
         sent_gains: [1.0; 8],
+        underruns_seen: (0, None),
     };
     match state.recovery.as_ref().and_then(|r| r.start_session()) {
         Some(file::LastSession::Crashed) => {
@@ -1959,31 +1991,54 @@ pub fn build_ui(cx: &mut Context) {
 
     VStack::new(cx, |cx| {
         top_bar(cx, s);
-        HStack::new(cx, |cx| {
-            browser(cx, s);
-            Element::new(cx)
-                .class("col-divider")
-                .display(s.browser_open.map(|o| if *o { Display::Flex } else { Display::None }));
-            track_headers(cx, s);
-            Element::new(cx).class("col-divider");
-            VStack::new(cx, |cx| {
-                Ruler::new(cx, s).height(Pixels(theme::tokens::RULER_HEIGHT));
-                ArrangementView::new(cx, s);
+        // The main area (polish 2 §5): browser, track headers and lanes in
+        // the order Settings ▸ Look & Feel picks; rebuilt when it changes.
+        let order = Memo::new(move |_| s.settings.with(|st| (st.headers_right, st.browser_right, st.show_overview)));
+        Binding::new(cx, order, move |cx| {
+            let (headers_right, browser_right, overview) = order.get();
+            HStack::new(cx, |cx| {
+                let browser_side = |cx: &mut Context| {
+                    Element::new(cx)
+                        .class("col-divider")
+                        .display(s.browser_open.map(|o| if *o { Display::Flex } else { Display::None }));
+                };
+                if !browser_right {
+                    browser(cx, s);
+                    browser_side(cx);
+                }
+                if !headers_right {
+                    track_headers(cx, s, overview);
+                }
+                VStack::new(cx, |cx| {
+                    if overview {
+                        views::overview::Overview::new(cx, s);
+                    }
+                    Ruler::new(cx, s).height(Pixels(theme::tokens::RULER_HEIGHT));
+                    ArrangementView::new(cx, s);
+                })
+                .width(Stretch(1.0))
+                .overflow(Overflow::Hidden);
+                if headers_right {
+                    track_headers(cx, s, overview);
+                }
+                if browser_right {
+                    browser_side(cx);
+                    browser(cx, s);
+                }
             })
-            .width(Stretch(1.0))
+            .class("main")
+            .height(Memo::new(move |_| {
+                if s.piano_open.get() {
+                    // Piano roll open: the arrangement gets the height the split
+                    // handle sets (its lanes scroll) and the piano roll the rest.
+                    let ov = if s.settings.with(|st| st.show_overview) { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 };
+                    Pixels(theme::tokens::RULER_HEIGHT + ov + s.piano_pane_h.get())
+                } else {
+                    Stretch(1.0)
+                }
+            }))
             .overflow(Overflow::Hidden);
-        })
-        .class("main")
-        .height(Memo::new(move |_| {
-            if s.piano_open.get() {
-                // Piano roll open: the arrangement gets the height the split
-                // handle sets (its lanes scroll) and the piano roll the rest.
-                Pixels(theme::tokens::RULER_HEIGHT + s.piano_pane_h.get())
-            } else {
-                Stretch(1.0)
-            }
-        }))
-        .overflow(Overflow::Hidden);
+        });
         // Bottom panel: the piano roll while a clip is open, else the device
         // inspector while a clip is selected, else nothing (the prototype's
         // full-height arrangement).
@@ -1999,6 +2054,10 @@ pub fn build_ui(cx: &mut Context) {
                 });
             }
         });
+        // The status bar along the window's bottom (polish 2 §6).
+        if status_bar_shown() {
+            views::statusbar::StatusBar::new(cx, s);
+        }
         notice(cx, s);
         views::rename::build(cx, s);
         views::export_dialog::build(cx, s);
@@ -2148,7 +2207,8 @@ const NOTICE_LONG: usize = 96;
 /// The notice's distance from the window's bottom-right corner (logical px).
 const NOTICE_MARGIN: f32 = 16.0;
 /// How long a notice stays, and an import report (F-37: long enough to read).
-const STATUS_SECS: u64 = 6;
+/// A status-bar message stays this long (polish 2 §6.2), then the idle text.
+const STATUS_SECS: u64 = 8;
 const REPORT_SECS: u64 = 30;
 
 /// Width of the recovery prompt's keys (logical px).
@@ -2158,22 +2218,25 @@ const NOTICE_KEY_W: f32 = 64.0;
 /// recovery prompt) float in a capsule under the transport instead of living
 /// in the top bar, where they would push the fixed-size controls around.
 fn notice(cx: &mut Context, s: Signals) {
-    let visible = Memo::new(move |_| {
-        !s.status.get().is_empty() || !s.audio_msg.get().is_empty() || s.recovery_offer.get()
-    });
+    // Polish 2 §6: messages and problems live on the status bar; the capsule
+    // is left to the recovery offer, a decision. With the status bar hidden
+    // (the regression gate's dev hook) messages still show here.
+    let bar = status_bar_shown();
+    let visible = Memo::new(move |_| s.recovery_offer.get() || (!bar && (!s.status.get().is_empty() || !s.audio_msg.get().is_empty())));
     Binding::new(cx, visible, move |cx| {
         if !visible.get() {
             return;
         }
         HStack::new(cx, |cx| {
-            Label::new(cx, s.audio_msg)
-                .class("notice-text")
-                .toggle_class("hidden", s.audio_msg.map(|m| m.is_empty()));
-            // A long message (an import report) wraps in a wide capsule.
-            Label::new(cx, s.status)
-                .class("notice-text")
-                .toggle_class("long", s.status.map(|m| m.chars().count() > NOTICE_LONG))
-                .toggle_class("hidden", s.status.map(|m| m.is_empty()));
+            if !bar {
+                Label::new(cx, s.audio_msg)
+                    .class("notice-text")
+                    .toggle_class("hidden", s.audio_msg.map(|m| m.is_empty()));
+                Label::new(cx, s.status)
+                    .class("notice-text")
+                    .toggle_class("long", s.status.map(|m| m.chars().count() > NOTICE_LONG))
+                    .toggle_class("hidden", s.status.map(|m| m.is_empty()));
+            }
             Binding::new(cx, s.recovery_offer, move |cx| {
                 if s.recovery_offer.get() {
                     Label::new(cx, s.recovery_msg).class("notice-text");
@@ -2194,7 +2257,7 @@ fn notice(cx: &mut Context, s: Signals) {
         .left(Stretch(1.0))
         .right(Pixels(NOTICE_MARGIN))
         .top(Stretch(1.0))
-        .bottom(Pixels(NOTICE_MARGIN));
+        .bottom(Pixels(NOTICE_MARGIN + if bar { theme::tokens::STATUS_BAR_HEIGHT } else { 0.0 }));
     });
 }
 
@@ -3447,6 +3510,16 @@ impl AppState {
             Set::OpenLast(b) => st.open_last = b,
             Set::Unsilence(id) => st.silenced.retain(|x| *x != id),
             Set::UnsilenceAll => st.silenced.clear(),
+            Set::HeadersRight(b) => st.headers_right = b,
+            Set::StripByClips(b) => st.strip_by_clips = b,
+            Set::BrowserRight(b) => st.browser_right = b,
+            Set::ShowOverview(b) => st.show_overview = b,
+            Set::HeaderWidth(w) => st.header_width = views::header_layout::clamp_width(w),
+        }
+        self.s.header.set_if_changed(views::header_layout::HeaderLayout::of(&self.settings));
+        if dev::enabled() {
+            let st = &self.settings;
+            eprintln!("dev: look headers_right={} strip_by_clips={} browser_right={} overview={} width={}", st.headers_right, st.strip_by_clips, st.browser_right, st.show_overview, st.header_width);
         }
         self.save_settings();
         if audio {
@@ -3515,6 +3588,11 @@ impl AppState {
                 }
             }
             Action::ToggleBrowser => cx.emit(AppEvent::ToggleBrowser),
+            Action::ShowOverview => {
+                let on = !self.settings.show_overview;
+                self.set_setting(cx, Set::ShowOverview(on));
+                self.clamp_lane_scroll();
+            }
             Action::Follow => cx.emit(AppEvent::TogglePianoFollow),
             Action::Escape => {
                 if self.s.menu.with_untracked(|m| m.is_some()) {
@@ -3568,6 +3646,7 @@ impl AppState {
             | Action::ZoomToSelection
             | Action::ZoomBack
             | Action::ZoomToFit
+            | Action::FitSong
             | Action::DrawMode
             | Action::GridNarrow
             | Action::GridWiden
@@ -3637,6 +3716,7 @@ impl AppState {
             can_consolidate: if piano { notes_selected } else { self.s.time_sel.with_untracked(|t| t.is_some()) || self.s.arrangement.with_untracked(|a| a.selection.len() > 1) },
             can_zoom_back: if piano { true } else { !self.zoom_back.is_empty() },
             draw: self.s.piano.with_untracked(|p| p.draw),
+            overview: self.settings.show_overview,
             recent: self
                 .settings
                 .recent

@@ -30,6 +30,8 @@ pub enum MenuSite {
     Spectrum,
     /// Settings ▸ Editing: the default track colour's grid.
     DefaultTrackColour,
+    /// The status bar's warning icon: the persistent problems (polish 2 §6.4).
+    Problems,
 }
 
 /// What an in-place rename edits.
@@ -147,7 +149,7 @@ impl AppState {
             Action::Split => self.split(),
             Action::Consolidate => self.consolidate(),
             Action::Rename => self.rename_selected(),
-            Action::ZoomIn | Action::ZoomOut | Action::ZoomToSelection | Action::ZoomBack | Action::ZoomToFit => self.zoom(a),
+            Action::ZoomIn | Action::ZoomOut | Action::ZoomToSelection | Action::ZoomBack | Action::ZoomToFit | Action::FitSong => self.zoom(a),
             Action::GridNarrow | Action::GridWiden | Action::GridTriplet | Action::GridSnap | Action::GridAdaptive => self.grid_cmd(a),
             Action::DrawMode => {
                 self.s.piano.update(|p| p.draw = !p.draw);
@@ -387,6 +389,22 @@ impl AppState {
                 }
                 None => self.set_status("No earlier zoom to go back to.".into()),
             },
+            // W: the whole song; pressed again (nothing moved since), back (P2-R: it toggles).
+            Action::FitSong => {
+                let end = self.song_fit_end();
+                let v = state::view_for(0, end, w);
+                if v == view && !self.zoom_back.is_empty() {
+                    return self.zoom(Action::ZoomBack);
+                }
+                self.zoom_back.push(view);
+                if self.zoom_back.len() > MAX_ZOOM_BACK {
+                    self.zoom_back.remove(0);
+                }
+                self.s.arrangement.update(|a| a.view = v);
+                if crate::dev::enabled() {
+                    eprintln!("dev: zoom FitSong range {:?} px_per_bar {:.2} scroll {:.0}", (0, end), v.px_per_bar(), v.scroll_ticks);
+                }
+            }
             _ => {
                 // Z: the selection. Zoom to Fit (a double-click on the
                 // ruler, R32): the time selection if there is one, else the
@@ -397,11 +415,7 @@ impl AppState {
                         None => return self.set_status(WHY_NO_RANGE.into()),
                     }
                 } else {
-                    let loop_end = self.s.transport.with_untracked(|t| t.loop_end_ticks) as u32;
-                    self.s.time_sel.get_untracked().map(|t| (t.start, t.end)).unwrap_or_else(|| {
-                        let end = self.s.arrangement.with_untracked(|a| a.song_end()).max(loop_end).max(4 * TICKS_PER_BAR);
-                        (0, end)
-                    })
+                    self.s.time_sel.get_untracked().map(|t| (t.start, t.end)).unwrap_or_else(|| (0, self.song_fit_end()))
                 };
                 self.zoom_back.push(view);
                 if self.zoom_back.len() > MAX_ZOOM_BACK {
@@ -414,6 +428,12 @@ impl AppState {
                 }
             }
         }
+    }
+
+    /// The end of "the whole song": the last clip or the loop end, at least four bars.
+    pub(crate) fn song_fit_end(&self) -> u32 {
+        let loop_end = self.s.transport.with_untracked(|t| t.loop_end_ticks) as u32;
+        self.s.arrangement.with_untracked(|a| a.song_end()).max(loop_end).max(4 * TICKS_PER_BAR)
     }
 
     /// Cmd+1 … Cmd+5 in the arrangement (A17, R56–R59).
@@ -712,6 +732,13 @@ impl AppState {
                 let cur = crate::file::parse_hex(&self.settings.default_track_colour).ok().map(state::rgb_hex);
                 colour_grid(cur, MenuAction::DefaultTrackColour)
             }
+            MenuSite::Problems => self
+                .s
+                .problems
+                .get_untracked()
+                .into_iter()
+                .map(|p| MenuItem::new(MenuAction::Info, p))
+                .collect(),
             MenuSite::Spectrum => {
                 let cur = crate::views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style);
                 crate::views::chrome::SpectrumStyle::ALL
@@ -858,7 +885,7 @@ impl AppState {
             }
             MenuAction::PresetReveal(_) => reveal(crate::user_presets::file_path()),
             MenuAction::SpectrumStyle(st) => cx.emit(crate::AppEvent::SetSpectrumStyle(st)),
-            MenuAction::Sub(_) | MenuAction::Separator => {}
+            MenuAction::Sub(_) | MenuAction::Separator | MenuAction::Info => {}
         }
     }
 

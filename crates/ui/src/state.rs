@@ -464,6 +464,8 @@ pub enum MenuAction {
     /// Opens a submenu.
     Sub(SubMenu),
     Separator,
+    /// A line of information (the status bar's problem details).
+    Info,
 }
 
 /// The submenus.

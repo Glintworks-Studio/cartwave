@@ -120,6 +120,10 @@ pub enum Action {
     ZoomToSelection,
     ZoomBack,
     ZoomToFit,
+    /// W (P2-R: Optimize Arrangement Width): the whole song in view; again goes back.
+    FitSong,
+    /// View ▸ Show Overview (Ctrl+Alt+O / Cmd+Option+O, P2-R).
+    ShowOverview,
     DrawMode,
     GridNarrow,
     GridWiden,
@@ -249,6 +253,9 @@ pub static TABLE: &[Shortcut] = &[
     sc!(ZoomBack, "view.zoom_back", "Zoom Back", "View", &[k(Code::KeyX)], &[k(Code::KeyX)], EDITORS),
     // No key: a double-click on the ruler (R32).
     sc!(ZoomToFit, "view.zoom_fit", "Zoom to Fit", "View", &[], &[], ARR),
+    // Polish 2 §7.2: W fits the whole song (the manual's Optimize Arrangement Width).
+    sc!(FitSong, "view.fit_song", "Fit the Whole Song", "View", &[k(Code::KeyW)], &[k(Code::KeyW)], ARR),
+    sc!(ShowOverview, "view.overview", "Show Overview", "View", &[cmd_alt(Code::KeyO)], &[cmd_alt(Code::KeyO)], APP),
     sc!(DrawMode, "view.draw_mode", "Draw Mode", "View", &[k(Code::KeyB)], &[k(Code::KeyB)], APP),
     // The grid of the focused editor (R56–R59).
     sc!(GridNarrow, "grid.narrow", "Narrow Grid", "Grid", &[cmd(Code::Digit1)], &[cmd(Code::Digit1)], EDITORS),

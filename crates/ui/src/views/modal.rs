@@ -17,18 +17,20 @@ use engine::FilterMode;
 pub enum SettingsTab {
     Audio,
     Display,
+    LookAndFeel,
     Editing,
     Files,
     Warnings,
 }
 
 impl SettingsTab {
-    pub const ALL: [SettingsTab; 5] = [Self::Audio, Self::Display, Self::Editing, Self::Files, Self::Warnings];
+    pub const ALL: [SettingsTab; 6] = [Self::Audio, Self::Display, Self::LookAndFeel, Self::Editing, Self::Files, Self::Warnings];
 
     fn label(self) -> &'static str {
         match self {
             Self::Audio => "Audio",
             Self::Display => "Display",
+            Self::LookAndFeel => "Look & Feel",
             Self::Editing => "Editing",
             Self::Files => "Files",
             Self::Warnings => "Warnings",
@@ -65,6 +67,14 @@ pub enum Set {
     NewClipColour(String),
     Unsilence(String),
     UnsilenceAll,
+    /// Settings ▸ Look & Feel (polish 2 §5.2).
+    HeadersRight(bool),
+    StripByClips(bool),
+    BrowserRight(bool),
+    /// View ▸ Show Overview (polish 2 §7.3).
+    ShowOverview(bool),
+    /// The headers' width (the boundary drag; saved when the drag ends).
+    HeaderWidth(f32),
 }
 
 /// The output filter choice in Project Settings (`None`: follow the profile).
@@ -158,6 +168,7 @@ fn settings(cx: &mut Context, s: Signals, tab: SettingsTab) {
         match tab {
             SettingsTab::Audio => audio(cx, s, &st),
             SettingsTab::Display => display(cx, &st),
+            SettingsTab::LookAndFeel => look_and_feel(cx, &st),
             SettingsTab::Editing => editing(cx, &st),
             SettingsTab::Files => files(cx, &st),
             SettingsTab::Warnings => warnings(cx, &st),
@@ -224,6 +235,25 @@ fn display(cx: &mut Context, st: &Settings) {
         });
         note(cx, "Draws the menu bar's dropdowns dark. Applies the next time a menu opens.");
     }
+}
+
+/// Settings ▸ Look & Feel (polish 2 §5.2): three independent choices that
+/// take effect at once and are saved per user.
+fn look_and_feel(cx: &mut Context, st: &Settings) {
+    row(cx, "Track headers", |cx| {
+        choice(cx, "Left", !st.headers_right, true, set(Set::HeadersRight(false)));
+        choice(cx, "Right", st.headers_right, true, set(Set::HeadersRight(true)));
+    });
+    row(cx, "Colour strip", |cx| {
+        choice(cx, "Outside", !st.strip_by_clips, true, set(Set::StripByClips(false)));
+        choice(cx, "By the clips", st.strip_by_clips, true, set(Set::StripByClips(true)));
+    });
+    note(cx, "Outside puts each track's colour strip at the window's edge; by the clips puts it next to the lanes.");
+    row(cx, "Browser", |cx| {
+        choice(cx, "Left", !st.browser_right, true, set(Set::BrowserRight(false)));
+        choice(cx, "Right", st.browser_right, true, set(Set::BrowserRight(true)));
+    });
+    note(cx, "Drag the edge between the track headers and the lanes to make the headers wider (380 to 600 px).");
 }
 
 fn editing(cx: &mut Context, st: &Settings) {
