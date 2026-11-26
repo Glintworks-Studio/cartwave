@@ -780,3 +780,16 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   title bar (twice the close button's centre below the window top = 32 pt on macOS 26), not the
   28 pt assumed by `chipbench`; the content layout then matches Windows' client coordinates
   exactly (top bar 0–75, Overview 76–107, ruler 108–135, rows from 136).
+- **MC-D9 (Return in a dialog with one clip selected: shared, not fixed).** With the Export
+  dialog open and one clip selected, Return reaches the arrangement first (Open Clip, which
+  consumes it), so the piano roll opens behind the dialog and the export doesn't start. The key
+  path is the same on Windows (vizia delivers keys to the focused view before the root), so it
+  isn't a macOS bug; fixing it would change shared code and hold the merge. Logged in
+  MAC-CATCHUP.md with the proposed fix (the arrangement and piano-roll key handlers ignore keys
+  while a dialog is open). The harness records it as a NOTE and exports with nothing selected.
+- **MC-D10 (MEM on macOS).** The top bar's MEM read-out showed "--" on macOS (DESIGNPASS.md §8
+  open item: `perf::process_memory` had no macOS branch), so a shipped read-out never worked on
+  the Mac. Now `proc_pid_rusage(RUSAGE_INFO_V2).ri_phys_footprint` (libSystem, no new crate),
+  `#[cfg(target_os = "macos")]`: the process's own memory, as Activity Monitor and `footprint`
+  count it, the counterpart of Windows' private bytes. Three sources agree: the app 94 MB, `top
+  -stats mem` 95M, `footprint` 95 MB (one launch, sampled seconds apart).

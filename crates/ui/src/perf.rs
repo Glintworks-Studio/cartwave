@@ -96,7 +96,36 @@ pub fn process_memory() -> Option<u64> {
         let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
         (ok != 0).then_some(c.private_usage as u64)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        // `rusage_info_v2` (<sys/resource.h>): `ri_phys_footprint` is the
+        // process's own dirty and compressed memory, what Activity Monitor's
+        // Memory column and `footprint` show: the macOS counterpart of
+        // Windows' private bytes (MAC-CATCHUP.md, MC-D10).
+        #[repr(C)]
+        #[derive(Default)]
+        struct RusageInfoV2 {
+            uuid: [u8; 16],
+            user_time: u64,
+            system_time: u64,
+            pkg_idle_wkups: u64,
+            interrupt_wkups: u64,
+            pageins: u64,
+            wired_size: u64,
+            resident_size: u64,
+            phys_footprint: u64,
+            rest: [u64; 10],
+        }
+        unsafe extern "C" {
+            fn proc_pid_rusage(pid: i32, flavor: i32, buffer: *mut RusageInfoV2) -> i32;
+        }
+        const RUSAGE_INFO_V2: i32 = 2;
+        let mut r = RusageInfoV2::default();
+        // SAFETY: a valid out-struct of rusage_info_v2's size for our own pid.
+        let ok = unsafe { proc_pid_rusage(std::process::id() as i32, RUSAGE_INFO_V2, &mut r) };
+        (ok == 0).then_some(r.phys_footprint)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         None
     }
