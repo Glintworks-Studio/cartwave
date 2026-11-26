@@ -1,0 +1,8 @@
+# summary: 1200 s, device "Mac mini Speakers · 48000 Hz · 2 ch · requested default"
+# callbacks 112496, frames/cb 512..512, cost mean 0.672% p99 1.60% max 2.00% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.78 ms
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# process: 670.7 M instr/s, 252.8 mW, P-core share 91.4%, 9.9 % of a core; audio thread 13.46 M instr/s, 0.62 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+  40 nominal
+   1 thermal

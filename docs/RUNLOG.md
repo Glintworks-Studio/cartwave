@@ -882,3 +882,11 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   drag; ideal 5/5/6 cadence). The proposed fix is vblank-paced frames from the display link (with
   Skia's Metal backend: PERF-macos.md §6–7, ENGINE-macos.md §8): a renderer/backend change, which
   the stop condition rules out here. Merge held on this gate (§1.5 and §8 of the prompt).
+- **MC-D9, update.** ⌫ is affected too: with Export open and a clip selected, ⌫ deleted the clip
+  behind the dialog (4 → 3 clips in the saved file; undoable). Same shared path, same proposed fix.
+- **MC-D22 (audio matrix lengths and devices).** Built-in output (the gate): ENGINE.md's A, B, C,
+  D, G at 64 / 128 / 256 / 512 frames, A and B at **300 s** (ENGINE.md: 600) to fit the session, C,
+  D, G at 120 s. The M2: A, C, G at 120 s. Test E (changing the system default output) is replaced
+  by an in-app switch built-in ↔ M2 through Settings ▸ Audio while playing, which needs no system
+  change (§0 asks before changing the default device). Ground truth as ENGINE-macos.md §3: CoreAudio
+  overloads and the late detector (no loopback cable; tapmon kept as "delivered-stream" evidence).

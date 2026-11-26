@@ -1,0 +1,14 @@
+dev: mode on; test hooks: [autoplay, audiolog, quit_after]; buffer None; filter None
+dev: spectrum style bars (settings)
+chipdaw: GL_VENDOR="Apple" GL_RENDERER="Apple M1" GL_VERSION="4.1 Metal - 90.5"
+# summary: 1200 s, device "Mac mini Speakers · 48000 Hz · 2 ch · requested default"
+# callbacks 112496, frames/cb 512..512, cost mean 0.672% p99 1.60% max 2.00% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.78 ms
+# edits applied 1, edit->frame tick max 8.53 ms, send->engine max 5.20 ms, dropped commands 0
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# thread cycles: audio 88.6 k/callback, ui 4247.5 k/presented frame
+# audio thread: 143.6 k instr/callback, 6.61 uJ/callback, P-core share 0.0%; ui thread: 10509 k instr/frame, 4001.9 uJ/frame, P-core share 100.0%
+# process: 670.7 M instr/s, 252.8 mW, P-core share 91.4%, 9.9 % of a core; audio thread 13.46 M instr/s, 0.62 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+# cb_hist_permille: 1:1249 2:9712 3:6738 4:13779 5:16884 6:18162 7:13843 8:10670 9:8542 10:5049 11:2654 12:1717 13:1111 14:746 15:588 16:635 17:322 18:68 19:21 20:6
+# window_host_ns: 3349239261260375 3350439262117541
