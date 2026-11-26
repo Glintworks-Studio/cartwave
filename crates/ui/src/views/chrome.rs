@@ -972,8 +972,12 @@ pub fn row_help(l: &HeaderLayout, h: f32, x: f32, y: f32) -> &'static str {
         "Track height: drag the row's bottom edge · Alt+wheel over a track"
     } else if inside(db_value_rect(l, h), x, y) || (x >= l.col_b() && x < l.col_b() + COL_B_W) {
         VolumeFader::HELP
-    } else if inside(pan_value_rect(l), x, y) {
+    } else if inside(pan_value_rect(l), x, y) || (x >= l.col_a() - PanSlider::PAD && x < l.col_a() + COL_A_W + PanSlider::PAD && (row::PAN_WELL_Y - 6.0..row::PAN_WELL_Y + 10.0).contains(&y)) {
         PanSlider::HELP
+    } else if (row::KEYS_Y..row::KEYS_Y + KEY_SIZE).contains(&y) && x >= l.col_a() && x < l.col_a() + KEY_SIZE {
+        "Mute this track"
+    } else if (row::KEYS_Y..row::KEYS_Y + KEY_SIZE).contains(&y) && x >= l.col_a() + KEY_SIZE + row::KEY_GAP && x < l.col_a() + 2.0 * KEY_SIZE + row::KEY_GAP {
+        if crate::shortcuts::MACOS { "Solo this track only · Cmd-click to solo several" } else { "Solo this track only · Ctrl-click to solo several" }
     } else {
         "Track: click to select · double-click the name to rename · right-click for its menu"
     }
@@ -1103,27 +1107,23 @@ impl TrackRow {
         let light = Cell::new((0u8, (u16::MAX, 0u16)));
         Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None), resize: None, edge_hover: false }
             .build(cx, move |cx| {
-                let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
                 Key::new(cx, s, "M", KeyAction::Mute(lane))
                     .position_type(PositionType::Absolute)
                     .left(s.header.map(|l| Pixels(l.col_a())))
-                    .top(Pixels(row::KEYS_Y))
-                    .tooltip(|cx| crate::tip(cx, "Mute this track."));
+                    .top(Pixels(row::KEYS_Y));
                 Key::new(cx, s, "S", KeyAction::Solo(lane))
                     .position_type(PositionType::Absolute)
                     .left(s.header.map(|l| Pixels(l.col_a() + KEY_SIZE + row::KEY_GAP)))
-                    .top(Pixels(row::KEYS_Y))
-                    .tooltip(move |cx| crate::tip(cx, &format!("Solo this track only. {ctrl}-click to solo several.")));
+                    .top(Pixels(row::KEYS_Y));
                 PanSlider::new(cx, s, lane)
                     .position_type(PositionType::Absolute)
                     .left(s.header.map(|l| Pixels(l.col_a() - PanSlider::PAD)))
-                    .top(Pixels(row::PAN_WELL_Y + row::PAN_WELL_H * 0.5 - row::HTHUMB_H * 0.5))
-                    .tooltip(|cx| crate::tip(cx, PanSlider::HELP));
+                    .top(Pixels(row::PAN_WELL_Y + row::PAN_WELL_H * 0.5 - row::HTHUMB_H * 0.5));
+
                 VolumeFader::new(cx, s, lane)
                     .position_type(PositionType::Absolute)
                     .left(s.header.map(|l| Pixels(l.col_b())))
-                    .top(Pixels(0.0))
-                    .tooltip(|cx| crate::tip(cx, VolumeFader::HELP));
+                    .top(Pixels(0.0));
             })
             .class("track-row")
             .bind(s.meters, move |mut h| {

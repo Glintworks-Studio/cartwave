@@ -544,6 +544,9 @@ impl Model for AppState {
             AppEvent::ShowProblems(x, y) => self.open_context_menu(edit::MenuSite::Problems, *x, *y),
             AppEvent::HoverHelp(t) => {
                 if self.s.hover_help.with_untracked(|h| h != t) {
+                    if dev::enabled() && !t.is_empty() {
+                        eprintln!("dev: help {t}");
+                    }
                     self.s.hover_help.set(t.clone());
                 }
             }
@@ -1766,6 +1769,19 @@ pub fn tip<'a>(cx: &'a mut Context, text: &str) -> Handle<'a, Tooltip> {
 
 /// A wrapper that carries a control's tooltip: vizia never hovers a
 /// disabled view, so a disabled button's "why" goes on this instead (I4).
+/// The status bar's hover help for a view (polish 2 §6.5): one line while
+/// the mouse is over it.
+pub trait HelpExt {
+    fn help(self, text: impl Into<String>) -> Self;
+}
+
+impl<V: View> HelpExt for Handle<'_, V> {
+    fn help(self, text: impl Into<String>) -> Self {
+        let t: String = text.into();
+        self.on_hover(move |cx| cx.emit(AppEvent::HoverHelp(t.clone()))).on_hover_out(|cx| cx.emit(AppEvent::HoverHelp(String::new())))
+    }
+}
+
 pub fn tip_wrap<'a>(cx: &'a mut Context, content: impl FnOnce(&mut Context)) -> Handle<'a, HStack> {
     HStack::new(cx, content).width(Auto).height(Auto).class("tip-wrap")
 }
@@ -2269,24 +2285,24 @@ fn top_bar(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
         HStack::new(cx, |cx| {
             HStack::new(cx, |cx| {
-                TopKeyView::new(cx, s, TopKey::Arrangement).tooltip(|cx| tip(cx, "Arrangement view."));
-                TopKeyView::new(cx, s, TopKey::Mixer).tooltip(|cx| tip(cx, "The Mixer view arrives in Batch 4."));
+                TopKeyView::new(cx, s, TopKey::Arrangement).help("Arrangement view");
+                TopKeyView::new(cx, s, TopKey::Mixer).help("Mixer view: arrives in Batch 4");
             })
             .class("key-group");
             Element::new(cx).class("bar-divider");
             HStack::new(cx, |cx| {
-                TopKeyView::new(cx, s, TopKey::Play).tooltip(|cx| tip(cx, &format!("Play ({}). The display shows what's playing.", shortcuts::label(Action::PlayStop))));
-                TopKeyView::new(cx, s, TopKey::Stop).tooltip(|cx| tip(cx, &format!("Stop ({}); press again to go back to the start ({}).", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Rewind))));
-                TopKeyView::new(cx, s, TopKey::Record).tooltip(|cx| tip(cx, "Recording arrives with MIDI input."));
-                TopKeyView::new(cx, s, TopKey::Loop).tooltip(|cx| tip(cx, "Loop the song between the loop brace's ends (the ruler)."));
+                TopKeyView::new(cx, s, TopKey::Play).help(format!("Play ({}) · the display shows what's playing", shortcuts::label(Action::PlayStop)));
+                TopKeyView::new(cx, s, TopKey::Stop).help(format!("Stop ({}) · press again to go back to the start ({})", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Rewind)));
+                TopKeyView::new(cx, s, TopKey::Record).help("Record: arrives with MIDI input");
+                TopKeyView::new(cx, s, TopKey::Loop).help("Loop: plays the song between the loop brace's ends (the ruler)");
             })
             .class("key-group");
         })
         .class("bar-group");
         Element::new(cx).class("bar-spacer");
         HStack::new(cx, |cx| {
-            DisplayWell::new(cx, s).tooltip(|cx| tip(cx, "Time, position, the selection's start and length, and the tempo. Drag the BPM up or down or use the wheel (Shift: finer); double-click it to type a tempo."));
-            TopKeyView::new(cx, s, TopKey::Tap).tooltip(|cx| tip(cx, &format!("Tap the tempo ({}): the average of the last four taps. Taps more than 2 s apart start over.", shortcuts::label(Action::Tap))));
+            DisplayWell::new(cx, s).help("Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type");
+            TopKeyView::new(cx, s, TopKey::Tap).help(format!("Tap tempo ({}): the average of the last four taps · taps more than 2 s apart start over", shortcuts::label(Action::Tap)));
         })
         .class("bar-group");
         Element::new(cx).class("bar-spacer");
@@ -2294,8 +2310,8 @@ fn top_bar(cx: &mut Context, s: Signals) {
             SpectrumBox::new(cx, s)
                 .width(Pixels(SPECTRUM_W))
                 .height(Pixels(WELL_H))
-                .tooltip(|cx| tip(cx, "The mix's spectrum. Right-click for its styles."));
-            CpuMem::new(cx, s).tooltip(|cx| tip(cx, "CPU: the time the sound engine needs per buffer, as a share of the buffer's length (OFF: no output device is running). MEM: this app's private memory."));
+                .help("Spectrum of the mix · right-click for its styles");
+            CpuMem::new(cx, s).help("CPU: the sound engine's time per buffer, as a share of it (OFF: no output running) · MEM: this app's private memory");
         })
         .class("bar-group");
     })

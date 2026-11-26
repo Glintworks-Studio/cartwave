@@ -52,13 +52,19 @@ pub fn register_lane_row(lane: usize, b: BoundingBox) {
     });
 }
 
-/// The lane at a window position: over its track header or anywhere to the
-/// right of it (the arrangement lane).
+/// The lane at a window position: over its track header or its lane in the
+/// arrangement, wherever the headers are (polish 2 §5.4: they can be on the
+/// right of the lanes).
 pub fn lane_at(x: f32, y: f32) -> Option<usize> {
+    let lanes = super::arrangement::arrangement_at();
     LANE_ROWS.with(|r| {
-        r.borrow()
-            .iter()
-            .position(|b| b.is_some_and(|b| x >= b.x && y >= b.y && y < b.y + b.h))
+        r.borrow().iter().position(|b| {
+            b.is_some_and(|b| {
+                let over_header = x >= b.x && x < b.x + b.w;
+                let over_lane = lanes.is_some_and(|(l, rt, _)| x >= l && x < rt);
+                (over_header || over_lane) && y >= b.y && y < b.y + b.h
+            })
+        })
     })
 }
 
