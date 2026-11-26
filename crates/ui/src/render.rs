@@ -22,6 +22,8 @@ pub fn render(p: &Project, secs: f64) -> Vec<f32> {
     pl.driver.solo = p.solo;
     pl.set_vrc6(p.chip == SoundChip::WithVrc6);
     pl.synth.set_filter(p.filter);
+    // The track volumes (polish 2 §3): a post-chip gain per track.
+    pl.synth.set_gains(p.arrangement.gains());
     pl.play();
     let mut out = vec![0f32; (secs * SAMPLE_RATE as f64) as usize];
     for chunk in out.chunks_mut(CHUNK) {

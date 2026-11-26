@@ -185,7 +185,6 @@ impl Arrangement {
         .width(Stretch(1.0))
         .bind(s.arrangement, |mut h| h.needs_redraw())
         .bind(s.transport, |mut h| h.needs_redraw())
-        .bind(s.lane_h, |mut h| h.needs_redraw())
         .bind(s.loop_on, |mut h| h.needs_redraw())
         .bind(s.lane_scroll, |mut h| h.needs_redraw())
         .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
@@ -214,13 +213,10 @@ impl Arrangement {
         )
     }
 
-    fn hit_test(a: &state::Arrangement, x: f32, y: f32, lane_h: f32) -> Option<(u32, Zone)> {
-        let lane = (y / lane_h).floor();
-        if lane < 0.0 {
-            return None;
-        }
-        let lane = lane as usize;
-        let ly = y - lane as f32 * lane_h;
+    fn hit_test(a: &state::Arrangement, x: f32, y: f32) -> Option<(u32, Zone)> {
+        let lane = a.lane_at(y)?;
+        let lane_h = a.lanes[lane].pitch();
+        let ly = y - a.lane_top(lane);
         if !(CLIP_V_INSET..=lane_h - CLIP_V_INSET).contains(&ly) {
             return None;
         }
@@ -255,11 +251,10 @@ impl Arrangement {
         let (mx, my) = self.local_mouse(cx);
         let mods = *cx.modifiers();
         let arr = self.s.arrangement;
-        let lane_h = self.s.lane_h.get_untracked();
-        let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+        let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my));
 
         // F-04: a dimmed VRC6 lane takes no edits (its hover says why).
-        let lane = (my / lane_h).floor().max(0.0) as usize;
+        let lane = arr.with_untracked(|a| a.lane_at_clamped(my));
         if crate::state::lane_off(self.s.chip.get_untracked(), lane) {
             if !mods.shift() {
                 arr.update(|a| a.selection.clear());
@@ -395,11 +390,10 @@ impl Arrangement {
 
     /// Snapped (or exact) tick and the lane at lane-space point (x, y).
     fn tick_lane_at(&self, x: f32, y: f32, snap: bool) -> (u32, usize) {
-        let lane_h = self.s.lane_h.get_untracked();
         self.s.arrangement.with_untracked(|a| {
             let t = a.view.x_to_tick(x as f64).max(0.0) as i64;
             let t = if snap { a.grid().round(t) } else { t };
-            let lane = ((y / lane_h).floor().max(0.0) as usize).min(a.lanes.len() - 1);
+            let lane = a.lane_at_clamped(y);
             (t.max(0) as u32, lane)
         })
     }
@@ -466,7 +460,8 @@ impl Arrangement {
                         .min()
                         .unwrap_or(0);
                     delta = delta.max(-min_start);
-                    let mut dlane = (dy / self.s.lane_h.get_untracked()).round() as i64;
+                    // Whole rows: the row under the mouse against the row pressed.
+                    let mut dlane = a.lane_at_clamped(drag.press.1 + dy) as i64 - a.lane_at_clamped(drag.press.1) as i64;
                     let (lo, hi) = drag
                         .origins
                         .iter()
@@ -550,8 +545,7 @@ impl Arrangement {
 
     fn update_hover(&mut self, cx: &mut EventContext) {
         let (mx, my) = self.local_mouse(cx);
-        let lane_h = self.s.lane_h.get_untracked();
-        let lane = (my >= 0.0).then(|| (my / lane_h).floor() as usize);
+        let lane = self.s.arrangement.with_untracked(|a| a.lane_at(my));
         if lane != self.hover_lane {
             let off = |l: Option<usize>| l.is_some_and(|l| crate::state::lane_off(self.s.chip.get_untracked(), l));
             if off(lane) || off(self.hover_lane) {
@@ -559,10 +553,7 @@ impl Arrangement {
             }
             self.hover_lane = lane;
         }
-        let hit = self
-            .s
-            .arrangement
-            .with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+        let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my));
         if hit.map(|h| h.0) != self.hover.map(|h| h.0) {
             cx.needs_redraw();
         }
@@ -579,11 +570,10 @@ impl Arrangement {
     /// selection is made where you clicked).
     fn on_context_menu(&mut self, cx: &mut EventContext) {
         let (mx, my) = self.local_mouse(cx);
-        let lane_h = self.s.lane_h.get_untracked();
-        if crate::state::lane_off(self.s.chip.get_untracked(), (my / lane_h).floor().max(0.0) as usize) {
+        if crate::state::lane_off(self.s.chip.get_untracked(), self.s.arrangement.with_untracked(|a| a.lane_at_clamped(my))) {
             return;
         }
-        let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
+        let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my));
         let site = if let Some((id, _)) = hit {
             self.s.arrangement.update(|a| {
                 if !a.is_selected(id) {
@@ -650,7 +640,7 @@ impl Arrangement {
         };
 
         let vbar = has_v.then(|| {
-            let content = a.lanes.len() as f32 * self.s.lane_h.get_untracked();
+            let content = a.lanes_height();
             let len = (h - 2.0 * BAR_INSET - BAR_INSET - BAR_THICK).max(1.0);
             let thumb = (len * h / content).clamp(BAR_MIN_THUMB.min(len), len);
             let t = (self.s.lane_scroll.get_untracked() / v_max).clamp(0.0, 1.0);
@@ -753,16 +743,16 @@ impl Arrangement {
     ) {
         let view = a.view;
         let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
-        let lane_h = self.s.lane_h.get_untracked() * s;
-        let lanes_top = lanes_bottom - a.lanes.len() as f32 * lane_h;
+        let lanes_top = lanes_bottom - a.lanes_height() * s;
+        let row_y = |i: usize| lanes_top + a.lane_top(i) * s;
         // Below the lanes: the canvas gradient (no lanes to draw there).
         canvas.draw_rect(rect, &gfx::vgrad(rect, CANVAS_TOP, CANVAS_BOTTOM));
         // Lane rows (VISUAL-SPEC.md §2.4): alternating #171717 / #141414,
         // each 72 px over its #1A1A1A hairline.
         let hl = gfx::hairline(s);
         for i in 0..a.lanes.len() {
-            let y0 = (lanes_top + i as f32 * lane_h).round();
-            let y1 = (lanes_top + (i + 1) as f32 * lane_h).round();
+            let y0 = row_y(i).round();
+            let y1 = row_y(i + 1).round();
             if y1 < rect.top || y0 > rect.bottom {
                 continue;
             }
@@ -797,7 +787,7 @@ impl Arrangement {
         }
         // Row hairlines stay on top of the grid.
         for i in 1..=a.lanes.len() {
-            let y1 = (lanes_top + i as f32 * lane_h).round();
+            let y1 = row_y(i).round();
             canvas.draw_rect(vg::Rect::from_ltrb(rect.left, y1 - hl, rect.right, y1), &gfx::fill(LINE));
         }
         let _ = loop_end;
@@ -838,23 +828,21 @@ impl View for Arrangement {
                 // On a clip: open it in the piano roll. On empty lane space: a
                 // new 1-bar clip at the snapped position (it wins overlaps).
                 let (mx, my) = self.local_mouse(cx);
-                let lane_h = self.s.lane_h.get_untracked();
-                let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my, lane_h));
-                let off = crate::state::lane_off(self.s.chip.get_untracked(), (my / lane_h).floor().max(0.0) as usize);
+                let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my));
+                let off = crate::state::lane_off(self.s.chip.get_untracked(), self.s.arrangement.with_untracked(|a| a.lane_at_clamped(my)));
                 match hit {
                     _ if off => {}
                     Some((id, _)) => cx.emit(crate::AppEvent::OpenPiano(id)),
                     None => {
-                        let lane = (my / lane_h).floor();
+                        let lane = self.s.arrangement.with_untracked(|a| a.lane_at(my));
                         let no_snap = crate::input::bypass_snap(cx.modifiers());
-                        let lanes = self.s.arrangement.with_untracked(|a| a.lanes.len());
-                        if lane >= 0.0 && (lane as usize) < lanes {
+                        if let Some(lane) = lane {
                             let random = self.s.settings.with_untracked(|st| st.new_clip_colour == "random");
                             self.s.arrangement.update(|a| {
                                 let t = a.view.x_to_tick(mx as f64).max(0.0) as i64;
                                 let g = a.grid().ticks as i64;
                                 let start = if no_snap { t } else { t.div_euclid(g) * g };
-                                let id = a.add_clip(lane as usize, start as u32, TICKS_PER_BAR);
+                                let id = a.add_clip(lane, start as u32, TICKS_PER_BAR);
                                 a.colour_new_clips(&[id], random);
                                 a.selection = vec![id];
                             });
@@ -993,11 +981,12 @@ impl View for Arrangement {
         self.s.arrangement.with_untracked(|a| {
             let view = a.view;
             let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
-            let lane_h = self.s.lane_h.get_untracked() * s;
-
-            // Lanes scroll vertically when they don't all fit (piano roll open).
+            // Lanes scroll vertically when they don't all fit; rows have
+            // their own heights (polish 2 §4).
             let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
-            let lanes_bottom = lanes_top + a.lanes.len() as f32 * lane_h;
+            let lanes_bottom = lanes_top + a.lanes_height() * s;
+            let row_y = |i: usize| lanes_top + a.lane_top(i) * s;
+            let row_h = |i: usize| a.lanes[i].pitch() * s;
             let loop_end = self.s.transport.with_untracked(|t| t.loop_end_ticks);
 
             // Animation targets; a clip is "live" (drawn every frame on top of
@@ -1031,7 +1020,7 @@ impl View for Arrangement {
                     if x1 < rect.left - 20.0 * s || x0 > rect.right + 20.0 * s {
                         return None;
                     }
-                    let y = lanes_top + c.lane as f32 * lane_h + CLIP_V_INSET * s;
+                    let (y, lane_h) = (row_y(c.lane) + CLIP_V_INSET * s, row_h(c.lane));
                     // Snap edges to device pixels for crisp borders. A clip
                     // starts on its grid line and ends 1 px short, so abutting
                     // clips show a 1 px gap (the owner's call over the
@@ -1147,7 +1136,7 @@ impl View for Arrangement {
                 for o in &d.origins {
                     let x0 = x_of(o.start as f64);
                     let x1 = x_of((o.start + o.len) as f64);
-                    let y = lanes_top + o.lane as f32 * lane_h + CLIP_V_INSET * s;
+                    let (y, lane_h) = (row_y(o.lane) + CLIP_V_INSET * s, row_h(o.lane));
                     let r = vg::Rect::from_ltrb(
                         x0.round(),
                         y.round(),
@@ -1215,8 +1204,8 @@ impl View for Arrangement {
             if playing {
                 let ix = x_of(a.insert.0 as f64).round();
                 if ix >= rect.left && ix <= rect.right {
-                    let y0 = lanes_top + a.insert.1 as f32 * lane_h;
-                    canvas.draw_rect(vg::Rect::from_xywh(ix, y0, s, lane_h), &gfx::fill(TEXT_HI.with_alpha(0.7)));
+                    let lane = a.insert.1.min(a.lanes.len() - 1);
+                    canvas.draw_rect(vg::Rect::from_xywh(ix, row_y(lane), s, row_h(lane)), &gfx::fill(TEXT_HI.with_alpha(0.7)));
                 }
             }
 
@@ -1230,9 +1219,9 @@ impl View for Arrangement {
             if let Some(ts) = self.s.time_sel.get_untracked() {
                 let sel = vg::Rect::from_ltrb(
                     x_of(ts.start as f64).round(),
-                    (lanes_top + ts.lane0 as f32 * lane_h).round(),
+                    row_y(ts.lane0.min(a.lanes.len())).round(),
                     x_of(ts.end as f64).round(),
-                    (lanes_top + (ts.lane1 + 1) as f32 * lane_h).round(),
+                    row_y((ts.lane1 + 1).min(a.lanes.len())).round(),
                 );
                 canvas.draw_rect(sel, &gfx::fill(Rgba::white(0.045)));
                 let edge = gfx::fill(Rgba::white(0.14));
@@ -1310,12 +1299,11 @@ impl View for Arrangement {
         // under the mouse says why.
         let chip = self.s.chip.get_untracked();
         if crate::state::lane_off(chip, chip::driver::LANE_V1) {
-            let lane_h = self.s.lane_h.get_untracked() * s;
             let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
-            let lanes = self.s.arrangement.with_untracked(|a| a.lanes.len());
+            let (lanes, tops): (usize, Vec<(f32, f32)>) = self.s.arrangement.with_untracked(|a| (a.lanes.len(), (0..a.lanes.len()).map(|i| (a.lane_top(i), a.lanes[i].pitch())).collect()));
             let f = gfx::font(Face::Medium, OFF_HINT_PX * s);
             for lane in (0..lanes).filter(|&l| crate::state::lane_off(chip, l)) {
-                let band = vg::Rect::from_xywh(rect.left, lanes_top + lane as f32 * lane_h, rect.width(), lane_h);
+                let band = vg::Rect::from_xywh(rect.left, lanes_top + tops[lane].0 * s, rect.width(), tops[lane].1 * s);
                 canvas.draw_rect(band, &gfx::fill(Rgba::black(OFF_DIM)));
                 if self.hover_lane == Some(lane) {
                     let tw = gfx::text_width(&f, crate::state::VRC6_OFF_HINT);
@@ -1411,7 +1399,7 @@ pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
             VStack::new(cx, |cx| {
                 let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
                 for i in 0..lanes {
-                    TrackRow::new(cx, s, i).height(s.lane_h.map(|h| Pixels(*h)));
+                    TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes[i].pitch())).map(|h| Pixels(*h)));
                 }
             })
             .height(Auto)

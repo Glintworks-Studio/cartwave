@@ -801,12 +801,13 @@ impl SplitHandle {
 
     /// The tallest lane viewport that still leaves the piano roll its
     /// minimum height (never taller than all 8 lanes).
-    fn max_pane_h(cx: &EventContext) -> f32 {
+    fn max_pane_h(&self, cx: &EventContext) -> f32 {
         let s = cx.scale_factor();
         let win_h = cx.cache.get_bounds(Entity::root()).h / s;
-        let room = win_h - TOPBAR_HEIGHT - RULER_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H;
+        let room = win_h - TOPBAR_HEIGHT - RULER_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H - crate::chrome_bands(&self.s);
         let room = (room / SP_1).floor() * SP_1;
-        room.clamp(crate::state::PIANO_PANE_MIN, 8.0 * crate::state::LANE_H_NORMAL)
+        let content = self.s.arrangement.with_untracked(|a| a.lanes_height());
+        room.clamp(crate::state::PIANO_PANE_MIN, content.max(crate::state::PIANO_PANE_MIN))
     }
 }
 
@@ -829,7 +830,7 @@ impl View for SplitHandle {
                 if let Some((y0, h0)) = self.drag {
                     let y = cx.mouse().cursor_y / cx.scale_factor();
                     let h = ((h0 + y - y0) / SP_1).round() * SP_1;
-                    let h = h.clamp(crate::state::PIANO_PANE_MIN, Self::max_pane_h(cx));
+                    let h = h.clamp(crate::state::PIANO_PANE_MIN, self.max_pane_h(cx));
                     if h != self.s.piano_pane_h.get_untracked() {
                         cx.emit(AppEvent::SetPianoPaneHeight(h));
                     }
@@ -841,7 +842,7 @@ impl View for SplitHandle {
                 cx.needs_redraw();
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                let h = crate::state::PIANO_PANE_DEFAULT.min(Self::max_pane_h(cx));
+                let h = crate::state::PIANO_PANE_DEFAULT.min(self.max_pane_h(cx));
                 cx.emit(AppEvent::SetPianoPaneHeight(h));
                 meta.consume();
             }
@@ -889,23 +890,22 @@ impl View for SplitHandle {
 
 // ─────────────────────────────── Track rows ───────────────────────────────
 //
-// VISUAL-SPEC.md §2.4. Positions are logical px from the row's top-left
-// (the row is 72 px plus its 1 px bottom hairline); they match the mockup's
-// layout boxes (docs/design/mockup-boxes.jsonl), snapped to whole px.
+// Polish 2 (E1): VISUAL-SPEC.md §4. Positions are logical px from the row's
+// top-left; the header layout (views/header_layout.rs) places the parts for
+// the header's width, side and strip position. The number, name block and
+// column A keep a 72 px band at the top of a taller row; only the fader
+// stretches (`row::fader_len`).
 
-/// The channel number: Inter 800 italic 40, centred in 28 px after the strip
-/// and a 12 px gap, on a 40 px line box from y 16; tracking −.02em.
+use super::header_layout::{self as hl_, row, HeaderLayout, COL_A_W, COL_B_W, NUMBER_W, STRIP_W};
+
+/// The channel number: Inter 800 italic 40, centred in its 28 px column on
+/// a 40 px line box from y 16; tracking −.02em.
 const NUMBER_PX: f32 = 40.0;
-const NUMBER_X: f32 = 28.0;
-const NUMBER_W: f32 = 28.0;
 const NUMBER_TOP: f32 = 16.0;
 const NUMBER_TRACKING: f32 = -0.02;
-/// Name: Inter 600 14 from x 68, its line box (normal line height) from y 14.5.
-const NAME_X: f32 = 68.0;
+/// Name: Inter 600 14, its line box (normal line height) from y 14.5.
 const NAME_PX: f32 = 14.0;
 const NAME_TOP: f32 = 14.5;
-/// The name column ends where the control block's 12 px gap starts.
-const NAME_RIGHT: f32 = 236.0;
 /// The profile badge: 16 px inside a 1 px border (18 px), radius 4, a lock
 /// and the chip name (Inter 600 11, #A8A8A8) with 4 px padding and gap.
 const BADGE_Y: f32 = 40.0;
@@ -919,44 +919,81 @@ const BADGE_BASELINE: f32 = 53.0;
 /// The preset name: Inter 500 12, #808080, 8 px after the badge.
 const PRESET_PX: f32 = 12.0;
 const PRESET_GAP: f32 = 8.0;
-/// The control block: 120 px wide, 12 px from the row's right edge, its
-/// 40 px (keys, 12 px gap, sliders) centred in the row.
-pub const CTRL_W: f32 = 120.0;
-pub const CTRL_RIGHT: f32 = 12.0;
-pub const CTRL_TOP: f32 = 16.0;
-/// Volume meter-fader and pan: track widths, track height, the gap between.
-pub const FADER_W: f32 = 68.0;
-pub const PAN_W: f32 = 40.0;
-pub const SLIDER_H: f32 = 4.0;
-pub const SLIDER_GAP: f32 = 12.0;
-/// The thumb: 8 × 12, centred on the track; the slider views are thumb-tall.
-pub const THUMB_W: f32 = 8.0;
-pub const THUMB_H: f32 = 12.0;
-/// Where the slider views sit (their top) below the keys.
-pub const SLIDER_VIEW_TOP: f32 = CTRL_TOP + KEY_SIZE + 8.0;
-/// The strip's lit look (`inset 0 0 10px rgba(255,255,255,.55)`, and a
-/// `0 0 10px` spill in the track colour at 35%).
-const STRIP_GLOW_A: f32 = 0.55;
+/// The pan and dB values: Inter 600 10 on a 12 px line, tracking .02em,
+/// #9A9A9A, centred in their column.
+const VALUE_PX: f32 = 10.0;
+const VALUE_TRACKING: f32 = 0.02;
+const VALUE_INK: Rgba = Rgba::hex(0x9A9A9A);
+/// dB scale labels: Inter 600 9 on a 10 px line, #808080; ticks #3A3A3A.
+const SCALE_PX: f32 = 9.0;
+const SCALE_INK: Rgba = Rgba::hex(0x808080);
+const SCALE_TICK: Rgba = Rgba::hex(0x3A3A3A);
+/// The pan fill from the centre.
+const PAN_FILL: Rgba = Rgba::hex(0x8A8A8A);
+/// The bottom-edge band that resizes a row (logical px), and the height
+/// change per Alt+wheel notch (three 4 px steps).
+pub const ROW_EDGE_GRAB: f32 = 4.0;
+pub const ROW_WHEEL_STEP: f32 = 12.0;
+/// The meter's cool-to-hot stops, as fractions of the fader's length from
+/// the bottom (polish 2 §3: it turns hot at 0 dB, 89%).
+pub const METER_STOPS: [(f32, Rgba); 5] = [
+    (0.0, Rgba::hex(0x2F6FD6)),
+    (0.45, Rgba::hex(0x2FB7B0)),
+    (0.70, Rgba::hex(0xC7D74E)),
+    (0.85, Rgba::hex(0xF0A23A)),
+    (0.89, Rgba::hex(0xE0483B)),
+];
+/// The strip's lit look: `inset 0 0 10px` white and a `0 0 10px` spill in
+/// the track colour (alphas: the palette's strip recipe).
 const STRIP_GLOW_R: f32 = 10.0;
-const STRIP_SPILL_A: f32 = 0.35;
 
 /// The strip's colours: the palette recipe (theme::palette::strip).
 fn strip_colours(color: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
     crate::theme::palette::strip(color, light)
 }
 
+/// The rects (logical, row-relative) a row's value fields occupy: the pan
+/// value and the dB value (double-click types a value, polish 2 §3).
+pub fn pan_value_rect(l: &HeaderLayout) -> (f32, f32, f32, f32) {
+    (l.col_a(), row::PAN_VALUE_Y, COL_A_W, row::VALUE_LINE)
+}
+
+pub fn db_value_rect(l: &HeaderLayout, h: f32) -> (f32, f32, f32, f32) {
+    (l.col_b(), row::db_value_y(h), COL_B_W, row::VALUE_LINE)
+}
+
+fn inside(r: (f32, f32, f32, f32), x: f32, y: f32) -> bool {
+    x >= r.0 && x < r.0 + r.2 && y >= r.1 - 2.0 && y < r.1 + r.3 + 2.0
+}
+
+/// The hover-help line for a point in a row (polish 2 §6.5).
+pub fn row_help(l: &HeaderLayout, h: f32, x: f32, y: f32) -> &'static str {
+    if y >= h + 1.0 - ROW_EDGE_GRAB {
+        "Track height: drag the row's bottom edge · Alt+wheel over a track"
+    } else if inside(db_value_rect(l, h), x, y) || (x >= l.col_b() && x < l.col_b() + COL_B_W) {
+        VolumeFader::HELP
+    } else if inside(pan_value_rect(l), x, y) {
+        PanSlider::HELP
+    } else {
+        "Track: click to select · double-click the name to rename · right-click for its menu"
+    }
+}
+
 /// One track row in the header column: colour strip (lights on each
 /// note-on), channel number, name, profile badge and preset, and the
-/// control block (M/S keys, the volume meter-fader, the pan slider: child
-/// views).
+/// control block (M/S keys, pan, the vertical volume meter-fader: child
+/// views, placed by the header layout).
 pub struct TrackRow {
     s: Signals,
     lane: usize,
     hover: bool,
     /// The lit strip, pre-rendered: (colour, height, scale) and the image.
     lit: LitCache,
-    /// The row's text and badge, pre-rendered.
+    /// The row's text, values and scale marks, pre-rendered.
     text: RefCell<Option<(RowTextKey, vg::Image)>>,
+    /// A bottom-edge resize in progress: (press y in window logical px, height then).
+    resize: Option<(f32, f32)>,
+    edge_hover: bool,
 }
 
 /// The lit strip: (colour, height, scale) and its image.
@@ -968,56 +1005,90 @@ struct RowTextKey {
     selected: bool,
     name: String,
     inst: Option<String>,
+    pan: String,
+    db: String,
+    layout: (i32, bool, bool),
     w: i32,
     h: i32,
     s: u32,
 }
 
-/// A row's number, name, profile badge and preset on a transparent layer
-/// (grayscale-antialiased text composites exactly as if drawn in place).
-fn render_row_text(lane: usize, k: &RowTextKey, s: f32) -> Option<vg::Image> {
+/// A row's number, name, badge, preset, values and dB scale on a
+/// transparent layer (grayscale-antialiased text composites exactly as if
+/// drawn in place).
+fn render_row_text(lane: usize, k: &RowTextKey, l: &HeaderLayout, row_h: f32, s: f32) -> Option<vg::Image> {
     let mut surface = vg::surfaces::raster_n32_premul((k.w.max(1), k.h.max(1)))?;
     let canvas = surface.canvas();
     canvas.clear(vg::Color::TRANSPARENT);
     let r = vg::Rect::from_xywh(0.0, 0.0, k.w as f32, k.h as f32);
-
     let hl = gfx::hairline(s);
     let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
-    let (selected, name) = (k.selected, &k.name);
-        // The channel number.
-        let nf = gfx::font(Face::HeavyItalic, NUMBER_PX * s);
-        let num = format!("{}", lane + 1);
-        let ntr = NUMBER_TRACKING * NUMBER_PX * s;
-        let nw = gfx::tracked_width(&num, &nf, ntr);
-        let (nx, ny) = at(NUMBER_X + NUMBER_W * 0.5, NUMBER_TOP);
-        let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
-        gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
+    let selected = k.selected;
 
-        // Name.
-        let f = gfx::font(Face::SemiBold, NAME_PX * s);
-        let (x, y) = at(NAME_X, NAME_TOP);
-        let (_, m) = f.metrics();
-        // Skia's hinting puts the ink a pixel higher than the browser's.
-        let base = (y - m.ascent).round() + s.round();
-        let max_w = (NAME_RIGHT - NAME_X) * s;
-        gfx::draw_text_clipped(canvas, name, x.round(), base, max_w, &f, TEXT_HI);
+    // The channel number.
+    let nf = gfx::font(Face::HeavyItalic, NUMBER_PX * s);
+    let num = format!("{}", lane + 1);
+    let ntr = NUMBER_TRACKING * NUMBER_PX * s;
+    let nw = gfx::tracked_width(&num, &nf, ntr);
+    let (nx, ny) = at(l.number_x() + NUMBER_W * 0.5, NUMBER_TOP);
+    let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
+    gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
 
-        // The profile badge and the preset.
-        let chip = if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
-        let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-        let bw = gfx::text_width(&bf, chip);
-        let (bx, by) = at(NAME_X, BADGE_Y);
-        let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
-        gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
-        let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
-        draw_lock(canvas, lock_o, s, BADGE_INK);
-        let bb = (r.top + BADGE_BASELINE * s).round();
-        gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
-        if let Some(text) = &k.inst {
-            let fi = gfx::font(Face::Medium, PRESET_PX * s);
-            let ix = badge.right + PRESET_GAP * s;
-            gfx::draw_text_clipped(canvas, text, ix.round(), bb, r.left + NAME_RIGHT * s - ix, &fi, if selected { TEXT_MID } else { TEXT_LO });
+    // Name (left-aligned in its column, "…" where it doesn't fit).
+    let name_x = l.name_x();
+    let name_right = name_x + l.name_w();
+    let f = gfx::font(Face::SemiBold, NAME_PX * s);
+    let (x, y) = at(name_x, NAME_TOP);
+    let (_, m) = f.metrics();
+    // Skia's hinting puts the ink a pixel higher than the browser's.
+    let base = (y - m.ascent).round() + s.round();
+    gfx::draw_text_clipped(canvas, &k.name, x.round(), base, l.name_w() * s, &f, TEXT_HI);
+
+    // The profile badge and the preset.
+    let chip = if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
+    let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
+    let bw = gfx::text_width(&bf, chip);
+    let (bx, by) = at(name_x, BADGE_Y);
+    let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
+    gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
+    let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
+    draw_lock(canvas, lock_o, s, BADGE_INK);
+    let bb = (r.top + BADGE_BASELINE * s).round();
+    gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
+    if let Some(text) = &k.inst {
+        let fi = gfx::font(Face::Medium, PRESET_PX * s);
+        let ix = badge.right + PRESET_GAP * s;
+        gfx::draw_text_clipped(canvas, text, ix.round(), bb, r.left + name_right * s - ix, &fi, if selected { TEXT_MID } else { TEXT_LO });
+    }
+
+    // The pan and dB values, centred in their columns.
+    let vf = gfx::font(Face::SemiBold, VALUE_PX * s);
+    let vtr = VALUE_TRACKING * VALUE_PX * s;
+    let value = |text: &str, rect: (f32, f32, f32, f32)| {
+        let w = gfx::tracked_width(text, &vf, vtr);
+        let (x, y) = at(rect.0 + rect.2 * 0.5, rect.1);
+        let base = gfx::css_baseline(&vf, y, row::VALUE_LINE * s).round();
+        gfx::draw_text_tracked(canvas, text, (x - w * 0.5).round(), base, &vf, vtr, VALUE_INK);
+    };
+    value(&k.pan, pan_value_rect(l));
+    value(&k.db, db_value_rect(l, row_h));
+
+    // dB scale marks beside a tall fader (≥ 96 px rows): ticks end 2 px
+    // left of the thumb, labels 2 px left of the ticks. Nothing under the thumb.
+    if row_h >= crate::state::SCALE_MIN_ROW_H {
+        let len = row::fader_len(row_h);
+        let well_x = l.col_b() + (COL_B_W - row::FADER_WELL_W) * 0.5;
+        let sf = gfx::font(Face::SemiBold, SCALE_PX * s);
+        for (y, label, show) in crate::state::scale_marks(len) {
+            let ty = r.top + (row::FADER_TOP + y) * s;
+            canvas.draw_rect(vg::Rect::from_xywh(r.left + (well_x + row::TICK_X) * s, ty.round(), row::TICK_W * s, hl), &gfx::fill(SCALE_TICK));
+            if show {
+                let lw = gfx::text_width(&sf, label);
+                let base = gfx::css_baseline(&sf, ty - row::LABEL_LINE * 0.5 * s, row::LABEL_LINE * s).round();
+                gfx::draw_text(canvas, label, (r.left + (well_x + row::LABEL_RIGHT) * s - lw).round(), base, &sf, SCALE_INK);
+            }
         }
+    }
 
     Some(surface.image_snapshot())
 }
@@ -1029,31 +1100,30 @@ impl TrackRow {
         // The meter is the row's child, but redrawing the whole row keeps the
         // damage one contiguous column (rows touch) instead of eight small
         // rects that each cost the renderer a pass (polish pass, POLISH.md).
-        let light = Cell::new((0u8, (u16::MAX, 0u16, false)));
-        Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None) }
+        let light = Cell::new((0u8, (u16::MAX, 0u16)));
+        Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None), resize: None, edge_hover: false }
             .build(cx, move |cx| {
                 let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
-                let left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W;
                 Key::new(cx, s, "M", KeyAction::Mute(lane))
                     .position_type(PositionType::Absolute)
-                    .left(Pixels(left + CTRL_W - 2.0 * KEY_SIZE - 8.0))
-                    .top(Pixels(CTRL_TOP))
+                    .left(s.header.map(|l| Pixels(l.col_a())))
+                    .top(Pixels(row::KEYS_Y))
                     .tooltip(|cx| crate::tip(cx, "Mute this track."));
                 Key::new(cx, s, "S", KeyAction::Solo(lane))
                     .position_type(PositionType::Absolute)
-                    .left(Pixels(left + CTRL_W - KEY_SIZE))
-                    .top(Pixels(CTRL_TOP))
+                    .left(s.header.map(|l| Pixels(l.col_a() + KEY_SIZE + row::KEY_GAP)))
+                    .top(Pixels(row::KEYS_Y))
                     .tooltip(move |cx| crate::tip(cx, &format!("Solo this track only. {ctrl}-click to solo several.")));
+                PanSlider::new(cx, s, lane)
+                    .position_type(PositionType::Absolute)
+                    .left(s.header.map(|l| Pixels(l.col_a() - PanSlider::PAD)))
+                    .top(Pixels(row::PAN_WELL_Y + row::PAN_WELL_H * 0.5 - row::HTHUMB_H * 0.5))
+                    .tooltip(|cx| crate::tip(cx, PanSlider::HELP));
                 VolumeFader::new(cx, s, lane)
                     .position_type(PositionType::Absolute)
-                    .left(Pixels(left - THUMB_W * 0.5))
-                    .top(Pixels(SLIDER_VIEW_TOP))
-                    .tooltip(move |cx| crate::tip(cx, &VolumeFader::tip(s, lane)));
-                PanSlider::new(cx)
-                    .position_type(PositionType::Absolute)
-                    .left(Pixels(left + FADER_W + SLIDER_GAP - THUMB_W * 0.5))
-                    .top(Pixels(SLIDER_VIEW_TOP))
-                    .tooltip(|cx| crate::tip(cx, PanSlider::WHY));
+                    .left(s.header.map(|l| Pixels(l.col_b())))
+                    .top(Pixels(0.0))
+                    .tooltip(|cx| crate::tip(cx, VolumeFader::HELP));
             })
             .class("track-row")
             .bind(s.meters, move |mut h| {
@@ -1063,14 +1133,15 @@ impl TrackRow {
                     h.needs_redraw();
                 }
             })
-            .bind(s.lane_h, |mut h| h.needs_redraw())
+            .bind(s.header, |mut h| h.needs_redraw())
             .bind(s.drag_preset, |mut h| h.needs_redraw())
             .bind(s.chip, |mut h| h.needs_redraw())
             .bind(s.arrangement, move |mut h| {
                 let now = s.arrangement.with_untracked(|a| {
+                    let l = &a.lanes[lane];
                     (
                         a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
-                        format!("{}\u{1}{}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), a.lanes[lane].name, a.lanes[lane].color),
+                        format!("{}\u{1}{}\u{1}{:?}\u{1}{}\u{1}{}\u{1}{}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), l.name, l.color, l.height, l.pan, l.vol_db),
                     )
                 });
                 if *seen.borrow() != now {
@@ -1090,6 +1161,15 @@ impl TrackRow {
                 .class("tip")
             })
     }
+
+    fn row_h(&self) -> f32 {
+        self.s.arrangement.with_untracked(|a| a.lanes[self.lane].height)
+    }
+
+    fn on_edge(&self, cx: &EventContext) -> bool {
+        let (_, y) = local_mouse(cx);
+        y >= self.row_h() + crate::state::ROW_HAIRLINE - ROW_EDGE_GRAB
+    }
 }
 
 impl View for TrackRow {
@@ -1098,6 +1178,7 @@ impl View for TrackRow {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        let off = crate::state::lane_off(self.s.chip.get_untracked(), self.lane);
         event.map(|we, meta| {
             match we {
                 WindowEvent::MouseEnter => {
@@ -1106,18 +1187,60 @@ impl View for TrackRow {
                 }
                 WindowEvent::MouseLeave => {
                     self.hover = false;
+                    if self.resize.is_none() {
+                        self.edge_hover = false;
+                        cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
+                    }
+                    cx.emit(AppEvent::HoverHelp(String::new()));
                     cx.needs_redraw();
                 }
+                WindowEvent::MouseMove(_, _) => {
+                    if let Some((y0, h0)) = self.resize {
+                        let y = cx.mouse().cursor_y / cx.scale_factor();
+                        cx.emit(AppEvent::SetLaneHeight(self.lane, h0 + (y - y0)));
+                    } else {
+                        let edge = self.on_edge(cx);
+                        if edge != self.edge_hover {
+                            self.edge_hover = edge;
+                            cx.emit(WindowEvent::SetCursor(if edge { CursorIcon::NsResize } else { CursorIcon::Default }));
+                        }
+                    }
+                    let (x, y) = local_mouse(cx);
+                    let l = self.s.header.get_untracked();
+                    cx.emit(AppEvent::HoverHelp(row_help(&l, self.row_h(), x, y).into()));
+                }
+                // §4.2: drag a track's bottom edge to change its height (one undo step).
+                WindowEvent::MouseDown(MouseButton::Left) if self.on_edge(cx) => {
+                    self.resize = Some((cx.mouse().cursor_y / cx.scale_factor(), self.row_h()));
+                    cx.emit(AppEvent::GestureBegin);
+                    cx.capture();
+                    meta.consume();
+                }
+                WindowEvent::MouseUp(MouseButton::Left) if self.resize.is_some() => {
+                    self.resize = None;
+                    cx.release();
+                    cx.emit(AppEvent::GestureEnd);
+                    meta.consume();
+                }
                 // T1: a click selects the track (Shift / Ctrl / Cmd adds).
-                WindowEvent::MouseDown(MouseButton::Left) if !crate::state::lane_off(self.s.chip.get_untracked(), self.lane) => {
+                WindowEvent::MouseDown(MouseButton::Left) if !off => {
                     let m = *cx.modifiers();
                     cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                     cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
                     meta.consume();
                 }
-                // T2: a double-click renames it.
-                WindowEvent::MouseDoubleClick(MouseButton::Left) if !crate::state::lane_off(self.s.chip.get_untracked(), self.lane) => {
-                    cx.emit(AppEvent::OpenRename(crate::edit::RenameTarget::Track(self.lane)));
+                // A double-click on a value types it (§3); elsewhere it renames (T2).
+                WindowEvent::MouseDoubleClick(MouseButton::Left) if !off => {
+                    let (x, y) = local_mouse(cx);
+                    let l = self.s.header.get_untracked();
+                    let target = if inside(db_value_rect(&l, self.row_h()), x, y) {
+                        crate::edit::RenameTarget::Volume(self.lane)
+                    } else if inside(pan_value_rect(&l), x, y) {
+                        crate::edit::RenameTarget::Pan(self.lane)
+                    } else {
+                        crate::edit::RenameTarget::Track(self.lane)
+                    };
+                    cx.emit(AppEvent::OpenRename(target));
                     meta.consume();
                 }
                 // T3: its menu.
@@ -1129,9 +1252,14 @@ impl View for TrackRow {
                 }
                 _ => {}
             }
-            // The header column scrolls with the lanes.
             if let WindowEvent::MouseScroll(_, sy) = we {
-                if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
+                // §4.2: Alt+wheel over a track changes its height (R35, P2-R).
+                if cx.modifiers().alt() && *sy != 0.0 {
+                    cx.emit(AppEvent::SetLaneHeight(self.lane, self.row_h() + sy.signum() * ROW_WHEEL_STEP));
+                    cx.emit(AppEvent::Commit);
+                    meta.consume();
+                } else if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
+                    // The header column scrolls with the lanes.
                     cx.emit(AppEvent::ScrollLanes(-*sy * super::arrangement::LANE_SCROLL_PER_NOTCH));
                     meta.consume();
                 }
@@ -1146,25 +1274,33 @@ impl View for TrackRow {
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
         let hl = gfx::hairline(s);
+        let lay = self.s.header.get_untracked();
         let selected = self
             .s
             .arrangement
             .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(self.lane) || a.track_sel.contains(&self.lane));
-        let (color, name) = self.s.arrangement.with_untracked(|a| (a.lanes[self.lane].color, a.lanes[self.lane].name.clone()));
+        let (color, name, row_h, pan, vol) = self.s.arrangement.with_untracked(|a| {
+            let l = &a.lanes[self.lane];
+            (l.color, l.name.clone(), l.height, l.pan, l.vol_db)
+        });
         let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
 
-        // Row surface (selection lifts it), and the 1 px bottom hairline.
-        let body = vg::Rect::from_ltrb(r.left, r.top, r.right, r.bottom - hl);
+        // Row surface (selection lifts it) inside the header's hairline,
+        // and the 1 px bottom hairline.
+        let hx = (r.left + lay.hairline_x() * s).round();
+        let (inner_l, inner_r) = if lay.right { (hx + hl, r.right) } else { (r.left, hx) };
+        let body = vg::Rect::from_ltrb(inner_l, r.top, inner_r, r.bottom - hl);
         canvas.draw_rect(body, &gfx::fill(if selected { BG_0.lighten(0.03) } else { BG_0 }));
-        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE));
+        // The strip by the clips covers the hairline (the board); the row's
+        // bottom hairline then runs under it too.
+        let full = vg::Rect::from_ltrb(r.left, r.top, r.right, r.bottom - hl);
+        canvas.draw_rect(vg::Rect::from_ltrb(if lay.by_clips { r.left } else { inner_l }, r.bottom - hl, if lay.by_clips { r.right } else { inner_r }, r.bottom), &gfx::fill(LINE));
 
         // The colour strip: full height, square, light left edge → dark
-        // right edge; lit by note-ons (inner glow and a soft spill).
-        let strip = vg::Rect::from_ltrb(r.left, body.top, (r.left + LANE_STRIP_W * s).round(), body.bottom);
-        // The unlit strip, then the lit look over it at `light`: the lit
-        // fill, edges, inner glow and spill are rendered once per colour,
-        // height and scale, and blending them at `light` is exactly
-        // mix(unlit, lit, light). No blur runs per frame (PERF.md).
+        // right edge; lit by note-ons (inner glow and a soft spill toward
+        // the header's inside).
+        let sx = (r.left + lay.strip_x() * s).round();
+        let strip = vg::Rect::from_ltrb(sx, full.top, (sx + STRIP_W * s).round(), full.bottom);
         let (fill, edge_l, edge_r) = strip_colours(color, 0.0);
         canvas.draw_rect(
             strip,
@@ -1181,39 +1317,57 @@ impl View for TrackRow {
             if let Some((_, img)) = lit.as_ref() {
                 let mut p = vg::Paint::default();
                 p.set_alpha_f(light.clamp(0.0, 1.0));
+                let pad = lit_pad(s);
                 canvas.save();
-                canvas.clip_rect(body, None, None);
-                canvas.draw_image(img, (strip.left, strip.top), Some(&p));
+                // The spill shows only toward the header's inside.
+                let clip = vg::Rect::from_ltrb(body.left.min(strip.left), body.top, body.right.max(strip.right), body.bottom);
+                canvas.clip_rect(clip, None, None);
+                if !lay.spill_right() {
+                    canvas.clip_rect(vg::Rect::from_ltrb(clip.left, clip.top, strip.right, clip.bottom), None, None);
+                } else {
+                    canvas.clip_rect(vg::Rect::from_ltrb(strip.left, clip.top, clip.right, clip.bottom), None, None);
+                }
+                canvas.draw_image(img, (strip.left - pad, strip.top), Some(&p));
                 canvas.restore();
             }
         }
 
-        // The number, name, badge and preset: one image per content and
-        // scale (a row redraws every frame while its strip or meter moves).
+        // The number, name, badge, preset, values and scale: one image per
+        // content and scale (a row redraws every frame while its strip or
+        // meter moves).
         let inst = self.s.arrangement.with_untracked(|a| a.instruments.lane(self.lane).map(|i| if i.is_kit() { format!("{}  (kit)", i.label()) } else { i.label() }));
-        let key = RowTextKey { selected, name: name.clone(), inst: inst.clone(), w: r.width().round() as i32, h: r.height().round() as i32, s: (s * 100.0).round() as u32 };
+        let key = RowTextKey {
+            selected,
+            name,
+            inst,
+            pan: crate::state::format_pan(pan),
+            db: crate::state::format_db(vol),
+            layout: (lay.w as i32, lay.right, lay.by_clips),
+            w: r.width().round() as i32,
+            h: r.height().round() as i32,
+            s: (s * 100.0).round() as u32,
+        };
         {
             let mut text = self.text.borrow_mut();
             if text.as_ref().is_none_or(|(k, _)| *k != key) {
-                *text = render_row_text(self.lane, &key, s).map(|img| (key, img));
+                *text = render_row_text(self.lane, &key, &lay, row_h, s).map(|img| (key, img));
             }
             if let Some((_, img)) = text.as_ref() {
                 canvas.draw_image(img, (r.left, r.top), None);
             }
         }
-        let bb = (r.top + BADGE_BASELINE * s).round();
-        // The disabled pan slider, where its (hit-only) view sits: drawn here
-        // so a row repaint is one view, not two.
-        let pan_left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W + FADER_W + SLIDER_GAP - THUMB_W * 0.5;
-        draw_pan(canvas, gfx::snap(vg::Rect::from_xywh(r.left + pan_left * s, r.top + SLIDER_VIEW_TOP * s, (PAN_W + THUMB_W) * s, THUMB_H * s)), s);
+        // The pan slider, where its (hit-only) view sits: drawn here so a
+        // row repaint is one view, not two.
+        draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), pan, s);
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
+        let bb = (r.top + BADGE_BASELINE * s).round();
         if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {
             canvas.draw_rect(body, &gfx::fill(Rgba::black(super::arrangement::OFF_DIM)));
             let fh = gfx::font(Face::Medium, PRESET_PX * s);
             let text = if self.hover { "Off: turn on VRC6 in File > Project Settings…" } else { "Off in the 2A03 profile" };
-            let hx = (r.left + NAME_X * s).round();
-            let max_w = r.right - CTRL_RIGHT * s - hx;
+            let hx = (r.left + lay.name_x() * s).round();
+            let max_w = (lay.name_w() + hl_::CTRL_W) * s;
             // An opaque band under the text so the badge below it doesn't show through.
             let band = vg::Rect::from_ltrb(hx - 2.0 * s, bb - 12.0 * s, hx + max_w, bb + 5.0 * s);
             canvas.draw_rect(band, &gfx::fill(BG_0));
@@ -1230,16 +1384,27 @@ impl View for TrackRow {
                 gfx::ring(canvas, &gfx::rrect(body, 0.0), 2.0 * s, &gfx::fill(NEUTRAL_HI.with_alpha(0.8)));
             }
         }
+        // The resize edge under the mouse (or being dragged): a neutral line.
+        if self.edge_hover || self.resize.is_some() {
+            canvas.draw_rect(vg::Rect::from_ltrb(body.left, r.bottom - 2.0 * hl, body.right, r.bottom), &gfx::fill(NEUTRAL_HI.with_alpha(0.5)));
+        }
     }
 }
 
-/// The fully lit strip (fill, edges, inner glow) plus its spill to the
-/// right, as an image whose top-left is the strip's.
+/// The lit strip image's padding on each side (room for the spill).
+fn lit_pad(s: f32) -> f32 {
+    (2.0 * STRIP_GLOW_R * s).ceil()
+}
+
+/// The fully lit strip (fill, edges, inner glow) plus its spill on both
+/// sides, as an image whose strip starts `lit_pad` px from its left.
 pub fn render_lit_strip(color: Rgba, w: f32, h: f32, s: f32) -> Option<vg::Image> {
-    let spill_pad = (2.0 * STRIP_GLOW_R * s).ceil();
-    let mut surface = vg::surfaces::raster_n32_premul(((w + spill_pad).ceil() as i32, h.ceil().max(1.0) as i32))?;
+    use crate::theme::palette::{STRIP_GLOW_A, STRIP_SPILL_A};
+    let pad = lit_pad(s);
+    let mut surface = vg::surfaces::raster_n32_premul(((w + 2.0 * pad).ceil() as i32, h.ceil().max(1.0) as i32))?;
     let c = surface.canvas();
     c.clear(vg::Color::TRANSPARENT);
+    c.translate((pad, 0.0));
     let strip = vg::Rect::from_xywh(0.0, 0.0, w, h);
     let hl = gfx::hairline(s);
     let mut spill = gfx::fill(color.with_alpha(STRIP_SPILL_A));
@@ -1249,8 +1414,8 @@ pub fn render_lit_strip(color: Rgba, w: f32, h: f32, s: f32) -> Option<vg::Image
     c.draw_rect(strip, &gfx::shaded(gfx::linear((0.0, 0.0), (w, 0.0), &fill, Some(&[0.0, 0.55, 1.0]))));
     c.draw_rect(vg::Rect::from_xywh(0.0, 0.0, hl, h), &gfx::fill(edge_l));
     c.draw_rect(vg::Rect::from_xywh(w - hl, 0.0, hl, h), &gfx::fill(edge_r));
-    let pad = gfx::rrect(strip.with_inset((hl, 0.0)), 0.0);
-    gfx::css_inset_shadow(c, &pad, 0.0, 0.0, STRIP_GLOW_R * s, 0.0, Rgba::white(STRIP_GLOW_A));
+    let inner = gfx::rrect(strip.with_inset((hl, 0.0)), 0.0);
+    gfx::css_inset_shadow(c, &inner, 0.0, 0.0, STRIP_GLOW_R * s, 0.0, Rgba::white(STRIP_GLOW_A));
     Some(surface.image_snapshot())
 }
 
@@ -1262,7 +1427,7 @@ fn draw_lock(canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba) {
     canvas.draw_path(&shackle, &gfx::stroke(ink, 1.2 * s));
 }
 
-/// The slider track: `#050505` with `inset 0 1px 0 #000` and `0 1px 0 #262626` below.
+/// The slider well: `#050505` with `inset 0 1px 0 #000` and `0 1px 0 #262626` below.
 fn slider_track(canvas: &Canvas, t: vg::Rect, s: f32) {
     let hl = gfx::hairline(s);
     canvas.draw_rect(vg::Rect::from_xywh(t.left, t.bottom, t.width(), hl), &gfx::fill(Rgba::hex(0x262626)));
@@ -1270,8 +1435,8 @@ fn slider_track(canvas: &Canvas, t: vg::Rect, s: f32) {
     canvas.draw_rect(vg::Rect::from_xywh(t.left, t.top, t.width(), hl), &gfx::fill(Rgba::black(1.0)));
 }
 
-/// The 8 × 12 thumb: square, `#4A4A4A` border, `#5A5A5A → #2E2E2E`, a
-/// `#A0A0A0` inner top line.
+/// A thumb: square, `#4A4A4A` border, `#5A5A5A → #2E2E2E`, a `#A0A0A0`
+/// inner top line (8 × 12 on the pan, 12 × 8 on the fader).
 fn slider_thumb(canvas: &Canvas, th: vg::Rect, s: f32, lift: f32) {
     let hl = gfx::hairline(s);
     canvas.draw_rect(th, &gfx::vgrad(th, Rgba::hex(0x5A5A5A).lighten(lift), Rgba::hex(0x2E2E2E).lighten(lift)));
@@ -1279,31 +1444,36 @@ fn slider_thumb(canvas: &Canvas, th: vg::Rect, s: f32, lift: f32) {
     canvas.draw_rect(vg::Rect::from_xywh(th.left + hl, th.top + hl, th.width() - 2.0 * hl, hl), &gfx::fill(Rgba::hex(0xA0A0A0)));
 }
 
-/// The track's volume meter-fader: a 68 × 4 track whose fill is a
-/// post-fader level meter (cool → hot over the full 68 px, never past the
-/// thumb), and the 8 × 12 thumb that sets the channel volume (the
-/// inspector's Volume dial: undoable, saved). The view is the thumb's
-/// height and the track plus half a thumb on each side, so the thumb can
-/// be grabbed at both ends.
+/// The vertical volume meter-fader (polish 2 §3, column B): a 4 px well
+/// from y 8, `row height − 32` long, the post-fader meter filling from the
+/// bottom on the fader's dB scale (cool to hot, hot at 0 dB, never past the
+/// thumb), and the 12 × 8 thumb at `(dB + 48) / 54` of the length. The view
+/// is column B from the row's top to the dB value, so the thumb can be
+/// grabbed at both ends.
 pub struct VolumeFader {
     s: Signals,
     lane: usize,
-    drag: bool,
+    /// A drag: (press y, the value then).
+    drag: Option<(f32, f32)>,
     hover: bool,
     wheel: crate::input::WheelSteps,
 }
 
 impl VolumeFader {
+    pub const HELP: &'static str = "Volume: drag to change · double-click the value to type it in dB";
+    /// dB per wheel notch.
+    const WHEEL_DB: f32 = 1.0;
+
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
-        let shown = Cell::new((u16::MAX, 0u16, false));
+        let shown = Cell::new((u16::MAX, 0u16));
         // `CHIPDAW_FROZEN_METERS=1` (dev): the meters don't follow the level
         // (the performance attribution in DESIGNPASS.md §6).
         let frozen = crate::dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1");
-        Self { s, lane, drag: false, hover: false, wheel: Default::default() }
+        Self { s, lane, drag: None, hover: false, wheel: Default::default() }
             .build(cx, |_| {})
             .class("fader")
-            .width(Pixels(FADER_W + THUMB_W))
-            .height(Pixels(THUMB_H))
+            .width(Pixels(COL_B_W))
+            .height(s.arrangement.map(move |a| Pixels(row::db_value_y(a.lanes[lane].height))))
             .bind(s.meters, move |mut h| {
                 let v = Self::state(&s, lane);
                 if !frozen && shown.get() != v {
@@ -1311,27 +1481,30 @@ impl VolumeFader {
                     h.needs_redraw();
                 }
             })
-            .bind(s.faders, |mut h| h.needs_redraw())
     }
 
-    /// (fill px ×4, thumb px ×4, disabled): what the view shows.
-    pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16, bool) {
-        let f = s.faders.with_untracked(|f| f[lane]);
+    /// (fill px ×4, thumb y ×4): what the view shows.
+    pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16) {
+        let (db, h) = s.arrangement.with_untracked(|a| (a.lanes[lane].vol_db, a.lanes[lane].height));
+        let len = row::fader_len(h);
         let level = if s.mute.get_untracked() & (1 << lane) != 0 { 0.0 } else { s.meters.with_untracked(|m| m.level[lane]) };
-        let fill = crate::state::meter_fill(level, f.pos, FADER_W);
-        ((fill * 4.0).round() as u16, (f.pos * FADER_W * 4.0).round() as u16, f.reason.is_some())
+        let fill = crate::state::meter_fill(level, db, len);
+        ((fill * 4.0).round() as u16, (crate::state::fader_y(db, len) * 4.0).round() as u16)
     }
 
-    pub fn tip(s: Signals, lane: usize) -> String {
-        match s.faders.with_untracked(|f| f[lane].reason) {
-            Some(why) => why.into(),
-            None => "Volume: drag the thumb or use the wheel. The bar shows the track's level after the fader.".into(),
-        }
+    fn db(&self) -> f32 {
+        self.s.arrangement.with_untracked(|a| a.lanes[self.lane].vol_db)
     }
 
-    fn set_from_x(&self, cx: &mut EventContext) {
-        let x = local_mouse(cx).0 - THUMB_W * 0.5;
-        cx.emit(AppEvent::SetLaneVolume(self.lane, x / FADER_W));
+    fn len(&self) -> f32 {
+        self.s.arrangement.with_untracked(|a| row::fader_len(a.lanes[self.lane].height))
+    }
+
+    /// The press point sets the value (the slider gesture the build had).
+    fn set_from_y(&self, cx: &mut EventContext) {
+        let y = local_mouse(cx).1 - row::FADER_TOP;
+        let pos = 1.0 - y / self.len();
+        cx.emit(AppEvent::SetLaneVolume(self.lane, crate::state::pos_to_db(pos)));
     }
 }
 
@@ -1341,9 +1514,115 @@ impl View for VolumeFader {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        let off = self.s.faders.with_untracked(|f| f[self.lane].reason.is_some());
         event.map(|we, meta| match we {
-            WindowEvent::MouseDown(MouseButton::Left) if !off => {
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                self.drag = Some((local_mouse(cx).1, self.db()));
+                cx.emit(AppEvent::GestureBegin);
+                cx.capture();
+                self.set_from_y(cx);
+                meta.consume();
+            }
+            WindowEvent::MouseMove(_, _) if self.drag.is_some() => self.set_from_y(cx),
+            WindowEvent::MouseUp(MouseButton::Left) if self.drag.is_some() => {
+                self.drag = None;
+                cx.release();
+                cx.emit(AppEvent::GestureEnd);
+                meta.consume();
+            }
+            WindowEvent::MouseScroll(_, y) if !cx.modifiers().alt() => {
+                let steps = self.wheel.steps(*y);
+                if steps != 0 {
+                    let db = self.db();
+                    let base = if db == f32::NEG_INFINITY { crate::state::VOL_DB_FLOOR } else { db };
+                    cx.emit(AppEvent::SetLaneVolume(self.lane, (base + steps as f32 * Self::WHEEL_DB).min(crate::state::VOL_DB_MAX)));
+                    cx.emit(AppEvent::Commit);
+                }
+                meta.consume();
+            }
+            WindowEvent::MouseEnter => {
+                self.hover = true;
+                cx.emit(AppEvent::HoverHelp(Self::HELP.into()));
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseLeave => {
+                self.hover = false;
+                cx.needs_redraw();
+            }
+            _ => {}
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Rows);
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        let (fill4, thumb4) = Self::state(&self.s, self.lane);
+        let len = self.len();
+        let left = (r.left + (COL_B_W - row::FADER_WELL_W) * 0.5 * s).round();
+        let top = (r.top + row::FADER_TOP * s).round();
+        let well = vg::Rect::from_xywh(left, top, (row::FADER_WELL_W * s).round(), (len * s).round());
+        slider_track(canvas, well, s);
+        let fill = fill4 as f32 / 4.0;
+        if fill > 0.0 {
+            // The gradient spans the full well; the fill reveals its bottom part.
+            let stops: Vec<Rgba> = METER_STOPS.iter().map(|(_, c)| *c).collect();
+            let pos: Vec<f32> = METER_STOPS.iter().map(|(x, _)| *x).collect();
+            let paint = gfx::shaded(gfx::linear((0.0, well.bottom), (0.0, well.top), &stops, Some(&pos)));
+            let fh = (fill * s).round();
+            canvas.draw_rect(vg::Rect::from_xywh(well.left, well.bottom - fh, well.width(), fh), &paint);
+        }
+        let cy = top + thumb4 as f32 / 4.0 * s;
+        let th = vg::Rect::from_xywh(
+            (left + (row::FADER_WELL_W - row::VTHUMB_W) * 0.5 * s).round(),
+            (cy - row::VTHUMB_H * 0.5 * s).round(),
+            row::VTHUMB_W * s,
+            row::VTHUMB_H * s,
+        );
+        let lift = if self.hover || self.drag.is_some() { 0.08 } else { 0.0 };
+        slider_thumb(canvas, th, s, lift);
+    }
+}
+
+/// The pan slider (column A, polish 2 §3): a 56 × 4 well with a centre
+/// tick, a fill from the centre and an 8 × 12 thumb. Editable and saved;
+/// heard once stereo mixing arrives (Batch 4). The row draws it; this view
+/// takes the gestures (press and drag, the wheel) and is the well plus half
+/// a thumb on each side.
+pub struct PanSlider {
+    s: Signals,
+    lane: usize,
+    drag: bool,
+    wheel: crate::input::WheelSteps,
+}
+
+impl PanSlider {
+    pub const HELP: &'static str =
+        "Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives";
+    pub const PAD: f32 = 4.0;
+
+    pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
+        Self { s, lane, drag: false, wheel: Default::default() }
+            .build(cx, |_| {})
+            .class("pan")
+            .width(Pixels(COL_A_W + 2.0 * Self::PAD))
+            .height(Pixels(row::HTHUMB_H))
+    }
+
+    fn set_from_x(&self, cx: &mut EventContext) {
+        let x = local_mouse(cx).0 - Self::PAD - COL_A_W * 0.5;
+        let v = (x / (COL_A_W * 0.5) * crate::state::PAN_MAX as f32).round();
+        cx.emit(AppEvent::SetLanePan(self.lane, v.clamp(-50.0, 50.0) as i8));
+    }
+}
+
+impl View for PanSlider {
+    fn element(&self) -> Option<&'static str> {
+        Some("pan")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) => {
                 self.drag = true;
                 cx.emit(AppEvent::GestureBegin);
                 cx.capture();
@@ -1357,95 +1636,39 @@ impl View for VolumeFader {
                 cx.emit(AppEvent::GestureEnd);
                 meta.consume();
             }
-            WindowEvent::MouseScroll(_, y) if !off => {
+            WindowEvent::MouseScroll(_, y) if !cx.modifiers().alt() => {
                 let steps = self.wheel.steps(*y);
                 if steps != 0 {
-                    let pos = self.s.faders.with_untracked(|f| f[self.lane].pos);
-                    let (lo, hi, _) = crate::state::fader_param(self.lane).map_or((0, 15, 0), |p| p.range(self.lane));
-                    cx.emit(AppEvent::SetLaneVolume(self.lane, pos + steps as f32 / (hi - lo) as f32));
+                    let pan = self.s.arrangement.with_untracked(|a| a.lanes[self.lane].pan) as i32;
+                    cx.emit(AppEvent::SetLanePan(self.lane, (pan + steps).clamp(-50, 50) as i8));
                     cx.emit(AppEvent::Commit);
                 }
                 meta.consume();
             }
-            WindowEvent::MouseEnter => {
-                self.hover = true;
-                cx.needs_redraw();
-            }
-            WindowEvent::MouseLeave => {
-                self.hover = false;
-                cx.needs_redraw();
-            }
-            // Keep a press on the fader from selecting the track.
-            WindowEvent::MouseDown(MouseButton::Left) => meta.consume(),
+            WindowEvent::MouseEnter => cx.emit(AppEvent::HoverHelp(Self::HELP.into())),
             _ => {}
         });
     }
 
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Rows);
-        let s = cx.scale_factor();
-        let r = gfx::snap(cx.bounds().into());
-        let (fill4, thumb4, off) = Self::state(&self.s, self.lane);
-        let left = (r.left + THUMB_W * 0.5 * s).round();
-        let track = vg::Rect::from_xywh(left, (r.center_y() - SLIDER_H * 0.5 * s).round(), (FADER_W * s).round(), (SLIDER_H * s).round());
-        slider_track(canvas, track, s);
-        let fill = fill4 as f32 / 4.0;
-        if fill > 0.0 {
-            // The gradient spans the full track; the fill reveals its left part.
-            let stops: Vec<Rgba> = FADER_STOPS.iter().map(|(_, c)| *c).collect();
-            let pos: Vec<f32> = FADER_STOPS.iter().map(|(x, _)| x / FADER_W).collect();
-            let paint = gfx::shaded(gfx::linear((track.left, 0.0), (track.right, 0.0), &stops, Some(&pos)));
-            canvas.draw_rect(vg::Rect::from_xywh(track.left, track.top, (fill * s).round(), track.height()), &paint);
-        }
-        let tx = (left + thumb4 as f32 / 4.0 * s - THUMB_W * 0.5 * s).round();
-        let th = vg::Rect::from_xywh(tx, r.top, THUMB_W * s, THUMB_H * s);
-        let lift = if (self.hover || self.drag) && !off { 0.08 } else { 0.0 };
-        slider_thumb(canvas, th, s, lift);
-    }
-}
-
-/// The pan slider: drawn (40 × 4, a centre detent) but disabled until
-/// stereo mixing arrives.
-pub struct PanSlider;
-
-impl PanSlider {
-    pub const WHY: &'static str = "Pan arrives with stereo mixing (Batch 4).";
-
-    pub fn new(cx: &mut Context) -> Handle<'_, Self> {
-        Self.build(cx, |_| {}).class("pan").width(Pixels(PAN_W + THUMB_W)).height(Pixels(THUMB_H))
-    }
-}
-
-impl View for PanSlider {
-    fn element(&self) -> Option<&'static str> {
-        Some("pan")
-    }
-
-    fn event(&mut self, _cx: &mut EventContext, event: &mut Event) {
-        // Disabled: a press does nothing (and doesn't select the track).
-        event.map(|we, meta| {
-            if let WindowEvent::MouseDown(_) = we {
-                meta.consume();
-            }
-        });
-    }
-
     fn draw(&self, _cx: &mut DrawContext, _canvas: &Canvas) {
-        // Drawn by the row (its cached layer: the pan is static until
-        // stereo arrives); this view carries the tooltip and eats clicks.
+        // Drawn by the row (one view repaints, not two).
     }
 }
 
-/// The disabled pan slider in the view rect `r` (device px).
-fn draw_pan(canvas: &Canvas, r: vg::Rect, s: f32) {
-    {
-        let left = (r.left + THUMB_W * 0.5 * s).round();
-        let track = vg::Rect::from_xywh(left, (r.center_y() - SLIDER_H * 0.5 * s).round(), (PAN_W * s).round(), (SLIDER_H * s).round());
-        slider_track(canvas, track, s);
-        // The centre detent: 1 × 8 at 19.5 px (the mockup's half-pixel, snapped).
-        let dx = (track.left + 19.5 * s).round();
-        canvas.draw_rect(vg::Rect::from_xywh(dx, (r.center_y() - 4.0 * s).round(), gfx::hairline(s), 8.0 * s), &gfx::fill(Rgba::hex(0x4A4A4A)));
-        let th = vg::Rect::from_xywh((track.left + (PAN_W * 0.5 - THUMB_W * 0.5) * s).round(), r.top, THUMB_W * s, THUMB_H * s);
-        slider_thumb(canvas, th, s, 0.0);
+/// The pan slider with its well's top-left at (x, y) (device px).
+fn draw_pan(canvas: &Canvas, x: f32, y: f32, pan: i8, s: f32) {
+    let hl = gfx::hairline(s);
+    let well = vg::Rect::from_xywh(x, y, (COL_A_W * s).round(), (row::PAN_WELL_H * s).round());
+    slider_track(canvas, well, s);
+    let half = COL_A_W * 0.5;
+    let cx = x + (half * s).round();
+    // The centre tick: 1 × 8 at 27.5 px (the mockup's half pixel, snapped).
+    canvas.draw_rect(vg::Rect::from_xywh(cx, (y - 2.0 * s).round(), hl, 8.0 * s), &gfx::fill(Rgba::hex(0x4A4A4A)));
+    let off = (pan as f32 / crate::state::PAN_MAX as f32 * half).round();
+    if off != 0.0 {
+        let (a, b) = if off < 0.0 { (cx + off * s, cx) } else { (cx, cx + off * s) };
+        canvas.draw_rect(vg::Rect::from_ltrb(a.round(), well.top, b.round(), well.bottom), &gfx::fill(PAN_FILL));
     }
+    let th = vg::Rect::from_xywh((cx + (off - row::HTHUMB_W * 0.5) * s).round(), (y + (row::PAN_WELL_H - row::HTHUMB_H) * 0.5 * s).round(), row::HTHUMB_W * s, row::HTHUMB_H * s);
+    slider_thumb(canvas, th, s, 0.0);
 }

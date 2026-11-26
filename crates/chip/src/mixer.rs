@@ -66,9 +66,44 @@ pub fn mix(o: &Outputs, vrc6_step: f64) -> f64 {
     apu + VRC6_SIGN * vrc6
 }
 
+/// Per-lane linear gains (the track volume faders, polish 2 §3), in lane order.
+pub type Gains = [f64; 8];
+
+/// `mix` with a post-mixer gain per lane. The chip's non-linear groups are
+/// evaluated on the real DAC levels (so channels interact as on the
+/// hardware); each group's output is then split between its channels by
+/// their share of the group's linear input and each share is scaled by its
+/// lane's gain. A lone channel at gain g is exactly g times louder (+6 dB =
+/// ×2). Callers use plain `mix` while every gain is 1.0, so unity renders are
+/// bit-identical to before.
+pub fn mix_gained(o: &Outputs, vrc6_step: f64, g: &Gains) -> f64 {
+    let (p1, p2) = (o[0] as f64, o[1] as f64);
+    let pulse = if p1 + p2 > 0.0 { pulse_out(o[0], o[1]) * (g[0] * p1 + g[1] * p2) / (p1 + p2) } else { 0.0 };
+    let (t, n, d) = (o[2] as f64 / 8227.0, o[3] as f64 / 12241.0, o[4] as f64 / 22638.0);
+    let s = t + n + d;
+    let tnd = if s > 0.0 { tnd_out(o[2], o[3], o[4]) * (g[2] * t + g[3] * n + g[4] * d) / s } else { 0.0 };
+    let vrc6 = (g[5] * o[5] as f64 + g[6] * o[6] as f64 + g[7] * o[7] as f64) * vrc6_step;
+    pulse + tnd + VRC6_SIGN * vrc6
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gained_mix_matches_at_unity_and_scales_a_lone_channel() {
+        let unity = [1.0; 8];
+        for o in [[15, 7, 9, 3, 64, 4, 12, 20], [0, 0, 15, 0, 0, 0, 0, 0], [0; 8], [1, 0, 0, 0, 127, 15, 15, 31]] {
+            let a = mix(&o, vrc6_step());
+            assert!((mix_gained(&o, vrc6_step(), &unity) - a).abs() < 1e-12);
+        }
+        let mut g = unity;
+        g[0] = 2.0;
+        let lone = [15, 0, 0, 0, 0, 0, 0, 0];
+        assert!((mix_gained(&lone, vrc6_step(), &g) - 2.0 * mix(&lone, vrc6_step())).abs() < 1e-12);
+        g[0] = 0.0;
+        assert_eq!(mix_gained(&lone, vrc6_step(), &g), 0.0);
+    }
 
     #[test]
     fn formula_values() {

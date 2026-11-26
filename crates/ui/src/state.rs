@@ -97,6 +97,139 @@ pub struct Lane {
     pub short: &'static str,
     /// The track's colour (T3 Colour ▸; saved from format v4).
     pub color: Rgba,
+    /// The row's height in logical px without its 1 px hairline:
+    /// `ROW_H_MIN`..=`ROW_H_MAX` in `ROW_H_STEP`s (polish 2 §4; format v6).
+    pub height: f32,
+    /// Pan, −`PAN_MAX` (left) … 0 (centre) … +`PAN_MAX` (right). Saved and
+    /// editable; heard once stereo mixing arrives (Batch 4) (format v6).
+    pub pan: i8,
+    /// The track volume in dB, −inf … +`VOL_DB_MAX`: a gain after the chip
+    /// (polish 2 §3; format v6). 0 dB = unity.
+    pub vol_db: f32,
+}
+
+impl Lane {
+    pub fn new(name: &str, short: &'static str, color: Rgba) -> Self {
+        Self { name: name.into(), short, color, height: ROW_H_MIN, pan: 0, vol_db: 0.0 }
+    }
+
+    /// The row's pitch: its height plus the hairline under it.
+    pub fn pitch(&self) -> f32 {
+        self.height + ROW_HAIRLINE
+    }
+}
+
+/// Row heights (logical px, without the hairline): 72 is the minimum and
+/// today's height, 300 the maximum, in 4 px steps (polish 2 §4).
+pub const ROW_H_MIN: f32 = 72.0;
+pub const ROW_H_MAX: f32 = 300.0;
+pub const ROW_H_STEP: f32 = 4.0;
+/// The hairline under each row.
+pub const ROW_HAIRLINE: f32 = 1.0;
+
+/// A height clamped to the range, on its 4 px steps.
+pub fn clamp_row_h(h: f32) -> f32 {
+    ((h / ROW_H_STEP).round() * ROW_H_STEP).clamp(ROW_H_MIN, ROW_H_MAX)
+}
+
+/// The volume fader's scale (polish 2 §3): position `(dB + 48) / 54`,
+/// −inf at the bottom, +6 dB of headroom at the top.
+pub const VOL_DB_MAX: f32 = 6.0;
+pub const VOL_DB_FLOOR: f32 = -48.0;
+/// Typed values are clamped to this at the bottom (−inf is typed as "-inf").
+pub const VOL_DB_MIN_TYPED: f32 = -70.0;
+/// Pan range: 50L … C … 50R.
+pub const PAN_MAX: i8 = 50;
+
+/// A dB value's fader position 0..1.
+pub fn db_to_pos(db: f32) -> f32 {
+    if db == f32::NEG_INFINITY {
+        return 0.0;
+    }
+    ((db - VOL_DB_FLOOR) / (VOL_DB_MAX - VOL_DB_FLOOR)).clamp(0.0, 1.0)
+}
+
+/// A fader position's dB value: the very bottom is −inf.
+pub fn pos_to_db(pos: f32) -> f32 {
+    if pos <= 0.0 {
+        f32::NEG_INFINITY
+    } else {
+        (VOL_DB_FLOOR + pos.min(1.0) * (VOL_DB_MAX - VOL_DB_FLOOR)).min(VOL_DB_MAX)
+    }
+}
+
+/// dB → linear gain (−inf → 0, 0 dB → exactly 1); at most ×2 (+6 dB).
+pub fn db_to_gain(db: f32) -> f32 {
+    if db == f32::NEG_INFINITY {
+        0.0
+    } else if db == 0.0 {
+        1.0
+    } else {
+        10f32.powf(db.min(VOL_DB_MAX) / 20.0)
+    }
+}
+
+/// A linear level → dB (0 → −inf).
+pub fn gain_to_db(g: f32) -> f32 {
+    if g <= 0.0 {
+        f32::NEG_INFINITY
+    } else {
+        20.0 * g.log10()
+    }
+}
+
+/// "−2.2 dB" (a real minus sign, one decimal), "0.0 dB", "2.5 dB", "−inf dB".
+pub fn format_db(db: f32) -> String {
+    if db == f32::NEG_INFINITY {
+        return "\u{2212}inf dB".into();
+    }
+    let r = (db * 10.0).round() / 10.0;
+    if r < 0.0 {
+        format!("\u{2212}{:.1} dB", -r)
+    } else {
+        format!("{:.1} dB", r.abs())
+    }
+}
+
+/// Typed dB: `-3`, `-3 dB`, `−3`, `+2.5`, `-inf`; clamped to −70 … +6.
+pub fn parse_db(text: &str) -> Option<f32> {
+    let t = text.trim().replace('\u{2212}', "-").to_ascii_lowercase();
+    let t = t.strip_suffix("db").unwrap_or(&t).trim();
+    if matches!(t, "-inf" | "-infinity" | "inf" | "-\u{221E}") {
+        return Some(f32::NEG_INFINITY);
+    }
+    let v: f32 = t.parse().ok().filter(|v: &f32| v.is_finite())?;
+    Some(v.clamp(VOL_DB_MIN_TYPED, VOL_DB_MAX))
+}
+
+/// "C", "25L", "30R".
+pub fn format_pan(p: i8) -> String {
+    match p {
+        0 => "C".into(),
+        p if p < 0 => format!("{}L", -(p as i32)),
+        p => format!("{p}R"),
+    }
+}
+
+/// Typed pan: `C`, `0`, `25L`, `30R`, `-25` (left), `+25` / `25` (right); clamped.
+pub fn parse_pan(text: &str) -> Option<i8> {
+    let t = text.trim().replace('\u{2212}', "-").to_ascii_uppercase();
+    let t = t.trim();
+    if t == "C" || t == "CENTER" || t == "CENTRE" {
+        return Some(0);
+    }
+    let (num, sign) = if let Some(n) = t.strip_suffix('L') {
+        (n.trim(), -1)
+    } else if let Some(n) = t.strip_suffix('R') {
+        (n.trim(), 1)
+    } else {
+        (t, 1)
+    };
+    if num.is_empty() {
+        return None;
+    }
+    let v: i32 = num.parse().ok()?;
+    Some((v * sign).clamp(-(PAN_MAX as i32), PAN_MAX as i32) as i8)
 }
 
 /// The palette offered by the Colour ▸ menus (clips and tracks): the lane
@@ -124,46 +257,14 @@ pub fn rgb_hex(c: Rgba) -> u32 {
 
 pub fn default_lanes() -> Vec<Lane> {
     vec![
-        Lane {
-            name: "Pulse 1".into(),
-            short: "P1",
-            color: tokens::LANE_PULSE,
-        },
-        Lane {
-            name: "Pulse 2".into(),
-            short: "P2",
-            color: tokens::LANE_PULSE,
-        },
-        Lane {
-            name: "Triangle".into(),
-            short: "TRI",
-            color: tokens::LANE_TRI,
-        },
-        Lane {
-            name: "Noise".into(),
-            short: "NOI",
-            color: tokens::LANE_NOISE,
-        },
-        Lane {
-            name: "DPCM".into(),
-            short: "DMC",
-            color: tokens::LANE_DPCM,
-        },
-        Lane {
-            name: "VRC6 Pulse 1".into(),
-            short: "V1",
-            color: tokens::LANE_VRC6_PULSE,
-        },
-        Lane {
-            name: "VRC6 Pulse 2".into(),
-            short: "V2",
-            color: tokens::LANE_VRC6_PULSE,
-        },
-        Lane {
-            name: "VRC6 Saw".into(),
-            short: "SAW",
-            color: tokens::LANE_VRC6_SAW,
-        },
+        Lane::new("Pulse 1", "P1", tokens::LANE_PULSE),
+        Lane::new("Pulse 2", "P2", tokens::LANE_PULSE),
+        Lane::new("Triangle", "TRI", tokens::LANE_TRI),
+        Lane::new("Noise", "NOI", tokens::LANE_NOISE),
+        Lane::new("DPCM", "DMC", tokens::LANE_DPCM),
+        Lane::new("VRC6 Pulse 1", "V1", tokens::LANE_VRC6_PULSE),
+        Lane::new("VRC6 Pulse 2", "V2", tokens::LANE_VRC6_PULSE),
+        Lane::new("VRC6 Saw", "SAW", tokens::LANE_VRC6_SAW),
     ]
 }
 
@@ -494,6 +595,51 @@ impl Arrangement {
             audition: None,
             samples: Vec::new(),
         }
+    }
+
+    /// The top of row `i` in lane space (logical px from the first row's top);
+    /// rows have their own heights (polish 2 §4). `i == lanes.len()` is the
+    /// bottom of the last row.
+    pub fn lane_top(&self, i: usize) -> f32 {
+        self.lanes.iter().take(i).map(Lane::pitch).sum()
+    }
+
+    /// Every row's pitch together.
+    pub fn lanes_height(&self) -> f32 {
+        self.lane_top(self.lanes.len())
+    }
+
+    /// The row at lane-space `y`, if any (a row owns its hairline).
+    pub fn lane_at(&self, y: f32) -> Option<usize> {
+        if y < 0.0 {
+            return None;
+        }
+        let mut top = 0.0;
+        for (i, l) in self.lanes.iter().enumerate() {
+            top += l.pitch();
+            if y < top {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// The row at lane-space `y`, clamped to the first and last.
+    pub fn lane_at_clamped(&self, y: f32) -> usize {
+        if y < 0.0 {
+            0
+        } else {
+            self.lane_at(y).unwrap_or(self.lanes.len().saturating_sub(1))
+        }
+    }
+
+    /// Each track's volume as a linear gain (the engine's `LaneGains`).
+    pub fn gains(&self) -> [f32; 8] {
+        let mut g = [1.0; 8];
+        for (i, l) in self.lanes.iter().take(8).enumerate() {
+            g[i] = db_to_gain(l.vol_db);
+        }
+        g
     }
 
     pub fn is_selected(&self, id: u32) -> bool {
@@ -1712,96 +1858,138 @@ impl Arrangement {
     }
 }
 
-/// A track header's volume fader (design pass §2.4): the lane's channel
-/// volume, the same value as the inspector's Volume dial (undoable, saved).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Fader {
-    /// 0..1 of the travel.
-    pub pos: f32,
-    /// Why it can't be used, if it can't (principle 3: the reason on hover).
-    pub reason: Option<&'static str>,
+/// The volume fader's thumb centre, px from the well's top, for `db` on a
+/// well `len` px long (polish 2 §3/§4: `round((1 − pos) · len)`).
+pub fn fader_y(db: f32, len: f32) -> f32 {
+    ((1.0 - db_to_pos(db)) * len).round()
 }
 
-impl Default for Fader {
-    fn default() -> Self {
-        Self { pos: 1.0, reason: None }
+/// The post-fader meter's fill height (px from the well's bottom) for a
+/// pre-fader `level` (0..1 of full scale) and the track's `db`, on the
+/// fader's own dB scale, never past the thumb's centre.
+pub fn meter_fill(level: f32, db: f32, len: f32) -> f32 {
+    let post = gain_to_db(level.clamp(0.0, 1.0) * db_to_gain(db));
+    let fill = (db_to_pos(post) * len).round();
+    fill.min(len - fader_y(db, len)).max(0.0)
+}
+
+/// The dB scale marks beside a tall fader (polish 2 §4: rows ≥ 96 px):
+/// 0, −6, −12 and −24 dB, as (tick y from the well's top, label, shown). A
+/// label closer than 12 px to the last shown one is skipped; ticks stay.
+pub const SCALE_MIN_ROW_H: f32 = 96.0;
+pub const SCALE_MARKS: [f32; 4] = [0.0, -6.0, -12.0, -24.0];
+pub fn scale_marks(len: f32) -> Vec<(f32, &'static str, bool)> {
+    let mut out = Vec::new();
+    let mut last: Option<f32> = None;
+    for (db, label) in SCALE_MARKS.iter().zip(["0", "6", "12", "24"]) {
+        let y = fader_y(*db, len);
+        let show = last.is_none_or(|l| (y - l).abs() >= 12.0);
+        if show {
+            last = Some(y);
+        }
+        out.push((y, label, show));
     }
-}
-
-/// The parameter a lane's fader moves, if it has one: Volume (0–15) on the
-/// pulses, noise and VRC6 pulses, the saw's accumulator rate (0–63).
-pub fn fader_param(lane: usize) -> Option<ParamId> {
-    match lane {
-        chip::driver::LANE_TRI | chip::driver::LANE_DMC => None,
-        chip::driver::LANE_SAW => Some(ParamId::Rate),
-        _ => Some(ParamId::Volume),
-    }
-}
-
-/// The lane's fader as the header shows it.
-pub fn fader_of(lane: usize, params: &engine::Params) -> Fader {
-    let Some(pid) = fader_param(lane) else {
-        return Fader {
-            pos: 1.0,
-            reason: Some(if lane == chip::driver::LANE_TRI {
-                "The triangle channel has no volume control on the 2A03."
-            } else {
-                "DPCM samples play at a fixed level on the 2A03."
-            }),
-        };
-    };
-    let (lo, hi, _) = pid.range(lane);
-    let pos = (params.get(lane, pid) - lo) as f32 / (hi - lo).max(1) as f32;
-    // In the decay envelopes the Volume register is the decay speed.
-    let decay = pid == ParamId::Volume && ParamId::for_lane(lane).contains(&ParamId::Envelope) && params.get(lane, ParamId::Envelope) != 0;
-    Fader { pos, reason: decay.then_some("Envelope is set to decay, so Volume sets the decay speed. Set Envelope to constant in the inspector to use the fader.") }
-}
-
-/// The fader's value for a 0..1 position (whole register steps).
-pub fn fader_value(lane: usize, pos: f32) -> Option<(ParamId, i32)> {
-    let pid = fader_param(lane)?;
-    let (lo, hi, _) = pid.range(lane);
-    Some((pid, lo + (pos.clamp(0.0, 1.0) * (hi - lo) as f32).round() as i32))
-}
-
-/// Logical px of meter fill for a post-fader `level` (0..1 of full scale)
-/// on a fader of `width` px with its thumb centre at `pos` of the travel:
-/// the level on the fader's own scale, never past the thumb.
-pub fn meter_fill(level: f32, pos: f32, width: f32) -> f32 {
-    let thumb = (pos.clamp(0.0, 1.0) * width).round();
-    (level.clamp(0.0, 1.0) * width).min(thumb).max(0.0)
+    out
 }
 
 #[cfg(test)]
 mod fader_tests {
     use super::*;
 
-    /// Design pass §4.4: at several fader positions and levels the meter
-    /// never passes the thumb.
+    /// Polish 2 §3: the dB scale, its round trip and the meter rule.
     #[test]
-    fn meter_never_passes_the_thumb() {
-        for pos in [0.0, 0.1, 0.33, 0.5, 0.78, 1.0] {
-            let thumb = (pos * 68.0f32).round();
-            for level in [0.0, 0.2, 0.5, 0.9, 1.0, 1.5] {
-                let f = meter_fill(level, pos, 68.0);
-                assert!(f <= thumb && f >= 0.0, "pos {pos} level {level}: fill {f} > thumb {thumb}");
-            }
+    fn db_scale_round_trips() {
+        assert_eq!(db_to_pos(f32::NEG_INFINITY), 0.0);
+        assert_eq!(db_to_pos(-48.0), 0.0);
+        assert!((db_to_pos(0.0) - 48.0 / 54.0).abs() < 1e-6);
+        assert_eq!(db_to_pos(6.0), 1.0);
+        assert_eq!(db_to_pos(12.0), 1.0, "clamped");
+        assert_eq!(pos_to_db(0.0), f32::NEG_INFINITY);
+        for db in [-47.5f32, -24.0, -6.0, -2.2, 0.0, 2.5, 6.0] {
+            assert!((pos_to_db(db_to_pos(db)) - db).abs() < 1e-4, "{db}");
         }
-        assert_eq!(meter_fill(0.5, 1.0, 68.0), 34.0);
+        assert_eq!(db_to_gain(0.0), 1.0);
+        assert_eq!(db_to_gain(f32::NEG_INFINITY), 0.0);
+        assert!((db_to_gain(6.0) - 1.9953).abs() < 1e-3 && db_to_gain(9.0) <= 2.0);
+        assert!((gain_to_db(db_to_gain(-3.0)) + 3.0).abs() < 1e-4);
+        // The mockup's 144 / 240 px rows: −1.3 dB → thumb centre 15, −3.1 → 35.
+        assert_eq!(fader_y(-1.3, 112.0), 15.0);
+        assert_eq!(fader_y(-3.1, 208.0), 35.0);
+        assert_eq!(fader_y(-2.2, 40.0), 6.0);
     }
 
     #[test]
-    fn faders_follow_the_channel_volume() {
-        let mut p = crate::instruments::default_params();
-        let pulse = chip::driver::LANE_P1;
-        p.set(pulse, ParamId::Envelope, 0);
-        p.set(pulse, ParamId::Volume, 15);
-        assert_eq!(fader_of(pulse, &p), Fader { pos: 1.0, reason: None });
-        assert_eq!(fader_value(pulse, 0.5), Some((ParamId::Volume, 8)));
-        p.set(pulse, ParamId::Envelope, 1);
-        assert!(fader_of(pulse, &p).reason.is_some(), "decay: the register is the decay speed");
-        assert!(fader_of(chip::driver::LANE_TRI, &p).reason.is_some());
-        assert!(fader_of(chip::driver::LANE_DMC, &p).reason.is_some());
-        assert_eq!(fader_value(chip::driver::LANE_SAW, 1.0), Some((ParamId::Rate, 63)));
+    fn meter_never_passes_the_thumb() {
+        for db in [f32::NEG_INFINITY, -30.0, -6.0, 0.0, 3.0, 6.0] {
+            for level in [0.0, 0.2, 0.5, 0.9, 1.0, 1.5] {
+                for len in [40.0, 64.0, 112.0, 268.0] {
+                    let f = meter_fill(level, db, len);
+                    assert!(f >= 0.0 && f <= len - fader_y(db, len), "{db} {level} {len}: {f}");
+                }
+            }
+        }
+        // Full level at 0 dB reaches the 0 dB mark, where the gradient turns hot.
+        assert_eq!(meter_fill(1.0, 0.0, 54.0), 48.0);
+    }
+
+    #[test]
+    fn value_parsing() {
+        assert_eq!(parse_db("-3"), Some(-3.0));
+        assert_eq!(parse_db("-3 dB"), Some(-3.0));
+        assert_eq!(parse_db("\u{2212}3"), Some(-3.0));
+        assert_eq!(parse_db("+2.5"), Some(2.5));
+        assert_eq!(parse_db("-inf"), Some(f32::NEG_INFINITY));
+        assert_eq!(parse_db("\u{2212}inf dB"), Some(f32::NEG_INFINITY));
+        assert_eq!(parse_db("12"), Some(6.0), "clamped");
+        assert_eq!(parse_db("-200"), Some(VOL_DB_MIN_TYPED));
+        assert_eq!(parse_db("loud"), None);
+        assert_eq!(parse_db(""), None);
+        assert_eq!(format_db(-2.2), "\u{2212}2.2 dB");
+        assert_eq!(format_db(-0.04), "0.0 dB");
+        assert_eq!(format_db(f32::NEG_INFINITY), "\u{2212}inf dB");
+        assert_eq!(format_db(2.5), "2.5 dB");
+        assert_eq!(parse_pan("C"), Some(0));
+        assert_eq!(parse_pan("0"), Some(0));
+        assert_eq!(parse_pan("25L"), Some(-25));
+        assert_eq!(parse_pan("30r"), Some(30));
+        assert_eq!(parse_pan("-25"), Some(-25));
+        assert_eq!(parse_pan("+25"), Some(25));
+        assert_eq!(parse_pan("80R"), Some(50), "clamped");
+        assert_eq!(parse_pan("L"), None);
+        assert_eq!(parse_pan("x"), None);
+        for v in [-50i8, -13, 0, 15, 50] {
+            assert_eq!(parse_pan(&format_pan(v)), Some(v));
+        }
+        assert_eq!(clamp_row_h(10.0), 72.0);
+        assert_eq!(clamp_row_h(145.0), 144.0);
+        assert_eq!(clamp_row_h(999.0), 300.0);
+    }
+
+    /// Polish 2 §4: marks at 0/6/12/24; a label under 12 px from the last
+    /// shown one is skipped (the mockup's 144 and 240 px rows show all four).
+    #[test]
+    fn scale_marks_skip_crowded_labels() {
+        let m = scale_marks(112.0);
+        assert_eq!(m.iter().map(|m| m.0).collect::<Vec<_>>(), vec![12.0, 25.0, 37.0, 62.0]);
+        assert!(m.iter().all(|m| m.2));
+        let m = scale_marks(64.0); // a 96 px row
+        assert_eq!(m.iter().map(|m| m.2).collect::<Vec<_>>(), vec![true, false, true, true]);
+    }
+
+    #[test]
+    fn rows_have_their_own_heights() {
+        let mut a = Arrangement::empty();
+        a.lanes[1].height = 144.0;
+        assert_eq!(a.lane_top(0), 0.0);
+        assert_eq!(a.lane_top(1), 73.0);
+        assert_eq!(a.lane_top(2), 73.0 + 145.0);
+        assert_eq!(a.lane_at(72.9), Some(0));
+        assert_eq!(a.lane_at(73.0), Some(1));
+        assert_eq!(a.lane_at(217.9), Some(1));
+        assert_eq!(a.lane_at(218.0), Some(2));
+        assert_eq!(a.lane_at(-1.0), None);
+        assert_eq!(a.lane_at(1.0e6), None);
+        assert_eq!(a.lane_at_clamped(1.0e6), 7);
+        assert_eq!(a.lanes_height(), 7.0 * 73.0 + 145.0);
     }
 }

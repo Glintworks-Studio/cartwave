@@ -188,6 +188,7 @@ impl Core {
                 Command::Vrc6(on) => p.set_vrc6(on),
                 Command::Filter(m) => p.synth.set_filter(m),
                 Command::Gain(g) => self.gain = g,
+                Command::LaneGains(g) => p.synth.set_gains(g),
                 Command::TestStall(us) => self.stall_us = us,
                 Command::TestPilot(hz) => self.pilot_hz = hz,
                 Command::TestClickAt(t) => self.click_at = t,

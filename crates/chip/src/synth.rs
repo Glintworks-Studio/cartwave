@@ -48,6 +48,9 @@ pub struct Synth {
     pub cycle: u64,
     outputs: Outputs,
     vrc6_step: f64,
+    /// Per-lane track gains (linear); `None` while all are 1.0, so the plain
+    /// mix runs and unity renders stay bit-identical.
+    gains: Option<mixer::Gains>,
     blep: Blep,
     filter: OutputFilter,
     /// Per-channel peak DAC input since the last `take_peaks`.
@@ -84,6 +87,7 @@ impl Synth {
             cycle: 0,
             outputs: [0; 8],
             vrc6_step: mixer::vrc6_step(),
+            gains: None,
             blep: Blep::new(CPU_HZ_NTSC, sample_rate),
             filter: OutputFilter::new(FilterMode::default(), sample_rate),
             peaks: [0; 8],
@@ -100,11 +104,35 @@ impl Synth {
         // Power-up levels (the triangle rests on step 0 = 15) are treated as
         // having always been there: no click when the engine starts.
         s.outputs = s.current_outputs();
-        let amp = mixer::mix(&s.outputs, s.vrc6_step);
+        let amp = s.mix(&s.outputs);
         s.blep.preset(Self::fixed(amp));
         s.filter.settle(Self::quantized(amp));
         s.sleep_check();
         s
+    }
+
+    #[inline]
+    fn mix(&self, o: &Outputs) -> f64 {
+        match &self.gains {
+            None => mixer::mix(o, self.vrc6_step),
+            Some(g) => mixer::mix_gained(o, self.vrc6_step, g),
+        }
+    }
+
+    /// Sets the per-lane track gains (linear). The output level changes at
+    /// the current cycle, band-limited like any other output step.
+    pub fn set_gains(&mut self, g: [f32; 8]) {
+        let new = if g.iter().all(|&x| x == 1.0) { None } else { Some(g.map(|x| x.max(0.0) as f64)) };
+        if new == self.gains {
+            return;
+        }
+        self.gains = new;
+        let amp = self.mix(&self.outputs);
+        if self.band_limited {
+            self.blep.set(self.cycle, Self::fixed(amp));
+        } else {
+            self.naive_amp = amp as f32;
+        }
     }
 
     fn fixed(amp: f64) -> i32 {
@@ -128,7 +156,7 @@ impl Synth {
         if sample_rate == self.blep.sample_rate {
             return;
         }
-        let amp = mixer::mix(&self.outputs, self.vrc6_step);
+        let amp = self.mix(&self.outputs);
         self.blep = Blep::new(CPU_HZ_NTSC, sample_rate);
         self.blep.rebase_at(self.cycle);
         self.blep.preset(Self::fixed(amp));
@@ -140,7 +168,7 @@ impl Synth {
         if mode != self.filter.mode {
             self.filter = OutputFilter::new(mode, self.blep.sample_rate);
             self.filter
-                .settle(Self::quantized(mixer::mix(&self.outputs, self.vrc6_step)));
+                .settle(Self::quantized(self.mix(&self.outputs)));
         }
     }
 
@@ -294,7 +322,7 @@ impl Synth {
         }
         self.dmc_min = self.dmc_min.min(o[4]);
         self.dmc_max = self.dmc_max.max(o[4]);
-        let amp = mixer::mix(&o, self.vrc6_step);
+        let amp = self.mix(&o);
         if self.band_limited {
             self.events += 1;
             self.blep.set(self.cycle, Self::fixed(amp));

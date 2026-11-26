@@ -28,6 +28,8 @@ pub enum Command {
     Filter(FilterMode),
     /// Output gain (linear).
     Gain(f32),
+    /// Per-track gains (linear, lane order): the track volume faders.
+    LaneGains([f32; 8]),
     /// Test only: busy-wait this many microseconds inside the next callback,
     /// to validate the underrun detectors.
     TestStall(u32),

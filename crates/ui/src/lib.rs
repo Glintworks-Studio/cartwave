@@ -79,7 +79,6 @@ pub struct Signals {
     /// The bottom panel shows the piano roll (else the device panel).
     pub piano_open: Signal<bool>,
     /// Arrangement lane height.
-    pub lane_h: Signal<f32>,
     /// Lane viewport height while the piano roll is open (split handle).
     pub piano_pane_h: Signal<f32>,
     /// Vertical lane scroll (logical px) and its current maximum (0 when all
@@ -135,13 +134,16 @@ pub struct Signals {
     /// The getting-started guide shown on demand (Help ▸ Getting Started)
     /// even when the project has clips (A22, F-14).
     pub guide: Signal<bool>,
+    /// The track headers' width, side and strip position (Settings ▸ Look
+    /// & Feel; the width also follows the boundary drag).
+    pub header: Signal<views::header_layout::HeaderLayout>,
+    /// The status bar's hover help: one line for the control under the mouse.
+    pub hover_help: Signal<String>,
     /// The project's format: (sample rate Hz, bit depth). The display's
     /// indicators show it; it's the export's default (Project Settings).
     pub project_format: Signal<(u32, u16)>,
     /// The process's private memory in MB (refreshed with the CPU read-out).
     pub mem_mb: Signal<Option<u32>>,
-    /// Each track's volume fader: position 0..1, or why it's disabled.
-    pub faders: Signal<[state::Fader; 8]>,
 }
 
 /// Project fields outside undo that a save writes (F-01: changing them
@@ -283,6 +285,8 @@ pub struct AppState {
     tap_step: Option<(usize, usize)>,
     /// Where the BPM field opens (window logical x, y, width).
     bpm_rename_at: (f32, f32, f32),
+    /// The track gains the engine has (it starts at unity).
+    sent_gains: [f32; 8],
 }
 
 pub enum AppEvent {
@@ -301,6 +305,12 @@ pub enum AppEvent {
     EditBpm(f32, f32, f32),
     /// A track's volume fader: lane, 0..1 of the fader's travel.
     SetLaneVolume(usize, f32),
+    /// A track's pan, −50 … 50 (polish 2 §3: saved, heard with stereo mixing).
+    SetLanePan(usize, i8),
+    /// The status bar's hover-help line (empty: none).
+    HoverHelp(String),
+    /// A track's row height, logical px (polish 2 §4); clamped to its steps.
+    SetLaneHeight(usize, f32),
     /// The spectrum's style (its right-click menu; remembered in settings.json).
     SetSpectrumStyle(views::chrome::SpectrumStyle),
     /// The browser's Preview key: audition presets on select (remembered).
@@ -505,16 +515,32 @@ impl Model for AppState {
                 self.bpm_rename_at = (*x, *y, *w);
                 self.open_rename(edit::RenameTarget::Bpm);
             }
-            AppEvent::SetLaneVolume(lane, pos) => {
-                if let Some((pid, v)) = state::fader_value(*lane, *pos) {
-                    if self.s.faders.with_untracked(|f| f[*lane].reason.is_none()) && self.params.get(*lane, pid) != v {
-                        self.params.set(*lane, pid, v);
-                        self.send(Command::Param { lane: *lane as u8, id: pid, value: v as i8 });
-                        if *lane == self.s.lane_sel.get_untracked() {
-                            self.s.dials.set(self.dial_values(*lane));
-                        }
-                        self.sync_piano_lane_volume();
-                        self.refresh_faders();
+            AppEvent::SetLaneVolume(lane, db) => {
+                // Polish 2 §3: the track volume in dB (a post-chip gain; the
+                // engine hears it from `sync_gains`). Undo groups a drag.
+                let db = if *db == f32::NEG_INFINITY { *db } else { db.clamp(state::VOL_DB_MIN_TYPED, state::VOL_DB_MAX) };
+                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| l.vol_db != db)) {
+                    self.s.arrangement.update(|a| a.lanes[*lane].vol_db = db);
+                    self.sync_gains();
+                }
+            }
+            AppEvent::SetLanePan(lane, pan) => {
+                let pan = (*pan).clamp(-state::PAN_MAX, state::PAN_MAX);
+                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| l.pan != pan)) {
+                    self.s.arrangement.update(|a| a.lanes[*lane].pan = pan);
+                }
+            }
+            AppEvent::HoverHelp(t) => {
+                if self.s.hover_help.with_untracked(|h| h != t) {
+                    self.s.hover_help.set(t.clone());
+                }
+            }
+            AppEvent::SetLaneHeight(lane, h) => {
+                let h = state::clamp_row_h(*h);
+                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| l.height != h)) {
+                    self.s.arrangement.update(|a| a.lanes[*lane].height = h);
+                    if dev::enabled() {
+                        eprintln!("dev: row height {lane} {h}");
                     }
                 }
             }
@@ -1385,13 +1411,14 @@ impl AppState {
         }
     }
 
-    /// The track headers' faders follow the channel parameters.
-    fn refresh_faders(&mut self) {
-        let mut f = [state::Fader::default(); 8];
-        for (lane, fd) in f.iter_mut().enumerate() {
-            *fd = state::fader_of(lane, &self.params);
+    /// Sends the track volumes to the engine when they changed (a fader
+    /// drag, a typed value, undo, a project load).
+    fn sync_gains(&mut self) {
+        let g = self.s.arrangement.with_untracked(|a| a.gains());
+        if g != self.sent_gains {
+            self.sent_gains = g;
+            self.send(Command::LaneGains(g));
         }
-        self.s.faders.set_if_changed(f);
     }
 
     /// One TAP: the tempo from the last four intervals; a sequence is one
@@ -1469,7 +1496,7 @@ impl AppState {
         let lane = self.s.lane_sel.get_untracked();
         let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(a.current_instrument(lane))));
         self.s.dial_state.set_if_changed(st);
-        self.refresh_faders();
+        self.sync_gains();
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -1789,7 +1816,6 @@ pub fn build_ui(cx: &mut Context) {
             ..PianoState::default()
         }),
         piano_open: Signal::new(false),
-        lane_h: Signal::new(LANE_H_NORMAL),
         piano_pane_h: Signal::new(PIANO_PANE_DEFAULT),
         lane_scroll: Signal::new(0.0),
         lane_scroll_max: Signal::new(0.0),
@@ -1817,9 +1843,10 @@ pub fn build_ui(cx: &mut Context) {
         recovery_msg: Signal::new(""),
         rename: Signal::new(None),
         guide: Signal::new(false),
+        header: Signal::new(views::header_layout::HeaderLayout::of(&settings)),
+        hover_help: Signal::new(String::new()),
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
         mem_mb: Signal::new(if dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
-        faders: Signal::new([state::Fader::default(); 8]),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1907,6 +1934,7 @@ pub fn build_ui(cx: &mut Context) {
         tap: tap::TapTempo::default(),
         tap_step: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
+        sent_gains: [1.0; 8],
     };
     match state.recovery.as_ref().and_then(|r| r.start_session()) {
         Some(file::LastSession::Crashed) => {
@@ -2052,6 +2080,19 @@ pub const MIN_WINDOW_SIZE: (u32, u32) = (
     ),
     MIN_WINDOW_H,
 );
+/// The height the Overview and the status bar take from the lanes (polish
+/// 2 §6, §7), as shown now.
+pub fn chrome_bands(s: &Signals) -> f32 {
+    let st = s.settings.with_untracked(|st| st.show_overview);
+    (if st { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 }) + if status_bar_shown() { theme::tokens::STATUS_BAR_HEIGHT } else { 0.0 }
+}
+
+/// The status bar is shown unless the dev hook `CHIPDAW_HIDE_STATUS=1`
+/// hides it (the regression gate's screenshots only).
+pub fn status_bar_shown() -> bool {
+    !dev::var("CHIPDAW_HIDE_STATUS").is_some_and(|v| v == "1")
+}
+
 /// The minimum window height (logical px, on the 4 px grid).
 const MIN_WINDOW_H: u32 = 720;
 /// The device inspector's height, padding and gap; must match `.device` in style.css.
@@ -2837,7 +2878,7 @@ impl AppState {
         self.editor = Ctx::PianoRoll;
         // Bring the clip's lane into view if it's scrolled out.
         if let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) {
-            let (top, bottom) = (lane as f32 * LANE_H_NORMAL, (lane + 1) as f32 * LANE_H_NORMAL);
+            let (top, bottom) = self.s.arrangement.with_untracked(|a| (a.lane_top(lane), a.lane_top(lane + 1)));
             let pane = self.s.piano_pane_h.get_untracked();
             let v = self.s.lane_scroll.get_untracked();
             if top < v {
@@ -2870,12 +2911,12 @@ impl AppState {
     /// always scroll when they don't fit (polish pass): under the piano
     /// roll's split, or in a short window (above the inspector, if open).
     fn clamp_lane_scroll(&mut self) {
-        let content = 8.0 * LANE_H_NORMAL;
+        let content = self.s.arrangement.with_untracked(|a| a.lanes_height());
         let viewport = if self.s.piano_open.get_untracked() {
             self.s.piano_pane_h.get_untracked()
         } else {
             let inspector = if self.s.inspector.get_untracked() { INSPECTOR_HEIGHT as f32 } else { 0.0 };
-            self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector
+            self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector - chrome_bands(&self.s)
         };
         let max = (content - viewport).max(0.0);
         self.s.lane_scroll_max.set_if_changed(max);

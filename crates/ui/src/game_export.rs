@@ -128,6 +128,8 @@ fn player_for(p: &Project, rate: u32, solo: u8) -> Player {
     pl.set_bpm(p.bpm as f64);
     pl.set_vrc6(p.chip == SoundChip::WithVrc6);
     pl.synth.set_filter(p.filter);
+    // The track volumes (polish 2 §3): a post-chip gain per track.
+    pl.synth.set_gains(p.arrangement.gains());
     pl.driver.params = p.params;
     pl.driver.mute = p.mute;
     pl.driver.solo = if solo != 0 { solo } else { p.solo };

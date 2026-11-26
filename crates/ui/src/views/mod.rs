@@ -5,6 +5,7 @@ pub mod clip;
 pub mod dial;
 pub mod export_dialog;
 pub mod gfx;
+pub mod header_layout;
 pub mod instrument;
 pub mod modal;
 pub mod overlay;

@@ -627,3 +627,23 @@ Every decision below was taken alone, as the prompt asked.
   `../before-polish2` (it already has the polish pass's dev hooks: frozen meters, pinned
   playhead). The reference pack is copied to `docs/design/polish2-ref/`; its element boxes are
   measured with `docs/polish2/tools/measure_ref.py` (headless Chrome) into `docs/polish2/boxes/`.
+- **P2-D4 (track volume is now a real dB gain).** The design pass's header fader moved the
+  chip's 4-bit Volume register (0–15; the triangle and DPCM had none): capped at unity and in
+  coarse steps, so the §3 scale (−inf … +6 dB) couldn't be built on it. Each track now has a
+  volume in dB (`Lane.vol_db`), a gain applied after the chip: `chip::mixer::mix_gained`
+  evaluates the 2A03's non-linear groups on the real DAC levels and scales each channel's share
+  of its group's output, so a lone channel at +6 dB is exactly ×2 (≤ 2.0). While every gain is
+  1.0 the synth runs the old `mix` unchanged (`Synth::set_gains`), so the golden render and every
+  migration hash are bit-identical (tested). The engine gets `Command::LaneGains`; the render,
+  export and game-export players set the same gains. The register stays the inspector's Volume
+  dial; every track (triangle and DPCM too) now has a working fader, so their disabled reasons
+  are gone. Wheel: 1 dB per notch. Typed values clamp to −70 … +6 dB; "-inf" is silence.
+  Positive values show without a sign ("2.5 dB", as negatives show "−2.2 dB").
+- **P2-D5 (format v6).** Row heights, pan and volume are saved per track, so the format goes to
+  **version 6** (a v5 build reading v6 fields would have failed on its strict field check
+  instead of saying "newer version"). Defaults are written as nothing, v5 files open at
+  72 px / C / 0 dB. A v5 corpus (`docs/songs/v5`, the v4 corpus saved by `main` 8644ff3, hashes
+  in its HASHES.txt) renders bit-identically (`version_5_files_render_bit_identically_in_version_6`).
+- **P2-D6 (pan).** Pan is −50 … +50 (shown 50L … C … 50R; the manual gives no format, P2-R
+  "unverified"), editable and saved, not heard until stereo mixing (Batch 4); its hover help
+  says so. A render with only pan changed is bit-identical (tested).

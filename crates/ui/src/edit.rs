@@ -40,6 +40,9 @@ pub enum RenameTarget {
     Preset(usize),
     /// The display's BPM (a double-click types a tempo).
     Bpm,
+    /// A track's volume / pan value (a double-click types it, polish 2 §3).
+    Volume(usize),
+    Pan(usize),
 }
 
 /// The open rename field: its target, place (window logical px) and the
@@ -522,7 +525,26 @@ impl AppState {
                 let s = self.scale;
                 let name = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.name.clone())).unwrap_or_default();
                 self.select_track(lane, false);
-                RenameSpec { target, x: row.x / s + RENAME_TRACK_X, y: row.y / s + RENAME_INSET, w: RENAME_TRACK_W, text: name }
+                // Over the number and name (its column moves with the layout).
+                let l = self.s.header.get_untracked();
+                let x = if l.mirrored() { l.name_x() - RENAME_INSET } else { l.name_x() - (crate::views::header_layout::NAME_X - RENAME_TRACK_X) };
+                RenameSpec { target, x: row.x / s + x, y: row.y / s + RENAME_INSET, w: RENAME_TRACK_W, text: name }
+            }
+            RenameTarget::Volume(lane) | RenameTarget::Pan(lane) => {
+                let Some(row) = crate::views::browser::lane_row(lane) else { return };
+                let s = self.scale;
+                let l = self.s.header.get_untracked();
+                let (h, text) = self.s.arrangement.with_untracked(|a| {
+                    let t = &a.lanes[lane];
+                    (t.height, if matches!(target, RenameTarget::Volume(_)) { crate::state::format_db(t.vol_db) } else { crate::state::format_pan(t.pan) })
+                });
+                let (x, y, w, lh) = if matches!(target, RenameTarget::Volume(_)) {
+                    crate::views::chrome::db_value_rect(&l, h)
+                } else {
+                    crate::views::chrome::pan_value_rect(&l)
+                };
+                let fw = RENAME_VALUE_W.max(w);
+                RenameSpec { target, x: row.x / s + x + (w - fw) * 0.5, y: row.y / s + y + (lh - RENAME_H) * 0.5, w: fw, text }
             }
             RenameTarget::Preset(i) => {
                 let Some(p) = self.preset(i) else { return };
@@ -570,6 +592,25 @@ impl AppState {
                     self.rename_next(l);
                 }
             }
+            RenameTarget::Volume(l) => match crate::state::parse_db(&text) {
+                Some(db) => {
+                    let gain_was = self.s.arrangement.with_untracked(|a| a.lanes[l].vol_db);
+                    if gain_was != db {
+                        self.s.arrangement.update(|a| a.lanes[l].vol_db = db);
+                        self.commit();
+                    }
+                }
+                None => self.set_status(format!("\"{text}\" isn't a volume. Type dB, like -3, +2.5 or -inf.")),
+            },
+            RenameTarget::Pan(l) => match crate::state::parse_pan(&text) {
+                Some(p) => {
+                    if self.s.arrangement.with_untracked(|a| a.lanes[l].pan) != p {
+                        self.s.arrangement.update(|a| a.lanes[l].pan = p);
+                        self.commit();
+                    }
+                }
+                None => self.set_status(format!("\"{text}\" isn't a pan value. Type C, 25L, 30R, -25 or +25.")),
+            },
             RenameTarget::Bpm => match crate::views::topbar::parse_bpm(&text) {
                 Some(b) => {
                     self.send(engine::Command::Bpm(b as f64));
@@ -928,6 +969,8 @@ const RENAME_MIN_W: f32 = 120.0;
 const RENAME_MAX_W: f32 = 240.0;
 const RENAME_TRACK_X: f32 = 24.0;
 const RENAME_TRACK_W: f32 = 160.0;
+/// The value field's width (polish 2 §3: dB and pan typed in place).
+const RENAME_VALUE_W: f32 = 64.0;
 
 /// Shows a file in Explorer / Finder (B5).
 fn reveal(path: Option<std::path::PathBuf>) {

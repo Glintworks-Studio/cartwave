@@ -7,7 +7,9 @@
 //! Batch 3. A version 1–3 lane `name` was informational and is not read, so
 //! those files open with the default names, exactly as before), 5 (the
 //! project's format, sample rate and bit depth: the design pass. Older files
-//! open as 48 kHz / 16-bit, the export default they had). Older files are migrated on load so they
+//! open as 48 kHz / 16-bit, the export default they had), 6 (each track's row
+//! height, pan and volume in dB: polish 2. Older files open at 72 px, centre
+//! and 0 dB, which renders exactly as before). Older files are migrated on load so they
 //! sound exactly as before (`migrate_v2`).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
@@ -29,7 +31,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 5;
+pub const VERSION: u32 = 6;
 /// A new project's format (the display's indicators, the export default).
 pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
 pub const DEFAULT_BIT_DEPTH: u16 = 24;
@@ -147,12 +149,50 @@ struct LaneV1 {
     /// Only the controls this lane's hardware has; missing ones are the defaults.
     #[serde(default)]
     params: BTreeMap<String, i32>,
+    /// Version 6: the row height (logical px), when not 72.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    height: Option<f32>,
+    /// Version 6: pan −50 (left) … 50 (right), when not centred.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pan: Option<i8>,
+    /// Version 6: the track volume in dB (a number, or "-inf"), when not 0 dB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    volume_db: Option<DbValue>,
     /// Version 2: the lane's instrument, inline. Missing: the raw channel (v1 sound).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     instrument: Option<InstV2>,
     /// Version 3: the lane's default instrument (an id in `instruments`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     inst: Option<u32>,
+}
+
+/// A track volume in the file: dB as a number, or "-inf" for silence (JSON
+/// has no infinity).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(untagged)]
+enum DbValue {
+    Db(f32),
+    Text(String),
+}
+
+impl DbValue {
+    fn of(db: f32) -> Option<Self> {
+        if db == f32::NEG_INFINITY {
+            Some(DbValue::Text("-inf".into()))
+        } else if db == 0.0 {
+            None
+        } else {
+            Some(DbValue::Db(db))
+        }
+    }
+
+    fn db(&self) -> Result<f32, String> {
+        match self {
+            DbValue::Db(v) if v.is_finite() => Ok(v.clamp(crate::state::VOL_DB_MIN_TYPED, crate::state::VOL_DB_MAX)),
+            DbValue::Text(t) if t == "-inf" => Ok(f32::NEG_INFINITY),
+            other => Err(format!("Bad track volume {other:?} (use dB or \"-inf\").")),
+        }
+    }
 }
 
 /// An instrument. Sequences are text in tracker style: values separated by
@@ -363,6 +403,9 @@ pub fn to_string(p: &Project) -> String {
                 .map(|l| crate::state::rgb_hex(l.color))
                 .filter(|c| *c != crate::state::rgb_hex(default_lanes()[lane].color))
                 .map(hex_text),
+            height: p.arrangement.lanes.get(lane).map(|l| l.height).filter(|h| *h != crate::state::ROW_H_MIN),
+            pan: p.arrangement.lanes.get(lane).map(|l| l.pan).filter(|v| *v != 0),
+            volume_db: p.arrangement.lanes.get(lane).and_then(|l| DbValue::of(l.vol_db)),
             mute: p.mute & (1 << lane) != 0,
             solo: p.solo & (1 << lane) != 0,
             params: ParamId::for_lane(lane)
@@ -535,6 +578,24 @@ pub fn from_str(text: &str) -> Result<Project, String> {
             }
             if let Some(c) = &l.color {
                 arrangement.lanes[lane].color = parse_hex(c)?;
+            }
+        }
+    }
+    // Version 6: row heights, pan and volume (older files: 72 px, C, 0 dB).
+    if h.version.unwrap_or(VERSION) >= 6 {
+        for (lane, l) in f.lanes.iter().enumerate() {
+            let t = &mut arrangement.lanes[lane];
+            if let Some(hgt) = l.height {
+                if !hgt.is_finite() {
+                    return Err(format!("Lane {} has a bad height.", lane + 1));
+                }
+                t.height = crate::state::clamp_row_h(hgt);
+            }
+            if let Some(v) = l.pan {
+                t.pan = v.clamp(-crate::state::PAN_MAX, crate::state::PAN_MAX);
+            }
+            if let Some(v) = &l.volume_db {
+                t.vol_db = v.db()?;
             }
         }
     }
@@ -814,6 +875,17 @@ pub struct Settings {
     /// Windows: the menu bar's dropdowns are drawn dark (Settings > Display;
     /// on by default since the polish pass, docs/design/DARK-MENUS.md).
     pub dark_menus: bool,
+    // ── Look & Feel (polish 2 §5) ──
+    /// The track headers' width, logical px (380 … 600; dragging the boundary).
+    pub header_width: f32,
+    /// Track headers on the right of the lanes (default: left).
+    pub headers_right: bool,
+    /// The colour strip by the clips (default: at the window's edge).
+    pub strip_by_clips: bool,
+    /// The browser on the right (default: left).
+    pub browser_right: bool,
+    /// View ▸ Show Overview (polish 2 §7; on by default).
+    pub show_overview: bool,
 }
 
 /// Open Recent keeps this many projects.
@@ -846,9 +918,18 @@ impl Default for Settings {
             default_track_colour: "#7F86E0".into(),
             reduced_auto_colours: false,
             new_clip_colour: "track".into(),
+            header_width: HEADER_W_MIN,
+            headers_right: false,
+            strip_by_clips: false,
+            browser_right: false,
+            show_overview: true,
         }
     }
 }
+
+/// The track headers' width range (logical px, polish 2 §5).
+pub const HEADER_W_MIN: f32 = 380.0;
+pub const HEADER_W_MAX: f32 = 600.0;
 
 /// The interface scales offered (percent).
 pub const UI_SCALES: [u32; 6] = [75, 100, 125, 150, 175, 200];
@@ -1071,7 +1152,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 5,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 6,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -1081,9 +1162,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 5,", "\"version\": 6,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 6,", "\"version\": 7,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 6"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 7"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

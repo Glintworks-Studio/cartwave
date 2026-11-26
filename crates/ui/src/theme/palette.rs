@@ -108,13 +108,21 @@ pub fn header_ink(a: Rgba, b: Rgba) -> Rgba {
 
 /// A colour strip (track header): fill stops left → right and the left and
 /// right edges, unlit (`light` 0) to fully lit (1).
+/// The lit strip's white mixes at its middle (55%) and right stops.
+pub const STRIP_LIT_MIX: [f32; 2] = [0.28, 0.55];
+/// The lit strip's inner glow (white) and its spill in the track colour
+/// (polish 2: .55 → .40 and .35 → .25).
+pub const STRIP_GLOW_A: f32 = 0.40;
+pub const STRIP_SPILL_A: f32 = 0.25;
+
 pub fn strip(c: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
     let l = light.clamp(0.0, 1.0);
     let off_a = c.darken(0.62);
     let off_b = c.darken(0.35);
     // The unlit gradient has two stops; its midpoint stands in for the lit one's middle.
     let off = [off_a, off_a.mix(off_b, 0.55), off_b];
-    let on = [c, c.lighten(0.35), c.lighten(0.7)];
+    // Lit: toned down ~20% in polish 2 (white mixes .35 / .70 → .28 / .55).
+    let on = [c, c.lighten(STRIP_LIT_MIX[0]), c.lighten(STRIP_LIT_MIX[1])];
     let fill = [off[0].mix(on[0], l), off[1].mix(on[1], l), off[2].mix(on[2], l)];
     let left = c.darken(0.2).mix(c.lighten(0.6), l);
     let right = c.darken(0.5);

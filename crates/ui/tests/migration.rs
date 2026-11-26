@@ -171,7 +171,7 @@ fn version_4_files_render_bit_identically_in_version_5() {
             bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
         }
         let v5 = file::to_string(&p);
-        assert!(v5.contains("\"version\": 5") && v5.contains("\"rate\": 48000") && v5.contains("\"bits\": 16"), "{name}");
+        assert!(v5.contains(&format!("\"version\": {}", file::VERSION)) && v5.contains("\"rate\": 48000") && v5.contains("\"bits\": 16"), "{name}");
         let again = file::from_str(&v5).unwrap();
         assert_eq!((again.rate, again.bits), (48_000, 16));
         assert_eq!(again.arrangement.lanes, p.arrangement.lanes, "{name}: names and colours kept");
@@ -196,4 +196,64 @@ fn project_format_is_saved_and_checked() {
     assert_eq!((again.rate, again.bits), (44_100, 16));
     let odd = text.replacen("\"bits\": 16", "\"bits\": 20", 1);
     assert!(file::from_str(&odd).unwrap_err().contains("bit depth 20"));
+}
+
+/// Version 5 files (written by main 8644ff3, the last version 5 build; see
+/// docs/songs/v5/HASHES.txt) open in version 6 unchanged: 72 px rows, pan
+/// centred, 0 dB (unity: the plain mix runs), the same hashes. Saved as
+/// version 6 they write none of the new fields.
+const V5: &[(&str, u64, u64)] = V4;
+
+#[test]
+fn version_5_files_render_bit_identically_in_version_6() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v5");
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e) in V5 {
+        let text = std::fs::read_to_string(dir.join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 5"), "{name} is a version 5 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.load_report.is_empty(), "{name}: {:?}", p.load_report);
+        for l in &p.arrangement.lanes {
+            assert_eq!((l.height, l.pan, l.vol_db), (72.0, 0, 0.0), "{name}");
+        }
+        assert_eq!(p.arrangement.gains(), [1.0; 8]);
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let e = render::hash(&export::render(&p));
+        if (r, e) != (want_r, want_e) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
+        }
+        let v6 = file::to_string(&p);
+        assert!(v6.contains("\"version\": 6") && !v6.contains("\"height\"") && !v6.contains("\"pan\"") && !v6.contains("\"volume_db\""), "{name}");
+        let again = file::from_str(&v6).unwrap();
+        assert_eq!(again.arrangement.lanes, p.arrangement.lanes);
+        assert_eq!(render::hash(&export::render(&again)), e, "{name}: v6 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// Polish 2 §3/§4: heights, pan and volume are saved per track; a track at
+/// +6 dB renders louder, at −inf silent, and the others are untouched.
+#[test]
+fn heights_pan_and_volume_are_saved_from_version_6() {
+    let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v5/showcase.chipdaw")).unwrap();
+    let mut p = file::from_str(&text).unwrap();
+    let base = export::render(&p);
+    p.arrangement.lanes[0].height = 144.0;
+    p.arrangement.lanes[1].pan = -25;
+    p.arrangement.lanes[2].vol_db = f32::NEG_INFINITY;
+    p.arrangement.lanes[3].vol_db = -3.5;
+    let saved = file::to_string(&p);
+    assert!(saved.contains("\"volume_db\": \"-inf\"") && saved.contains("\"pan\": -25") && saved.contains("\"height\": 144.0"), "{saved}");
+    let again = file::from_str(&saved).unwrap();
+    assert_eq!(again.arrangement.lanes, p.arrangement.lanes);
+    // Pan is saved but not heard yet (stereo mixing is Batch 4): only the
+    // volumes change the render.
+    let mut pan_only = file::from_str(&text).unwrap();
+    pan_only.arrangement.lanes[1].pan = -25;
+    pan_only.arrangement.lanes[0].height = 144.0;
+    assert_eq!(render::hash(&export::render(&pan_only)), render::hash(&base));
+    assert_ne!(render::hash(&export::render(&again)), render::hash(&base));
+    // Out-of-range heights are clamped to the 4 px steps.
+    let odd = saved.replacen("\"height\": 144.0", "\"height\": 1000.0", 1);
+    assert_eq!(file::from_str(&odd).unwrap().arrangement.lanes[0].height, 300.0);
 }

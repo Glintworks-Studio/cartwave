@@ -30,6 +30,8 @@ pub fn render_limited(p: &Project, max_seconds: f64) -> Vec<f32> {
     player.set_bpm(p.bpm as f64);
     player.set_vrc6(p.chip == SoundChip::WithVrc6);
     player.synth.set_filter(p.filter);
+    // The track volumes (polish 2 §3): a post-chip gain per track.
+    player.synth.set_gains(p.arrangement.gains());
     player.driver.params = p.params;
     player.driver.mute = p.mute;
     player.driver.solo = p.solo;

@@ -220,6 +220,10 @@ pub const LANE_STRIP_W: f32 = 16.0;
 /// `state::LANE_H_NORMAL`, 73).
 pub const LANE_HEIGHT: f32 = 72.0;
 pub const RULER_HEIGHT: f32 = 28.0;
+/// The Overview strip above the ruler (polish 2 §7) and the status bar
+/// along the window's bottom (§6).
+pub const OVERVIEW_HEIGHT: f32 = 32.0;
+pub const STATUS_BAR_HEIGHT: f32 = 24.0;
 /// The header column including its right hairline.
 pub const TRACK_HEADER_WIDTH: f32 = 380.0;
 pub const CLIP_V_INSET: f32 = 2.0;
