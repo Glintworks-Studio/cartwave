@@ -3287,6 +3287,13 @@ impl AppState {
                 let f = st.ui_scale_factor();
                 cx.emit(WindowEvent::SetUserScaleFactor(f));
             }
+            Set::DarkMenus(b) => {
+                st.dark_menus = b;
+                #[cfg(feature = "menus")]
+                if let Some(m) = &self.menus {
+                    m.set_dark(b);
+                }
+            }
             Set::ClockBars(b) => {
                 st.clock_bars = b;
                 self.s.clock_bars.set(b);
@@ -3535,6 +3542,7 @@ impl AppState {
             self.set_status(format!("Removed {} missing project(s) from Open Recent.", gone.len()));
         }
         let m = menus::NativeMenus::build(&self.menu_state());
+        m.set_dark(self.settings.dark_menus);
         // Menu commands arrive on the UI thread (muda's window subclass) and
         // go through the usual event path.
         let proxy = std::sync::Mutex::new(cx.get_proxy());

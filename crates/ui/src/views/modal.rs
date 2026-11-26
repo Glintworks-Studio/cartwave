@@ -52,6 +52,7 @@ pub enum Set {
     Rate(u32),
     FrameCap(u32),
     UiScale(u32),
+    DarkMenus(bool),
     ClockBars(bool),
     ArrangementGrid(String),
     PianoGrid(String),
@@ -213,6 +214,13 @@ fn display(cx: &mut Context, st: &Settings) {
         }
     });
     note(cx, "On top of the system's display scaling. The window keeps its layout and grows or shrinks with it.");
+    if cfg!(all(windows, feature = "menus")) {
+        row(cx, "Dark menus", |cx| {
+            choice(cx, "On", st.dark_menus, true, set(Set::DarkMenus(true)));
+            choice(cx, "Off", !st.dark_menus, true, set(Set::DarkMenus(false)));
+        });
+        note(cx, "Draws the menu bar's dropdowns dark. Applies the next time a menu opens.");
+    }
     row(cx, "Clock shows", |cx| {
         choice(cx, "Time (m:ss.cc)", !st.clock_bars, true, set(Set::ClockBars(false)));
         choice(cx, "Bars (bar.beat.16th)", st.clock_bars, true, set(Set::ClockBars(true)));
