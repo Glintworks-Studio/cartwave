@@ -1293,16 +1293,12 @@ impl View for TrackRow {
         });
         let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
 
-        // Row surface (selection lifts it) inside the header's hairline,
-        // and the 1 px bottom hairline.
-        let hx = (r.left + lay.hairline_x() * s).round();
-        let (inner_l, inner_r) = if lay.right { (hx + hl, r.right) } else { (r.left, hx) };
-        let body = vg::Rect::from_ltrb(inner_l, r.top, inner_r, r.bottom - hl);
+        // Row surface (selection lifts it) and the 1 px bottom hairline (the
+        // header's divider is its own view beside the rows).
+        let body = vg::Rect::from_ltrb(r.left, r.top, r.right, r.bottom - hl);
         canvas.draw_rect(body, &gfx::fill(if selected { BG_0.lighten(0.03) } else { BG_0 }));
-        // The strip by the clips covers the hairline (the board); the row's
-        // bottom hairline then runs under it too.
-        let full = vg::Rect::from_ltrb(r.left, r.top, r.right, r.bottom - hl);
-        canvas.draw_rect(vg::Rect::from_ltrb(if lay.by_clips { r.left } else { inner_l }, r.bottom - hl, if lay.by_clips { r.right } else { inner_r }, r.bottom), &gfx::fill(LINE));
+        let full = body;
+        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE));
 
         // The colour strip: full height, square, light left edge → dark
         // right edge; lit by note-ons (inner glow and a soft spill toward

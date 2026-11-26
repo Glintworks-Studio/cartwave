@@ -699,3 +699,9 @@ Every decision below was taken alone, as the prompt asked.
   and a track row's tooltip opened under the idle mouse). AT-25 clicks the S keys at their E1
   place (header x 288…312, y 10…34). AT-09 failed once in the full run and passed alone and on
   every later run (a timing flake in the piano roll, which this pass didn't touch).
+- **P2-D19 (the header keeps its 1 px divider view).** The first build drew the hairline inside a
+  380 px column; at 150% the old divider view rounds to 2 device px, so the lanes started 1 px
+  earlier and the regression gate caught every grid line moving. The column is again 379 px plus
+  the original `.col-divider` view on the lanes' side, so every scale rounds as before (gate passes
+  at 100% and 150%). Consequence: where the board's strip by the clips covers the hairline, ours
+  stops 1 px short of the lanes, at the divider (within gate 2's 1 px).

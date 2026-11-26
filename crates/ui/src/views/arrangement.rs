@@ -1368,9 +1368,8 @@ const OFF_HINT_PX: f32 = 12.0;
 
 // ───────────────────────────── Track headers ─────────────────────────────
 
-/// The header column's surface: `#0A0A0A` and its 1 px `#1E1E1E` hairline on
-/// the lanes' side (rows and cells draw over it; a strip by the clips covers
-/// it in its row, as on the board).
+/// The header column's surface: `#0A0A0A` behind the rows (its 1 px
+/// `#1E1E1E` divider on the lanes' side is the `.col-divider` view beside it).
 pub struct HeaderColumn {
     s: Signals,
 }
@@ -1382,11 +1381,9 @@ impl View for HeaderColumn {
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let s = cx.scale_factor();
+        let _ = (s, &self.s);
         let r = gfx::snap(cx.bounds().into());
         canvas.draw_rect(r, &gfx::fill(BG_0));
-        let l = self.s.header.get_untracked();
-        let x = (r.left + l.hairline_x() * s).round();
-        canvas.draw_rect(vg::Rect::from_xywh(x, r.top, gfx::hairline(s), r.height()), &gfx::fill(LINE_SOFT));
     }
 }
 
@@ -1396,18 +1393,17 @@ pub struct TracksCell {
     s: Signals,
 }
 
-/// A header-column cell's surface: the band colour inside the column's
-/// hairline, the hairline, and the one hairline under it.
-fn band_cell(canvas: &Canvas, r: vg::Rect, s: f32, l: &super::header_layout::HeaderLayout) {
+/// A header-column cell's surface: the band colour and the one hairline
+/// under it.
+fn band_cell(canvas: &Canvas, r: vg::Rect, s: f32, _l: &super::header_layout::HeaderLayout) {
     let hl = gfx::hairline(s);
     canvas.draw_rect(r, &gfx::fill(RULER_BG));
-    let x = (r.left + l.hairline_x() * s).round();
-    canvas.draw_rect(vg::Rect::from_xywh(x, r.top, hl, r.height()), &gfx::fill(LINE_SOFT));
     canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE_SOFT));
 }
 
-/// The cells' label: 16 px in from the column's left edge, wherever the
-/// headers are (text is always left-aligned, §5.3).
+/// The cells' label: 16 px in from the header's left edge, wherever the
+/// headers are (text is always left-aligned, §5.3); a right-side column
+/// starts after its 1 px divider.
 const CELL_LABEL_X: f32 = 16.0;
 
 impl View for TracksCell {
@@ -1421,7 +1417,8 @@ impl View for TracksCell {
         band_cell(canvas, r, s, &self.s.header.get_untracked());
         let f = gfx::font(Face::SemiBold, 11.0 * s);
         let base = (r.top + super::ruler::LABEL_BASELINE * s).round();
-        gfx::draw_text_tracked(canvas, "TRACKS", (r.left + CELL_LABEL_X * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+        let off = self.s.header.get_untracked().row_off();
+        gfx::draw_text_tracked(canvas, "TRACKS", (r.left + (CELL_LABEL_X - off) * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
     }
 }
 
@@ -1443,7 +1440,8 @@ impl View for OverviewCell {
         band_cell(canvas, r, s, &self.s.header.get_untracked());
         let base = (r.top + super::overview::LABEL_BASELINE * s).round();
         let f = gfx::font(Face::SemiBold, 11.0 * s);
-        gfx::draw_text_tracked(canvas, "OVERVIEW", (r.left + CELL_LABEL_X * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+        let off = self.s.header.get_untracked().row_off();
+        gfx::draw_text_tracked(canvas, "OVERVIEW", (r.left + (CELL_LABEL_X - off) * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
         let bars = super::overview::song_bars(&self.s);
         let text = format!("{bars} BAR{}", if bars == 1 { "" } else { "S" });
         let f2 = gfx::font(Face::SemiBold, 10.0 * s);
@@ -1500,10 +1498,21 @@ impl View for HeaderEdge {
     }
 }
 
-/// Builds the track header column: the Overview's label cell (when shown),
-/// the cell beside the ruler, then one [`TrackRow`] per lane, and the width
-/// edge on the lanes' side.
-pub fn track_headers(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, HeaderColumn> {
+/// Builds the track headers: the column (the Overview's label cell when
+/// shown, the cell beside the ruler, then one [`TrackRow`] per lane, and the
+/// width edge on the lanes' side) and its 1 px divider toward the lanes.
+pub fn track_headers(cx: &mut Context, s: Signals, overview: bool) {
+    let right = s.header.get_untracked().right;
+    if right {
+        Element::new(cx).class("col-divider");
+    }
+    header_column(cx, s, overview);
+    if !right {
+        Element::new(cx).class("col-divider");
+    }
+}
+
+fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, HeaderColumn> {
     HeaderColumn { s }
         .build(cx, move |cx| {
             if overview {
@@ -1532,13 +1541,13 @@ pub fn track_headers(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_,
             HeaderEdge { s, drag: None }
                 .build(cx, |_| {})
                 .position_type(PositionType::Absolute)
-                .left(s.header.map(|l| Pixels(if l.right { 0.0 } else { l.w - HEADER_EDGE_GRAB })))
+                .left(s.header.map(|l| Pixels(if l.right { 0.0 } else { l.row_w() - HEADER_EDGE_GRAB })))
                 .top(Pixels(0.0))
                 .width(Pixels(HEADER_EDGE_GRAB))
                 .height(Stretch(1.0))
                 .cursor(CursorIcon::EwResize);
         })
         .class("track-column")
-        .width(s.header.map(|l| Pixels(l.w)))
+        .width(s.header.map(|l| Pixels(l.row_w())))
         .bind(s.header, |mut h| h.needs_redraw())
 }

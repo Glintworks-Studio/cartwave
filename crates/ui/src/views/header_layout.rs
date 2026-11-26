@@ -1,7 +1,9 @@
 //! Where a track header's parts sit (polish 2 §3–§5; boards
-//! `docs/design/polish2-ref/E1-*`). All positions are logical px from the
-//! header's left edge, for a header `w` px wide including its 1 px hairline
-//! on the lanes' side.
+//! `docs/design/polish2-ref/E1-*`). A header `w` px wide is a `w − 1` px
+//! column of rows plus the 1 px divider on the lanes' side (the same views as
+//! before polish 2, so every scale rounds the same: RUNLOG P2-D19). Positions
+//! are logical px from the **row's** left edge: with the headers on the right
+//! the row starts 1 px into the header, after the divider.
 //!
 //! The parts are laid out "strip first": strip 0–16, number 28–56, name
 //! 68 … w − 144, controls w − 132 … w − 12. When the strip sits at the
@@ -61,27 +63,30 @@ impl HeaderLayout {
         self.right != self.by_clips
     }
 
-    /// A box `x0 … x0 + w` of the strip-first frame in header coordinates.
-    pub fn place(&self, x0: f32, w: f32) -> f32 {
-        if self.mirrored() {
-            self.w - x0 - w
-        } else {
-            x0
-        }
-    }
-
-    /// The hairline's x (on the lanes' side).
-    pub fn hairline_x(&self) -> f32 {
+    /// Where the rows start inside the header (after the divider when the
+    /// headers are on the right).
+    pub fn row_off(&self) -> f32 {
         if self.right {
-            0.0
+            1.0
         } else {
-            self.w - 1.0
+            0.0
         }
     }
 
-    /// The strip's left edge.
+    /// The rows' width (the header without its divider).
+    pub fn row_w(&self) -> f32 {
+        self.w - 1.0
+    }
+
+    /// A box `x0 … x0 + w` of the strip-first frame, row-relative.
+    pub fn place(&self, x0: f32, w: f32) -> f32 {
+        (if self.mirrored() { self.w - x0 - w } else { x0 }) - self.row_off()
+    }
+
+    /// The strip's left edge, kept inside the row: where the board's strip
+    /// covers the hairline (by the clips) it stops 1 px short of the lanes.
     pub fn strip_x(&self) -> f32 {
-        self.place(0.0, STRIP_W)
+        self.place(0.0, STRIP_W).clamp(0.0, self.row_w() - STRIP_W)
     }
 
     pub fn number_x(&self) -> f32 {
@@ -176,16 +181,18 @@ mod tests {
     /// Polish 2 §5.3: the order table, against the side-order board's boxes.
     #[test]
     fn order_table_matches_the_board() {
+        // Row-relative (a right-side row starts 1 px into the header); the
+        // board's header x is row x + row_off.
         let ll = HeaderLayout { w: 380.0, right: false, by_clips: false };
         assert_eq!((ll.strip_x(), ll.number_x(), ll.name_x(), ll.ctrl_x()), (0.0, 28.0, 68.0, 248.0));
-        assert_eq!((ll.col_a(), ll.col_b(), ll.hairline_x()), (256.0, 328.0, 379.0));
+        assert_eq!((ll.col_a(), ll.col_b(), ll.row_w()), (256.0, 328.0, 379.0));
         let lc = HeaderLayout { by_clips: true, ..ll };
-        assert_eq!((lc.strip_x(), lc.number_x(), lc.name_x(), lc.ctrl_x()), (364.0, 324.0, 144.0, 12.0));
+        assert_eq!((lc.strip_x(), lc.number_x(), lc.name_x(), lc.ctrl_x()), (363.0, 324.0, 144.0, 12.0), "the strip stops at the divider");
         assert_eq!((lc.col_a(), lc.col_b()), (20.0, 92.0), "the block never mirrors inside");
         let rc = HeaderLayout { right: true, by_clips: true, ..ll };
-        assert_eq!((rc.strip_x(), rc.number_x(), rc.name_x(), rc.ctrl_x(), rc.hairline_x()), (0.0, 28.0, 68.0, 248.0, 0.0));
+        assert_eq!((rc.strip_x(), rc.number_x() + rc.row_off(), rc.name_x() + 1.0, rc.ctrl_x() + 1.0), (0.0, 28.0, 68.0, 248.0));
         let ro = HeaderLayout { right: true, by_clips: false, ..ll };
-        assert_eq!((ro.strip_x(), ro.name_x(), ro.ctrl_x()), (364.0, 144.0, 12.0));
+        assert_eq!((ro.strip_x(), ro.name_x() + 1.0, ro.ctrl_x() + 1.0), (363.0, 144.0, 12.0));
         assert!(!ll.mirrored() && lc.mirrored() && !rc.mirrored() && ro.mirrored());
     }
 
@@ -195,6 +202,8 @@ mod tests {
         let w = HeaderLayout { w: 520.0, ..Default::default() };
         assert_eq!((w.name_x(), w.name_w(), w.ctrl_x()), (68.0, 308.0, 388.0));
         assert_eq!(w.w - w.ctrl_x() - CTRL_W, CTRL_EDGE, "the block stays at its edge");
+        let r = HeaderLayout { right: true, ..w };
+        assert_eq!(r.ctrl_x() + r.row_off(), CTRL_EDGE, "on the right, at the left edge");
         assert_eq!(clamp_width(100.0), 380.0);
         assert_eq!(clamp_width(900.0), 600.0);
     }

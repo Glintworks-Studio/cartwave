@@ -40,7 +40,7 @@ $States = @(
   @("stopped", @{}, "", $null),
   @("playing", @{ CHIPDAW_PLAYHEAD = "7680" }, "", { Key 0x20; Start-Sleep -Milliseconds 500 }),
   @("loop_off", @{}, "", { Click 293 38 }),
-  @("solo_mute", @{}, "", { if ($New) { Click (241 + 300) (104 + 2 * 73 + 22); Click (241 + 268) (104 + 3 * 73 + 22) } else { Click (241 + 356) (104 + 2 * 73 + 28); Click (241 + 324) (104 + 3 * 73 + 28) } }),
+  @("solo_mute", @{}, "", { if ($New) { Click (241 + 300) (104 + 2 * 73 + 22); Start-Sleep -Milliseconds 700; Click (241 + 268) (104 + 3 * 73 + 22) } else { Click (241 + 356) (104 + 2 * 73 + 28); Click (241 + 324) (104 + 3 * 73 + 28) } }),
   @("browser_closed", @{}, ', "browser_open": false', $null),
   @("inspector", @{}, "", { Click 700 140 }),
   @("piano_roll", @{ CHIPDAW_OPEN_CLIP = "1" }, "", $null),
