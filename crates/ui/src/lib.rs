@@ -1030,8 +1030,11 @@ impl Model for AppState {
                     self.end_session(choice == Proceed::Discard);
                 }
             }
-            if let WindowEvent::KeyDown(code, _) = we {
+            if let WindowEvent::KeyDown(code, key) = we {
                 let mods = *cx.modifiers();
+                // The logical key too, as the editors do: the physical code can be
+                // unidentified or the numpad's (remote desktop, injected input).
+                let code = &if matches!(key, Some(vizia::prelude::Key::Delete | vizia::prelude::Key::Backspace)) && !crate::input::command(&mods) { Code::Delete } else { *code };
                 // F-03 / dialogs: while a dialog is open, or a text field is
                 // being edited, no shortcut reaches the document.
                 let ctx = if self.s.dialog_open() {
@@ -3893,6 +3896,18 @@ impl AppState {
                 if menu && piano =>
             {
                 cx.emit_custom(Event::new(PianoCmd(a)).target(Entity::root()).propagate(Propagation::Subtree));
+            }
+            // R86 / R87: with a track selected (no clip, no time selection),
+            // Delete and Duplicate act on the track wherever the focus is (a
+            // header click doesn't focus the arrangement).
+            Action::Delete | Action::Duplicate
+                if !piano && self.s.time_sel.with_untracked(|t| t.is_none()) && self.s.arrangement.with_untracked(|a| a.selection.is_empty() && !a.track_sel.is_empty()) =>
+            {
+                if a == Action::Delete {
+                    self.delete_tracks(None);
+                } else {
+                    self.duplicate_tracks(None);
+                }
             }
             Action::Cut | Action::Copy | Action::Paste | Action::Duplicate | Action::Delete | Action::Quantize => return false,
             // Keys: the focused editor handles these itself.

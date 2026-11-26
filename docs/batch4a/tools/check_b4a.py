@@ -4,6 +4,7 @@ import os
 import re
 import sys
 
+sys.stdout.reconfigure(encoding="utf-8")
 work = sys.argv[1]
 obs = json.load(open(os.path.join(work, "obs.json"), encoding="utf-8-sig"))
 results = {}
@@ -47,12 +48,16 @@ if os.path.exists(os.path.join(work, "b401_after_export.chipdaw")):
     check(S, not lst("b401_piano"), f"Return behind a dialog never opened the piano roll ({lst('b401_piano')})")
 
 
+DEFAULT = ["#C9D24A", "#C9D24A", "#7F86E0", "#B5AC98", "#E39A42", "#D9579A", "#D9579A", "#3CC4A6"]
+
+
 def track_colour(f, i):
+    """A track's colour; a pre-v7 file leaves the default out (v7 writes it)."""
     if f is None:
         return "missing file"
     if "tracks" in f:
         return f["tracks"][i].get("color")
-    return f["lanes"][i].get("color")
+    return f["lanes"][i].get("color") or DEFAULT[i]
 
 
 if os.path.exists(os.path.join(work, "b402_esc.chipdaw")):

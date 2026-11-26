@@ -1066,3 +1066,8 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   on it); (5) AT-26 places the window before its gesture: `Shot` moves the window to the top-left,
   and its shot between the hover and the click put the cursor over the track menu's new rows. The
   B4A harness places the window after every launch for the same reason.
+- **B4A-D18 (Delete from a track header).** B4A-04 found that Delete with a track selected did
+  nothing after a header click: the root's key path matched only the physical key code, and an
+  injected (non-extended) Delete arrives as the numpad's. The editors already match the logical
+  key for that reason (remote desktop, injected input); the root now does the same. A header click
+  also takes the keyboard focus (a text field kept Delete), and so does the end of a header drag.

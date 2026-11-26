@@ -128,6 +128,7 @@ if (Want "B4A-04") {
   $a = NameAt 1; $b = NameAt 0
   DragL $a[0] $a[1] $a[0] ($b[1] - 20); Start-Sleep -Milliseconds 400   # drag it above track 1
   Save; Keep $p "b404_moved"
+  Shot "b404_before_delete"
   K 0x2E; Start-Sleep -Milliseconds 400                 # Delete: the selected (moved) track
   Save; Keep $p "b404_deleted"
   # Colour from the header's menu (AT-13's last step; the polish grid).
@@ -149,6 +150,7 @@ if (Want "B4A-05") {
   $obs.b405_menu = @(DevLines $d "^dev: menu Badge")
   $mi = MenuItemAt 309 ((RowY 0) + 58 + 2) 1 1; ClickL $mi[0] $mi[1]  # "2A03 Pulse 1" (Studio, separator, P1)
   Start-Sleep -Milliseconds 800
+  Find-Dialog 4000 | Out-Null
   $obs.b405_dialog = Dialog-Text
   pwsh -NoProfile -File "$Repo\docs\batch4a\tools\screen.ps1" -Out "$Work\lock-reset-dialog.png" | Out-Null
   Press-Button "Reset and lock" | Out-Null; Start-Sleep -Milliseconds 500
@@ -167,7 +169,7 @@ if (Want "B4A-05") {
 # ─────────── B4A-06: profile switching asks; Unlock / Switch anyway / Cancel ───────────
 if (Want "B4A-06") {
   foreach ($ans in @("unlock", "fit", "cancel")) {
-    $p = Fx "fx4_studio" "b406_$ans"; $d = Join-Path $Work "d406$ans"
+    $p = Fx "fx4_studio" "b406w_$ans"; $d = Join-Path $Work "d406$ans"
     $env:CHIPDAW_WARN_ANSWER = $ans
     Launch -Project $p -Data $d; Place
     Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
@@ -185,7 +187,7 @@ if (Want "B4A-06") {
 # ─────────── B4A-07: a chord on a locked track asks; Fit / Unlock / Cancel ───────────
 if (Want "B4A-07") {
   foreach ($ans in @("fit", "unlock", "cancel")) {
-    $p = Fx "fx4_chord" "b407_$ans"; $d = Join-Path $Work "d407$ans"
+    $p = Fx "fx4_chord" "b407w_$ans"; $d = Join-Path $Work "d407$ans"
     $env:CHIPDAW_WARN_ANSWER = $ans
     Launch -Project $p -Data $d; Place
     $cl = @(((BarX 1) + 40), ((RowY 0) + 40)); DblL $cl[0] $cl[1]; Start-Sleep -Milliseconds 800   # open the clip
@@ -195,7 +197,7 @@ if (Want "B4A-07") {
     $bx = 0; $by = 0; $bw = 0; $bh = 0
     if ($ln.Count -gt 0) { $f = ($ln[-1] -split " "); $bx = [double]$f[4]; $by = [double]$f[5]; $bw = [double]$f[6]; $bh = [double]$f[7] }
     # Two notes at the same time on two rows: a chord.
-    $x = $bx + 120; ClickL $x ($by + $bh * 0.45); Start-Sleep -Milliseconds 700
+    $x = $bx + 400; ClickL $x ($by + $bh * 0.45); Start-Sleep -Milliseconds 700
     ClickL $x ($by + $bh * 0.30); Start-Sleep -Milliseconds 900
     if ($ans -eq "fit") { Shot "profile-warning-after" }
     K 0x1B; Start-Sleep -Milliseconds 300

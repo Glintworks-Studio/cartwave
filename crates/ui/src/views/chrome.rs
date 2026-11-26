@@ -1328,6 +1328,9 @@ impl View for TrackRow {
                     let m = *cx.modifiers();
                     cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                     cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
+                    // Keys (Delete, Ctrl+D, Ctrl+R) now act on the track: take the
+                    // keyboard focus from wherever it was (a text field keeps Delete).
+                    cx.focus();
                     // Captured only once it turns into a drag: the row's M / S keys
                     // and sliders still get their own release.
                     self.press = Some((cx.mouse().cursor_y / cx.scale_factor(), false));
@@ -1340,6 +1343,9 @@ impl View for TrackRow {
                     }
                     if let Some((from, to)) = self.s.track_drag.get_untracked() {
                         self.s.track_drag.set(None);
+                        // Keys go on to act on the moved track (Delete right after
+                        // the drop): keep the keyboard focus here.
+                        cx.focus();
                         if from != to {
                             cx.emit(AppEvent::MoveTrack(from, to));
                         }

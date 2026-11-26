@@ -517,6 +517,20 @@ mod tests {
         let (ra, rb) = (rms(&a[2000..]), rms(&b[2000..]));
         assert!(ra > 0.01, "{ra}");
         // Same level within 0.1 dB.
+        std::println!("one pulse note: console RMS {ra:.5}, studio RMS {rb:.5}, {:+.3} dB", 20.0 * (rb / ra).log10());
         assert!((20.0 * (rb / ra).log10()).abs() < 0.1, "console {ra} vs studio {rb}");
+    }
+
+    /// Two pulses at once: the console's non-linear mixer makes them quieter
+    /// than the sum of two lone pulses; studio voices add linearly. The
+    /// measured difference goes into BATCH4A.md ("studio vs locked").
+    #[test]
+    fn two_voices_are_linear_two_console_pulses_are_not() {
+        let one = mixer::pulse_out(15, 0);
+        let two_console = mixer::pulse_out(15, 15);
+        let two_studio = 2.0 * level_of(VoiceKind::Pulse, 15);
+        let db = 20.0 * (two_studio / two_console).log10();
+        std::println!("two pulses at volume 15 (peak level): console {two_console:.4}, studio {two_studio:.4}: studio {db:+.2} dB louder; one: {one:.4}");
+        assert!(db > 0.5 && db < 1.5, "{db}");
     }
 }
