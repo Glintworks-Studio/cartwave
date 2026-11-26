@@ -722,3 +722,5 @@ Every decision below was taken alone, as the prompt asked.
   while clips are dragged, and the Overview redraws only when what it shows changes (not on a
   note edit): piano-roll drag A/B +0.64 → +0.08. (4) The lane layer's surface keeps 256 px of
   slack, so a width drag doesn't reallocate it every frame.
+- **Merge.** Every gate passed on the final build: `pre-polish2` tags the old `main` (8644ff3),
+  pushed; `main` fast-forwarded to `polish2/header-nav` (e09139c) and pushed.

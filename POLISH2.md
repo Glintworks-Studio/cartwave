@@ -248,5 +248,5 @@ git merge --ff-only polish2/header-nav
 git push origin main
 ```
 
-@@MERGED@@ To go back: `git checkout -b back-to-pre-polish2 pre-polish2`.
+**Done 2026-11-26:** `pre-polish2` tags the old `main` (8644ff3) and is pushed; `main` was fast-forwarded to `polish2/header-nav` (e09139c) and pushed. To go back: `git checkout -b back-to-pre-polish2 pre-polish2`.
 
