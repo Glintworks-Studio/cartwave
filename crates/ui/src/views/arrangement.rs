@@ -43,7 +43,7 @@ pub fn clip_at(a: &state::Arrangement, x: f32, y: f32) -> Option<u32> {
         .map(|c| c.id)
 }
 use crate::notes::Note;
-use crate::state::{self, Clip, TimeSel, MIN_CLIP_TICKS, TICKS_PER_BAR};
+use crate::state::{self, TimeSel, MIN_CLIP_TICKS, TICKS_PER_BAR};
 use crate::theme::tokens::*;
 use crate::Signals;
 
@@ -80,9 +80,34 @@ struct Drag {
     moved: bool,
     /// Plain click on an already-selected clip collapses the selection on release.
     collapse_to: Option<u32>,
+    /// Ctrl/Cmd-click on a selected clip (R28): it leaves the selection on
+    /// release, unless the press turned into a drag.
+    toggle_off: Option<u32>,
+    /// Ctrl-drag (Option-drag on macOS) copies: the copies are made when the
+    /// drag starts moving, so a Ctrl-click alone copies nothing.
+    duplicate: bool,
     /// The snapped tick and the track under the press: a click without a
     /// drag puts the insert marker there (A1, R38: Split acts on it).
     press_at: (u32, usize),
+}
+
+/// Shift-click's range (R28): every clip on the tracks from `anchor`'s to
+/// `id`'s that overlaps the time from the earlier start to the later end.
+/// Without an anchor, just `id`.
+pub(crate) fn clip_range(a: &state::Arrangement, anchor: Option<u32>, id: u32) -> Vec<u32> {
+    let (Some(x), Some(y)) = (anchor.and_then(|i| a.clip(i)), a.clip(id)) else { return vec![id] };
+    let (l0, l1) = (x.lane.min(y.lane), x.lane.max(y.lane));
+    let (t0, t1) = (x.start_ticks.min(y.start_ticks), x.end_ticks().max(y.end_ticks()));
+    let mut v: Vec<u32> = a
+        .clips
+        .iter()
+        .filter(|c| c.lane >= l0 && c.lane <= l1 && c.start_ticks < t1 && c.end_ticks() > t0)
+        .map(|c| c.id)
+        .filter(|&c| c != x.id)
+        .collect();
+    // The anchor stays the range's start (a second Shift-click re-ranges from it).
+    v.insert(0, x.id);
+    v
 }
 
 pub struct Arrangement {
@@ -303,11 +328,19 @@ impl Arrangement {
         };
         self.s.time_sel.set(None);
 
+        // Selection modifiers (R28, Live 12 manual §42.5 / §42.9): Ctrl/Cmd-click
+        // adds or removes one clip; Shift-click selects the range from the
+        // last selected clip to this one (every clip on the tracks between,
+        // overlapping the time between). A plain click selects one.
         let mut collapse_to = None;
+        let mut toggle_off = None;
+        let toggle = crate::input::command(&mods);
         arr.update(|a| {
             if mods.shift() {
-                if let Some(i) = a.selection.iter().position(|s| *s == id) {
-                    a.selection.remove(i);
+                a.selection = clip_range(a, a.selection.last().copied(), id);
+            } else if toggle {
+                if a.is_selected(id) {
+                    toggle_off = Some(id);
                 } else {
                     a.selection.push(id);
                 }
@@ -329,30 +362,11 @@ impl Arrangement {
             Zone::RightEdge => DragMode::ResizeRight,
         };
 
-        let mut anchor = id;
-        // Ctrl-drag (Option-drag on macOS) duplicates the selection and drags the copies.
-        if mode == DragMode::Move && crate::input::duplicate_drag(&mods) {
-            arr.update(|a| {
-                let mut new_sel = Vec::new();
-                let originals: Vec<Clip> = a
-                    .selection
-                    .iter()
-                    .filter_map(|sid| a.clip(*sid).cloned())
-                    .collect();
-                // Duplicates are independent copies (no linked clips yet).
-                for mut c in originals {
-                    let new_id = a.next_id;
-                    a.next_id += 1;
-                    if c.id == id {
-                        anchor = new_id;
-                    }
-                    c.id = new_id;
-                    c.rev = state::Rev::next();
-                    new_sel.push(new_id);
-                    a.push_clip(c);
-                }
-                a.selection = new_sel;
-            });
+        let anchor = id;
+        // Ctrl-drag (Option-drag on macOS) duplicates the selection and drags
+        // the copies, once the drag moves (`on_drag`).
+        let duplicate = mode == DragMode::Move && crate::input::duplicate_drag(&mods);
+        if duplicate {
             collapse_to = None;
         }
 
@@ -385,6 +399,8 @@ impl Arrangement {
             origins,
             moved: false,
             collapse_to,
+            toggle_off,
+            duplicate,
             press_at,
         });
         cx.capture();
@@ -433,6 +449,30 @@ impl Arrangement {
             return;
         }
         drag.moved = true;
+        if std::mem::take(&mut drag.duplicate) {
+            // The copies take the originals' places in the drag; the
+            // originals stay where they are.
+            let d = &mut *drag;
+            self.s.arrangement.update(|a| {
+                let mut new_sel = Vec::new();
+                for o in d.origins.iter_mut() {
+                    let Some(mut c) = a.clip(o.id).cloned() else { continue };
+                    let new_id = a.next_id;
+                    a.next_id += 1;
+                    if d.anchor == o.id {
+                        d.anchor = new_id;
+                    }
+                    c.id = new_id;
+                    c.rev = state::Rev::next();
+                    o.id = new_id;
+                    new_sel.push(new_id);
+                    a.push_clip(c);
+                }
+                a.selection = new_sel.clone();
+                a.editing = new_sel;
+            });
+            d.toggle_off = None;
+        }
         let drag = drag.clone();
 
         self.s.arrangement.update(|a| {
@@ -540,6 +580,9 @@ impl Arrangement {
             if !drag.moved {
                 if let Some(id) = drag.collapse_to {
                     self.s.arrangement.update(|a| a.selection = vec![id]);
+                }
+                if let Some(id) = drag.toggle_off {
+                    self.s.arrangement.update(|a| a.selection.retain(|s| *s != id));
                 }
                 cx.emit(crate::AppEvent::SetInsert(drag.press_at.0, drag.press_at.1));
             }
@@ -1574,4 +1617,29 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
         .class("track-column")
         .width(s.header.map(|l| Pixels(l.row_w())))
         .bind(s.header, |mut h| h.needs_redraw())
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::clip_range;
+    use crate::state::{Arrangement, TICKS_PER_BAR};
+
+    /// R28: Shift-click selects every clip in the tracks-by-time rectangle
+    /// between the last selected clip and the clicked one.
+    #[test]
+    fn shift_click_selects_the_range() {
+        let mut a = Arrangement::empty();
+        let bar = TICKS_PER_BAR;
+        let c1 = a.add_clip(0, 0, bar); // track 1, bar 1
+        let c2 = a.add_clip(1, bar, bar); // track 2, bar 2
+        let c3 = a.add_clip(2, 2 * bar, bar); // track 3, bar 3
+        let far = a.add_clip(1, 8 * bar, bar); // track 2, bar 9: outside the time
+        let below = a.add_clip(4, bar, bar); // track 5: outside the tracks
+        let mut r = clip_range(&a, Some(c1), c3);
+        r.sort();
+        assert_eq!(r, vec![c1, c2, c3]);
+        assert!(!r.contains(&far) && !r.contains(&below));
+        assert_eq!(clip_range(&a, None, c2), vec![c2], "no anchor: just the clip");
+        assert_eq!(clip_range(&a, Some(c3), c1)[0], c3, "the anchor stays first");
+    }
 }

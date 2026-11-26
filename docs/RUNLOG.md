@@ -937,3 +937,15 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   as the clip panel does. `tests/glyphs.rs` fails on either character inside a string literal in
   `crates/ui/src`. Consequence for §5: the lock badge's 🔒 is **drawn** (a procedural glyph), not
   typed.
+- **B4A-D5 (fixup 4: selection modifiers, R28).** The manual (Live 12, §42.5 Editing; §42.9
+  Zooming, Display and Selections; docs/ux-audit/manual-refs.md R28): Ctrl/Cmd-click adds items one
+  at a time, Shift-click selects a contiguous range. Copied: **Ctrl-click (⌘-click) toggles** one
+  clip (added on press, removed on release when the press didn't become a drag); **Shift-click
+  selects the range** from the last selected clip to the clicked one, every clip on the tracks
+  between that overlaps the time between (ours: what "contiguous" means in a two-dimensional
+  arrangement; the manual doesn't say). Shift-click used to toggle. On Windows Ctrl is also the
+  copy-drag modifier (A6): the copies are now made when the drag starts moving, so a Ctrl-click
+  alone no longer stacks invisible copies on the originals (it did: copies were made on press).
+  The earlier suites' Shift-clicks select two neighbouring clips, the same with either rule.
+  Tests: `selection_tests::shift_click_selects_the_range`, B4A-03 (toggle on, toggle off, range,
+  Ctrl-drag still copies).

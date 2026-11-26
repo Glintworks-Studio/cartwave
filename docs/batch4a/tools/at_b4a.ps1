@@ -80,5 +80,32 @@ if (Want "B4A-02") {
   Stop-App
 }
 
+
+# ─────────── B4A-03: Ctrl-click toggles a clip, Shift-click selects a range (R28) ───────────
+if (Want "B4A-03") {
+  $p = Fx "fx_basic" "b403"; $d = Join-Path $Work "d403"
+  Launch -Project $p -Data $d
+  $lead = @(((BarX 2) + 10), ((RowY 0) + 40)); $harmA = @(((BarX 1) + 40), ((RowY 1) + 40))
+  $harmB = @(((BarX 3) + 40), ((RowY 1) + 40)); $bass = @(((BarX 6) + 10), ((RowY 2) + 40))
+  ClickL $lead[0] $lead[1]; Start-Sleep -Milliseconds 500
+  CtrlClickL $harmB[0] $harmB[1]; Start-Sleep -Milliseconds 500
+  Save; Keep $p "b403_ctrl_click"                      # no copies from a Ctrl-click
+  K 0x2E; Save; Keep $p "b403_del_two"                 # Lead A + Harm B deleted
+  Ctrl 0x5A; Start-Sleep -Milliseconds 300
+  ClickL $lead[0] $lead[1]; Start-Sleep -Milliseconds 500
+  CtrlClickL $harmB[0] $harmB[1]; Start-Sleep -Milliseconds 500
+  CtrlClickL $lead[0] $lead[1]; Start-Sleep -Milliseconds 500   # toggles Lead A off
+  K 0x2E; Save; Keep $p "b403_del_toggled"             # only Harm B deleted
+  Ctrl 0x5A; Start-Sleep -Milliseconds 300
+  ClickL $harmA[0] $harmA[1]; Start-Sleep -Milliseconds 500
+  ShiftClickL $bass[0] $bass[1]; Start-Sleep -Milliseconds 500  # range: tracks 2..3, bars 1..8
+  K 0x2E; Save; Keep $p "b403_del_range"
+  Ctrl 0x5A; Start-Sleep -Milliseconds 300
+  ClickL $lead[0] $lead[1]; Start-Sleep -Milliseconds 500
+  KeyDown 0x11; DragL $lead[0] $lead[1] ($lead[0] + 92 * 4) $lead[1]; KeyUp 0x11   # Ctrl-drag copies (A6)
+  Save; Keep $p "b403_ctrl_drag"
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4a\tools\check_b4a.py" $Work

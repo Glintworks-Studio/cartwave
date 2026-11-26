@@ -64,6 +64,18 @@ if os.path.exists(os.path.join(work, "b402_esc.chipdaw")):
     check(S, track_colour(pk, 2) not in (orig, None), f"pick B: the track takes it ({track_colour(pk, 2)})")
     check(S, track_colour(u, 2) == orig, f"hover A, pick B, undo: the original colour ({track_colour(u, 2)} vs {orig})")
 
+
+if os.path.exists(os.path.join(work, "b403_ctrl_click.chipdaw")):
+    S = "B4A-03"
+    cc, two, tog, rng = (load(n) for n in ("b403_ctrl_click", "b403_del_two", "b403_del_toggled", "b403_del_range"))
+    check(S, clip_ids(cc) == [1, 2, 3, 4], f"a Ctrl-click makes no copies ({clip_ids(cc)})")
+    check(S, clip_ids(two) == [2, 4], f"click Lead A, Ctrl-click Harm B, Delete: both gone ({clip_ids(two)})")
+    check(S, clip_ids(tog) == [1, 2, 4], f"... Ctrl-click Lead A again toggles it off: only Harm B gone ({clip_ids(tog)})")
+    check(S, clip_ids(rng) == [1], f"click Harm A, Shift-click Bass: the range (Harm A, Harm B, Bass) ({clip_ids(rng)})")
+    cd = load("b403_ctrl_drag")
+    starts = sorted(c["start"] for c in cd["clips"] if c["lane"] == 0) if cd else None
+    check(S, cd and len(cd["clips"]) == 5 and starts == [0, 4 * 3840], f"Ctrl-drag still copies: Lead A stays, a copy at bar 5 ({starts})")
+
 print()
 bad = [k for k, v in results.items() if not all(v)]
 for k in sorted(results):

@@ -246,7 +246,7 @@ P2-R39). We copy the behaviour, not the look.
 | A1 | Click empty space | Insert marker there; clears clip selection (today) | M | ✓ |
 | A2 | Drag empty space | Time selection across tracks (today) | M | ✓ |
 | A3 | Shift-click | Extends the time selection, across tracks (R44) | S | ✓ · **done** (B3) |
-| A4 | Click / Shift-click / Ctrl-click a clip | Select / add range / toggle (R28). As built on both platforms: Shift-click toggles; Ctrl/⌘-click is a plain click (MAC-CATCHUP.md) | M | ✓ |
+| A4 | Click / Shift-click / Ctrl-click a clip | Select / add range / toggle (R28: Live 12 manual §42.5 Editing, §42.9 Zooming, Display and Selections). **Batch 4a:** Ctrl-click (⌘-click on macOS) adds or removes one clip; Shift-click selects the range from the last selected clip to this one (every clip on the tracks between that overlaps the time between); a Ctrl-drag (⌥-drag) still copies, made once the drag moves | M | ✓ · **done** (4a) |
 | A5 | Drag clip, edges | Move (also to another track) / resize (today) | M | ✓ |
 | A6 | Ctrl-drag (⌥-drag on macOS; ⌘-drag there bypasses the snap) clip | Copy (today; unverified for the arrangement, R48) | S | ✓ |
 | A7 | Double-click clip | Open in the piano roll (today; R150) | M | ✓ |
