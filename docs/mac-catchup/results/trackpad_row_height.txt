@@ -1,0 +1,4 @@
+== before (main ef2ea19)
+NOTE  ⌥ + a 20-event continuous scroll (40 px of swipe) over track 2: height 72 -> 300.0 (19 steps of 12 px: one per event, whatever its size)
+== after
+PASS  ⌥ + a 20-event continuous scroll (40 px of swipe) over track 2: height 72 -> 96.0 (2 steps of 12 px: one per event, whatever its size)

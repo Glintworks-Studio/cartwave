@@ -356,6 +356,75 @@ if want("dialogs"):
     report("File ▸ New from MIDI File… (showcase.mid), then Cmd+S names it", bool(fm) and fm[0].suffix == ".chipdaw" and len(d["clips"]) >= 6, f"title {t!r}, {[p.name for p in fm]}, {len(d['clips'])} clips")
     a.quit()
 
+# ---------------------------------------------------------------- Navigation: ruler, Overview, trackpad-style scrolls
+if want("nav"):
+    a = App("nav", REPO / "docs/songs/v5/showcase.chipdaw")
+
+    def last_nav(text, kind):
+        m = re.findall(rf"dev: {kind} (\w+) px_per_bar ([0-9.]+) scroll ([0-9.]+)", text)
+        return (m[-1][0], float(m[-1][1]), float(m[-1][2])) if m else None
+
+    m = a.mark()
+    a.seq(("click", x_of(3), 122), ("sleep", .3))
+    r = last_nav(a.since(m), "ruler")
+    report("Ruler click places the playhead (a click, no zoom)", r and r[0] == "click" and r[1] == PX_BAR, str(r))
+    m = a.mark()
+    a.seq(("drag", x_of(5), 122, x_of(5), 122 + 60, "", 30, 10), ("sleep", .3))
+    r = last_nav(a.since(m), "ruler")
+    report("Ruler vertical drag (down) zooms in", r and r[0] == "drag" and r[1] > PX_BAR, str(r))
+    m = a.mark()
+    a.seq(("drag", x_of(6), 122, x_of(4), 122, "", 30, 10), ("sleep", .3))
+    r2 = last_nav(a.since(m), "ruler")
+    report("Ruler horizontal drag scrolls", r2 and r2[0] == "drag" and abs(r2[1] - r[1]) < 0.5 and r2[2] > r[2], f"{r} -> {r2}")
+    m = a.mark()
+    a.seq(("dclick", x_of(4), 122), ("sleep", .4))
+    report("Ruler double-click fits the song", "zoom" in a.since(m) or "ruler" in a.since(m), a.since(m).strip().splitlines()[-1] if a.since(m).strip() else "")
+    m = a.mark()
+    a.seq(("drag", 900, 92, 1100, 92, "", 30, 10), ("sleep", .3))
+    o = last_nav(a.since(m), "overview")
+    report("Overview sideways drag scrolls", o and o[0] == "drag", str(o))
+    m = a.mark()
+    a.seq(("drag", 900, 92, 900, 92 + 50, "", 30, 10), ("sleep", .3))
+    o2 = last_nav(a.since(m), "overview")
+    report("Overview up/down drag zooms", o2 and o and abs(o2[1] - o[1]) > 1, f"{o} -> {o2}")
+    m = a.mark()
+    a.seq(("click", 1400, 92), ("sleep", .3))
+    o3 = last_nav(a.since(m), "overview")
+    report("Overview click outside the frame jumps there", o3 and o3[0] == "click", str(o3))
+    m = a.mark()
+    a.seq(("dclick", 900, 92), ("sleep", .4))
+    report("Overview double-click fits", bool(a.since(m).strip()), a.since(m).strip().splitlines()[-1] if a.since(m).strip() else "(nothing)")
+    # Trackpad-style input (no trackpad here: synthetic continuous pixel scrolls, 40 small events).
+    a.quit()
+    a = App("nav2", FIX)
+    z0 = a.shot("tp0")
+    for _ in range(20):
+        a.drv("pscroll", x_of(4), y_of(5), -6)
+    z1 = a.shot("tp1")
+    report("Continuous (trackpad-style) scroll moves the lanes in time", not img("diff", z0, z1, 8).startswith("0 "), img("diff", z0, z1, 8))
+    for _ in range(20):
+        a.drv("pscroll", x_of(4), y_of(5), 6)
+    # ⌥ + continuous scroll over a header: how far one swipe of 20 small events resizes the row.
+    m = a.mark()
+    for _ in range(20):
+        a.drv("pscroll", 400, y_of(1), 2, "alt")
+    hs = re.findall(r"dev: row height (\d+) ([0-9.]+)", a.since(m))
+    d = a.save()
+    h = d["lanes"][1].get("height")
+    report("⌥ + a 20-event continuous scroll (40 px of swipe) over track 2", "NOTE" if h and h >= 200 else True, f"height 72 -> {h} ({len(hs)} steps of 12 px)")
+    a.quit()
+
+# ---------------------------------------------------------------- Colours (POLISH.md): the grid in the menus, Settings ▸ Editing
+if want("colors"):
+    a = App("colors", FIX)
+    m = a.mark()
+    a.seq(("rclick", 330, ROW0 + 20), ("sleep", .5))
+    menu = re.findall(r"dev: menu (.*)", a.since(m))
+    report("Right-click a track header: its menu", bool(menu) and "Colour" in menu[-1], menu[-1][:120] if menu else "")
+    shot = a.shot("colmenu")
+    a.seq(("key", "escape"), ("sleep", .3))
+    a.quit()
+
 # ---------------------------------------------------------------- Quit and close
 if want("quit"):
     a = App("quit", FIX)

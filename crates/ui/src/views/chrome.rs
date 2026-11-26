@@ -998,6 +998,11 @@ pub struct TrackRow {
     /// A bottom-edge resize in progress: (press y in window logical px, height then).
     resize: Option<(f32, f32)>,
     edge_hover: bool,
+    /// ⌥+wheel row height in whole steps. A trackpad sends many small deltas
+    /// per swipe, and one step per event took a short swipe from 72 to 300 px
+    /// (MAC-CATCHUP.md, MC-D14); a mouse notch is still exactly one step.
+    #[cfg(target_os = "macos")]
+    wheel: crate::input::WheelSteps,
 }
 
 /// The lit strip: (colour, height, scale) and its image.
@@ -1105,7 +1110,17 @@ impl TrackRow {
         // damage one contiguous column (rows touch) instead of eight small
         // rects that each cost the renderer a pass (polish pass, POLISH.md).
         let light = Cell::new((0u8, (u16::MAX, 0u16)));
-        Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None), resize: None, edge_hover: false }
+        Self {
+            s,
+            lane,
+            hover: false,
+            lit: RefCell::new(None),
+            text: RefCell::new(None),
+            resize: None,
+            edge_hover: false,
+            #[cfg(target_os = "macos")]
+            wheel: Default::default(),
+        }
             .build(cx, move |cx| {
                 Key::new(cx, s, "M", KeyAction::Mute(lane))
                     .position_type(PositionType::Absolute)
@@ -1263,8 +1278,14 @@ impl View for TrackRow {
             if let WindowEvent::MouseScroll(_, sy) = we {
                 // §4.2: Alt+wheel over a track changes its height (R35, P2-R).
                 if cx.modifiers().alt() && *sy != 0.0 {
-                    cx.emit(AppEvent::SetLaneHeight(self.lane, self.row_h() + sy.signum() * ROW_WHEEL_STEP));
-                    cx.emit(AppEvent::Commit);
+                    #[cfg(target_os = "macos")]
+                    let steps = self.wheel.steps(*sy) as f32;
+                    #[cfg(not(target_os = "macos"))]
+                    let steps = sy.signum();
+                    if steps != 0.0 {
+                        cx.emit(AppEvent::SetLaneHeight(self.lane, self.row_h() + steps * ROW_WHEEL_STEP));
+                        cx.emit(AppEvent::Commit);
+                    }
                     meta.consume();
                 } else if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
                     // The header column scrolls with the lanes.

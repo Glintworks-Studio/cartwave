@@ -810,3 +810,11 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   1 px. Measured (results/mockup-match.md): the app moves 0.5 px between 1× and 2× (baseline
   rounding), the reference's @2x PNG moves its labels 0.5–1 px up against its own @1x PNG; against
   the HTML box (the spec, P2-D7) the app is within 0.5 px at both scales. Not changed.
+- **MC-D14 (⌥ + trackpad swipe over a track; macOS only).** No trackpad here, so trackpad input
+  was synthesized (continuous pixel scroll events, 2 px each). ⌥+wheel row height stepped 12 px
+  per event whatever its size: a 20-event, 40 px swipe took track 2 from 72 to **300** px (the
+  maximum). The fader and pan wheels already accumulate (`input::WheelSteps`, PERF-macos.md §2);
+  the row height now does too, `#[cfg(target_os = "macos")]`: the same swipe gives **96** px (two
+  lines, two steps), and one mouse notch is still exactly 12 px (`--only mouse`: 84). Windows keeps
+  its code (precision touchpads there would benefit from the same accumulator: proposed, not made,
+  as it would change shared behaviour). A physical trackpad is still untested (open item).
