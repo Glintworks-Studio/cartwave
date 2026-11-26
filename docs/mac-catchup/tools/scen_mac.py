@@ -43,7 +43,7 @@ results = []
 
 
 def report(name, ok, detail=""):
-    line = f"{'PASS' if ok else 'FAIL'}  {name}: {detail}"
+    line = f"{'PASS' if ok is True else 'FAIL' if ok is False else ok}  {name}: {detail}"
     print(line, flush=True)
     results.append(line)
 
@@ -445,6 +445,66 @@ if want("mouse"):
     report("Wheel and Shift+wheel scroll in time", not img("diff", z0, s1, 8).startswith("0 ") and not img("diff", z0, s2, 8).startswith("0 "), f"wheel {img('diff', z0, s1, 8)}; shift {img('diff', z0, s2, 8)}")
     a.quit()
 
+# ---------------------------------------------------------------- Native file dialogs (rfd) and Open Recent
+if want("dialogs"):
+    for f in WORK.glob("mc_*"):
+        f.unlink()
+    src = WORK / "mc_open.chipdaw"
+    src.write_bytes(FIX.read_bytes())
+    a = App("dialogs")
+
+    def go_to(path):
+        """In an open panel: '/' opens Go to the Folder; type the rest, Return selects, Return opens."""
+        a.seq(("type", "/"), ("sleep", 1.0), ("type", str(path)[1:]), ("sleep", .8), ("key", "return"), ("sleep", 1.5), ("key", "return"), ("sleep", 2))
+
+    a.seq(("key", "o", "cmd"), ("sleep", 1.2))
+    go_to(src)
+    report("Cmd+O, Go to the file, Open", a.title().startswith("mc_open"), a.title())
+    # Save As: the panel offers the current name in the current folder; a name typed without
+    # the extension gets it.
+    a.seq(("click", x_of(5, .5), y_of(3, "header")), ("key", "d", "cmd"), ("key", "s", "shift,cmd"), ("sleep", 1.2), ("key", "a", "cmd"), ("type", "mc_saved"), ("key", "return"), ("sleep", 1.5))
+    saved = WORK / "mc_saved.chipdaw"
+    report("Shift+Cmd+S, a name without the extension: saved as .chipdaw", saved.exists() and a.title().startswith("mc_saved") and len(json.loads(saved.read_text())["clips"]) == 5,
+           f"{sorted(p.name for p in WORK.glob('mc_saved*'))}, title {a.title()!r}")
+    # Export Audio: the dialog, Return exports, the save panel offers <name>.wav.
+    a.proj = saved
+    # Shared (not macOS) finding: with one clip selected, Return in the Export dialog reaches the
+    # arrangement first (Open Clip) and never the dialog. Recorded, then the export is tested
+    # with nothing selected.
+    m = a.mark()
+    a.seq(("key", "r", "shift,cmd"), ("sleep", .8), ("key", "return"), ("sleep", 2.0))
+    opened = "piano roll bounds" in a.since(m) and "Save" not in a.drv("windows")
+    report("Return in Export with one clip selected opens the piano roll behind it (shared code: Windows too)", "NOTE" if opened else True, "reproduced" if opened else "not reproduced")
+    a.seq(("key", "escape"), ("sleep", .3), ("key", "escape"), ("sleep", .3), ("click", 1300, 860), ("key", "escape"), ("sleep", .3), ("key", "r", "shift,cmd"), ("sleep", .8), ("key", "return"), ("sleep", 2.5), ("key", "return"), ("sleep", 4))
+    wav = WORK / "mc_saved.wav"
+    head = wav.read_bytes()[:12] if wav.exists() else b""
+    report("Shift+Cmd+R, Return, Save: mc_saved.wav (RIFF WAVE) and its loop files", head[:4] == b"RIFF" and head[8:12] == b"WAVE", f"{sorted(p.name for p in WORK.glob('mc_saved*'))}")
+    a.seq(("key", "escape"), ("sleep", .4))
+    # Import ▸ Audio as DPCM Sample…
+    a.seq(("menu", "File", "Import", "Audio as DPCM Sample…"), ("sleep", 2))
+    go_to(REPO / "docs/songs/hey.wav")
+    d = a.save()
+    report("File ▸ Import ▸ Audio as DPCM Sample… (hey.wav)", len(d.get("samples", [])) >= 1, f"{len(d.get('samples', []))} sample(s)")
+    # Open Recent lists what was opened and saved, newest first.
+    recent = [l.strip() for l in a.drv("menus").split("[Edit]")[0].split("Open Recent")[1].splitlines()[1:4]]
+    report("File ▸ Open Recent: newest first, with the folder", recent and recent[0].startswith("mc_saved.chipdaw") and any(r.startswith("mc_open.chipdaw") for r in recent), str(recent))
+    st = a.settings()
+    report("… kept in settings.json", any(str(saved) == r for r in st.get("recent", [])), str(st.get("recent", [])[:2]))
+    # New from MIDI File…
+    a.seq(("menu", "File", "New from MIDI File…"), ("sleep", 2))
+    go_to(REPO / "docs/songs/showcase.mid")
+    t = a.title()
+    a.seq(("key", "s", "cmd"), ("sleep", 2.5), ("key", "a", "cmd"), ("type", "mc_frommidi"), ("key", "return"), ("sleep", 1.5))
+    # The panel opens in the folder last used (docs/songs, where the MIDI file was): find the
+    # file through Open Recent's newest entry, then remove it from the repo.
+    newest = pathlib.Path(a.settings().get("recent", [""])[0])
+    fm = [newest] if newest.name.startswith("mc_frommidi") and newest.exists() else []
+    d = json.loads(fm[0].read_text()) if fm else {"clips": []}
+    for f in fm:
+        f.unlink()
+    report("File ▸ New from MIDI File… (showcase.mid), then Cmd+S names it", bool(fm) and fm[0].suffix == ".chipdaw" and len(d["clips"]) >= 6, f"title {t!r}, {[p.name for p in fm]}, {len(d['clips'])} clips")
+    a.quit()
+
 # ---------------------------------------------------------------- Quit and close
 if want("quit"):
     a = App("quit", FIX)
@@ -470,4 +530,4 @@ if want("quit"):
 
 if args.out:
     pathlib.Path(args.out).write_text("\n".join(results) + "\n")
-print(f"{sum(r.startswith('PASS') for r in results)} pass, {sum(r.startswith('FAIL') for r in results)} fail")
+print(f"{sum(r.startswith('PASS') for r in results)} pass, {sum(r.startswith('FAIL') for r in results)} fail, {sum(r.startswith('NOTE') for r in results)} notes")

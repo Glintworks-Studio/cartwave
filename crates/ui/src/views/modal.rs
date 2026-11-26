@@ -238,7 +238,7 @@ fn display(cx: &mut Context, st: &Settings) {
     // macOS draws the menu bar itself, light or dark with the system's
     // appearance; the Windows-only Dark menus choice has no meaning there.
     if cfg!(target_os = "macos") {
-        note(cx, "Menus follow the system's appearance (System Settings ▸ Appearance).");
+        note(cx, "Menus follow the system's appearance (System Settings > Appearance).");
     }
 }
 

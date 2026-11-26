@@ -133,9 +133,11 @@ func key(_ name: String, _ m: String = "") {
     pause(0.08)
 }
 func typeText(_ s: String) {
+    let shifted: [Character: String] = ["_": "-", ":": ";", "~": "`", "?": "/", "\"": "'", "!": "1", "@": "2", "(": "9", ")": "0"]
     for ch in s {
         let c = String(ch)
-        if c.uppercased() == c && c.lowercased() != c { key(c.lowercased(), "shift") } else { key(c) }
+        if let base = shifted[ch] { key(base, "shift") }
+        else if c.uppercased() == c && c.lowercased() != c { key(c.lowercased(), "shift") } else { key(c) }
     }
 }
 func mouse(_ type: CGEventType, _ p: CGPoint, _ f: CGEventFlags = [], button: CGMouseButton = .left, clicks: Int64 = 1) {
