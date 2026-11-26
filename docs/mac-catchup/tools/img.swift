@@ -82,6 +82,13 @@ case "stack":
         else { off += im.height; c.draw(im, in: CGRect(x: 0, y: H - off, width: im.width, height: im.height)); off += gap }
     }
     save(c.makeImage()!, a[2])
+case "pad":
+    // img pad <in> <out> left top: a black margin (Windows harness frame offsets), sRGB
+    let im = load(a[1]); let (l, t) = (i(3), i(4))
+    let c = newCtx(im.width + l, im.height + t)
+    c.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1)); c.fill(CGRect(x: 0, y: 0, width: im.width + l, height: im.height + t))
+    c.draw(im, in: CGRect(x: l, y: 0, width: im.width, height: im.height))
+    save(c.makeImage()!, a[2])
 case "label":
     let im = load(a[1]); let H = im.height + 28
     let c = newCtx(im.width, H)
@@ -113,7 +120,9 @@ case "row":
     let (p, w, _) = pixels(load(a[1]), CGColorSpace(name: CGColorSpace.sRGB))
     for x in i(3)..<i(4) { let k = (i(2) * w + x) * 4; print("\(x) #" + String(format: "%02X%02X%02X", p[k], p[k + 1], p[k + 2])) }
 case "runs":
-    let (p, w, _) = pixels(load(a[1]), CGColorSpace(name: CGColorSpace.sRGB))
+    // img runs <png> x y h [raw]: raw = the captured display values, no conversion
+    let im0 = load(a[1])
+    let (p, w, _) = pixels(im0, a.count > 5 && a[5] == "raw" ? im0.colorSpace : CGColorSpace(name: CGColorSpace.sRGB))
     let (x0, y0, h) = (i(2), i(3), i(4))
     var all: [Int] = []; var banded = 0; var rows = 0
     for x in x0..<(x0 + 5) {
