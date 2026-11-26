@@ -716,6 +716,10 @@ impl PianoRoll {
     /// A key while the piano roll has focus, through the shortcut table
     /// (F-30). Esc and the app-wide keys bubble up to the app.
     fn on_key(&mut self, cx: &mut EventContext, code: Code, key: Option<&Key>) -> bool {
+        // A dialog is open: the root's `Ctx::Modal` rule (MC-D9).
+        if self.s.dialog_open() {
+            return false;
+        }
         let mods = *cx.modifiers();
         // The logical key too: the physical code can be unidentified
         // (remote desktop, injected input).

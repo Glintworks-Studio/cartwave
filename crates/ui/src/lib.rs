@@ -149,6 +149,16 @@ pub struct Signals {
     pub mem_mb: Signal<Option<u32>>,
 }
 
+impl Signals {
+    /// A dialog is open (a modal panel or the Export dialog): the root's
+    /// `Ctx::Modal` rule. The editors' own key handlers return early, so no
+    /// key (Return, Backspace, Delete…) reaches the song behind a dialog
+    /// (MAC-CATCHUP.md §8, MC-D9).
+    pub fn dialog_open(&self) -> bool {
+        self.modal.with_untracked(|m| m.is_some()) || self.export_dlg.with_untracked(|d| d.is_some())
+    }
+}
+
 /// Project fields outside undo that a save writes (F-01: changing them
 /// leaves unsaved changes too).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -969,7 +979,7 @@ impl Model for AppState {
                 let mods = *cx.modifiers();
                 // F-03 / dialogs: while a dialog is open, or a text field is
                 // being edited, no shortcut reaches the document.
-                let ctx = if self.s.modal.with_untracked(|m| m.is_some()) || self.s.export_dlg.with_untracked(|d| d.is_some()) {
+                let ctx = if self.s.dialog_open() {
                     Ctx::Modal
                 } else if self.text_edit.is_some_and(|e| e == cx.focused()) {
                     Ctx::Text
@@ -2941,6 +2951,9 @@ impl AppState {
     }
 
     fn open_piano(&mut self, id: u32) {
+        if dev::enabled() {
+            eprintln!("dev: open piano roll {id}");
+        }
         let chip = self.s.chip.get_untracked();
         if self.s.arrangement.with_untracked(|a| a.clip(id).is_some_and(|c| state::lane_off(chip, c.lane))) {
             return self.set_status(state::VRC6_OFF_HINT.into());

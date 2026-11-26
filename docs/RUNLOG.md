@@ -902,3 +902,21 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   (ef2ea19) and is pushed; `main` fast-forwarded to 18b5860 (`--ff-only`) and pushed. `main` is
   checked out in `../before-mac-catchup` (clean), so the fast-forward ran in that worktree rather
   than via `git checkout main`. The 60 Hz holds remain open for the display-link work.
+
+## Batch 4a (BATCH4A_PROMPT.md v2, branch `batch4a/model`, Windows PC)
+
+- **B4A-D1 (pre-flight).** `main` was 19 commits behind `origin/main`; fast-forwarded to 0e669ac.
+  **`mac/catchup` is merged** (0e669ac = MC-D24, its last commit; `git log main..origin/mac/catchup`
+  is empty). Baseline: `main` 0e669ac, worktree `../before-batch4a`, release built. Branch
+  `batch4a/model` from it. **The CEO's `B4a-main-track.*` reference folder was not handed over**:
+  not in the repo, `polish2-ref/`, Documents, Downloads or Desktop. The Main track is built from the
+  prompt's written spec (§7: colours, gradient, divider, layout rules); the mockup-match gate (§9.3)
+  is measured against the prompt's numbers and reported as such, and `docs/design/batch4a-ref/`
+  holds a note saying what is missing.
+- **B4A-D2 (fixup 1: keys behind dialogs).** `Signals::dialog_open()` (a modal or the Export
+  dialog) is the root's `Ctx::Modal` rule; the arrangement's `KeyDown` and the piano roll's
+  `on_key` return early on it. Test **B4A-01** (`docs/batch4a/tools/at_b4a.ps1`): a clip
+  selected, Export open, Backspace and Delete; Settings open, Return, Backspace, Delete: the saved
+  file keeps all 4 clips and the piano roll never opens. On the baseline build the same test fails
+  (clip 1 deleted twice over), so it tests what it claims. Return in the Export dialog is its
+  Export key (E2) and is not pressed by the test.

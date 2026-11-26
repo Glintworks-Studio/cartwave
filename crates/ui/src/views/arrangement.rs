@@ -926,6 +926,7 @@ impl View for Arrangement {
                 });
                 meta.consume();
             }
+            WindowEvent::KeyDown(..) if self.s.dialog_open() => {}
             WindowEvent::KeyDown(code, key) => {
                 use crate::shortcuts::{lookup, Action, Ctx};
                 let mods = *cx.modifiers();
