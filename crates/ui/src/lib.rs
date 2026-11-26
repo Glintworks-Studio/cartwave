@@ -1611,6 +1611,11 @@ impl AppState {
             }
             let dropouts = self.underruns_seen.1.is_some_and(|t| now.duration_since(t) < DROPOUT_HOLD);
             let mut problems = Vec::new();
+            // Dev hook: `CHIPDAW_FAKE_PROBLEM=text` shows a persistent problem
+            // (the status bar's screenshots and tests).
+            if let Some(t) = dev::var("CHIPDAW_FAKE_PROBLEM") {
+                problems.push(t);
+            }
             if !msg.is_empty() {
                 problems.push(msg.clone());
             }
@@ -1828,7 +1833,12 @@ pub fn build_ui(cx: &mut Context) {
 
     // The default chip; the default output filter follows it.
     let chip = SoundChip::WithVrc6;
-    let settings = file::load_settings();
+    let mut settings = file::load_settings();
+    // Dev hook: `CHIPDAW_OVERVIEW=0` starts with the Overview hidden (the
+    // earlier scenario suites' coordinates; not saved unless changed).
+    if dev::var("CHIPDAW_OVERVIEW").is_some_and(|v| v == "0") {
+        settings.show_overview = false;
+    }
     let s = Signals {
         // Opens with nothing selected: the full-height arrangement of the prototype.
         arrangement: Signal::new(state::Arrangement {
@@ -1895,6 +1905,12 @@ pub fn build_ui(cx: &mut Context) {
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
         mem_mb: Signal::new(if dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
     };
+
+    // Dev hook: a persistent problem shown from the start (also kept while
+    // the engine reports its own; see `sync_engine`).
+    if let Some(t) = dev::var("CHIPDAW_FAKE_PROBLEM") {
+        s.problems.set(vec![t]);
+    }
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
     let timer = cx.add_timer(ANIMATION_PUMP, None, |cx, action| {

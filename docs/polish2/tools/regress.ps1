@@ -50,7 +50,7 @@ $States = @(
 )
 if ($New) {
   # Settings > Look & Feel (the new section; after only).
-  $States += ,@("look_feel", @{}, "", { KeyDown 0x11; Key 0xBC; KeyUp 0x11; Start-Sleep -Milliseconds 600; Click 640 168; Start-Sleep -Milliseconds 400 })
+  $States += ,@("look_feel", @{}, "", { KeyDown 0x11; Key 0xBC; KeyUp 0x11; Start-Sleep -Milliseconds 600; Click 611 160; Start-Sleep -Milliseconds 400 })
 }
 foreach ($st in $States) {
   $name, $envs, $extra, $act = $st
