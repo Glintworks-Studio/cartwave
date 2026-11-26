@@ -17,3 +17,4 @@ only when the CEO picks it for a build. Keep entries to a line or two.
 | Suggest a scale on MIDI import | Sam | Listed as proposed in VISION.md |
 | Calibrate the VRC6 level from a real hardware recording | Hannah, Rachel | Buy a Famicom, a VRC6 cartridge and a loopback cable |
 | Submit the upstream Vizia PRs and cpal issues | Leo | Ready in `docs/upstream/`; needs a human to submit |
+| Custom-drawn menu bar (Windows/Linux; macOS keeps the system bar); custom window frame later | CEO (parked, polish pass) | Today: native bar, dark owner-drawn dropdowns (DARK-MENUS.md) |

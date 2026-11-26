@@ -10,7 +10,7 @@
 use vizia::prelude::*;
 
 use crate::shortcuts::{self, Action, Ctx};
-use crate::state::{self, ContextMenuSpec, MenuAction, MenuItem, SubMenu, TimeSel, PALETTE, TICKS_PER_BAR};
+use crate::state::{self, ContextMenuSpec, MenuAction, MenuItem, SubMenu, TimeSel, TICKS_PER_BAR};
 use crate::theme::tokens::Rgba;
 use crate::{AppState, PianoCmd};
 
@@ -28,6 +28,8 @@ pub enum MenuSite {
     Preset(usize),
     /// The spectrum well: its styles.
     Spectrum,
+    /// Settings ▸ Editing: the default track colour's grid.
+    DefaultTrackColour,
 }
 
 /// What an in-place rename edits.
@@ -665,6 +667,10 @@ impl AppState {
                     MenuItem::cmd(A::DrawMode).checked(self.s.piano.with_untracked(|p| p.draw)),
                 ]
             }
+            MenuSite::DefaultTrackColour => {
+                let cur = crate::file::parse_hex(&self.settings.default_track_colour).ok().map(state::rgb_hex);
+                colour_grid(cur, MenuAction::DefaultTrackColour)
+            }
             MenuSite::Spectrum => {
                 let cur = crate::views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style);
                 crate::views::chrome::SpectrumStyle::ALL
@@ -713,17 +719,18 @@ impl AppState {
     /// Opens a submenu next to its row.
     pub(crate) fn open_sub(&mut self, sub: SubMenu, x: f32, y: f32) {
         let items: Vec<MenuItem> = match sub {
+            // The colour grid (polish §3.4): the 70 palette colours, the
+            // current one marked; hovering previews, a click applies to every
+            // selected clip or track.
             SubMenu::ClipColor => {
-                let mut v = vec![MenuItem::new(MenuAction::ClipColor(None), "Track Colour")];
-                v.extend(PALETTE.iter().map(|(n, h)| MenuItem { swatch: Some(Rgba::hex(*h)), ..MenuItem::new(MenuAction::ClipColor(Some(Rgba::hex(*h))), *n) }));
+                let cur = self.s.arrangement.with_untracked(|a| a.first_selected().and_then(|c| c.color).map(state::rgb_hex));
+                let mut v = vec![MenuItem::new(MenuAction::ClipColor(None), "Track Colour").checked(cur.is_none())];
+                v.extend(colour_grid(cur, |c| MenuAction::ClipColor(Some(c))));
                 v
             }
             SubMenu::TrackColor(lane) => {
                 let cur = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| state::rgb_hex(l.color)));
-                PALETTE
-                    .iter()
-                    .map(|(n, h)| MenuItem { swatch: Some(Rgba::hex(*h)), ..MenuItem::new(MenuAction::TrackColor(lane, Rgba::hex(*h)), *n).checked(cur == Some(*h)) })
-                    .collect()
+                colour_grid(cur, move |c| MenuAction::TrackColor(lane, c))
             }
             SubMenu::Grid => {
                 let (snap, o) = self.s.arrangement.with_untracked(|a| (a.snap, a.grid_opts));
@@ -782,23 +789,15 @@ impl AppState {
                 a.snap = g;
                 a.grid_opts.adaptive = false;
             }),
-            MenuAction::ClipColor(c) => {
-                self.s.arrangement.update(|a| {
-                    for id in a.selection.clone() {
-                        if let Some(clip) = a.clip_mut(id) {
-                            clip.color = c;
-                        }
-                    }
-                });
+            MenuAction::ClipColor(_) | MenuAction::TrackColor(..) => {
+                // A preview may have applied it already: keep it, commit once.
+                self.colour_backup = None;
+                self.apply_colour(action);
                 self.commit();
             }
-            MenuAction::TrackColor(lane, c) => {
-                self.s.arrangement.update(|a| {
-                    if let Some(l) = a.lanes.get_mut(lane) {
-                        l.color = c;
-                    }
-                });
-                self.commit();
+            MenuAction::DefaultTrackColour(c) => {
+                self.settings.default_track_colour = format!("#{:06X}", state::rgb_hex(c));
+                self.save_settings();
             }
             MenuAction::RenameTrack(l) => self.open_rename(RenameTarget::Track(l)),
             MenuAction::PresetRename(i) => self.open_rename(RenameTarget::Preset(i)),
@@ -822,19 +821,101 @@ impl AppState {
         }
     }
 
+    /// Applies a colour action to its targets: every selected clip, or every
+    /// selected track when the menu's track is one of them (else that track).
+    pub(crate) fn apply_colour(&mut self, action: MenuAction) {
+        match action {
+            MenuAction::ClipColor(c) => self.s.arrangement.update(|a| {
+                for id in a.selection.clone() {
+                    if let Some(clip) = a.clip_mut(id) {
+                        clip.color = c;
+                    }
+                }
+            }),
+            MenuAction::TrackColor(lane, c) => self.s.arrangement.update(|a| {
+                let lanes: Vec<usize> = if a.track_sel.contains(&lane) { a.track_sel.clone() } else { vec![lane] };
+                for l in lanes {
+                    if let Some(l) = a.lanes.get_mut(l) {
+                        l.color = c;
+                    }
+                }
+            }),
+            _ => {}
+        }
+    }
+
+    /// Hovering a colour previews it on the targets (not an undo step);
+    /// `None` puts the colours back. The first preview keeps the originals.
+    pub(crate) fn preview_colour(&mut self, action: Option<MenuAction>) {
+        self.restore_colours();
+        let Some(action) = action else { return };
+        let backup = self.s.arrangement.with_untracked(|a| match action {
+            MenuAction::ClipColor(_) => Some(ColourBackup::Clips(a.selection.iter().filter_map(|id| a.clip(*id).map(|c| (*id, c.color))).collect())),
+            MenuAction::TrackColor(lane, _) => {
+                let lanes: Vec<usize> = if a.track_sel.contains(&lane) { a.track_sel.clone() } else { vec![lane] };
+                Some(ColourBackup::Lanes(lanes.iter().filter_map(|l| a.lanes.get(*l).map(|x| (*l, x.color))).collect()))
+            }
+            _ => None,
+        });
+        if backup.is_some() {
+            self.colour_backup = backup;
+            self.apply_colour(action);
+        }
+    }
+
+    /// Puts back the colours a preview changed (the menu closed without a pick).
+    pub(crate) fn restore_colours(&mut self) {
+        let Some(b) = self.colour_backup.take() else { return };
+        self.s.arrangement.update(|a| match &b {
+            ColourBackup::Clips(v) => {
+                for (id, c) in v {
+                    if let Some(clip) = a.clip_mut(*id) {
+                        clip.color = *c;
+                    }
+                }
+            }
+            ColourBackup::Lanes(v) => {
+                for (l, c) in v {
+                    if let Some(lane) = a.lanes.get_mut(*l) {
+                        lane.color = *c;
+                    }
+                }
+            }
+        });
+    }
+
     /// Insert MIDI Clip (Cmd+Shift+M): one clip per open track in the time
     /// selection.
     pub(crate) fn insert_clips(&mut self) {
         let Some(ts) = self.s.time_sel.get_untracked() else { return self.set_status(WHY_NO_TIMESEL.into()) };
         let open = self.lane_open();
+        let random = self.settings.new_clip_colour == "random";
         self.s.arrangement.update(|a| {
             let ids: Vec<u32> = (ts.lane0..=ts.lane1.min(a.lanes.len() - 1)).filter(|&l| open(l)).map(|lane| a.add_clip(lane, ts.start, ts.end - ts.start)).collect();
             a.resolve_overlaps(&ids);
+            a.colour_new_clips(&ids, random);
             a.selection = ids;
         });
         self.s.time_sel.set(None);
         self.commit();
     }
+}
+
+/// The colours a preview replaced, to put back.
+#[derive(Clone, Debug)]
+pub(crate) enum ColourBackup {
+    Clips(Vec<(u32, Option<Rgba>)>),
+    Lanes(Vec<(usize, Rgba)>),
+}
+
+/// The 70 palette colours as grid cells, `cur` (0xRRGGBB) marked.
+fn colour_grid(cur: Option<u32>, action: impl Fn(Rgba) -> MenuAction) -> Vec<MenuItem> {
+    crate::theme::palette::all()
+        .map(|c| {
+            let hex = state::rgb_hex(c);
+            MenuItem { swatch: Some(c), grid: true, ..MenuItem::new(action(c), format!("#{hex:06X}")).checked(cur == Some(hex)) }
+        })
+        .collect()
 }
 
 /// Zoom factor of one + / − press, and how many Z steps X remembers.

@@ -485,7 +485,8 @@ impl View for PresetList {
                     if is_preset {
                         let c = preset_color(kinds);
                         let g = vg::Rect::from_xywh(gx, gy - 4.0 * s, 8.0 * s, 8.0 * s);
-                        canvas.draw_rrect(gfx::rrect(g, 2.0 * s), &gfx::vgrad(g, c, c.darken(0.35)));
+                        let (top, bottom) = crate::theme::palette::marker(c);
+                        canvas.draw_rrect(gfx::rrect(g, 2.0 * s), &gfx::vgrad(g, top, bottom));
                     } else {
                         for k in 0..3 {
                             let g = vg::Rect::from_xywh(gx, gy - 5.0 * s + k as f32 * 4.0 * s, 8.0 * s, 2.0 * s);
@@ -653,7 +654,8 @@ impl View for DragGhost {
         gfx::top_sheen(canvas, &rr, gfx::hairline(s), KEY_STROKE, KEY_SHEEN);
         let c = preset_color(p.kinds);
         let g = vg::Rect::from_xywh(r.left + 12.0 * s, r.center_y() - 4.0 * s, 8.0 * s, 8.0 * s);
-        canvas.draw_rrect(gfx::rrect(g, 2.0 * s), &gfx::fill(c));
+        let (top, bottom) = crate::theme::palette::marker(c);
+        canvas.draw_rrect(gfx::rrect(g, 2.0 * s), &gfx::vgrad(g, top, bottom));
         let base = gfx::baseline_for_center(&f, r.center_y());
         gfx::draw_text(canvas, &label, (r.left + 24.0 * s).round(), base.round(), &f, TEXT_HI);
     }
@@ -676,9 +678,9 @@ pub struct PreviewKey {
     hover: bool,
 }
 
-/// The key's size (logical px): fits the 16 px browser header.
-const PREVIEW_W: f32 = 28.0;
-const PREVIEW_H: f32 = 16.0;
+/// The key's size (logical px): 24 × 24, centred on the 24 px title row.
+const PREVIEW_W: f32 = 24.0;
+const PREVIEW_H: f32 = 24.0;
 
 impl PreviewKey {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {

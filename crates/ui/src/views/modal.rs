@@ -59,6 +59,10 @@ pub enum Set {
     Autosave(u32),
     OfferRecovery(bool),
     OpenLast(bool),
+    /// Settings ▸ Editing ▸ Track and Clip Colors.
+    AutoTrackColours(bool),
+    ReducedAutoColours(bool),
+    NewClipColour(String),
     Unsilence(String),
     UnsilenceAll,
 }
@@ -238,6 +242,82 @@ fn editing(cx: &mut Context, st: &Settings) {
         choice(cx, "On", st.follow_playhead, true, set(Set::Follow(true)));
         choice(cx, "Off", !st.follow_playhead, true, set(Set::Follow(false)));
     });
+    // Track and Clip Colors (polish §3.5; the reference's Theme & Colors,
+    // Live 12 manual §2.3.2): the behaviour, with our own palette.
+    Label::new(cx, "TRACK AND CLIP COLOURS").class("section-title").class("modal-subhead");
+    row(cx, "Auto-assign track colours", |cx| {
+        choice(cx, "On", st.auto_track_colours, true, set(Set::AutoTrackColours(true)));
+        choice(cx, "Off", !st.auto_track_colours, true, set(Set::AutoTrackColours(false)));
+    });
+    let auto = st.auto_track_colours;
+    let def = crate::file::parse_hex(&st.default_track_colour).unwrap_or(crate::theme::tokens::LANE_TRI);
+    row(cx, "Default track colour", move |cx| {
+        let why = if auto { "Used when auto-assign is off." } else { "New tracks get this colour. Click to choose another." };
+        SwatchKey::new(cx, def, !auto).tooltip(move |cx| crate::tip(cx, why));
+    });
+    row(cx, "Reduced automatic colours", |cx| {
+        choice(cx, "On", st.reduced_auto_colours, true, set(Set::ReducedAutoColours(true)));
+        choice(cx, "Off", !st.reduced_auto_colours, true, set(Set::ReducedAutoColours(false)));
+    });
+    row(cx, "New clip colour", |cx| {
+        choice(cx, "Track colour", st.new_clip_colour != "random", true, set(Set::NewClipColour("track".into())));
+        choice(cx, "Random", st.new_clip_colour == "random", true, set(Set::NewClipColour("random".into())));
+    });
+    note(cx, "Automatic colours come from the palette, each as far as possible from the tracks around it. Reduced uses its middle row only. Tracks can be added from Batch 4.");
+}
+
+/// The default track colour's key: a swatch in the plain hairline tier;
+/// a click opens the colour grid (the context menu's).
+pub struct SwatchKey {
+    color: crate::theme::tokens::Rgba,
+    enabled: bool,
+}
+
+impl SwatchKey {
+    pub fn new(cx: &mut Context, color: crate::theme::tokens::Rgba, enabled: bool) -> Handle<'_, Self> {
+        Self { color, enabled }
+            .build(cx, |_| {})
+            .class("swatch-key")
+            .width(Pixels(48.0))
+            .height(Pixels(24.0))
+            .cursor(if enabled { CursorIcon::Hand } else { CursorIcon::Default })
+    }
+}
+
+impl View for SwatchKey {
+    fn element(&self) -> Option<&'static str> {
+        Some("swatch-key")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| {
+            if let WindowEvent::MouseDown(MouseButton::Left) = we {
+                if self.enabled {
+                    let b = cx.bounds();
+                    let s = cx.scale_factor();
+                    cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::DefaultTrackColour, b.x / s, (b.y + b.h) / s + 4.0));
+                }
+                meta.consume();
+            }
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        use crate::theme::tokens::{Rgba, RADIUS_KEY, STROKE};
+        use crate::views::gfx;
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        let rr = gfx::rrect(r, RADIUS_KEY * s);
+        canvas.draw_rrect(rr, &gfx::fill(Rgba::hex(0x151515)));
+        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(STROKE));
+        let sw = gfx::snap(r.with_inset((6.0 * s, 6.0 * s)));
+        let (top, bottom) = crate::theme::palette::swatch(self.color);
+        let srr = gfx::rrect(sw, 3.0 * s);
+        canvas.draw_rrect(srr, &gfx::vgrad(sw, top, bottom));
+        if !self.enabled {
+            canvas.draw_rrect(rr, &gfx::fill(Rgba::black(0.55)));
+        }
+    }
 }
 
 fn files(cx: &mut Context, st: &Settings) {

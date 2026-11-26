@@ -367,13 +367,18 @@ label {
 .browser {
     height: 1s;
     background-image: linear-gradient(to bottom, #101010, #0A0A0A);
-    padding-top: 12px;
+    /* 4 + the 24 px header + 8 = 36: the search field stays where it was
+       when the header was 16 px (polish pass). */
+    padding-top: 4px;
     padding-bottom: 12px;
     gap: 8px;
 }
 
+/* The title row: "BROWSER" (the inspector's section-title style), the
+   24 px Preview key centred on the row, 8 px to the shortcut text, 12 px in
+   from both edges like the list below. */
 .browser-head {
-    height: 16px;
+    height: 24px;
     padding-left: 12px;
     padding-right: 12px;
     alignment: left;
@@ -608,4 +613,9 @@ rename-box {
     gap: 4px;
     child-top: 1s;
     child-bottom: 1s;
+}
+
+/* Settings ▸ Editing: the Track and Clip Colors group's heading (polish). */
+.modal-subhead {
+    padding-top: 12px;
 }

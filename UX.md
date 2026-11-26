@@ -114,10 +114,13 @@ Support/ChipDAW`). Every field has a default, unknown fields are ignored (today'
 | Display | Frame-rate cap (replaces F6) | **60 fps** (options 60 / 120; Off in dev mode only) | S | ✓ |
 | | Interface scale | 100% (follows the OS) | S | ✓ · **done** (B3): 75–200%, live |
 | | Clock shows | Time (m:ss.cc) | S | ✓ · **retired** (design pass): both are shown |
-| | Dark menus (Windows) | **Off** (owner-drawn dropdowns; docs/design/DARK-MENUS.md) | S | design pass: built, waits for the CEO's approval to default on |
+| | Dark menus (Windows) | **On** (owner-drawn dropdowns; docs/design/DARK-MENUS.md) | S | polish pass: **on by default** (CEO-approved) |
 | Editing | Default arrangement grid | 1/16 | S | ✓ |
 | | Default piano-roll grid | 1/16 | S | ✓ |
 | | Follow playhead | On | S | ✓ |
+| | **Track and Clip Colors:** Auto-assign track colours | On (off: the **Default track colour**, #7F86E0) | S | polish pass · **done** (used by Batch 4's Create Track) |
+| | Reduced automatic colours | Off (on: the palette's middle row, 14 colours) | S | polish pass · **done** |
+| | New clip colour | **Track colour** (or Random: distinct from the clips beside it) | S | polish pass · **done** |
 | Files | Autosave interval | 2 min | S | ✓ |
 | | Offer recovery after an unsaved quit | On | M | ✓ |
 | | Open last project at start | Off | S | ✓ |
@@ -153,6 +156,23 @@ Stored **in the project file** (v5 since the design pass).
 | Loop on/off | Capsule loop light (+ Ctrl+L sets and enables) | — |
 | Rewind | Home key / Stop when stopped | Clock double-click |
 | Debug tools | `CHIPDAW_DEV=1` builds only | F3–F7 in release |
+
+## 4a. Colours (polish pass)
+
+Reference behaviour, Live 12 Reference Manual, chapter 2 "First Steps", §2.3.2 "Theme & Colors"
+(paraphrased): track colours can be auto-assigned or not, with a default colour for all tracks;
+"Reduced Automatic Colors" lowers the number of colours used for auto-assigning; the Clip Color
+setting makes new clips get random colours or their track's colour. The manual gives no defaults
+and doesn't describe the colour chooser itself, so the defaults and the grid below are ours.
+**Copied: the behaviour. Not copied: the palette or the look.**
+
+| # | Behaviour | Pri | Status |
+|---|---|---|---|
+| C1 | **Palette**: our own 70 base colours, 5 × 14 (hue, then lightness), `theme/palette.rs`; today's colours kept; none passes for the toggle lime (one logged exception, the legacy pulse colour) | S | done |
+| C2 | **Colour grid**: Colour ▸ in the track and clip menus opens the 70 colours in the menu itself; hovering previews on the selection; a click applies to every selected track or clip (one undo step, unsaved mark, saved); the current colour is ringed | S | done |
+| C3 | **Clip text** is `#111111` or `#F2F2F2`, whichever reaches 4.5:1 on the header | M | done |
+| C4 | **Settings ▸ Editing ▸ Track and Clip Colors** (§2) | S | done |
+| C5 | New clips follow **New clip colour**; `next_track_color` is ready for Create Track (Batch 4) | S | done (clips) / ready (tracks) |
 
 ## 4b. The top bar (design pass, Option D)
 
@@ -303,6 +323,11 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | AT-31 (B5, I3) | Save as Preset (a visible button) writes a user preset; its browser menu offers Rename, Delete, Show in Explorer |
 | [unit] (A9–A12, F-22, P7, P9, R46, R47, format v4) | `state::edit_tests`, `notes::tests::batch3_note_ops`, the undo property test (split, consolidate, time commands, paste, rename, colour), `tests/migration.rs` (v3 → v4 hashes), `tests/robustness.rs` (v4 names and colours) |
 
+| PL-01 (C2) | Colour ▸ on a track, a click on a grid cell: the track takes it, one Ctrl+Z restores it, the file saves it |
+| PL-02 (C2) | Two clips selected, Colour ▸ cell: both take it |
+| PL-03 (C5) | New clip colour Random: a clip inserted with Ctrl+Shift+M gets a palette colour of its own |
+| PL-04 (polish §2.4) | At 1536×816 with the inspector open, the wheel over the headers scrolls the lanes |
+| PL-05 (polish §2.4) | The window can't be made smaller than 1296×720 (logical); the top bar's groups don't touch there |
 | DP-01 (TB4) | Four taps 500 ms apart → 120 BPM; one Ctrl+Z restores the tempo; the TAP key taps too |
 | DP-02 (TB5) | The spectrum style chosen from its menu is in settings.json and back after a restart |
 | DP-03 (B7) | A click and ↓ each audition a preset; with the Preview key off a click is silent; while playing it says why |

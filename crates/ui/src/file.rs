@@ -344,7 +344,7 @@ fn hex_text(c: u32) -> String {
 }
 
 /// "#RRGGBB" → a colour; errors are user-facing.
-fn parse_hex(t: &str) -> Result<crate::theme::tokens::Rgba, String> {
+pub fn parse_hex(t: &str) -> Result<crate::theme::tokens::Rgba, String> {
     let h = t.strip_prefix('#').filter(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit())).ok_or_else(|| format!("Bad colour \"{t}\" (use #RRGGBB)."))?;
     Ok(crate::theme::tokens::Rgba::hex(u32::from_str_radix(h, 16).map_err(|_| format!("Bad colour \"{t}\"."))?))
 }
@@ -802,8 +802,17 @@ pub struct Settings {
     pub spectrum_style: String,
     /// The browser auditions a preset when it is selected (its Preview key).
     pub preview_on_select: bool,
+    /// Settings ▸ Editing ▸ Track and Clip Colors (polish pass; the
+    /// reference's Theme & Colors, Live 12 manual §2.3.2): new tracks get
+    /// an automatic colour, or `default_track_colour` (#RRGGBB) when off.
+    pub auto_track_colours: bool,
+    pub default_track_colour: String,
+    /// Automatic picks use fewer colours (the palette's middle row).
+    pub reduced_auto_colours: bool,
+    /// New clips: "track" (the track's colour) or "random".
+    pub new_clip_colour: String,
     /// Windows: the menu bar's dropdowns are drawn dark (Settings > Display;
-    /// off by default, docs/design/DARK-MENUS.md).
+    /// on by default since the polish pass, docs/design/DARK-MENUS.md).
     pub dark_menus: bool,
 }
 
@@ -831,7 +840,12 @@ impl Default for Settings {
             ui_scale: 100,
             spectrum_style: "bars".into(),
             preview_on_select: true,
-            dark_menus: false,
+            // On by default since the polish pass (the CEO approved it).
+            dark_menus: true,
+            auto_track_colours: true,
+            default_track_colour: "#7F86E0".into(),
+            reduced_auto_colours: false,
+            new_clip_colour: "track".into(),
         }
     }
 }
@@ -1174,21 +1188,21 @@ mod tests {
     /// Dark menus are off unless the user turns them on, and the choice
     /// survives a save and load of settings.json.
     #[test]
-    fn dark_menus_default_off_and_round_trip() {
-        assert!(!Settings::default().dark_menus);
+    fn dark_menus_default_on_and_round_trip() {
+        assert!(Settings::default().dark_menus, "on by default (polish pass)");
         let old: Settings = serde_json::from_str(r#"{"ui_scale": 125}"#).unwrap();
-        assert!(!old.dark_menus, "a file from before the setting keeps it off");
-        let on = Settings { dark_menus: true, ..Settings::default() };
-        let text = serde_json::to_string_pretty(&on).unwrap();
-        assert!(text.contains("\"dark_menus\": true"));
+        assert!(old.dark_menus, "a file from before the setting gets the default: on");
+        let off = Settings { dark_menus: false, ..Settings::default() };
+        let text = serde_json::to_string_pretty(&off).unwrap();
+        assert!(text.contains("\"dark_menus\": false"));
         let back: Settings = serde_json::from_str(&text).unwrap();
-        assert_eq!(back, on);
+        assert_eq!(back, off, "turning it off is kept");
         // Through the real file functions, in a scratch data dir.
         let dir = std::env::temp_dir().join(format!("chipdaw-dark-menus-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(dir.join("settings.json"), &text).unwrap();
         let read: Settings = serde_json::from_str(&std::fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();
-        assert!(read.dark_menus);
+        assert!(!read.dark_menus);
         let _ = std::fs::remove_dir_all(dir);
     }
 

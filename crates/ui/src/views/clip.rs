@@ -48,13 +48,9 @@ pub struct ClipPaint<'a> {
     pub scale: f32,
 }
 
-/// Option D clips (VISUAL-SPEC.md §2.4): a body of the lane colour at
-/// 22% → 10% (the lane grid shows through), a 16 px header in the full lane
-/// colour with Inter 600 11 #111111 text, a 1 px border in the lane colour
-/// at 50%, radius 4. Hover and selection brighten the tint and the border.
-const BODY_TOP_A: f32 = 0.22;
-const BODY_BOTTOM_A: f32 = 0.10;
-const EDGE_A: f32 = 0.5;
+/// Option D clips (VISUAL-SPEC.md §2.4): the shades come from
+/// `theme::palette::clip` (body 22% → 10%, a 16 px header, a 1 px border at
+/// 50%, header text #111111 or #F2F2F2 by contrast); radius 4.
 const NAME_PX: f32 = 11.0;
 const NAME_PAD: f32 = 8.0;
 
@@ -86,9 +82,9 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
         canvas.save_layer_alpha_f(r.with_outset((2.0 * s, 2.0 * s)), dragging_alpha);
     }
 
-    let lane = p.color.lighten(0.06 * a.hover + 0.04 * a.selected);
-    let tint = 0.04 * a.hover + 0.06 * a.selected;
-    canvas.draw_rrect(rr, &gfx::vgrad(r, lane.with_alpha(BODY_TOP_A + tint), lane.with_alpha(BODY_BOTTOM_A + tint)));
+    // Every shade comes from the palette recipe (theme::palette::clip).
+    let k = crate::theme::palette::clip(p.color, a.hover, a.selected);
+    canvas.draw_rrect(rr, &gfx::vgrad(r, k.body_top, k.body_bottom));
 
     // Header: 16 px inside the border, the full lane colour.
     let inner = r.with_inset((hl, hl));
@@ -96,7 +92,7 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
     canvas.save();
     canvas.clip_rrect(gfx::rrect(inner, (RADIUS_CLIP * s - hl).max(0.0)), vg::ClipOp::Intersect, true);
     let header = vg::Rect::from_xywh(inner.left, inner.top, inner.width(), header_h);
-    canvas.draw_rect(header, &gfx::fill(lane));
+    canvas.draw_rect(header, &gfx::fill(k.header));
 
     // Mini note preview in the lane colour (kept from before: not in the mockup).
     if !p.notes.is_empty() && r.height() > header_h + 8.0 * s {
@@ -105,7 +101,7 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
         let area_top = inner.top + header_h + 4.0 * s;
         let area_bot = r.bottom - 4.0 * s;
         let bar_h = (2.0 * s).max(((area_bot - area_top) / (span + 1.0)).min(3.0 * s));
-        let paint = gfx::fill(lane.lighten(0.12).with_alpha(0.92));
+        let paint = gfx::fill(k.note);
         for n in p.notes {
             let x0 = r.left + n.start as f32 * p.px_per_tick;
             let x1 = r.left + (n.start + n.len).min(p.len_ticks) as f32 * p.px_per_tick;
@@ -128,13 +124,12 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
             Some(i) => format!("{}  ·  {i}", p.name),
             None => p.name.to_string(),
         };
-        gfx::draw_text_clipped(canvas, &text, x, base_y, r.right - x - 4.0 * s, &f, CLIP_INK);
+        gfx::draw_text_clipped(canvas, &text, x, base_y, r.right - x - 4.0 * s, &f, k.ink);
     }
     canvas.restore();
 
     // The 1 px border in the lane colour; selection brightens it.
-    let sel = a.selected;
-    gfx::ring(canvas, &rr, hl, &gfx::fill(lane.with_alpha(EDGE_A + 0.15 * a.hover + 0.45 * sel)));
+    gfx::ring(canvas, &rr, hl, &gfx::fill(k.edge));
 
     if layered {
         canvas.restore();

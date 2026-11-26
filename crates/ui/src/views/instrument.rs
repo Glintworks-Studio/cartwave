@@ -338,7 +338,8 @@ impl View for InstrumentView {
                     for (j, v) in vol.iter().enumerate() {
                         let h = bar.height() * (*v as f32 / 15.0);
                         let r = vg::Rect::from_xywh(bar.left + bw * j as f32, bar.bottom - h, (bw - s).max(s), h);
-                        canvas.draw_rect(r, &gfx::vgrad(r, color.with_alpha(0.9), color.darken(0.3).with_alpha(0.7)));
+                        let (top, bottom) = crate::theme::palette::graph_fill(color);
+                        canvas.draw_rect(r, &gfx::vgrad(r, top, bottom));
                     }
                 }
                 lo = k.top.saturating_add(1);
@@ -389,9 +390,9 @@ impl View for InstrumentView {
                 let bar = vg::Rect::from_ltrb(x0 + 1.0 * s, top, x0 + bw - 1.0 * s, bot.max(top + 1.5 * s));
                 let in_loop = q.loop_at != NONE && j as u8 >= q.loop_at && (q.release_at == NONE || j as u8 <= q.release_at || q.loop_at > q.release_at);
                 let after_rel = q.release_at != NONE && j as u8 > q.release_at;
-                let c = if after_rel { color.darken(0.35) } else { color };
                 let alpha = if in_loop { 1.0 } else { 0.78 };
-                canvas.draw_rect(bar, &gfx::vgrad(bar, c.lighten(0.1).with_alpha(alpha), c.darken(0.25).with_alpha(alpha)));
+                let (bar_top, bar_bottom) = crate::theme::palette::graph_bar(color, after_rel, alpha);
+                canvas.draw_rect(bar, &gfx::vgrad(bar, bar_top, bar_bottom));
             }
             // Loop and release markers, each with a grab tab at the top.
             for (idx, txt, col) in [(q.loop_at, "↺", NEUTRAL_HI), (q.release_at, "R", RECORD)] {

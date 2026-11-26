@@ -271,6 +271,8 @@ pub struct AppState {
     /// The window's scale factor and logical size, as of the last tick.
     scale: f32,
     window_logical: (f32, f32),
+    /// The colours a colour-grid hover preview replaced.
+    colour_backup: Option<edit::ColourBackup>,
     /// A brief audition (arrow keys in the browser) ends then.
     audition_until: Option<Instant>,
     /// When MEM was last read.
@@ -305,6 +307,8 @@ pub enum AppEvent {
     TogglePreviewOnSelect,
     /// Audition a preset for a moment (selected with the arrow keys).
     AuditionBrief(usize),
+    /// Hovering a colour grid cell previews it (`None`: put the colours back).
+    ColourPreview(Option<MenuAction>),
     /// Project Settings: the project's bit depth (16 / 24).
     SetBitDepth(u16),
     /// Project Settings: the project's sample rate (44 100 / 48 000).
@@ -650,8 +654,15 @@ impl Model for AppState {
                 self.clamp_lane_scroll();
             }
             AppEvent::SetLoop(start, end) => self.set_song_loop(*start, *end, false),
-            AppEvent::CloseMenu => self.s.menu.set(None),
+            AppEvent::CloseMenu => {
+                self.restore_colours();
+                self.s.menu.set(None);
+            }
+            AppEvent::ColourPreview(a) => self.preview_colour(*a),
             AppEvent::Menu(action) => {
+                if !matches!(action, MenuAction::ClipColor(_) | MenuAction::TrackColor(..)) {
+                    self.restore_colours();
+                }
                 if !matches!(action, MenuAction::Sub(_) | MenuAction::Separator) {
                     self.s.menu.set(None);
                     self.run_menu_action(cx, *action);
@@ -680,6 +691,9 @@ impl Model for AppState {
                 let v = self.s.lane_scroll.get_untracked() + dy;
                 self.s.lane_scroll.set_if_changed(v);
                 self.clamp_lane_scroll();
+                if dev::enabled() {
+                    eprintln!("dev: lane scroll {:.0} max {:.0}", self.s.lane_scroll.get_untracked(), self.s.lane_scroll_max.get_untracked());
+                }
             }
             AppEvent::ToggleLoop => {
                 self.s.loop_on.update(|l| *l = !*l);
@@ -949,6 +963,8 @@ impl AppState {
         self.scale = cx.scale_factor();
         let win = cx.cache.get_bounds(Entity::root());
         self.window_logical = (win.w / self.scale, win.h / self.scale);
+        // The lane viewport follows the window and the inspector.
+        self.clamp_lane_scroll();
         self.tests.maybe_stall();
         self.idle_housekeeping();
         self.install_menus(cx);
@@ -1885,6 +1901,7 @@ pub fn build_ui(cx: &mut Context) {
         scale: 1.0,
         window_logical: (MIN_WINDOW_SIZE.0 as f32, MIN_WINDOW_SIZE.1 as f32),
         audition_until: None,
+        colour_backup: None,
         last_mem: None,
         tap: tap::TapTempo::default(),
         tap_step: None,
@@ -1954,10 +1971,11 @@ pub fn build_ui(cx: &mut Context) {
             }
         });
         notice(cx, s);
-        context_menu(cx, s);
         views::rename::build(cx, s);
         views::export_dialog::build(cx, s);
         views::modal::build(cx, s);
+        // Menus open above the modal panels too (Settings' colour grid).
+        context_menu(cx, s);
     })
     .class("shell");
 
@@ -2017,11 +2035,13 @@ impl AppState {
     }
 }
 
-/// Smallest window (logical px) that shows everything at its designed size:
+/// Smallest window (logical px):
 /// - width: the inspector's fixed sections (dials, channels) plus the
 ///   smallest CLIP section and the panel's padding and gaps, or the top
-///   bar's three groups if wider;
-/// - height: top bar + ruler + eight full lanes + the inspector panel.
+///   bar's three groups if wider (1296: the top bar never clips or touches);
+/// - height: 720 (polish pass): the lanes scroll, so a 1080p laptop at 125%
+///   (1536×816 logical without the taskbar) fits; five lanes still show
+///   above the inspector.
 pub const MIN_WINDOW_SIZE: (u32, u32) = (
     // The inspector (two paddings and two gaps), but never narrower than
     // the top bar's fixed controls need.
@@ -2029,9 +2049,10 @@ pub const MIN_WINDOW_SIZE: (u32, u32) = (
         INSPECTOR_PAD * 4 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + INSTRUMENT_SECTION_MIN_W as u32,
         TOPBAR_MIN_W,
     ),
-    (theme::tokens::TOPBAR_HEIGHT + theme::tokens::RULER_HEIGHT + 8.0 * LANE_H_NORMAL) as u32
-        + INSPECTOR_HEIGHT,
+    MIN_WINDOW_H,
 );
+/// The minimum window height (logical px, on the 4 px grid).
+const MIN_WINDOW_H: u32 = 720;
 /// The device inspector's height, padding and gap; must match `.device` in style.css.
 const INSPECTOR_HEIGHT: u32 = 232;
 const INSPECTOR_PAD: u32 = 16;
@@ -2043,10 +2064,11 @@ const CLIP_SECTION_MIN_W: u32 = 240;
 const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
 // 320, not 480: the room the CHANNELS meters left goes to the instrument editor.
 const CLIP_SECTION_MAX_W: f32 = 320.0;
-/// The narrowest window the top bar's three groups fit (Option D: keys
-/// 297 + display and TAP 628 + spectrum and CPU/MEM 312 + 2 × 16 padding =
-/// 1269, on the 4 px grid).
-const TOPBAR_MIN_W: u32 = 1272;
+/// The narrowest window the top bar's three groups fit with room between
+/// them: keys 297 + display and TAP 628 + spectrum and CPU/MEM 312 + 2 × 16
+/// padding = 1269, plus the groups' own 12 px gap on each side, on the 4 px
+/// grid (polish pass: at 1272 they touched).
+const TOPBAR_MIN_W: u32 = 1296;
 
 const fn max_u32(a: u32, b: u32) -> u32 {
     if a > b {
@@ -2843,15 +2865,18 @@ impl AppState {
         self.clamp_lane_scroll();
     }
 
-    /// Keeps the lane scroll inside what the lane viewport allows: all lanes
-    /// fit (no scroll) unless the piano roll's split makes the viewport short.
+    /// Keeps the lane scroll inside what the lane viewport allows. The lanes
+    /// always scroll when they don't fit (polish pass): under the piano
+    /// roll's split, or in a short window (above the inspector, if open).
     fn clamp_lane_scroll(&mut self) {
         let content = 8.0 * LANE_H_NORMAL;
-        let max = if self.s.piano_open.get_untracked() {
-            (content - self.s.piano_pane_h.get_untracked()).max(0.0)
+        let viewport = if self.s.piano_open.get_untracked() {
+            self.s.piano_pane_h.get_untracked()
         } else {
-            0.0
+            let inspector = if self.s.inspector.get_untracked() { INSPECTOR_HEIGHT as f32 } else { 0.0 };
+            self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector
         };
+        let max = (content - viewport).max(0.0);
         self.s.lane_scroll_max.set_if_changed(max);
         let v = self.s.lane_scroll.get_untracked().clamp(0.0, max);
         self.s.lane_scroll.set_if_changed(v);
@@ -3372,6 +3397,9 @@ impl AppState {
                 st.follow_playhead = f;
                 self.s.piano.update(|p| p.follow = f);
             }
+            Set::AutoTrackColours(b) => st.auto_track_colours = b,
+            Set::ReducedAutoColours(b) => st.reduced_auto_colours = b,
+            Set::NewClipColour(v) => st.new_clip_colour = v,
             Set::Autosave(secs) => st.autosave_secs = secs,
             Set::OfferRecovery(b) => st.offer_recovery = b,
             Set::OpenLast(b) => st.open_last = b,

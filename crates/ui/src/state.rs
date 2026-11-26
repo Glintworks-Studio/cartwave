@@ -358,6 +358,8 @@ pub enum MenuAction {
     PresetReveal(usize),
     /// The spectrum's style.
     SpectrumStyle(crate::views::chrome::SpectrumStyle),
+    /// Settings ▸ Editing: the default track colour (auto colours off).
+    DefaultTrackColour(Rgba),
     /// Opens a submenu.
     Sub(SubMenu),
     Separator,
@@ -384,11 +386,13 @@ pub struct MenuItem {
     pub checked: bool,
     /// A colour swatch (Colour ▸ items).
     pub swatch: Option<Rgba>,
+    /// A cell of the colour grid (swatch only, laid out 14 to a row).
+    pub grid: bool,
 }
 
 impl MenuItem {
     pub fn new(action: MenuAction, label: impl Into<String>) -> Self {
-        Self { action, label: label.into(), shortcut: String::new(), enabled: true, reason: String::new(), checked: false, swatch: None }
+        Self { action, label: label.into(), shortcut: String::new(), enabled: true, reason: String::new(), checked: false, swatch: None, grid: false }
     }
 
     /// A shortcut-table command: its name and key.
@@ -1674,6 +1678,39 @@ pub const LANE_H_NORMAL: f32 = 73.0;
 /// Lanes keep their full height and scroll vertically.
 pub const PIANO_PANE_DEFAULT: f32 = 4.0 * LANE_H_NORMAL;
 pub const PIANO_PANE_MIN: f32 = LANE_H_NORMAL;
+
+impl Arrangement {
+    /// New clips' colours (Settings ▸ Editing ▸ New clip colour): with
+    /// `random`, each gets a palette colour distinct from the clips next to
+    /// it on its track and from the track's colour; else the track's
+    /// (no colour of its own).
+    pub fn colour_new_clips(&mut self, ids: &[u32], random: bool) {
+        if !random {
+            return;
+        }
+        for id in ids {
+            let Some((lane, start, end)) = self.clip(*id).map(|c| (c.lane, c.start_ticks, c.end_ticks())) else { continue };
+            let track = self.lanes[lane].color;
+            // The nearest clip before and after on the track.
+            let mut before: Option<(u32, Rgba)> = None;
+            let mut after: Option<(u32, Rgba)> = None;
+            for c in self.clips.iter().filter(|c| c.lane == lane && c.id != *id) {
+                let col = c.color.unwrap_or(track);
+                if c.end_ticks() <= start && before.is_none_or(|(e, _)| c.end_ticks() > e) {
+                    before = Some((c.end_ticks(), col));
+                }
+                if c.start_ticks >= end && after.is_none_or(|(s, _)| c.start_ticks < s) {
+                    after = Some((c.start_ticks, col));
+                }
+            }
+            let near: Vec<Rgba> = before.into_iter().chain(after).map(|(_, c)| c).collect();
+            let pick = crate::theme::palette::next_clip_color(&near, track, false);
+            if let Some(c) = self.clip_mut(*id) {
+                c.color = Some(pick);
+            }
+        }
+    }
+}
 
 /// A track header's volume fader (design pass §2.4): the lane's channel
 /// volume, the same value as the inspector's Volume dial (undoable, saved).

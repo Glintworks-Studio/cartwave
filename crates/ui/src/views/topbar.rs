@@ -482,19 +482,16 @@ impl DisplayWell {
                 h.needs_redraw();
             }
         };
-        let (r2, r3, r4, r5, r6) = (redraw.clone(), redraw.clone(), redraw.clone(), redraw.clone(), redraw.clone());
         Self { s, scrub: None, wheel: Default::default(), hover_bpm: false, overhang: RefCell::new(None), indicators: RefCell::new(None), static_layer: RefCell::new(None) }
             .build(cx, |_| {})
             .class("display")
             .id("display")
             .width(Pixels(DISPLAY_W))
             .height(Pixels(WELL_H))
-            .bind(s.transport, redraw)
-            .bind(s.loop_on, r2)
-            .bind(s.time_sel, r3)
-            .bind(s.arrangement, r4)
-            .bind(s.audio_load, r5)
-            .bind(s.project_format, r6)
+            // Sampled once per presented frame (the pump's tick), not on
+            // every model change: a clip drag changes the arrangement on each
+            // mouse move, and START / LENGTH follow it (polish pass §2.5).
+            .bind(s.frame, redraw)
     }
 
     /// The cells' left edges (logical px from the display's left), centred
@@ -530,9 +527,10 @@ impl DisplayWell {
     }
 }
 
-/// The overhang: a top gradient (black .78 at 0, .5 at 8, .28 at 18, .12 at
-/// 26, 0 at 34 CSS px) plus `inset 0 14px 16px -10px rgba(0,0,0,.95)`, in
-/// the display's padding box (radius 7).
+/// The overhang: a top gradient (black .62 at 0, .4 at 8, .22 at 18, .1 at
+/// 26, 0 at 34 CSS px) plus `inset 0 14px 16px -10px rgba(0,0,0,.8)`, in the
+/// display's padding box (radius 7). The polish pass toned the mockup's
+/// (.78 / .5 / .28 / .12, inset .95) to about 80%, keeping its 34 px reach.
 fn render_overhang(w: i32, h: i32, radius: f32, s: f32) -> Option<vg::Image> {
     let mut surface = vg::surfaces::raster_n32_premul((w.max(1), h.max(1)))?;
     let c = surface.canvas();
@@ -542,7 +540,7 @@ fn render_overhang(w: i32, h: i32, radius: f32, s: f32) -> Option<vg::Image> {
     c.save();
     c.clip_rrect(rr, vg::ClipOp::Intersect, true);
     let stops = [0.0, 8.0, 18.0, 26.0, 34.0];
-    let alphas = [0.78, 0.5, 0.28, 0.12, 0.0];
+    let alphas = [0.62, 0.40, 0.22, 0.10, 0.0];
     let colors: Vec<Rgba> = alphas.iter().map(|a| Rgba::black(*a)).collect();
     let pos: Vec<f32> = stops.iter().map(|y| y / 34.0).collect();
     c.draw_rect(
@@ -550,7 +548,7 @@ fn render_overhang(w: i32, h: i32, radius: f32, s: f32) -> Option<vg::Image> {
         &gfx::shaded(gfx::linear((0.0, 0.0), (0.0, 34.0 * s), &colors, Some(&pos))),
     );
     c.restore();
-    gfx::css_inset_shadow(c, &rr, 0.0, 14.0 * s, 16.0 * s, -10.0 * s, Rgba::black(0.95));
+    gfx::css_inset_shadow(c, &rr, 0.0, 14.0 * s, 16.0 * s, -10.0 * s, Rgba::black(0.8));
     Some(surface.image_snapshot())
 }
 

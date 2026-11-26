@@ -455,19 +455,39 @@ const MENU_REASON_PX: f32 = 11.0;
 const MENU_SWATCH: f32 = 12.0;
 const MENU_CHECK_W: f32 = 16.0;
 
+/// The colour grid inside a menu (polish §3.4): 16 px cells, 4 px apart,
+/// 14 to a row, 8 px in from the menu's padding.
+const GRID_CELL: f32 = 16.0;
+const GRID_GAP: f32 = 4.0;
+const GRID_COLS: usize = crate::theme::palette::COLS;
+const GRID_PAD: f32 = 8.0;
+
 fn row_h(it: &crate::state::MenuItem) -> f32 {
-    if it.action == crate::state::MenuAction::Separator {
+    if it.grid {
+        0.0
+    } else if it.action == crate::state::MenuAction::Separator {
         MENU_SEP_H
     } else {
         MENU_ROW_H
     }
 }
 
+/// The grid block's size (logical px) for `n` cells.
+fn grid_size(n: usize) -> (f32, f32) {
+    if n == 0 {
+        return (0.0, 0.0);
+    }
+    let rows = n.div_ceil(GRID_COLS) as f32;
+    let cols = n.min(GRID_COLS) as f32;
+    (2.0 * GRID_PAD + cols * GRID_CELL + (cols - 1.0) * GRID_GAP, 2.0 * GRID_PAD + rows * GRID_CELL + (rows - 1.0) * GRID_GAP)
+}
+
 /// A menu's size (logical px).
 pub fn menu_size_of(items: &[crate::state::MenuItem]) -> (f32, f32) {
     let rows: f32 = items.iter().map(row_h).sum();
     let reason = if items.iter().any(|i| !i.enabled) { MENU_REASON_H } else { 0.0 };
-    (MENU_W, MENU_PAD * 2.0 + rows + reason)
+    let (gw, gh) = grid_size(items.iter().filter(|i| i.grid).count());
+    (MENU_W.max(gw + 2.0 * MENU_PAD), MENU_PAD * 2.0 + rows + gh + reason)
 }
 
 /// Where to open a menu for a click at (x, y) so it stays inside a window of
@@ -522,21 +542,36 @@ impl ContextMenu {
             .height(Pixels(h))
     }
 
-    /// The row under the mouse and its top (logical px from the menu's top).
+    /// The row (or grid cell) under the mouse and its top (logical px from
+    /// the menu's top).
     fn row_at(&self, cx: &EventContext) -> Option<(usize, f32)> {
         if !mouse_inside(cx) {
             return None;
         }
-        let (_, y) = local_mouse(cx);
+        let (x, y) = local_mouse(cx);
         let mut top = MENU_PAD;
         for (i, it) in self.items.iter().enumerate() {
+            if it.grid {
+                continue;
+            }
             let h = row_h(it);
             if y >= top && y < top + h {
                 return (it.action != crate::state::MenuAction::Separator).then_some((i, top));
             }
             top += h;
         }
-        None
+        // The grid below the rows.
+        self.items.iter().enumerate().filter(|(_, it)| it.grid).enumerate().find_map(|(k, (i, _))| {
+            let c = Self::cell(k, top);
+            (x >= c.0 && x < c.0 + GRID_CELL && y >= c.1 && y < c.1 + GRID_CELL).then_some((i, c.1))
+        })
+    }
+
+    /// Cell `k`'s top-left (logical px from the menu's top-left), the grid
+    /// starting at `top`.
+    fn cell(k: usize, top: f32) -> (f32, f32) {
+        let (col, row) = ((k % GRID_COLS) as f32, (k / GRID_COLS) as f32);
+        (MENU_PAD + GRID_PAD + col * (GRID_CELL + GRID_GAP), top + GRID_PAD + row * (GRID_CELL + GRID_GAP))
     }
 }
 
@@ -551,8 +586,15 @@ impl View for ContextMenu {
             WindowEvent::MouseMove(_, _) => {
                 let r = self.row_at(cx);
                 if r.map(|r| r.0) != self.hover {
+                    let was_grid = self.hover.is_some_and(|h| self.items[h].grid);
                     self.hover = r.map(|r| r.0);
                     cx.needs_redraw();
+                    // A colour cell previews its colour on the selection.
+                    match self.hover.filter(|h| self.items[*h].grid) {
+                        Some(h) => cx.emit(AppEvent::ColourPreview(Some(self.items[h].action))),
+                        None if was_grid => cx.emit(AppEvent::ColourPreview(None)),
+                        None => {}
+                    }
                     // Hovering a submenu row opens it beside the row.
                     if let (Some((i, top)), false) = (r, self.nested) {
                         if let MenuAction::Sub(sub) = self.items[i].action {
@@ -564,6 +606,9 @@ impl View for ContextMenu {
                 }
             }
             WindowEvent::MouseLeave => {
+                if self.hover.is_some_and(|h| self.items[h].grid) {
+                    cx.emit(AppEvent::ColourPreview(None));
+                }
                 self.hover = None;
                 cx.needs_redraw();
             }
@@ -592,6 +637,9 @@ impl View for ContextMenu {
         let f = gfx::font(Face::Medium, MENU_TEXT_PX * s);
         let mut top = MENU_PAD;
         for (i, item) in self.items.iter().enumerate() {
+            if item.grid {
+                continue;
+            }
             let h = row_h(item);
             let row = vg::Rect::from_xywh(r.left + MENU_PAD * s, r.top + top * s, r.width() - 2.0 * MENU_PAD * s, h * s);
             top += h;
@@ -622,7 +670,8 @@ impl View for ContextMenu {
             if let Some(c) = item.swatch {
                 let sw = vg::Rect::from_xywh(x, row.center_y() - MENU_SWATCH * 0.5 * s, MENU_SWATCH * s, MENU_SWATCH * s);
                 let srr = gfx::rrect(gfx::snap(sw), 3.0 * s);
-                canvas.draw_rrect(srr, &gfx::vgrad(sw, c.lighten(0.08), c.darken(0.12)));
+                let (st, sb) = crate::theme::palette::swatch(c);
+                canvas.draw_rrect(srr, &gfx::vgrad(sw, st, sb));
                 gfx::ring(canvas, &srr, gfx::hairline(s), &gfx::fill(Rgba::black(0.4)));
                 x += (MENU_SWATCH + 8.0) * s;
             }
@@ -642,6 +691,31 @@ impl View for ContextMenu {
                 gfx::draw_text(canvas, &item.shortcut, (row.right - MENU_TEXT_X * s - sw).round(), base, &f, ink);
             }
         }
+        // The colour grid: swatches in the menu's swatch material; the
+        // current colour has a neutral 2 px ring, the hovered one a hairline.
+        let grid: Vec<(usize, &crate::state::MenuItem)> = self.items.iter().enumerate().filter(|(_, it)| it.grid).collect();
+        if !grid.is_empty() {
+            if top > MENU_PAD {
+                canvas.draw_rect(vg::Rect::from_xywh(r.left + (MENU_PAD + 8.0) * s, (r.top + top * s).round(), r.width() - 2.0 * (MENU_PAD + 8.0) * s, gfx::hairline(s)), &gfx::fill(LINE));
+            }
+            for (k, (i, it)) in grid.iter().enumerate() {
+                let (gx, gy) = Self::cell(k, top);
+                let cell = gfx::snap(vg::Rect::from_xywh(r.left + gx * s, r.top + gy * s, GRID_CELL * s, GRID_CELL * s));
+                let c = it.swatch.unwrap_or(STROKE);
+                let crr = gfx::rrect(cell, 3.0 * s);
+                let (st, sb) = crate::theme::palette::swatch(c);
+                canvas.draw_rrect(crr, &gfx::vgrad(cell, st, sb));
+                gfx::ring(canvas, &crr, gfx::hairline(s), &gfx::fill(Rgba::black(0.4)));
+                if it.checked || self.hover == Some(*i) {
+                    let hl = gfx::hairline(s);
+                    let w = if it.checked { 2.0 * hl } else { hl };
+                    let outer = gfx::rrect(cell.with_outset((w + hl, w + hl)), 4.0 * s);
+                    gfx::ring(canvas, &outer, w, &gfx::fill(if it.checked { NEUTRAL_HI } else { TEXT_MID }));
+                }
+            }
+            top += grid_size(grid.len()).1;
+        }
+
         // The reason a hovered row is disabled (F-24).
         if self.items.iter().any(|i| !i.enabled) {
             let area = vg::Rect::from_ltrb(r.left + MENU_PAD * s, r.top + top * s, r.right - MENU_PAD * s, r.bottom - MENU_PAD * s);
@@ -831,19 +905,9 @@ const STRIP_GLOW_A: f32 = 0.55;
 const STRIP_GLOW_R: f32 = 10.0;
 const STRIP_SPILL_A: f32 = 0.35;
 
-/// The strip's fill stops (left → right) and its edge colours, unlit and
-/// lit, mixed by the note-on light (0..1).
-fn strip_colours(c: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
-    let l = light.clamp(0.0, 1.0);
-    let off_a = c.darken(0.62);
-    let off_b = c.darken(0.35);
-    // The unlit gradient has two stops; its midpoint stands in for the lit one's middle.
-    let off = [off_a, off_a.mix(off_b, 0.55), off_b];
-    let on = [c, c.lighten(0.35), c.lighten(0.7)];
-    let fill = [off[0].mix(on[0], l), off[1].mix(on[1], l), off[2].mix(on[2], l)];
-    let left = c.darken(0.2).mix(c.lighten(0.6), l);
-    let right = c.darken(0.5);
-    (fill, left, right)
+/// The strip's colours: the palette recipe (theme::palette::strip).
+fn strip_colours(color: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
+    crate::theme::palette::strip(color, light)
 }
 
 /// One track row in the header column: colour strip (lights on each
@@ -1128,7 +1192,7 @@ impl View for TrackRow {
 
 /// The fully lit strip (fill, edges, inner glow) plus its spill to the
 /// right, as an image whose top-left is the strip's.
-fn render_lit_strip(color: Rgba, w: f32, h: f32, s: f32) -> Option<vg::Image> {
+pub fn render_lit_strip(color: Rgba, w: f32, h: f32, s: f32) -> Option<vg::Image> {
     let spill_pad = (2.0 * STRIP_GLOW_R * s).ceil();
     let mut surface = vg::surfaces::raster_n32_premul(((w + spill_pad).ceil() as i32, h.ceil().max(1.0) as i32))?;
     let c = surface.canvas();

@@ -849,11 +849,13 @@ impl View for Arrangement {
                         let no_snap = crate::input::bypass_snap(cx.modifiers());
                         let lanes = self.s.arrangement.with_untracked(|a| a.lanes.len());
                         if lane >= 0.0 && (lane as usize) < lanes {
+                            let random = self.s.settings.with_untracked(|st| st.new_clip_colour == "random");
                             self.s.arrangement.update(|a| {
                                 let t = a.view.x_to_tick(mx as f64).max(0.0) as i64;
                                 let g = a.grid().ticks as i64;
                                 let start = if no_snap { t } else { t.div_euclid(g) * g };
                                 let id = a.add_clip(lane as usize, start as u32, TICKS_PER_BAR);
+                                a.colour_new_clips(&[id], random);
                                 a.selection = vec![id];
                             });
                             cx.emit(crate::AppEvent::Commit);
