@@ -2,3 +2,14 @@ dev: mode on; test hooks: [pilot, autoplay, audiolog, quit_after]; buffer Some(2
 dev: project format 48000 24
 dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\songs\stress64.chipdaw (64 clips)
 dev: spectrum style bars (settings)
+# summary: 1800 s, device "VX3211-2K (NVIDIA High Definition Audio) · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 180000, frames/cb 480..1056, cost mean 5.104% p99 9.90% max 13.30% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.35 ms
+# edits applied 1, edit->frame tick max 11.03 ms, send->engine max 6.81 ms, dropped commands 0
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# thread cycles: audio 2406.3 k/callback, ui 6952.0 k/presented frame
+# audio thread: 0.0 k instr/callback, 0.00 uJ/callback, P-core share ?; ui thread: 0 k instr/frame, 0.0 uJ/frame, P-core share ?
+# process: 0.0 M instr/s, 0.0 mW, P-core share ?, 0.0 % of a core; audio thread 0.00 M instr/s, 0.00 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+# cb_hist_permille: 1:1 2:2 3:3 4:2 8:1 9:3 12:1 13:1 14:1 15:1 17:1 28:118 29:118 30:39 31:1627 32:7188 33:4081 34:3140 35:7439 36:3633 37:953 38:634 39:532 40:1323 41:7473 42:5692 43:2261 44:10022 45:14295 46:8593 47:10879 48:8559 49:3251 50:1851 51:1540 52:1809 53:7443 54:8887 55:4902 56:2251 57:7096 58:9276 59:5738 60:2574 61:1840 62:1728 63:1522 64:1343 65:1064 66:950 67:744 68:691 69:853 70:912 71:770 72:614 73:541 74:678 75:675 76:558 77:465 78:381 79:321 80:281 81:352 82:509 83:461 84:476 85:365 86:337 87:496 88:473 89:400 90:391 91:272 92:273 93:326 94:282 95:224 96:179 97:148 98:123 99:130 100:118 101:89 102:101 103:108 104:100 105:140 106:154 107:119 108:131 109:105 110:70 111:41 112:43 113:48 114:77 115:57 116:44 117:31 118:10 119:8 120:6 121:4 122:4 123:3 126:2 127:2 129:1 132:1 133:1
+# loopback: 675000 blocks, 45285 pilot dropouts

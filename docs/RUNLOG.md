@@ -1083,3 +1083,11 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   (the first build shrank the piano roll instead; the regression gate's piano_roll state caught it).
   PEAK above full scale shows its sign ("+33.6": 512 studio voices summed linearly at full volume;
   the faders and the Main gain are the user's level controls).
+- **B4A-D21 (the audio gate's two stress runs).** 30 min of the 64-studio-track project at full
+  volume: the engine's detectors 0 starved / 0 late / 0 overruns, but loopback counted 45,285 pilot
+  "dropouts", **8–40 in every one of the 1,800 seconds**. Stalls come in bursts; this was steady.
+  512 voices at full volume peak near +34 dBFS, so the output clipped and the quiet 23 kHz pilot was
+  masked. Re-run with the project's Main gain at −40 dB (applied before the pilot is added):
+  **0 pilot dropouts in 30 min**, callback p99 9.7% (the same cost: 5.10% mean both times), 0
+  allocation violations. The loopback method needs an unclipped signal; that run is the gate's.
+  WASAPI shared mode gave 480-frame callbacks for the 256 requested (ENGINE.md: nominal on Windows).

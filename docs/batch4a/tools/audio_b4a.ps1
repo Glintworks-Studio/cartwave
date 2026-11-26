@@ -29,6 +29,9 @@ function Run-App([string]$name, [hashtable]$envs, [int]$secs) {
 foreach ($r in $Runs) {
   switch ($r) {
     "S64" { Run-App "S64_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64.chipdaw") } $Secs }
+    # The same at Main -40 dB: the mix stays under full scale, so the pilot (added after Main)
+    # survives and loopback can judge dropouts (512 voices at full volume peak ~+34 dBFS and clip).
+    "S64M" { Run-App "S64M_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64_main-40.chipdaw") } $Secs }
     "DEMO" { Run-App "DEMO_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1" } 120 }
   }
 }

@@ -1,0 +1,13 @@
+dev: mode on; test hooks: [pilot, autoplay, audiolog, quit_after]; buffer Some(256); filter None
+dev: spectrum style bars (settings)
+# summary: 120 s, device "VX3211-2K (NVIDIA High Definition Audio) · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 11998, frames/cb 480..1056, cost mean 0.217% p99 0.60% max 1.60% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.54 ms
+# edits applied 1, edit->frame tick max 7.75 ms, send->engine max 2.25 ms, dropped commands 0
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# thread cycles: audio 135.8 k/callback, ui 4409.9 k/presented frame
+# audio thread: 0.0 k instr/callback, 0.00 uJ/callback, P-core share ?; ui thread: 0 k instr/frame, 0.0 uJ/frame, P-core share ?
+# process: 0.0 M instr/s, 0.0 mW, P-core share ?, 0.0 % of a core; audio thread 0.00 M instr/s, 0.00 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+# cb_hist_permille: 0:77 1:6150 2:4213 3:1036 4:328 5:132 6:35 7:20 8:5 13:1 16:1
+# loopback: 44992 blocks, 0 pilot dropouts
