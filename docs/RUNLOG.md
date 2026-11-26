@@ -793,3 +793,10 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   `#[cfg(target_os = "macos")]`: the process's own memory, as Activity Monitor and `footprint`
   count it, the counterpart of Windows' private bytes. Three sources agree: the app 94 MB, `top
   -stats mem` 95M, `footprint` 95 MB (one launch, sampled seconds apart).
+- **MC-D11 (no window tabs on macOS).** AppKit's automatic window tabbing added View ▸ Show Tab
+  Bar and Show All Tabs; Show Tab Bar put a 36 pt tab strip over a one-window app and pushed the
+  whole UI down (evidence/tabbar-before.png). The standalone binary now sets
+  `NSWindow.allowsAutomaticWindowTabbing = NO` before the window exists, through the
+  Objective-C runtime (libobjc; no crate), `#[cfg(target_os = "macos")]` in `crates/app` (a
+  plugin's host owns its window, so the library is untouched). After: the View menu ends with
+  Draw Mode and Enter Full Screen; the Window menu is unchanged.

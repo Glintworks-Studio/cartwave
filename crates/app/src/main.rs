@@ -90,6 +90,34 @@ fn render_demo(dir: &str, secs: f64) {
     }
 }
 
+/// macOS: one window, no tabs. AppKit otherwise adds View ▸ Show Tab Bar and
+/// Show All Tabs to the menus, and the tab bar it shows pushes the whole UI
+/// down 36 pt for nothing (MAC-CATCHUP.md, MC-D11). `NSWindow.
+/// allowsAutomaticWindowTabbing = NO`, set before the window exists, through
+/// the Objective-C runtime (libobjc, part of the OS: no new crate).
+#[cfg(target_os = "macos")]
+fn no_window_tabbing() {
+    use std::ffi::{c_char, c_void};
+    #[link(name = "objc")]
+    unsafe extern "C" {
+        fn objc_getClass(name: *const c_char) -> *mut c_void;
+        fn sel_registerName(name: *const c_char) -> *mut c_void;
+        fn objc_msgSend();
+    }
+    // SAFETY: NSWindow is a class and `setAllowsAutomaticWindowTabbing:` a
+    // class method taking a BOOL (`bool` on arm64 and x86-64); objc_msgSend is
+    // called through a pointer cast to exactly that signature, on the main
+    // thread before AppKit makes the window.
+    unsafe {
+        let class = objc_getClass(c"NSWindow".as_ptr());
+        let sel = sel_registerName(c"setAllowsAutomaticWindowTabbing:".as_ptr());
+        if !class.is_null() {
+            let send: unsafe extern "C" fn(*mut c_void, *mut c_void, bool) = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+            send(class, sel, false);
+        }
+    }
+}
+
 fn main() -> Result<(), ApplicationError> {
     if let Some(a) = arg_after("--render-demo") {
         let dir = a.first().map(String::as_str).unwrap_or("docs/audio");
@@ -102,6 +130,8 @@ fn main() -> Result<(), ApplicationError> {
     let size = (w.max(ui::MIN_WINDOW_SIZE.0), h.max(ui::MIN_WINDOW_SIZE.1));
     // Settings > Display > Interface scale, on top of the OS scale.
     let scale = ui::file::load_settings().ui_scale_factor();
+    #[cfg(target_os = "macos")]
+    no_window_tabbing();
     Application::new(|cx| {
         ui::build_ui(cx);
     })
