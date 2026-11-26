@@ -424,6 +424,35 @@ if want("colors"):
     shot = a.shot("colmenu")
     a.seq(("key", "escape"), ("sleep", .3))
     a.quit()
+    # The grid (Colour ▸): a click applies, one ⌘Z restores. Cells: the grid's top-left cell at
+    # (586, 202), 20 px pitch; B = row 3, column 9 (#4FA8E0), A = row 1, column 2.
+    A_CELL, B_CELL = (600, 205), (746, 242)
+
+    def open_grid(app):
+        app.seq(("rclick", 330, ROW0 + 20), ("sleep", .4), ("move", 380, 202), ("move", 390, 202), ("sleep", .5))
+
+    def colour(app):
+        return app.save()["lanes"][0].get("color")
+
+    a = App("colors2", FIX)
+    open_grid(a)
+    a.seq(("move", *B_CELL), ("sleep", .3), ("click", *B_CELL), ("sleep", .4))
+    c1 = colour(a)
+    a.seq(("key", "z", "cmd"), ("sleep", .3))
+    c2 = colour(a)
+    report("Colour ▸ grid: a click sets the track colour (saved), one ⌘Z restores it", c1 == "#4FA8E0" and c2 is None, f"{c1} -> undo {c2}")
+    open_grid(a)
+    a.seq(("move", *A_CELL), ("sleep", .4), ("key", "escape"), ("sleep", .3), ("key", "escape"), ("sleep", .3))
+    c3 = colour(a)
+    report("Hover a colour, then Esc: the preview stays (saved, no unsaved mark) — shared code: Esc skips restore_colours", "NOTE" if c3 else True, f"saved colour {c3}")
+    a.quit()
+    a = App("colors3", FIX)
+    open_grid(a)
+    a.seq(("move", *A_CELL), ("sleep", .3), ("move", *B_CELL), ("sleep", .3), ("click", *B_CELL), ("sleep", .4))
+    a.seq(("key", "z", "cmd"), ("sleep", .3))
+    c4 = colour(a)
+    report("Hover cell A, click cell B, ⌘Z: back to A, not the original — shared code", "NOTE" if c4 else True, f"after undo {c4}")
+    a.quit()
 
 # ---------------------------------------------------------------- Quit and close
 if want("quit"):

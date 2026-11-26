@@ -818,3 +818,12 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   lines, two steps), and one mouse notch is still exactly 12 px (`--only mouse`: 84). Windows keeps
   its code (precision touchpads there would benefit from the same accumulator: proposed, not made,
   as it would change shared behaviour). A physical trackpad is still untested (open item).
+- **MC-D15 (colour preview: two shared bugs, not fixed).** In the Colour ▸ grid (POLISH.md C2):
+  (1) hovering a cell and closing the menu with Esc leaves the previewed colour on the track,
+  and it is saved without the unsaved mark: `Action::Escape` clears `s.menu` directly, while the
+  `CloseMenu` path calls `restore_colours()` first. Proposed: the Esc branch calls
+  `restore_colours()` too (one line). (2) Hovering cell A and then clicking cell B makes ⌘Z restore
+  A, not the original colour; going straight to B undoes correctly. The preview must be reaching
+  the undo base before the pick; proposed: restore the preview before the pick's commit, and a
+  unit test of hover-A/pick-B/undo. Both paths have no platform code, so they are Windows bugs
+  too; fixing them would hold the merge. In the harness as NOTE lines (`--only colors`).
