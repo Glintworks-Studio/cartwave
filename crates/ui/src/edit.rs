@@ -862,9 +862,9 @@ impl AppState {
                 a.grid_opts.adaptive = false;
             }),
             MenuAction::ClipColor(_) | MenuAction::TrackColor(..) => {
-                // A preview may have applied it already: keep it, commit once.
-                self.colour_backup = None;
-                self.apply_colour(action);
+                // Undo the preview first, then apply the pick and commit once.
+                let mut p = std::mem::take(&mut self.colour_preview);
+                self.s.arrangement.update(|a| p.pick(a, action));
                 self.commit();
             }
             MenuAction::DefaultTrackColour(c) => {
@@ -893,67 +893,22 @@ impl AppState {
         }
     }
 
-    /// Applies a colour action to its targets: every selected clip, or every
-    /// selected track when the menu's track is one of them (else that track).
-    pub(crate) fn apply_colour(&mut self, action: MenuAction) {
-        match action {
-            MenuAction::ClipColor(c) => self.s.arrangement.update(|a| {
-                for id in a.selection.clone() {
-                    if let Some(clip) = a.clip_mut(id) {
-                        clip.color = c;
-                    }
-                }
-            }),
-            MenuAction::TrackColor(lane, c) => self.s.arrangement.update(|a| {
-                let lanes: Vec<usize> = if a.track_sel.contains(&lane) { a.track_sel.clone() } else { vec![lane] };
-                for l in lanes {
-                    if let Some(l) = a.lanes.get_mut(l) {
-                        l.color = c;
-                    }
-                }
-            }),
-            _ => {}
-        }
-    }
-
     /// Hovering a colour previews it on the targets (not an undo step);
-    /// `None` puts the colours back. The first preview keeps the originals.
+    /// `None` puts the colours back.
     pub(crate) fn preview_colour(&mut self, action: Option<MenuAction>) {
-        self.restore_colours();
-        let Some(action) = action else { return };
-        let backup = self.s.arrangement.with_untracked(|a| match action {
-            MenuAction::ClipColor(_) => Some(ColourBackup::Clips(a.selection.iter().filter_map(|id| a.clip(*id).map(|c| (*id, c.color))).collect())),
-            MenuAction::TrackColor(lane, _) => {
-                let lanes: Vec<usize> = if a.track_sel.contains(&lane) { a.track_sel.clone() } else { vec![lane] };
-                Some(ColourBackup::Lanes(lanes.iter().filter_map(|l| a.lanes.get(*l).map(|x| (*l, x.color))).collect()))
-            }
-            _ => None,
-        });
-        if backup.is_some() {
-            self.colour_backup = backup;
-            self.apply_colour(action);
-        }
+        let mut p = std::mem::take(&mut self.colour_preview);
+        self.s.arrangement.update(|a| p.preview(a, action));
+        self.colour_preview = p;
     }
 
-    /// Puts back the colours a preview changed (the menu closed without a pick).
+    /// Puts back the colours a preview changed (the menu closed without a
+    /// pick: a click away, Esc).
     pub(crate) fn restore_colours(&mut self) {
-        let Some(b) = self.colour_backup.take() else { return };
-        self.s.arrangement.update(|a| match &b {
-            ColourBackup::Clips(v) => {
-                for (id, c) in v {
-                    if let Some(clip) = a.clip_mut(*id) {
-                        clip.color = *c;
-                    }
-                }
-            }
-            ColourBackup::Lanes(v) => {
-                for (l, c) in v {
-                    if let Some(lane) = a.lanes.get_mut(*l) {
-                        lane.color = *c;
-                    }
-                }
-            }
-        });
+        if !self.colour_preview.active() {
+            return;
+        }
+        let mut p = std::mem::take(&mut self.colour_preview);
+        self.s.arrangement.update(|a| p.restore(a));
     }
 
     /// Insert MIDI Clip (Cmd+Shift+M): one clip per open track in the time
@@ -973,11 +928,103 @@ impl AppState {
     }
 }
 
+/// Applies a colour action to its targets: every selected clip, or every
+/// selected track when the menu's track is one of them (else that track).
+pub(crate) fn apply_colour_to(a: &mut state::Arrangement, action: MenuAction) {
+    match action {
+        MenuAction::ClipColor(c) => {
+            for id in a.selection.clone() {
+                if let Some(clip) = a.clip_mut(id) {
+                    clip.color = c;
+                }
+            }
+        }
+        MenuAction::TrackColor(lane, c) => {
+            for l in colour_lanes(a, lane) {
+                if let Some(l) = a.lanes.get_mut(l) {
+                    l.color = c;
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The tracks a track-colour action colours.
+fn colour_lanes(a: &state::Arrangement, lane: usize) -> Vec<usize> {
+    if a.track_sel.contains(&lane) {
+        a.track_sel.clone()
+    } else {
+        vec![lane]
+    }
+}
+
 /// The colours a preview replaced, to put back.
 #[derive(Clone, Debug)]
 pub(crate) enum ColourBackup {
     Clips(Vec<(u32, Option<Rgba>)>),
     Lanes(Vec<(usize, Rgba)>),
+}
+
+/// The Colour grid's hover preview (POLISH.md C2). While it is active the
+/// document shows a colour nobody picked, so **nothing may commit it**: the
+/// app's per-tick commit waits (`active`), Esc and a click away `restore`, and
+/// a pick restores first, then applies and commits once (MAC-CATCHUP.md §8,
+/// MC-D15: the per-tick commit used to bake the hovered colour into the undo
+/// history, so "hover A, pick B, undo" gave A).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ColourPreview {
+    backup: Option<ColourBackup>,
+}
+
+impl ColourPreview {
+    pub(crate) fn active(&self) -> bool {
+        self.backup.is_some()
+    }
+
+    /// Shows `action`'s colour on its targets (`None`: no preview). The
+    /// originals are kept from before the first preview.
+    pub(crate) fn preview(&mut self, a: &mut state::Arrangement, action: Option<MenuAction>) {
+        self.restore(a);
+        let Some(action) = action else { return };
+        let backup = match action {
+            MenuAction::ClipColor(_) => Some(ColourBackup::Clips(a.selection.iter().filter_map(|id| a.clip(*id).map(|c| (*id, c.color))).collect())),
+            MenuAction::TrackColor(lane, _) => Some(ColourBackup::Lanes(colour_lanes(a, lane).iter().filter_map(|l| a.lanes.get(*l).map(|x| (*l, x.color))).collect())),
+            _ => None,
+        };
+        if backup.is_some() {
+            self.backup = backup;
+            apply_colour_to(a, action);
+        }
+    }
+
+    /// Puts the original colours back.
+    pub(crate) fn restore(&mut self, a: &mut state::Arrangement) {
+        let Some(b) = self.backup.take() else { return };
+        match &b {
+            ColourBackup::Clips(v) => {
+                for (id, c) in v {
+                    if let Some(clip) = a.clip_mut(*id) {
+                        clip.color = *c;
+                    }
+                }
+            }
+            ColourBackup::Lanes(v) => {
+                for (l, c) in v {
+                    if let Some(lane) = a.lanes.get_mut(*l) {
+                        lane.color = *c;
+                    }
+                }
+            }
+        }
+    }
+
+    /// A click on a cell: the preview is undone, then the pick applied (the
+    /// caller commits once).
+    pub(crate) fn pick(&mut self, a: &mut state::Arrangement, action: MenuAction) {
+        self.restore(a);
+        apply_colour_to(a, action);
+    }
 }
 
 /// The 70 palette colours as grid cells, `cur` (0xRRGGBB) marked.
@@ -1037,4 +1084,75 @@ fn reveal(path: Option<std::path::PathBuf>) {
     let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let _ = std::process::Command::new("xdg-open").arg(p.parent().unwrap_or(&p)).spawn();
+}
+
+#[cfg(test)]
+mod colour_preview_tests {
+    use super::*;
+    use crate::history::{Doc, History};
+
+    fn setup() -> (state::Arrangement, History) {
+        let a = crate::mock::demo_arrangement();
+        let h = History::new(Doc::of(&a, 150.0, crate::instruments::default_params()));
+        (a, h)
+    }
+
+    /// The app commits every pump tick; this is that commit, honouring the
+    /// preview gate as `AppState::commit` does.
+    fn tick(a: &state::Arrangement, h: &mut History, p: &ColourPreview) {
+        if !p.active() {
+            h.commit(Doc::of(a, 150.0, crate::instruments::default_params()));
+        }
+    }
+
+    /// MC-D15 (1): hover a colour, Esc: the old colour is back and nothing
+    /// was recorded.
+    #[test]
+    fn esc_after_hover_restores_the_old_colour() {
+        let (mut a, mut h) = setup();
+        let orig = a.lanes[2].color;
+        let mut p = ColourPreview::default();
+        let hover = crate::theme::palette::all().nth(20).unwrap();
+        p.preview(&mut a, Some(MenuAction::TrackColor(2, hover)));
+        assert_eq!(a.lanes[2].color, hover, "the hover shows the colour");
+        tick(&a, &mut h, &p);
+        p.restore(&mut a); // Esc
+        tick(&a, &mut h, &p);
+        assert_eq!(a.lanes[2].color, orig);
+        assert!(!h.can_undo(), "a preview is never an undo step");
+    }
+
+    /// MC-D15 (2): hover A, pick B, undo: the original colour, for tracks
+    /// and clips.
+    #[test]
+    fn hover_a_pick_b_undo_gives_the_original() {
+        let (mut a, mut h) = setup();
+        let orig = a.lanes[1].color;
+        let (ca, cb) = (crate::theme::palette::all().nth(5).unwrap(), crate::theme::palette::all().nth(40).unwrap());
+        let mut p = ColourPreview::default();
+        p.preview(&mut a, Some(MenuAction::TrackColor(1, ca)));
+        tick(&a, &mut h, &p);
+        p.preview(&mut a, Some(MenuAction::TrackColor(1, cb)));
+        tick(&a, &mut h, &p);
+        p.pick(&mut a, MenuAction::TrackColor(1, cb));
+        assert!(!p.active());
+        tick(&a, &mut h, &p);
+        assert_eq!(a.lanes[1].color, cb);
+        let back = h.undo(Doc::of(&a, 150.0, crate::instruments::default_params())).expect("one step");
+        assert_eq!(back.lanes[1].color, orig, "undo returns the original, not the hovered A");
+        assert!(!h.can_undo(), "exactly one step");
+
+        // Clips the same way.
+        let (mut a, mut h) = setup();
+        let id = a.clips[0].id;
+        a.selection = vec![id];
+        let orig = a.clip(id).unwrap().color;
+        let mut p = ColourPreview::default();
+        p.preview(&mut a, Some(MenuAction::ClipColor(Some(ca))));
+        tick(&a, &mut h, &p);
+        p.pick(&mut a, MenuAction::ClipColor(Some(cb)));
+        tick(&a, &mut h, &p);
+        let back = h.undo(Doc::of(&a, 150.0, crate::instruments::default_params())).expect("one step");
+        assert_eq!(back.clips.iter().find(|c| c.id == id).unwrap().color, orig);
+    }
 }

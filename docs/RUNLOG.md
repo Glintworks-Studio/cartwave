@@ -920,3 +920,13 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   file keeps all 4 clips and the piano roll never opens. On the baseline build the same test fails
   (clip 1 deleted twice over), so it tests what it claims. Return in the Export dialog is its
   Export key (E2) and is not pressed by the test.
+- **B4A-D3 (fixup 2: colour previews; the cause).** Reproduced on Windows first (B4A-02, before
+  the fix: "hover A, pick B, undo" gave A, `#4DC6FB`). The cause wasn't the pick: the app commits
+  **every pump tick** (`idle_housekeeping` → `commit()`), so a hovered colour was recorded as an
+  undo step while it showed (1,752 commits in one 20 s run, traced with a backtrace). Fix: the
+  preview is a small pure `edit::ColourPreview` (preview / restore / pick); `commit()` treats an
+  active preview as busy, like a gesture; a pick restores the originals first, then applies and
+  commits once; Esc (`Action::Escape`) restores like `CloseMenu`. The Esc case already passed on
+  Windows (the hover-time commit was later overwritten by the restore), but it left two stray
+  undo steps; now none. Unit tests `edit::colour_preview_tests` (Esc after hover; hover A / pick B
+  / undo for a track and a clip, exactly one step) and B4A-02 pass.

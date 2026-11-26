@@ -46,6 +46,24 @@ if os.path.exists(os.path.join(work, "b401_after_export.chipdaw")):
     check(S, m and clip_ids(m) == clip_ids(fx), f"Return/Backspace/Delete behind Settings: clips unchanged ({clip_ids(m)})")
     check(S, not lst("b401_piano"), f"Return behind a dialog never opened the piano roll ({lst('b401_piano')})")
 
+
+def track_colour(f, i):
+    if f is None:
+        return "missing file"
+    if "tracks" in f:
+        return f["tracks"][i].get("color")
+    return f["lanes"][i].get("color")
+
+
+if os.path.exists(os.path.join(work, "b402_esc.chipdaw")):
+    S = "B4A-02"
+    fx, e, pk, u = load("fx_basic"), load("b402_esc"), load("b402_picked"), load("b402_undone")
+    orig = track_colour(fx, 2)
+    check(S, track_colour(e, 2) == orig, f"hover a colour, Esc: the old colour is back ({track_colour(e, 2)} vs {orig})")
+    check(S, obs.get("b402_title_esc") == obs.get("b402_title0"), f"... and nothing is unsaved ({obs.get('b402_title_esc')!r})")
+    check(S, track_colour(pk, 2) not in (orig, None), f"pick B: the track takes it ({track_colour(pk, 2)})")
+    check(S, track_colour(u, 2) == orig, f"hover A, pick B, undo: the original colour ({track_colour(u, 2)} vs {orig})")
+
 print()
 bad = [k for k, v in results.items() if not all(v)]
 for k in sorted(results):

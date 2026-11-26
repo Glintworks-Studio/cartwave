@@ -48,5 +48,37 @@ if (Want "B4A-01") {
   Stop-App
 }
 
+
+# The colour grid's cell (row r, column c) for a submenu opened from a menu at (mx, my) whose
+# "Colour" row is the n-th (0-based) row (the polish harness's Cell).
+function Cell($mx, $my, $n, $r, $c, $rowsAbove = 0) {
+  $sx = $mx + 240 - 4; $sy = $my + $n * 28
+  @(($sx + 4 + 8 + $c * 20 + 8), ($sy + 4 + $rowsAbove * 28 + 8 + $r * 20 + 8))
+}
+
+# ─────────── B4A-02: colour previews never leak (MC-D15) ───────────
+if (Want "B4A-02") {
+  $p = Fx "fx_basic" "b402"; $d = Join-Path $Work "d402"
+  Launch -Project $p -Data $d
+  $mx = 400; $my = (RowY 2) + 5
+  # (1) hover a colour, Esc: the old colour is back, nothing unsaved.
+  $obs.b402_title0 = Title
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 500
+  $c = Cell $mx $my 1 1 8; MoveL $c[0] $c[1]; Start-Sleep -Milliseconds 400
+  Shot "b402_hover"
+  K 0x1B; Start-Sleep -Milliseconds 300
+  $obs.b402_title_esc = Title
+  Save; Keep $p "b402_esc"
+  # (2) hover A, pick B, undo: the original colour.
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 500
+  $a = Cell $mx $my 1 1 8; MoveL $a[0] $a[1]; Start-Sleep -Milliseconds 400
+  $b = Cell $mx $my 1 2 3; ClickL $b[0] $b[1]; Start-Sleep -Milliseconds 300
+  Save; Keep $p "b402_picked"
+  Ctrl 0x5A; Save; Keep $p "b402_undone"
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4a\tools\check_b4a.py" $Work

@@ -287,7 +287,8 @@ pub struct AppState {
     scale: f32,
     window_logical: (f32, f32),
     /// The colours a colour-grid hover preview replaced.
-    colour_backup: Option<edit::ColourBackup>,
+    /// The Colour grid's hover preview (nothing commits while it shows).
+    colour_preview: edit::ColourPreview,
     /// A brief audition (arrow keys in the browser) ends then.
     audition_until: Option<Instant>,
     /// When MEM was last read.
@@ -2009,7 +2010,7 @@ pub fn build_ui(cx: &mut Context) {
         scale: 1.0,
         window_logical: (MIN_WINDOW_SIZE.0 as f32, MIN_WINDOW_SIZE.1 as f32),
         audition_until: None,
-        colour_backup: None,
+        colour_preview: edit::ColourPreview::default(),
         last_mem: None,
         tap: tap::TapTempo::default(),
         tap_step: None,
@@ -2560,7 +2561,10 @@ impl AppState {
     /// Records an undo step if the document changed (dropped while a gesture
     /// is still in progress).
     fn commit(&mut self) {
+        // A colour preview isn't an edit: the per-tick commit must not record
+        // it (MC-D15).
         let busy = self.gesture_depth > 0
+            || self.colour_preview.active()
             || self.s.arrangement.with_untracked(|a| !a.editing.is_empty() || a.editing_notes.is_some());
         if !busy {
             // Instruments only deleted clips used are dropped with the step.
@@ -3648,6 +3652,8 @@ impl AppState {
             Action::Follow => cx.emit(AppEvent::TogglePianoFollow),
             Action::Escape => {
                 if self.s.menu.with_untracked(|m| m.is_some()) {
+                    // As closing the menu any other way: a previewed colour goes back (MC-D15).
+                    self.restore_colours();
                     self.s.menu.set(None);
                 } else if self.s.guide.get_untracked() {
                     self.s.guide.set(false);
