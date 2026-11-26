@@ -800,3 +800,13 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   Objective-C runtime (libobjc; no crate), `#[cfg(target_os = "macos")]` in `crates/app` (a
   plugin's host owns its window, so the library is untouched). After: the View menu ends with
   Draw Mode and Enter Full Screen; the Window menu is unchanged.
+- **MC-D12 (2× backing).** Neither display is Retina. For the mockup match at 2× the second
+  display was switched for the session to its HiDPI mode (1280 × 720 pt, 2× backing, 60 Hz,
+  ioModeID 7) by `docs/mac-catchup/tools/hidpi_mac.py`, which restores ioModeID 18 in a
+  `finally` and reads it back (it did: 18). The window (1440 × 920 requested) was held to the
+  display at 1440 × 752 pt with its minimum content height; the header boards fit in it.
+- **MC-D13 (the dB scale labels at 2×).** E1-row-heights at 2×: the four scale labels of each
+  tall row are 1.5 logical px from the @2x board; everything else on every board is within
+  1 px. Measured (results/mockup-match.md): the app moves 0.5 px between 1× and 2× (baseline
+  rounding), the reference's @2x PNG moves its labels 0.5–1 px up against its own @1x PNG; against
+  the HTML box (the spec, P2-D7) the app is within 0.5 px at both scales. Not changed.

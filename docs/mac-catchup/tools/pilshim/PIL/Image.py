@@ -83,7 +83,8 @@ class Image:
         raw = b"".join(b"\0" + bytes(self._d[y * self.width * 3:(y + 1) * self.width * 3]) for y in range(self.height))
         def chunk(t, d):
             return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
-        with open(path, "wb") as f:
+        import builtins
+        with builtins.open(path, "wb") as f:
             f.write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", self.width, self.height, 8, 2, 0, 0, 0))
                     + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
 
