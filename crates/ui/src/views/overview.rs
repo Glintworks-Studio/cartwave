@@ -319,7 +319,8 @@ mod tests {
     /// The ruler and the Overview zoom around the grabbed tick.
     #[test]
     fn nav_drag_keeps_the_grabbed_tick() {
-        let v0 = Viewport::default();
+        // Scrolled in, so a drag to the right doesn't run into the song's start.
+        let v0 = Viewport { scroll_ticks: 8.0 * TICKS_PER_BAR as f64, ..Viewport::default() };
         let d = NavDrag::new((0.0, 0.0), v0, 300.0);
         let v = d.view(40.0, 300.0);
         assert!(v.px_per_bar() > v0.px_per_bar());
