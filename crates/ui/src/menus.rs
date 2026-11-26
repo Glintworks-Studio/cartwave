@@ -174,7 +174,10 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         out.push(MenuSpec {
             title: "ChipDAW",
             entries: vec![
-                MacPredefined("about"),
+                // Our own About (version, commit, licences, font credits): the
+                // system panel only knows the bundle's name, and there is no
+                // bundle yet (MC-D5).
+                Item(Cmd::About),
                 Separator,
                 a(Action::Settings),
                 Separator,
@@ -492,9 +495,9 @@ mod native {
                         }
                         Entry::MacPredefined(which) => {
                             let p = match *which {
-                                "about" => PredefinedMenuItem::about(Some("About ChipDAW"), None),
                                 "services" => PredefinedMenuItem::services(None),
-                                "hide" => PredefinedMenuItem::hide(None),
+                                // The system's default label names the process ("Hide app").
+                                "hide" => PredefinedMenuItem::hide(Some("Hide ChipDAW")),
                                 "hide_others" => PredefinedMenuItem::hide_others(None),
                                 "show_all" => PredefinedMenuItem::show_all(None),
                                 "minimize" => PredefinedMenuItem::minimize(None),
@@ -626,6 +629,11 @@ mod tests {
         assert_eq!(mac[0].title, "ChipDAW");
         assert!(mac.iter().any(|m| m.title == "Window"));
         assert!(!mac[1].entries.contains(&Entry::Item(Cmd::Action(Action::Quit))));
+        // The App menu holds our About (licences, font credits), Settings and Quit.
+        for c in [Cmd::About, Cmd::Action(Action::Settings), Cmd::Action(Action::Quit)] {
+            assert!(mac[0].entries.contains(&Entry::Item(c)), "{}", c.id());
+        }
+        assert!(!mac.last().unwrap().entries.contains(&Entry::Item(Cmd::About)), "About is in the App menu on macOS");
     }
 
     /// The dark rows' measuring: DPI scaling, the shortcut column, the

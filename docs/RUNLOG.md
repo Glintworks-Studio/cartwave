@@ -752,3 +752,16 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   commands do nothing; File, app and Help commands (New, Open, Save, Save As, Export, Settings,
   Project Settings, Quit, About, the shortcut sheet) still work, as in any Mac app (⌘Q quits
   while a field has focus). Undo / Redo in a field do nothing, as on Windows (AT-03).
+- **MC-D4 (no app bundle: the menu bar says "app").** The release binary runs unbundled, so
+  macOS names the app after the process: the bold menu title reads **"app"**, the save sheet and
+  About panel show a generic folder icon, and Finder can't open `.chipdaw` files with it (no
+  `CFBundleDocumentTypes`). Renaming the binary would change every platform's build and every
+  harness; the real fix is an `.app` bundle (Info.plist: `CFBundleName` ChipDAW, the icon, the
+  `.chipdaw` document type, `CFBundleIdentifier`), which belongs with code signing and
+  notarisation (a release item, out of scope). Logged as a gap with that proposal.
+- **MC-D5 (About on macOS).** The App menu's "About ChipDAW" was muda's predefined item, i.e.
+  the system About panel. Unbundled, it showed only a folder icon and "app": no version, commit,
+  licence or font credits (the OFL notice), and Help has no About on macOS, so that content was
+  unreachable on the Mac. The App menu now opens our own About (the Windows Help ▸ About
+  dialog), and "Hide app" reads "Hide ChipDAW". Only `spec(mac = true)` changes, which Windows
+  never builds a menu from; `menus::tests::no_placeholders` checks the App menu.

@@ -266,6 +266,51 @@ for c in cmds where !c.isEmpty {
             let r = AXUIElementPerformAction(item, kAXPressAction as CFString)
             print("menu \(a.joined(separator: " > ")): \(r == .success ? "pressed" : "error \(r.rawValue)")")
         } else { print("menu \(a.joined(separator: " > ")): not found") }
+    case "title":
+        print((axWindow().flatMap { axAttr($0, kAXTitleAttribute) as? String }) ?? "(no window)")
+    case "windows":
+        // Every AX window and sheet of the app (native file panels and alerts show up here).
+        for w in (axAttr(axApp, kAXWindowsAttribute) as? [AXUIElement]) ?? [] {
+            let role = (axAttr(w, kAXRoleAttribute) as? String) ?? "?"
+            let sub = (axAttr(w, kAXSubroleAttribute) as? String) ?? ""
+            print("window role=\(role) subrole=\(sub) title='\(title(w))'")
+            for c in children(w) where ((axAttr(c, kAXRoleAttribute) as? String) ?? "") == "AXSheet" {
+                print("  sheet title='\(title(c))'")
+                for b in children(c) where ((axAttr(b, kAXRoleAttribute) as? String) ?? "") == "AXButton" { print("    button '\(title(b))'") }
+            }
+            for b in children(w) where ((axAttr(b, kAXRoleAttribute) as? String) ?? "") == "AXButton" && !title(b).isEmpty { print("  button '\(title(b))'") }
+            for t in children(w) where ((axAttr(t, kAXRoleAttribute) as? String) ?? "") == "AXStaticText" {
+                print("  text '\((axAttr(t, kAXValueAttribute) as? String) ?? "")'")
+            }
+        }
+    case "press":
+        // Press a button by title in any window or sheet (native dialogs).
+        var done = false
+        func walk(_ e: AXUIElement, _ depth: Int) {
+            if done || depth > 6 { return }
+            for c in children(e) {
+                if ((axAttr(c, kAXRoleAttribute) as? String) ?? "") == "AXButton" && title(c) == a[0] {
+                    AXUIElementPerformAction(c, kAXPressAction as CFString); done = true; return
+                }
+                walk(c, depth + 1)
+            }
+        }
+        for w in (axAttr(axApp, kAXWindowsAttribute) as? [AXUIElement]) ?? [] { walk(w, 0) }
+        print("press '\(a[0])': \(done ? "pressed" : "not found")")
+    case "setfield":
+        // Type a path into a native save panel's name field: focuses it via AX and sets the value.
+        var set = false
+        func walk(_ e: AXUIElement, _ depth: Int) {
+            if set || depth > 8 { return }
+            for c in children(e) {
+                if ((axAttr(c, kAXRoleAttribute) as? String) ?? "") == "AXTextField" {
+                    AXUIElementSetAttributeValue(c, kAXValueAttribute as CFString, a[0] as CFString); set = true; return
+                }
+                walk(c, depth + 1)
+            }
+        }
+        for w in (axAttr(axApp, kAXWindowsAttribute) as? [AXUIElement]) ?? [] { walk(w, 0) }
+        print("setfield: \(set ? "set" : "no text field")")
     case "info":
         guard let w = win else { print("no window"); break }
         var disp: [CGDirectDisplayID] = Array(repeating: 0, count: 4); var n: UInt32 = 0
