@@ -611,3 +611,5 @@ Every decision below was taken alone, as the prompt asked.
 - **PL-D17 (independent clip colours, owner's request mid-run).** Already in the model since format
   v4 (`Clip.color`, `None` = the track's): the clip menu's Colour ▸ sets it, "Track Colour" clears
   it, and a track colour change leaves clips with their own colour alone. PL-02 now checks it.
+- **Merge.** Every gate passed: `pre-polish` tags the old `main` (23b5da9), pushed; `main`
+  fast-forwarded to `polish/option-d` (48ee94b, which contains `design/option-d`) and pushed.

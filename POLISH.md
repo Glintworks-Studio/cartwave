@@ -131,4 +131,6 @@ git merge --ff-only polish/option-d
 git push origin main
 ```
 
-MERGE_RESULT_PLACEHOLDER
+**Done 2026-11-26:** `pre-polish` tags the old `main` (23b5da9) and is pushed; `main` was
+fast-forwarded to `polish/option-d` (48ee94b: the design pass and this pass) and pushed. To go
+back: `git checkout -b back-to-pre-polish pre-polish`.
