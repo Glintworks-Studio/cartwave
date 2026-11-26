@@ -380,7 +380,7 @@ fn warnings(cx: &mut Context, st: &Settings) {
     }
     for id in &st.silenced {
         let id = id.clone();
-        row(cx, &id.clone(), |cx| {
+        row(cx, &crate::warn::describe(&id), |cx| {
             choice(cx, "Reset", false, true, set(Set::Unsilence(id)));
         });
     }

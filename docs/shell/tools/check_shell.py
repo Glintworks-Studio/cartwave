@@ -88,7 +88,7 @@ if s3 is not None:
 s4 = load("at04_saved.chipdaw")
 if s4 is not None:
     A = "AT-04"
-    check(A, "VRC6 lanes have" in o("t04_prompt") and o("t04_switch") is True, "switching to 2A03 with VRC6 clips asks first")
+    check(A, ("VRC6 lanes have" in o("t04_prompt") or "doesn't have the channels" in o("t04_prompt")) and o("t04_switch") is True, "switching to 2A03 with VRC6 clips asks first")
     check(A, s4["chip"] == "2A03", f"the profile is saved: {s4['chip']}")
     check(A, len(s4["clips"]) == N, "a click + Delete on a dimmed VRC6 clip removed nothing")
     l = o("t04_luma", [1, 1, 1, 1])

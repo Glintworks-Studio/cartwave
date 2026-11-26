@@ -1052,3 +1052,17 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   filter; it marks the project unsaved).
 - **B4A-D16 (black is reserved).** `palette::black_is_reserved_for_main`: no palette colour (so no
   grid cell and no automatic pick, reduced or not) has a brightest channel under `#40`.
+- **B4A-D17 (the earlier suites on format 7; harness changes).** All earlier scenarios were run on
+  this build (`run_old_suites.ps1`). Six needed attention: **AT-25 and AT-26 found a real bug**:
+  the header row captured the mouse on press (for the new header drag), so the M / S keys never
+  got their release (AT-25's solo). Fixed: the row captures only once a drag starts. The rest are
+  harness updates, as earlier passes made: (1) `docs/batch4a/tools/v7compat.py` lets every checker
+  read a format 7 file as the version 6 shape it was written for (`tracks` as `lanes`, `profile`
+  as `chip`, default colours left out as v6 did); (2) AT-04 / AT-16 click the new profile label
+  "NES (2A03)" and the new warning's "Switch anyway" (the text check accepts the new wording);
+  (3) AT-29: fx_basic now opens as NES (no VRC6 clips, B4A-D8), so the layout for "another chip"
+  is the 2A03 + VRC6 Band and its answer "Load on studio tracks"; (4) AT-02's pixel diff ignores
+  the window's 1 px OS frame (its colour follows focus: every one of the 1,605 differing pixels was
+  on it); (5) AT-26 places the window before its gesture: `Shot` moves the window to the top-left,
+  and its shot between the hover and the click put the cursor over the track menu's new rows. The
+  B4A harness places the window after every launch for the same reason.

@@ -1263,6 +1263,9 @@ impl View for TrackRow {
                     let y = cx.mouse().cursor_y / cx.scale_factor();
                     let (y0, _) = self.press.unwrap_or_default();
                     if self.s.track_drag.get_untracked().is_some() || (y - y0).abs() >= TRACK_DRAG_START {
+                        if self.s.track_drag.get_untracked().is_none() {
+                            cx.capture();
+                        }
                         let b = cx.bounds();
                         let top = b.y / cx.scale_factor();
                         let to = self.s.arrangement.with_untracked(|a| a.lane_at_clamped(a.lane_top(self.lane) + (y - top)));
@@ -1325,13 +1328,16 @@ impl View for TrackRow {
                     let m = *cx.modifiers();
                     cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                     cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
+                    // Captured only once it turns into a drag: the row's M / S keys
+                    // and sliders still get their own release.
                     self.press = Some((cx.mouse().cursor_y / cx.scale_factor(), false));
-                    cx.capture();
                     meta.consume();
                 }
                 WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some() => {
                     let (_, badge) = self.press.take().unwrap_or_default();
-                    cx.release();
+                    if badge || self.s.track_drag.get_untracked().is_some() {
+                        cx.release();
+                    }
                     if let Some((from, to)) = self.s.track_drag.get_untracked() {
                         self.s.track_drag.set(None);
                         if from != to {

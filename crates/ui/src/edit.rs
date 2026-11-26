@@ -728,8 +728,8 @@ impl AppState {
                 MenuItem::cmd(A::ZoomToFit).key("Double-click"),
             ],
             MenuSite::Track(lane) => {
-                let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
-                vec![
+                let (n, locked) = self.s.arrangement.with_untracked(|a| (a.lanes.len(), a.lanes.get(lane).is_some_and(|l| l.locked())));
+                let mut v = vec![
                     MenuItem::new(MenuAction::RenameTrack(lane), "Rename").key(shortcuts::label(A::Rename)),
                     MenuItem::new(MenuAction::Sub(SubMenu::TrackColor(lane)), "Colour"),
                     MenuItem::sep(),
@@ -738,8 +738,12 @@ impl AppState {
                     MenuItem::new(MenuAction::DeleteTrack(lane), "Delete Track").off_if(n <= 1, "A project keeps at least one track."),
                     MenuItem::sep(),
                     MenuItem::new(MenuAction::Sub(SubMenu::Lock(lane)), "Lock"),
-                    MenuItem::new(MenuAction::Sub(SubMenu::Voices(lane)), "Voices").off_if(self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.locked())), "A locked track plays one note at a time, like the chip."),
-                ]
+                ];
+                // A studio track's polyphony cap (a locked track is monophonic: no row).
+                if !locked {
+                    v.push(MenuItem::new(MenuAction::Sub(SubMenu::Voices(lane)), "Voices"));
+                }
+                v
             }
             MenuSite::Badge(lane) => self.lock_menu_items(lane),
             MenuSite::Piano(_) => {

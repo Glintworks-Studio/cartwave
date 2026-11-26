@@ -190,9 +190,9 @@ if (Want "AT-04") {
   Launch -Project $a -Data $d
   Shot "at04_before"
   Invoke-Menu "File" 8                                    # Project Settings…
-  $obs.t04_clicked = Click-Text "2A03"                    # Hardware profile: 2A03
+  $obs.t04_clicked = Click-Text "NES (2A03)"              # Hardware profile: NES (Batch 4a labels)
   $obs.t04_prompt = Dialog-Text; Shot "at04_prompt"
-  $obs.t04_switch = Press-Button "Switch to 2A03"
+  $obs.t04_switch = Press-Button "Switch anyway"         # Batch 4a: Unlock tracks / Switch anyway / Cancel
   Key 0x1B; Start-Sleep -Milliseconds 300
   Move-To 900 490; Start-Sleep -Milliseconds 500          # hover a VRC6 lane: it says why
   Shot "at04_after"
@@ -254,8 +254,8 @@ if (Want "AT-16") {
   Launch -Project $a -Data $d
   Invoke-Menu "File" 8
   Shot "at16_project_settings"
-  $obs.t16_clicked_profile = Click-Text "2A03"            # 2A03 (asks: the VRC6 lanes have clips)
-  Press-Button "Switch to 2A03" | Out-Null
+  $obs.t16_clicked_profile = Click-Text "NES (2A03)"      # NES (asks: locked VRC6 tracks; Batch 4a labels)
+  Press-Button "Switch anyway" | Out-Null
   Start-Sleep -Milliseconds 300
   $obs.t16_clicked_filter = Click-Text "Famicom"          # Output filter: Famicom
   Start-Sleep -Milliseconds 300

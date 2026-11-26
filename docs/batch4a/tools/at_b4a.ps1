@@ -15,6 +15,9 @@ python "$Repo\docs\batch3\tools\fixtures.py" $Work | Out-Null
 python "$Repo\docs\batch4a\tools\fixtures_b4a.py" $Work | Out-Null
 foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $obs = [ordered]@{ work = $Work }
+# Shot moves the window to the top-left: place it there right after each launch, so a later
+# shot never moves the window under the cursor mid-gesture.
+function Place { pwsh -NoProfile -File "$Repo\docs\perf	ools\shot.ps1" -Out "$global:Work\_place.png" | Out-Null; Start-Sleep -Milliseconds 300 }
 function ClickL($x, $y) { MoveL $x $y; Start-Sleep -Milliseconds 150; Down; Up; Start-Sleep -Milliseconds 300 }
 function DragL($x0, $y0, $x1, $y1) { MoveL $x0 $y0; Start-Sleep -Milliseconds 150; $a = P $x0 $y0; $b = P $x1 $y1; Down; for ($i = 1; $i -le 16; $i++) { Move-To ([int]($a[0] + ($b[0] - $a[0]) * $i / 16)) ([int]($a[1] + ($b[1] - $a[1]) * $i / 16)); Start-Sleep -Milliseconds 15 }; Up; Start-Sleep -Milliseconds 300 }
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
@@ -30,7 +33,7 @@ function BarX($bar) { 621 + 92 * ($bar - 1) }
 # ─────────── B4A-01: Return and Backspace never reach the song behind a dialog (MC-D9) ───────────
 if (Want "B4A-01") {
   $p = Fx "fx_basic" "b401"; $d = Join-Path $Work "d401"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   ClickL ((BarX 2) + 10) ((RowY 0) + 40)          # select Lead A
   CtrlShift 0x52; Start-Sleep -Milliseconds 500    # Export Audio… (Ctrl+Shift+R)
   Shot "b401_export"
@@ -59,7 +62,7 @@ function Cell($mx, $my, $n, $r, $c, $rowsAbove = 0) {
 # ─────────── B4A-02: colour previews never leak (MC-D15) ───────────
 if (Want "B4A-02") {
   $p = Fx "fx_basic" "b402"; $d = Join-Path $Work "d402"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   $mx = 400; $my = (RowY 2) + 5
   # (1) hover a colour, Esc: the old colour is back, nothing unsaved.
   $obs.b402_title0 = Title
@@ -84,7 +87,7 @@ if (Want "B4A-02") {
 # ─────────── B4A-03: Ctrl-click toggles a clip, Shift-click selects a range (R28) ───────────
 if (Want "B4A-03") {
   $p = Fx "fx_basic" "b403"; $d = Join-Path $Work "d403"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   $lead = @(((BarX 2) + 10), ((RowY 0) + 40)); $harmA = @(((BarX 1) + 40), ((RowY 1) + 40))
   $harmB = @(((BarX 3) + 40), ((RowY 1) + 40)); $bass = @(((BarX 6) + 10), ((RowY 2) + 40))
   ClickL $lead[0] $lead[1]; Start-Sleep -Milliseconds 500
@@ -117,7 +120,7 @@ $MainY = 823                                       # the Main row's top (client 
 # ─────────── B4A-04 / AT-13: insert a track (Ctrl+Shift+T), drag it to the top, delete it, colour ───────────
 if (Want "B4A-04") {
   $p = Fx "fx_basic" "b404"; $d = Join-Path $Work "d404"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   $n = NameAt 0; ClickL $n[0] $n[1]; Start-Sleep -Milliseconds 400
   CtrlShift 0x54; Start-Sleep -Milliseconds 500        # Ctrl+Shift+T: a studio track below track 1
   Save; Keep $p "b404_inserted"
@@ -140,7 +143,7 @@ if (Want "B4A-04") {
 # ─────────── B4A-05: lock with reset ("Reset and lock"), one undo, unlock restores ───────────
 if (Want "B4A-05") {
   $p = Fx "fx4_studio" "b405"; $d = Join-Path $Work "d405"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   $bd = Badge 0; ClickL $bd[0] $bd[1]; Start-Sleep -Milliseconds 500
   Shot "lock-menu"
   $obs.b405_menu = @(DevLines $d "^dev: menu Badge")
@@ -166,7 +169,7 @@ if (Want "B4A-06") {
   foreach ($ans in @("unlock", "fit", "cancel")) {
     $p = Fx "fx4_studio" "b406_$ans"; $d = Join-Path $Work "d406$ans"
     $env:CHIPDAW_WARN_ANSWER = $ans
-    Launch -Project $p -Data $d
+    Launch -Project $p -Data $d; Place
     Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
     $obs."b406_click_$ans" = Click-Text "NES (2A03)"
     Start-Sleep -Milliseconds 500
@@ -184,7 +187,7 @@ if (Want "B4A-07") {
   foreach ($ans in @("fit", "unlock", "cancel")) {
     $p = Fx "fx4_chord" "b407_$ans"; $d = Join-Path $Work "d407$ans"
     $env:CHIPDAW_WARN_ANSWER = $ans
-    Launch -Project $p -Data $d
+    Launch -Project $p -Data $d; Place
     $cl = @(((BarX 1) + 40), ((RowY 0) + 40)); DblL $cl[0] $cl[1]; Start-Sleep -Milliseconds 800   # open the clip
     K 0x42; Start-Sleep -Milliseconds 300                         # B: draw mode
     $ln = DevLines $d "^dev: piano roll bounds"
@@ -206,7 +209,7 @@ if (Want "B4A-07") {
 # ─────────── B4A-08: the Main gain (wheel), PEAK resets, saved ───────────
 if (Want "B4A-08") {
   $p = Fx "fx_basic" "b408"; $d = Join-Path $Work "d408"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   Shot "main-track"
   MoveL 589 ($MainY + 30); Start-Sleep -Milliseconds 200
   Wheel -1; Start-Sleep -Milliseconds 200; Wheel -1; Start-Sleep -Milliseconds 200; Wheel -1; Start-Sleep -Milliseconds 300
@@ -220,7 +223,7 @@ if (Want "B4A-08") {
 # ─────────── B4A-09: Insert Track ▸ a type from the header menu; Voices; Duplicate ───────────
 if (Want "B4A-09") {
   $p = Fx "fx4_studio" "b409"; $d = Join-Path $Work "d409"
-  Launch -Project $p -Data $d
+  Launch -Project $p -Data $d; Place
   $mx = 400; $my = (RowY 0) + 5
   RightL $mx $my; Start-Sleep -Milliseconds 300
   $obs.b409_menu = @(DevLines $d "^dev: menu Track")

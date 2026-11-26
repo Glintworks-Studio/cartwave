@@ -219,6 +219,9 @@ if (Want "AT-25") {
 if (Want "AT-26") {
   $p = Fx "fx_basic" "at26"; $d = Join-Path $Work "d26"
   Launch -Project $p -Data $d -Scale $Scale
+  # Batch 4a: Shot moves the window to the top-left; do it first, so the later shot between
+  # the hover and the click doesn't move the menu under the cursor (B4A-D17).
+  Shot "at26_start"
   $mx = 300; $my = (Ly 3) - 10
   RightL $mx $my
   MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 400   # hover Colour: the submenu
@@ -282,9 +285,11 @@ if (Want "AT-29") {
   $obs.t29_after_esc = @(Ui-Texts | Where-Object { $_ -like "field:*" })
   ClickL 100 193                                                # "Classic 2A03 Band": select only
   Save; Keep $p "at29_click"; Shot "at29_layout_selected"
-  DblL 100 193                                                  # double-click: load (it asks: 2A03)
+  # Batch 4a: fx_basic opens as NES (no VRC6 clips), so the layout for another chip is the
+  # 2A03 + VRC6 Band; "Load on studio tracks" keeps the profile (RUNLOG B4A-D17).
+  DblL 100 221                                                  # double-click: load (it asks: VRC6)
   $obs.t29_dialog = Dialog-Text
-  $obs.t29_keep = Press-Button "Keep 2A03 + VRC6"
+  $obs.t29_keep = Press-Button "Load on studio tracks"
   Save; Keep $p "at29_dbl"; Stop-App
 }
 

@@ -26,6 +26,9 @@ function Pixel-Diff([string]$PathA, [string]$PathB, [int[]]$Skip = @()) {
   $diff = 0
   for ($i = 0; $i -lt $x.Length; $i += 4) {
     if ($x[$i] -ne $y[$i] -or $x[$i + 1] -ne $y[$i + 1] -or $x[$i + 2] -ne $y[$i + 2]) {
+      # The window's 1 px frame is the OS's (its colour follows focus): not the app (Batch 4a).
+      $fx = ($i / 4) % $pa.W; $fy = [math]::Floor(($i / 4) / $pa.W)
+      if ($fx -eq 0 -or $fx -ge $pa.W - 1 -or $fy -ge $pa.H - 1) { continue }
       if ($Skip.Count -eq 4) {
         $px = ($i / 4) % $pa.W; $py = [math]::Floor(($i / 4) / $pa.W)
         if ($px -ge $Skip[0] -and $px -lt $Skip[2] -and $py -ge $Skip[1] -and $py -lt $Skip[3]) { continue }
