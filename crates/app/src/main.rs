@@ -15,7 +15,10 @@ use vizia::prelude::*;
 #[global_allocator]
 static ALLOC: engine::alloc_check::CheckingAllocator = engine::alloc_check::CheckingAllocator;
 
-const DEFAULT_SIZE: (u32, u32) = (1440, 900);
+/// The window's starting size (logical px). 920 tall: what the design pass's
+/// minimum made it; the polish pass lowered the minimum (lanes scroll) but
+/// keeps the start size.
+const DEFAULT_SIZE: (u32, u32) = (1440, 920);
 
 fn arg_after(flag: &str) -> Option<Vec<String>> {
     let args: Vec<String> = std::env::args().collect();

@@ -33,16 +33,20 @@ ALLOWED = {
 }
 
 
-def crop(img, scale):
-    """The client area. The title bar and menu bar heights scale with the DPI the
-    window was created at, not the app's interface scale, so the client top is found:
-    the top bar's #323232 top line in the column at x = 700 logical."""
+def client_top(img, scale):
+    """The client area's top: the top bar's #323232 top line in the column at
+    x = 700 logical (found on the plain "stopped" shot; every shot of a run has
+    the window in the same place)."""
     x = int(700 * scale / 100)
     px = img.load()
     for y in range(10, 200):
         if px[x, y][:3] == (0x32, 0x32, 0x32):
-            return img.crop((1, y, img.width - 1, img.height - 1)), y
+            return y
     raise SystemExit("no client top found")
+
+
+def crop(img, top):
+    return img.crop((1, top, img.width - 1, img.height - 1)), top
 
 
 def main():
@@ -51,12 +55,14 @@ def main():
     k = scale / 100.0
     rows = ["| State | Changed px | Outside the allowed regions | Changed regions (bbox, client px) |", "|---|---|---|---|"]
     failed = 0
+    top_a = client_top(Image.open(os.path.join(before, "stopped.png")).convert("RGB"), scale)
+    top_b = client_top(Image.open(os.path.join(after, "stopped.png")).convert("RGB"), scale)
     for f in sorted(os.listdir(before)):
         if not f.endswith(".png") or not os.path.exists(os.path.join(after, f)):
             continue
         name = f[:-4]
-        a, ya = crop(Image.open(os.path.join(before, f)).convert("RGB"), scale)
-        b, yb = crop(Image.open(os.path.join(after, f)).convert("RGB"), scale)
+        a, _ = crop(Image.open(os.path.join(before, f)).convert("RGB"), top_a)
+        b, _ = crop(Image.open(os.path.join(after, f)).convert("RGB"), top_b)
         w, h = min(a.width, b.width), min(a.height, b.height)
         # The menu popup sits above the client top: compare from the screenshot's top
         # for that state (same window placement in both).

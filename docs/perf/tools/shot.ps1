@@ -17,6 +17,24 @@ public class W {
 if ($Delay -gt 0) { Start-Sleep -Milliseconds $Delay }
 $p = Get-Process -Name $ProcName -ErrorAction Stop | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 $h = $p.MainWindowHandle
+# With a menu open the process's "main window" can be the popup (untitled):
+# use the process's titled top-level window instead.
+if ([string]::IsNullOrEmpty($p.MainWindowTitle)) {
+  Add-Type @"
+using System; using System.Runtime.InteropServices; using System.Text;
+public class Ew { public delegate bool P(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(P p, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  public static IntPtr Find(uint pid) { IntPtr found = IntPtr.Zero;
+    EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); var sb = new StringBuilder(256);
+      if (p == pid && IsWindowVisible(h) && GetWindowText(h, sb, 256) > 0 && sb.ToString().Contains("ChipDAW")) { found = h; return false; } return true; }, IntPtr.Zero);
+    return found; } }
+"@
+  $t = [Ew]::Find([uint32]$p.Id)
+  if ($t -ne [IntPtr]::Zero) { $h = $t }
+}
 [W]::SetForegroundWindow($h) | Out-Null
 # Move to top-left (SWP_NOSIZE | SWP_NOZORDER) so tall windows fit above the taskbar.
 [W]::SetWindowPos($h, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001 -bor 0x0004) | Out-Null

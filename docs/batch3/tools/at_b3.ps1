@@ -222,11 +222,14 @@ if (Want "AT-26") {
   RightL $mx $my
   MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 400   # hover Colour: the submenu
   Shot "at26_colour_sub"
-  ClickL ($mx + 236 + 60) ($my + 28 + 4 + 6 * 28 + 14)          # "Sky"
+  # The colour grid (polish pass): the submenu opens at the menu's right edge, 28 px down;
+  # cells are 16 px on a 20 px pitch from 12 px in. Sky #4FA8E0: row 3, column 9.
+  ClickL ($mx + 236 + 12 + 8 * 20 + 8) ($my + 28 + 12 + 2 * 20 + 8)      # Sky
   $cx = Bx 2; $cy = Ly 0
   RightL $cx $cy
   MoveL ($cx + 30) ($cy + 4 + 5 * 28 + 8 + 3 * 28 + 14); Start-Sleep -Milliseconds 400
-  ClickL ($cx + 236 + 60) ($cy + 4 + 5 * 28 + 8 + 3 * 28 + 4 + 8 * 28 + 14)   # "Coral"
+  # Under "Track Colour" (one row): Coral #E0705A, row 3, column 1.
+  ClickL ($cx + 236 + 12 + 0 * 20 + 8) ($cy + 5 * 28 + 8 + 3 * 28 + 4 + 28 + 8 + 2 * 20 + 8)   # Coral
   Shot "at26_coloured"; Save; Keep $p "at26_out"; Stop-App
 }
 

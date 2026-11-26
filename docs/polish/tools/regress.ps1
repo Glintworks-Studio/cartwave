@@ -13,6 +13,21 @@ $ErrorActionPreference = "Stop"
 $Exe = (Resolve-Path $Exe).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 $S = $Scale / 100.0
+Add-Type -AssemblyName System.Drawing
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public class Wr { [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rr, B; }
+  [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out R r, int s); }
+"@
+# A screenshot of the window's frame bounds (shot.ps1's method), by handle: with a menu
+# open, the process's "main window" can be the popup.
+function Save-Window([IntPtr]$h, [string]$path) {
+  $r = New-Object Wr+R; [Wr]::DwmGetWindowAttribute($h, 9, [ref]$r, 16) | Out-Null
+  $bmp = New-Object System.Drawing.Bitmap ($r.Rr - $r.L), ($r.B - $r.T)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.CopyFromScreen($r.L, $r.T, 0, 0, $bmp.Size)
+  $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose()
+}
 function P($x, $y) { Move-To ([int]($x * $S)) ([int]($y * $S)) }
 function Click($x, $y) { P $x $y; Down; Up; Start-Sleep -Milliseconds 300 }
 function Park { P 1300 840; Start-Sleep -Milliseconds 700 }
@@ -49,7 +64,7 @@ foreach ($st in $States) {
   Park
   if ($act) { & $act; if ($name -ne "menu_edit") { Park } }
   Start-Sleep -Milliseconds 800
-  pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out (Join-Path $Out "$name.png") | Out-Null
+  Save-Window $global:AppH (Join-Path $Out "$name.png")
   if ($name -eq "menu_edit") { MKey 0x1B; MKey 0x1B }
   Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
 }
