@@ -15,6 +15,10 @@ $global:Exe = (Resolve-Path $Exe).Path
 python "$Repo\docs\batch3\tools\fixtures.py" $Work | Out-Null
 foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $obs = [ordered]@{ work = $Work }
+# Clicks and drags settle on their spot first (hover state), so a click right after a layout
+# change (a width drag, a settings change) isn't lost.
+function ClickL($x, $y) { MoveL $x $y; Start-Sleep -Milliseconds 150; Down; Up; Start-Sleep -Milliseconds 250 }
+function DragL($x0, $y0, $x1, $y1) { MoveL $x0 $y0; Start-Sleep -Milliseconds 150; $a = P $x0 $y0; $b = P $x1 $y1; Down; for ($i = 1; $i -le 16; $i++) { Move-To ([int]($a[0] + ($b[0] - $a[0]) * $i / 16)) ([int]($a[1] + ($b[1] - $a[1]) * $i / 16)); Start-Sleep -Milliseconds 15 }; Up; Start-Sleep -Milliseconds 300 }
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 function Want($id) { $Only.Count -eq 0 -or $Only -contains $id }
 function Fx($name, $as) { $p = Join-Path $Work "$as.chipdaw"; Copy-Item (Join-Path $Work "$name.chipdaw") $p -Force; $p }

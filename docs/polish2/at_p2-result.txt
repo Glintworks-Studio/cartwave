@@ -1,0 +1,93 @@
+PASS P2-01: saved as format version 6
+PASS P2-01: '-3' + Enter: track 1 at -3 dB (-3.0)
+PASS P2-01: one Ctrl+Z restores 0 dB (None)
+PASS P2-01: Esc cancels (None)
+PASS P2-01: '-inf' is silence (-inf)
+PASS P2-01: '+2.5' and a click elsewhere commits on track 2 (2.5)
+PASS P2-01: marked unsaved: title 'p201 — ChipDAW' -> '*p201 — ChipDAW'
+PASS P2-02: '25L': pan -25 (-25)
+PASS P2-02: '30R': pan 30 (30)
+PASS P2-02: one Ctrl+Z goes back to 25L (-25)
+PASS P2-02: '-12' is 12L (-12)
+PASS P2-03: dragging the fader down lowers the volume (-26.400002)
+PASS P2-03: one Ctrl+Z undoes the whole drag (None)
+PASS P2-03: dragging the pan thumb right pans right (25)
+PASS P2-04: dragging the bottom edge down 72 px: 144 (144.0)
+PASS P2-04: Alt+wheel up one notch over track 2: 84 (84.0)
+PASS P2-04: Ctrl+Z restores 72 (None)
+PASS P2-04: dev lines: ['dev: row height 0 76', 'dev: row height 0 80', 'dev: row height 0 84']
+PASS P2-05: the width stops at 600 (600.0)
+PASS P2-05: and at 380 (380.0)
+PASS P2-05: dragging the boundary 140 px right: 520 (520.0)
+PASS P2-05: kept after a restart (screenshot p205_restart.png)
+PASS P2-06: Track headers: Right (saved, the others untouched)
+PASS P2-06: Colour strip: By the clips
+PASS P2-06: Browser: Right
+PASS P2-06: applied at once: ['dev: look headers_right=true strip_by_clips=true browser_right=true overview=true width=380']
+PASS P2-07: a click on the ruler places the playhead (a click, not a drag)
+PASS P2-07: dragging down zooms in: [189.01, 189.01]
+PASS P2-07: dragging sideways scrolls: [5977.0, 10040.0]
+PASS P2-07: a double-click zooms to fit
+PASS P2-07: the ruler's hover help
+PASS P2-08: W fits the whole song
+PASS P2-08: W again goes back
+PASS P2-09: a click outside the outline jumps
+PASS P2-09: drags scroll and zoom
+PASS P2-09: a double-click zooms to fit
+PASS P2-09: Ctrl+Alt+O hides it (saved)
+PASS P2-09: and shows it again
+PASS P2-09: the Overview's hover help
+PASS P2-10: hover help for the fader
+PASS P2-10: hover help for the M key
+PASS P2-10: hover help for the pan
+PASS P2-10: hover help for the view keys
+PASS P2-10: hover help for the transport
+PASS P2-10: hover help for the display
+PASS P2-10: hover help for the TAP
+PASS P2-10: hover help for the spectrum
+PASS P2-10: hover help for the CPU/MEM
+PASS P2-10: hover help for the ruler
+PASS P2-10: hover help for the Overview
+PASS P2-10: a click on the problem icon lists the problems
+PASS P2-11: lo: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: lo: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: lo: the dB value of track 3 (-6.0)
+PASS P2-11: lo: the pan value of track 4 (10)
+PASS P2-11: lo: the fader of track 5 (-21.0)
+PASS P2-11: lo: the bottom edge of track 6 (96.0)
+PASS P2-11: lo: the name of track 7 (Hit)
+PASS P2-11: lo: the width boundary (420.0)
+PASS P2-11: lo: the ruler
+PASS P2-11: lo: the Overview
+PASS P2-11: lc: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: lc: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: lc: the dB value of track 3 (-6.0)
+PASS P2-11: lc: the pan value of track 4 (10)
+PASS P2-11: lc: the fader of track 5 (-21.0)
+PASS P2-11: lc: the bottom edge of track 6 (96.0)
+PASS P2-11: lc: the name of track 7 (Hit)
+PASS P2-11: lc: the width boundary (420.0)
+PASS P2-11: lc: the ruler
+PASS P2-11: lc: the Overview
+PASS P2-11: rc: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: rc: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: rc: the dB value of track 3 (-6.0)
+PASS P2-11: rc: the pan value of track 4 (10)
+PASS P2-11: rc: the fader of track 5 (-21.0)
+PASS P2-11: rc: the bottom edge of track 6 (96.0)
+PASS P2-11: rc: the name of track 7 (Hit)
+PASS P2-11: rc: the width boundary (420.0)
+PASS P2-11: rc: the ruler
+PASS P2-11: rc: the Overview
+PASS P2-11: ro: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: ro: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: ro: the dB value of track 3 (-6.0)
+PASS P2-11: ro: the pan value of track 4 (10)
+PASS P2-11: ro: the fader of track 5 (-21.0)
+PASS P2-11: ro: the bottom edge of track 6 (96.0)
+PASS P2-11: ro: the name of track 7 (Hit)
+PASS P2-11: ro: the width boundary (420.0)
+PASS P2-11: ro: the ruler
+PASS P2-11: ro: the Overview
+
+ALL PASS: P2-01, P2-02, P2-03, P2-04, P2-05, P2-06, P2-07, P2-08, P2-09, P2-10, P2-11

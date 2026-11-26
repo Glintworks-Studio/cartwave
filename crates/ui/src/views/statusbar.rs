@@ -77,7 +77,9 @@ impl View for StatusBar {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
-            WindowEvent::MouseDown(MouseButton::Left) => {
+            // On release: a menu opened on the press would take the release
+            // on its first row (which closes it).
+            WindowEvent::MouseUp(MouseButton::Left) => {
                 let s = cx.scale_factor();
                 let b = cx.bounds();
                 let x = (cx.mouse().cursor_x - b.x) / s;

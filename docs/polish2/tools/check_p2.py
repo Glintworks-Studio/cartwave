@@ -129,6 +129,13 @@ if obs.get("p210_dev") is not None:
                       ("CPU/MEM", r"^dev: help CPU"), ("ruler", r"^dev: help Ruler"), ("Overview", r"^dev: help Overview")]:
         check(S, has(d, pat), f"hover help for the {name}")
     check(S, has(d, r"^dev: menu Problems"), "a click on the problem icon lists the problems")
+    a, b = (os.path.join(work, n) for n in ("p210_status.png", "p210_problems.png"))
+    if os.path.exists(a) and os.path.exists(b):
+        from PIL import Image, ImageChops
+        ia, ib = Image.open(a).convert("RGB"), Image.open(b).convert("RGB")
+        box = (0, ia.height - 260, 400, ia.height - 30)
+        diff = ImageChops.difference(ia.crop(box), ib.crop(box)).getbbox()
+        check(S, diff is not None, f"and the list stays on screen (the area above the icon changed: {diff})")
 
 for tag in ("lo", "lc", "rc", "ro"):
     f = load(f"p211_{tag}_after")
