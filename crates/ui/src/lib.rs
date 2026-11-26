@@ -320,6 +320,8 @@ pub enum AppEvent {
     HoverHelp(String),
     /// The status bar's warning icon was clicked (window logical x, y).
     ShowProblems(f32, f32),
+    /// The status bar's message was clicked: the whole text.
+    ShowMessage(f32, f32),
     /// A track's row height, logical px (polish 2 §4); clamped to its steps.
     SetLaneHeight(usize, f32),
     /// The spectrum's style (its right-click menu; remembered in settings.json).
@@ -542,6 +544,11 @@ impl Model for AppState {
                 }
             }
             AppEvent::ShowProblems(x, y) => self.open_context_menu(edit::MenuSite::Problems, *x, *y),
+            AppEvent::ShowMessage(x, y) => {
+                // Keep the message up while it's being read.
+                self.status_until = Some(Instant::now() + Duration::from_secs(REPORT_SECS));
+                self.open_context_menu(edit::MenuSite::Message, *x, *y)
+            }
             AppEvent::HoverHelp(t) => {
                 if self.s.hover_help.with_untracked(|h| h != t) {
                     if dev::enabled() && !t.is_empty() {

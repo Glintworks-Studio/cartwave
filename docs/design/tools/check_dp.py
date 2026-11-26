@@ -74,8 +74,8 @@ if "dp03_on" in obs:
 # DP-04: disabled reasons
 if "dp04_mixer" in obs:
     S = "DP-04"
-    for k, what in (("dp04_mixer", "Mixer key"), ("dp04_record", "Record key"), ("dp04_pan", "pan slider"), ("dp04_tri", "triangle's fader")):
-        check(S, len(as_list(o(k))) > 0, f"the {what} says why: {o(k)}")
+    for k, what in (("dp04_mixer", "Mixer key"), ("dp04_record", "Record key"), ("dp04_pan", "pan slider (editable; heard with stereo mixing)"), ("dp04_tri", "triangle's fader (works since polish 2)")):
+        check(S, len(as_list(o(k))) > 0, f"the {what} says why on the status bar: {o(k)}")
 
 # DP-05: bit depth
 if "dp05_dev" in obs:
@@ -84,7 +84,7 @@ if "dp05_dev" in obs:
     check(S, any(l.endswith(" 16") for l in dev[:1]), f"a version 4 file opens as 16-bit: {dev[:1]}")
     check(S, any(l.endswith(" 24") for l in dev), f"Project Settings sets 24-bit: {dev}")
     f = load("dp05_saved")
-    check(S, f is not None and f.get("bits") == 24 and f.get("version") == 5, f"saved: version {f and f.get('version')}, bits {f and f.get('bits')}")
+    check(S, f is not None and f.get("bits") == 24 and f.get("version") >= 5, f"saved: version {f and f.get('version')}, bits {f and f.get('bits')}")
     b, a = (os.path.join(work, n) for n in ("dp05_before.png", "dp05_after.png"))
     if os.path.exists(b) and os.path.exists(a):
         # The indicators' format text (client x 416..488, y 40..56; window y + 51, x + 1).

@@ -647,3 +647,55 @@ Every decision below was taken alone, as the prompt asked.
 - **P2-D6 (pan).** Pan is −50 … +50 (shown 50L … C … 50R; the manual gives no format, P2-R
   "unverified"), editable and saved, not heard until stereo mixing (Batch 4); its hover help
   says so. A render with only pan changed is bit-identical (tested).
+- **P2-D7 (the boards' HTML over their PNGs).** Positions come from the HTML boxes. The 1× PNGs
+  disagree with their own HTML by 1 px in places (E1-header: M/S at y 9 and the pan well at 59 in
+  the PNG; y 10 and 58 in the HTML); the code follows the HTML. The boards draw the M / S letter
+  at the key's top-left (a static-HTML button artifact); §3 says the keys are unchanged, so the
+  glyph stays centred.
+- **P2-D8 (the fader's scale between boards).** E1-header's thumbs don't follow §3's scale
+  (−2.2 dB at 5 px, −1.3 dB at 2 px); E1-row-heights does (`round((1 − (dB + 48)/54) · length)`
+  for the thumb's centre: −1.3 dB → 15 on a 112 px well, −3.1 → 35 on 208). The code follows the
+  formula; its meter stops are §3's 0/45/70/85/89 % (E1-header used px stops).
+- **P2-D9 (row heights).** A row's height excludes its hairline (72 = today's 72 + 1). The resize
+  grab is the row's bottom 4 px (ns-resize); Alt while dragging sets every track (P2-R20); Alt+wheel
+  is 12 px (three 4 px steps) per notch. Heights are part of the document (undo, the unsaved mark).
+- **P2-D10 (the header column draws its hairline).** The column paints `#0A0A0A` and the hairline
+  on the lanes' side (the old 1 px divider element is gone), so a strip by the clips covers it in
+  its row as on the board; the default layout is pixel-identical (regression gate). The width grab
+  is 4 px inside the column; the width is saved when the drag ends.
+- **P2-D11 (ruler click vs drag, §7.1).** Today a press on the ruler scrubbed while dragging.
+  Resolution: a press that moves < 3 px is a click and places the playhead as before; a drag
+  navigates (vertical zooms, 1.2 %/px exponential, down = in, anchored at the grabbed bar;
+  horizontal scrolls with the bar following the mouse; P2-R7). **Shift+drag scrubs** (the manual's
+  Shift-scrub, P2-R10). The loop brace and the double-click (fit) are unchanged.
+- **P2-D12 (keys).** W was free: **Fit the Whole Song** (the manual's Optimize Arrangement Width,
+  P2-R13; pressed again it goes back, as the manual's toggle). Ctrl+Alt+O / Cmd+Option+O was free:
+  **View ▸ Show Overview** (P2-R6). Zoom In / Out (+ / −) existed (B3). Both are in the one
+  shortcut table, so the menus and the shortcut sheet list them.
+- **P2-D13 (the Overview).** Its extent is the song (the last clip or the loop end, at least four
+  bars; the label's "24 BARS"). A press outside the outline jumps there (the view centred on it)
+  and keeps dragging from there; inside, it drags. The manual doesn't say what a single click does
+  (P2-R5), so the jump is the CEO's spec. Up to 14 tracks get their own row, then they share.
+- **P2-D14 (status bar).** Messages stay 8 s (was 6). A click on a message shows it whole (an
+  import report no longer fits a one-line bar). Problems: no device, can't open, reconnecting,
+  dropouts (cleared 10 s after the last underrun). The warning icon is amber, not lime (not an
+  "on" state). "Hardware profile over budget" can't happen yet (Batch 4). The recovery offer stays
+  in its capsule (a decision). With the status bar hidden (dev hook), messages fall back to the
+  capsule.
+- **P2-D15 (hover help scope).** Converted to the status bar: the header controls, transport,
+  view keys, display, TAP, ruler, Overview, spectrum, CPU/MEM (§6.5's list). The inspector's,
+  browser's and dialogs' tooltips stay tooltips (outside the list; in a dialog the bar is under
+  the backdrop); a track row's full-name tooltip stays (content, not help).
+- **P2-D16 (the earlier suites).** AT-01…31, DP-01…05 and PL-01…05 click fixed coordinates (rows
+  from y 104, lanes down to the window's bottom). They run with the dev hooks
+  `CHIPDAW_OVERVIEW=0` and `CHIPDAW_HIDE_STATUS=1` (`docs/polish2/tools/run_old_suites.ps1`); the
+  new layout itself is covered by P2-01…11. DP-04 now reads the reasons from the status bar's hover
+  help, and the triangle's fader works (P2-D4); DP-05 accepts format ≥ 5.
+- **P2-D17 (dev hooks).** `CHIPDAW_HIDE_STATUS=1` (the regression gate), `CHIPDAW_OVERVIEW=0`
+  (earlier suites), `CHIPDAW_FAKE_PROBLEM=text` (the status bar's screenshot and P2-10). All
+  dev-mode only (`CHIPDAW_DEV=1`), none is a user setting.
+- **P2-D18 (harness fixes in the earlier suites).** AT-02 waited 7 s for "Saved" to fade
+  (now 8 s): 9 s, and it parks the mouse first (it runs without dev mode, so the Overview shows
+  and a track row's tooltip opened under the idle mouse). AT-25 clicks the S keys at their E1
+  place (header x 288…312, y 10…34). AT-09 failed once in the full run and passed alone and on
+  every later run (a timing flake in the piano roll, which this pass didn't touch).

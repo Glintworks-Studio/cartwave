@@ -38,7 +38,13 @@ fn main() {
             canvas.draw_rect(vg::Rect::from_xywh(r.right - 1.0, r.top, 1.0, r.height()), &gfx::fill(er));
             if lit_on {
                 if let Some(img) = chrome::render_lit_strip(c, r.width(), r.height(), s) {
-                    canvas.draw_image(&img, (r.left, r.top), None);
+                    // The image pads both sides for the spill; a strip at the
+                    // window's edge shows only the inner one (polish 2).
+                    let pad = chrome::lit_pad(s);
+                    canvas.save();
+                    canvas.clip_rect(vg::Rect::from_ltrb(r.left, r.top, r.right + pad, r.bottom), None, None);
+                    canvas.draw_image(&img, (r.left - pad, r.top), None);
+                    canvas.restore();
                 }
             }
         }

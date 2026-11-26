@@ -83,6 +83,8 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Zoom to Selection | Z | Z | (R30) | M | ✓ · **done** (B3) |
 | Zoom Back | X | X | (R31) | M | ✓ · **done** (B3) |
 | Zoom to Fit | (double-click the ruler) | same | Whole song (R32) | M | ✓ · **done** (B3) |
+| Fit the Whole Song | W | W | The whole song in view; pressed again, back (the manual's Optimize Arrangement Width, P2-R13) | M | polish 2 · **done** |
+| Show Overview | Ctrl+Alt+O | ⌘⌥O | The Overview strip above the ruler, with a checkmark; on by default, saved per user (P2-R6) | S | polish 2 · **done** |
 | Draw Mode | B | B | Toggle (R5) | M | ✓ · **done** (B3) |
 | Clock: Bars / Time | — | — | Replaces the click-on-clock toggle (F-38); Home rewinds | S | ✓ · **retired** (design pass): the display shows TIME and POSITION together |
 | Automation Mode | A | A | (R104) | L | ✓ |
@@ -115,6 +117,9 @@ Support/ChipDAW`). Every field has a default, unknown fields are ignored (today'
 | | Interface scale | 100% (follows the OS) | S | ✓ · **done** (B3): 75–200%, live |
 | | Clock shows | Time (m:ss.cc) | S | ✓ · **retired** (design pass): both are shown |
 | | Dark menus (Windows) | **On** (owner-drawn dropdowns; docs/design/DARK-MENUS.md) | S | polish pass: **on by default** (CEO-approved) |
+| Look & Feel | Track headers | **Left** (or Right) | S | polish 2 · **done** |
+| | Colour strip | **Outside** (at the window's edge; or By the clips) | S | polish 2 · **done** |
+| | Browser | **Left** (or Right) | S | polish 2 · **done** |
 | Editing | Default arrangement grid | 1/16 | S | ✓ |
 | | Default piano-roll grid | 1/16 | S | ✓ |
 | | Follow playhead | On | S | ✓ |
@@ -128,7 +133,8 @@ Support/ChipDAW`). Every field has a default, unknown fields are ignored (today'
 | | Reset all warnings | — | M | ✓ |
 
 Also stored (not shown): recent files, window size/position, browser open, export options,
-split height.
+split height, the track headers' width (380–600, the boundary drag) and View ▸ Show Overview.
+The manual has no left/right setting for headers or the browser (P2-R43, P2-R44): those three are ours.
 
 ## 3. Project Settings
 
@@ -191,6 +197,33 @@ See [docs/design/VISUAL-SPEC.md](docs/design/VISUAL-SPEC.md) §2.
 POSITION, START, LENGTH, BPM) are Inter 600 **10 px**, below the 11 px minimum for informative text
 (F-39). They are uppercase, tracked .1em, and `#808080` on `#151515` is 4.6:1, above 4.5:1.
 
+## 4c. The status bar (polish 2)
+
+A 24 px bar along the window's bottom (VISUAL-SPEC.md §10). The reference's Status Bar shows
+messages (Live 12 manual, ch. 3 Live Concepts, §3.2 The Status Bar, P2-R38) and its Info View
+shows the name and function of the control under the mouse (ch. 2 First Steps, §2.2.2 Info View,
+P2-R39). We copy the behaviour, not the look.
+
+| # | Behaviour | Pri | Status |
+|---|---|---|---|
+| SB1 | Left, `role=status`: the latest non-urgent message with a small icon, 8 s, then the idle text ("Saved · name" / "Unsaved changes · name"). A click shows a long message whole. Every former toast moved here (docs/polish2/notices.md) | S | done |
+| SB2 | Persistent problems (no audio device, a device that won't open, dropouts until 10 s pass without one) put a warning icon on the bar until resolved; a click lists them. (In the reference, overloads show in the Control Bar, not the Status Bar: P2-R42, contradicted; our CEO's spec wins.) A hardware profile over its budget joins this list with Batch 4 | S | done |
+| SB3 | Right: one line of hover help for the control under the mouse: header controls, transport, display, TAP, ruler, Overview, spectrum, CPU/MEM (their tooltips converted). Inspector, browser and dialog tooltips stay tooltips | S | done |
+| SB4 | Dialogs stay for decisions only: save prompts, the MIDI-drop conflict, profile changes, anything destructive; the recovery offer stays in its capsule | M | done |
+
+## 4d. Navigation: ruler and Overview (polish 2)
+
+| # | Action | Result | Pri | Status |
+|---|---|---|---|---|
+| N1 | Drag the beat-time ruler **vertically** | Zooms smoothly (down: in), anchored under the mouse so the grabbed bar stays put (P2-R7, ch. 6 Arrangement View, §6.1 Layout item 2, §6.2 Navigation and Zooming) | M | done |
+| N2 | Drag the ruler **horizontally** | Scrolls (the grabbed bar follows the mouse) (P2-R7) | M | done |
+| N3 | Click the ruler | Places the playhead, as before (a press that moves under 3 px is a click; the manual doesn't say what a plain click does, P2-R11). **Shift+drag** scrubs (P2-R10, §6.3). The loop brace keeps its gestures | M | done |
+| N4 | Double-click the ruler | Zooms to the time selection, or the whole song (P2-R8, R32) | M | done (B3) |
+| N5 | W | Fits the whole song; again, back (P2-R13) | M | done |
+| N6 | + / − | Zoom in / out (P2-R15) | M | done (B3) |
+| N7 | The Overview (32 px above the ruler) | The whole arrangement, one row per track (several per row past 14), the visible part outlined (P2-R1, P2-R2); drag sideways scrolls, up/down zooms where grabbed (P2-R3); a click outside the outline jumps there (ours: P2-R5 unverified); double-click as the ruler (P2-R4) | S | done |
+| N8 | View ▸ Show Overview, Ctrl+Alt+O | Shows / hides it (P2-R6); on by default, saved per user; hidden, its 32 px go back to the lanes | S | done |
+
 ## 5. Behaviour tables
 
 ### 5.1 Arrangement
@@ -229,9 +262,12 @@ POSITION, START, LENGTH, BPM) are Inter 600 **10 px**, below the 11 px minimum f
 | T5 | M / S | Mute / solo (today); Cmd-click solo adds (R143) | S | ✓ · **done** (B3) |
 | T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ |
 | T7 | Click 🔒 | Unlock: becomes a studio track that sounds the same (VISION) | L | ✓ |
-| T8 | Volume meter-fader | Drag or wheel: the channel volume (the inspector's Volume: undoable, saved); its fill is the post-fader level and never passes the thumb. Disabled with the reason on the triangle and DPCM (no volume control) and in the decay envelopes | S | design pass · **done** |
-| T9 | Pan | Drawn, disabled: "Pan arrives with stereo mixing (Batch 4)" | L | design pass · drawn |
-| T10 | Strip | Lights on each note-on and fades over ~250 ms | S | design pass · **done** |
+| T8 | Volume meter-fader | **Polish 2:** a vertical fader in **dB** (−inf … +6 dB, position `(dB + 48) / 54`): a gain after the chip on every track (RUNLOG P2-D4). Drag (press sets the value) or wheel (1 dB); **double-click the dB value to type it** (`-3`, `-3 dB`, `−3`, `+2.5`, `-inf`; Enter commits, Esc cancels, a click away commits; clamped; one undo step; unsaved mark; P2-R31). The post-fader meter fills from the bottom on the same scale, hot at 0 dB, never past the thumb. dB scale marks (0 6 12 24) on rows ≥ 96 px | S | polish 2 · **done** |
+| T9 | Pan | **Polish 2:** editable and saved (−50 … +50, shown 50L … C … 50R): drag, wheel, or double-click the value to type `C`, `0`, `25L`, `30R`, `-25`, `+25`. Heard once stereo mixing arrives (Batch 4); its hover help says so | L | polish 2 · **done** (not heard yet) |
+| T10 | Strip | Lights on each note-on and fades over ~250 ms; toned down ~20% (polish 2) | S | design pass · **done** |
+| T11 | Row height | 72 (minimum) … 300 px in 4 px steps: **drag a track's bottom edge** (P2-R19; Alt while dragging: every track, P2-R20) or **Alt+wheel** over a track (P2-R21). Saved per track in the project (format v6), undoable. Taller rows keep the number, name and column A in a 72 px band; only the fader stretches | S | polish 2 · **done** |
+| T12 | Header width | Drag the boundary between headers and lanes: 380 … 600 px, extra width to the name only; saved per user. (The manual doesn't describe one: P2-R29, ours) | S | polish 2 · **done** |
+| T13 | Layout | Settings ▸ Look & Feel: headers Left / Right, strip Outside / By the clips (the order table, VISUAL-SPEC.md §4a); the TRACKS and OVERVIEW cells move with the headers | S | polish 2 · **done** |
 
 ### 5.3 Piano roll
 | # | Action | Result | Pri | CEO |
@@ -322,6 +358,22 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | AT-30 (§1 menus) | The Edit, View and Help menus show the Batch 3 items (screenshots); the shortcut sheet lists them |
 | AT-31 (B5, I3) | Save as Preset (a visible button) writes a user preset; its browser menu offers Rename, Delete, Show in Explorer |
 | [unit] (A9–A12, F-22, P7, P9, R46, R47, format v4) | `state::edit_tests`, `notes::tests::batch3_note_ops`, the undo property test (split, consolidate, time commands, paste, rename, colour), `tests/migration.rs` (v3 → v4 hashes), `tests/robustness.rs` (v4 names and colours) |
+
+| P2-01 (T8) | Double-click track 1's dB value, type `-3`, Enter: saved at −3 dB, the title marks it unsaved; one Ctrl+Z restores 0 dB; Esc cancels; `-inf` is silence; `+2.5` and a click elsewhere commits |
+| P2-02 (T9) | Type pan values `25L`, `30R` (one Ctrl+Z back to 25L), `-12` (12L): saved |
+| P2-03 (T8, T9) | Drag the fader down: lower volume, one Ctrl+Z undoes the drag; drag the pan thumb right: pans right |
+| P2-04 (T11) | Drag track 1's bottom edge down 72 px: 144; Alt+wheel up over track 2: 84; Ctrl+Z: 72 (saved files) |
+| P2-05 (T12) | Drag the boundary: 520 (and it stops at 600 and 380); settings.json keeps it after a restart |
+| P2-06 (T13) | Settings ▸ Look & Feel: Right, By the clips, Browser Right: each saved and applied at once |
+| P2-07 (N1–N4) | Ruler: a click places the playhead; a vertical drag zooms in; a horizontal drag scrolls; a double-click fits; its hover help |
+| P2-08 (N5) | W fits the song; W again goes back |
+| P2-09 (N7, N8) | Overview: a click outside the outline jumps; drags scroll and zoom; a double-click fits; Ctrl+Alt+O hides and shows it (settings.json) |
+| P2-10 (SB1–SB3) | Hover help for the fader, M, pan, view keys, transport, display, TAP, spectrum, CPU/MEM, ruler, Overview; a click on the problem icon lists the problems |
+| P2-11 (T13, §5.4) | In all four layouts: M, S, the dB value, the pan value, the fader, a row's bottom edge, the name (rename), the width boundary, the ruler and the Overview hit what they should (saved file, settings.json) |
+| [unit] (polish 2) | `state::fader_tests` (dB scale round trip, meter rule, value parsing, scale marks, row heights), `header_layout::tests` (the order table, width), `overview::tests` (row plan, the shared nav drag), `palette` (strips lit/unlit apart ≥ 0.15 ΔE, the overview recipe), `chip::mixer` (gained mix = plain mix at unity, a lone channel ×2), `tests/migration.rs` (v5 → v6 hashes, heights/pan/volume saved) |
+
+Polish 2 results: P2-01…P2-11 pass in `docs/polish2/tools/at_p2.ps1` (checker `check_p2.py`); the
+earlier suites run through `docs/polish2/tools/run_old_suites.ps1` (see POLISH2.md §5).
 
 | PL-01 (C2) | Colour ▸ on a track, a click on a grid cell: the track takes it, one Ctrl+Z restores it, the file saves it |
 | PL-02 (C2) | Two clips selected, Colour ▸ cell: both take it; the track's colour then changes and the clips keep theirs |

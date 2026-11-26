@@ -32,6 +32,8 @@ pub enum MenuSite {
     DefaultTrackColour,
     /// The status bar's warning icon: the persistent problems (polish 2 §6.4).
     Problems,
+    /// The status bar's message, whole (polish 2 §6.2).
+    Message,
 }
 
 /// What an in-place rename edits.
@@ -737,8 +739,10 @@ impl AppState {
                 .problems
                 .get_untracked()
                 .into_iter()
+                .flat_map(|p| wrap_lines(&p, MESSAGE_WRAP))
                 .map(|p| MenuItem::new(MenuAction::Info, p))
                 .collect(),
+            MenuSite::Message => wrap_lines(&self.s.status.get_untracked(), MESSAGE_WRAP).into_iter().map(|l| MenuItem::new(MenuAction::Info, l)).collect(),
             MenuSite::Spectrum => {
                 let cur = crate::views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style);
                 crate::views::chrome::SpectrumStyle::ALL
@@ -984,6 +988,31 @@ fn colour_grid(cur: Option<u32>, action: impl Fn(Rgba) -> MenuAction) -> Vec<Men
             MenuItem { swatch: Some(c), grid: true, ..MenuItem::new(action(c), format!("#{hex:06X}")).checked(cur == Some(hex)) }
         })
         .collect()
+}
+
+/// A status message shown whole wraps at about this many characters per row.
+const MESSAGE_WRAP: usize = 34;
+
+/// Splits text into rows of at most `width` characters at spaces (and at its
+/// own line breaks).
+pub fn wrap_lines(text: &str, width: usize) -> Vec<String> {
+    let mut out = Vec::new();
+    for para in text.lines() {
+        let mut line = String::new();
+        for w in para.split_whitespace() {
+            if !line.is_empty() && line.chars().count() + 1 + w.chars().count() > width {
+                out.push(std::mem::take(&mut line));
+            }
+            if !line.is_empty() {
+                line.push(' ');
+            }
+            line.push_str(w);
+        }
+        if !line.is_empty() {
+            out.push(line);
+        }
+    }
+    out
 }
 
 /// Zoom factor of one + / − press, and how many Z steps X remembers.

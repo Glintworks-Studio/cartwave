@@ -86,6 +86,10 @@ impl View for StatusBar {
                     // The details of the persistent problems.
                     cx.emit(AppEvent::ShowProblems(cx.mouse().cursor_x / s, b.y / s));
                     meta.consume();
+                } else if !self.s.status.with_untracked(|m| m.is_empty()) && x < b.w / s * 0.5 {
+                    // The whole message (a long one, like an import report, is cut to one line).
+                    cx.emit(AppEvent::ShowMessage(cx.mouse().cursor_x / s, b.y / s));
+                    meta.consume();
                 }
             }
             WindowEvent::MouseMove(_, _) => {

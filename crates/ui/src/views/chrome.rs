@@ -1197,7 +1197,15 @@ impl View for TrackRow {
                 WindowEvent::MouseMove(_, _) => {
                     if let Some((y0, h0)) = self.resize {
                         let y = cx.mouse().cursor_y / cx.scale_factor();
-                        cx.emit(AppEvent::SetLaneHeight(self.lane, h0 + (y - y0)));
+                        // Alt while dragging: every track takes the height (P2-R20).
+                        if cx.modifiers().alt() {
+                            let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
+                            for l in 0..n {
+                                cx.emit(AppEvent::SetLaneHeight(l, h0 + (y - y0)));
+                            }
+                        } else {
+                            cx.emit(AppEvent::SetLaneHeight(self.lane, h0 + (y - y0)));
+                        }
                     } else {
                         let edge = self.on_edge(cx);
                         if edge != self.edge_hover {
@@ -1392,7 +1400,7 @@ impl View for TrackRow {
 }
 
 /// The lit strip image's padding on each side (room for the spill).
-fn lit_pad(s: f32) -> f32 {
+pub fn lit_pad(s: f32) -> f32 {
     (2.0 * STRIP_GLOW_R * s).ceil()
 }
 

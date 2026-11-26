@@ -71,27 +71,55 @@ beats 8 px `#3A3A3A`; sixteenths 4 px `#262626`. The TRACKS cell beside it: Inte
 pentagon (`#E6E6E6`, 1 px white stroke) with a stem to the ruler's bottom; the line in the lanes is
 1 px `#E6E6E6` at 85%.
 
-## 4. Track rows
+## 4. Track rows (polish 2: E1)
 
-Header column 380 px including its right hairline `#1E1E1E`, background `#0A0A0A`. Rows 72 px
-plus a `#1A1A1A` hairline (pitch 73) **(file)**. Positions from the row's top-left:
+Boards: [`polish2-ref/E1-header`](polish2-ref/E1-header.html), `E1-row-heights`,
+`E1-header-width-side`, `E1-header-side-order`; element boxes measured from the HTML
+(`docs/polish2/tools/measure_ref.py` → `docs/polish2/boxes/`). Code: `views/header_layout.rs`
+(geometry), `views/chrome.rs` (`TrackRow`, `VolumeFader`, `PanSlider`).
+
+Header column **380 px** (380 … 600, the boundary drag) including its 1 px hairline `#1E1E1E` on
+the lanes' side, background `#0A0A0A`. Rows **72 … 300 px** (4 px steps) plus a `#1A1A1A` hairline.
+Positions in the "strip-first" frame (logical px from the row's top-left, header `w` wide):
 
 | Element | Position and style |
 |---|---|
-| Colour strip | x 0–16, full height, square. Unlit `mix(c, black .62) → mix(c, black .35)`; lit `c → mix(c, white .35) (55%) → mix(c, white .7)`, inner glow `inset 0 0 10px` white 55% and a `0 0 10px` spill in the track colour at 35% **(file)**; edges: left `mix(c, black .2)` → `mix(c, white .6)` lit, right `mix(c, black .5)`. Note-ons light it; it fades over 250 ms |
+| Colour strip | x 0–16, full row height, square. Unlit `mix(c, black .62) → mix(c, black .35)`; lit `c → mix(c, white .28) (55%) → mix(c, white .55)`, inner glow `inset 0 0 10px` white **40%**, a `0 0 10px` spill in the track colour at **25%** toward the header's inside (polish 2: toned down ~20%); edges: left `mix(c, black .2)` → `mix(c, white .6)` lit, right `mix(c, black .5)`. Note-ons light it; it fades over 250 ms |
 | Number | Inter 800 italic 40, `#222222`, centred in x 28–56, line box y 16–56, tracking −.02em |
-| Name | x 68, Inter 600 14, `#E6E6E6`, ellipsis at x 236 |
-| Profile badge | x 68, y 40, 18 px tall (16 inside a 1 px `#323232` border) **(file)**, radius 4: lock 9×11 and the chip name, Inter 600 11 `#A8A8A8`, 4 px padding and gap |
-| Preset | 8 px after the badge, Inter 500 12 `#808080`, ellipsis at x 236 |
-| M / S | 24×24 keys at x 312 / 344, y 16; glyphs Inter 700 12 |
-| Volume meter-fader | track 68×4 at x 248, y 52 (`#050505`, `inset 0 1px 0 #000`, `0 1px 0 #262626` below); fill = post-fader level on the fader's scale, never past the thumb, gradient over the full 68 px: `#2F6FD6` 0, `#2FB7B0` 22, `#C7D74E` 44, `#F0A23A` 56, `#E0483B` 68; thumb 8×12 square, `#4A4A4A` border, `#5A5A5A → #2E2E2E`, `#A0A0A0` inner top line |
-| Pan | track 40×4 at x 328, a 1×8 `#4A4A4A` centre detent, the same thumb; disabled: "Pan arrives with stereo mixing (Batch 4)." |
+| Name | x 68, Inter 600 14, `#E6E6E6`, ellipsis at `w − 144` (extra width goes only here) |
+| Profile badge, preset | x 68, y 40, as before; the preset ends with "…" at `w − 144` |
+| Control block | 120 px, 12 px in from the far edge: x `w − 132` … `w − 12`; never stretches or mirrors inside |
+| Column A (56 px, at block + 8) | M / S keys 24 × 24, 8 apart, at y 10 (unchanged keys, lime glyph when on); the pan value at y 42 (Inter 600 10/12, tracking .02em, `#9A9A9A`: `C`, `13L`, `25R`); the pan well 56 × 4 at y 58 (`#050505`, `inset 0 1px 0 #000`, `0 1px 0 #262626`), a 1 × 8 `#4A4A4A` centre tick at 28, a `#8A8A8A` fill from the centre, the 8 × 12 thumb (`#4A4A4A` border, `#5A5A5A → #2E2E2E`, `#A0A0A0` inner top line); thumb centre `28 + pan / 50 · 28` |
+| Column B (40 px, 16 after A) | the vertical meter-fader: well 4 px wide at the column's centre, from y 8, **row height − 32** long; the post-fader meter fills from the bottom with the cool-to-hot gradient, stops at **0 / 45 / 70 / 85 / 89 %** of the length (`#2F6FD6`, `#2FB7B0`, `#C7D74E`, `#F0A23A`, `#E0483B`: hot at 0 dB), never past the thumb; the 12 × 8 thumb, centre at `round((1 − (dB + 48) / 54) · length)`; the dB value 4 px under the well (Inter 600 10/12, `#9A9A9A`, one decimal, a real minus `−`, `−inf dB` at silence) |
 
-Full name, profile and preset show on hover.
+**Taller rows** (`E1-row-heights`): the strip runs the full height; the number, the name block and
+column A stay in the **72 px band at the top**, exactly as in a 72 px row; only the fader stretches.
+**dB scale marks** on rows **≥ 96 px**: 0, −6, −12, −24 dB labelled `0 6 12 24` (Inter 600 9/10,
+`#808080`), ticks 4 px `#3A3A3A` at well x −10 … −6 (2 px left of the thumb), labels right-aligned at
+well x −12; a label < 12 px from the last shown one is skipped (a 96 px row shows `0 12 24`).
+
+Full name, profile and preset show on hover (a tooltip: content, not help).
+
+## 4a. Header layouts (polish 2 §5)
+
+Settings ▸ Look & Feel. "Outside" means the strip is at the window's edge. Mirrored rows place
+every box at `w − x − width`; text stays left-aligned; the control block never mirrors inside.
+
+| Headers | Strip | Left to right | Mirrored | Hairline |
+|---|---|---|---|---|
+| Left | Outside | strip · number · name · controls (default) | no | right edge |
+| Left | By the clips | controls · name · number · strip | yes | right edge, under the strip |
+| Right | By the clips | strip · number · name · controls | no | left edge, under the strip |
+| Right | Outside | controls · name · number · strip | yes | left edge |
+
+The TRACKS and OVERVIEW cells sit in the header column (their label 16 px in from its left). The
+browser moves across as a whole, unmirrored, with its 1 px divider on the lanes' side. The width
+boundary is a 4 px grab band inside the column on the lanes' side (ew-resize cursor).
 
 ## 5. Lanes and clips
 
-Rows alternate `#171717` / `#141414` over their `#1A1A1A` hairline; bar grid `#262626`, beat grid
+Rows alternate `#171717` / `#141414` over their `#1A1A1A` hairline, each as tall as its track
+header (polish 2); bar grid `#262626`, beat grid
 `#1D1D1D`. Clips start on their grid line and end 1 px short (abutting clips show a 1 px gap; the
 owner's call over the mockup's 2 px inset at both ends, RUNLOG DP-D23), and sit 2 px in from the
 row's top and bottom: radius 4, body the track colour at 22% → 10% (the
@@ -113,10 +141,11 @@ search field and the list stay where they were.
   OKLCh hues), ours; nothing within OKLab ΔE 0.06 of the toggle lime except the legacy pulse
   `#C9D24A`.
 - **Recipes** (the only way a surface gets a palette colour's shades): `strip` (unlit
-  `mix(black .62) → mix(black .35)`, lit `c → mix(white .35) → mix(white .7)`, edges),
+  `mix(black .62) → mix(black .35)`, lit `c → mix(white .28) → mix(white .55)` since polish 2, edges),
   `clip` (header; body 22% → 10%; border 50%; notes `mix(white .12)` at 92%; hover and
   selection lighten), `marker` (browser: `c → mix(black .35)`), `graph_bar` / `graph_fill`
-  (inspector macros), `swatch` (menus: `mix(white .08) → mix(black .12)`).
+  (inspector macros), `swatch` (menus: `mix(white .08) → mix(black .12)`), `overview` (polish 2:
+  the base colour at 50% and a 1 px top line in the base colour).
 - **Clip header text:** `#111111`, or `#F2F2F2` when the dark text wouldn't reach 4.5:1.
 - **Colour grid:** inside the context menu: 16 px swatches on a 20 px pitch, 14 to a row, 8 px
   in; the current colour has a 2 px `#E6E6E6` ring, the hovered one a 1 px `#9A9A9A` ring.
@@ -130,3 +159,22 @@ scroll when they don't fit, above the inspector too). A 1080p laptop at 125% (15
 
 Pulse `#C9D24A`, Triangle `#7F86E0`, Noise `#B5AC98`, VRC6 Pulse `#D9579A` (the mockup's tracks);
 DPCM `#E39A42` and Saw `#3CC4A6` unchanged.
+
+## 10. The status bar (polish 2 §6)
+
+24 px along the window's bottom, under the inspector or piano roll: `#0F0F0F`, a 1 px top hairline
+`#1E1E1E`, Inter 500 11, 16 px side padding. Left (`role=status`): a 10 × 8 check (idle) or a 4 px
+dot (a message), 8 px, then the text in `#9A9A9A` (6.4:1). With a persistent problem a 12 × 11 amber
+(`#F0A23A`, the meter's hot stop: not lime) warning triangle comes first. Right: the hover help,
+right-aligned, `#808080` (4.9:1). The lanes give up its height and scroll.
+
+## 11. The Overview (polish 2 §7)
+
+32 px between the top bar and the ruler, its strip aligned with the lanes (`#0A0A0A`); the label
+cell in the header column (the TRACKS cell's look, `OVERVIEW` and the song length `24 BARS`, Inter
+600 10, `#808080`, right-aligned 16 px in). The whole song spans the strip. Rows from y 3, 6 px
+tall, 1 px apart, shrinking to 1 px with more tracks, then merging tracks (50+ still fit). Clips:
+the `overview` recipe, 1 px short of their end. The visible part: 1 px `#8C8C8C`, radius 2, white 4%
+with an 8% inner top highlight, y 2 … 31 (not lime). The loop: a 2 px lime line at 55% along the top,
+only while the loop is on. The playhead: 1 px `#E6E6E6` at 60%. The clip layer is cached and redrawn
+only when clips, colours, the track count or the song length change.

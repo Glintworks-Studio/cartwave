@@ -1447,7 +1447,8 @@ impl View for OverviewCell {
         let bars = super::overview::song_bars(&self.s);
         let text = format!("{bars} BAR{}", if bars == 1 { "" } else { "S" });
         let f2 = gfx::font(Face::SemiBold, 10.0 * s);
-        let tr = 0.08 * 10.0 * s;
+        // The board: letter-spacing .1em.
+        let tr = 0.1 * 10.0 * s;
         let w = gfx::tracked_width(&text, &f2, tr);
         gfx::draw_text_tracked(canvas, &text, (r.right - CELL_LABEL_X * s - w).round(), base, &f2, tr, TEXT_LO);
     }

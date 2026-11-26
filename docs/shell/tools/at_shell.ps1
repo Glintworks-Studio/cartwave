@@ -132,8 +132,9 @@ if (Want "AT-02") {
   $a = Fresh "at02"; $d = Join-Path $Work "d02"
   # Release build, no CHIPDAW_DEV: the project comes from the command line (CHIPDAW_PROJECT is a test hook).
   Launch -Data $d -NoDev -AppArgs @("`"$a`"")
+  Move-To 1300 800                                        # empty canvas: no hover, no tooltip
   Ctrl 0x53; Start-Sleep -Milliseconds 400; Copy-Item $a "$Work\at02_before.chipdaw" -Force
-  Start-Sleep -Seconds 7                                  # the "Saved" notice fades first
+  Start-Sleep -Seconds 9                                  # the "Saved" message fades first (8 s since polish 2)
   Shot "at02_before"
   foreach ($vk in 0x72, 0x73, 0x74, 0x75, 0x76) { Key $vk; Start-Sleep -Milliseconds 400 }   # F3..F7
   Start-Sleep -Milliseconds 500

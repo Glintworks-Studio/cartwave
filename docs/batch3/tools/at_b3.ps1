@@ -209,8 +209,9 @@ if (Want "AT-25") {
   $obs.t25_texts = @(Ui-Texts)
   Shot "at25_track_selected"
   $obs.t25_tip = Hover-Text "Make Unique"; Shot "at25_tooltip_disabled"
-  ClickL 597 ((Ly 0) - 1); ClickL 597 ((Ly 1) - 1)               # S on Pulse 1, then S on Pulse 2
-  CtrlClickL 597 ((Ly 2) - 1)                                   # Ctrl-click S on the triangle: adds
+  # Polish 2 (E1): the S keys sit at header x 288..312, y 10..34 (centre 241 + 300, row + 22).
+  ClickL 541 ((Ly 0) - 15); Start-Sleep -Milliseconds 600; ClickL 541 ((Ly 1) - 15); Start-Sleep -Milliseconds 600   # S on Pulse 1, then S on Pulse 2
+  CtrlClickL 541 ((Ly 2) - 15)                                   # Ctrl-click S on the triangle: adds
   Save; Keep $p "at25_out"; Stop-App
 }
 

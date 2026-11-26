@@ -101,11 +101,15 @@ if (Want "DP-04") {
   New-Item -ItemType Directory -Force $d | Out-Null
   '{ "browser_open": false }' | Set-Content -Encoding ascii (Join-Path $d "settings.json")
   Launch -Data $d
-  $obs.dp04_mixer = @(Hover-Texts 84 38 | Where-Object { $_ -match "Batch 4" }); Shot "dp04_mixer"
-  $obs.dp04_record = @(Hover-Texts 245 38 | Where-Object { $_ -match "MIDI input" }); Shot "dp04_record"
-  # Lane 1's pan slider (x 328 + 4 into the header, y 158) and the triangle's fader (lane 3).
-  $obs.dp04_pan = @(Hover-Texts 352 158 | Where-Object { $_ -match "stereo" }); Shot "dp04_pan"
-  $obs.dp04_tri = @(Hover-Texts 300 (104 + 2 * 73 + 54) | Where-Object { $_ -match "no volume" }); Shot "dp04_triangle"
+  # Polish 2: the reasons are the status bar's hover help (dev lines "dev: help …"); pan is
+  # editable (heard with stereo mixing) and every track's fader works (a dB gain, P2-D4).
+  foreach ($pt in @(@(84, 38), @(245, 38), @(284, 164), @(348, (104 + 2 * 73 + 20)))) { MoveL ($pt[0] - 3) $pt[1]; Start-Sleep -Milliseconds 150; MoveL $pt[0] $pt[1]; Start-Sleep -Milliseconds 500 }
+  Shot "dp04_after"
+  $help = @(DevLines $d "^dev: help")
+  $obs.dp04_mixer = @($help | Where-Object { $_ -match "Batch 4" })
+  $obs.dp04_record = @($help | Where-Object { $_ -match "MIDI input" })
+  $obs.dp04_pan = @($help | Where-Object { $_ -match "stereo" })
+  $obs.dp04_tri = @($help | Where-Object { $_ -match "^dev: help Volume" })
   Stop-App
 }
 
