@@ -18,3 +18,7 @@ only when the CEO picks it for a build. Keep entries to a line or two.
 | Calibrate the VRC6 level from a real hardware recording | Hannah, Rachel | Buy a Famicom, a VRC6 cartridge and a loopback cable |
 | Submit the upstream Vizia PRs and cpal issues | Leo | Ready in `docs/upstream/`; needs a human to submit |
 | Custom-drawn menu bar (Windows/Linux; macOS keeps the system bar); custom window frame later | CEO (parked, polish pass) | Today: native bar, dark owner-drawn dropdowns (DARK-MENUS.md) |
+| Roadmap order (CEO, Batch 4a prompt): 4a → 4b → Batch 5 automation → input and recording → time signatures and scales → effects → the arcade FM board → the SNES | CEO | Recorded in VISION.md "Build roadmap"; the items below wait for their slot |
+| Per-preset authenticity marks (🔒 + profile on a preset row, UX.md B6) | Batch 4a | Today the channel layouts are the authentic presets (RUNLOG B4A-D14) |
+| Typing a dB value on the Main fader; Main gain as an undo step | Batch 4a | Drag and wheel work; see RUNLOG B4A-D15 |
+| "Don't ask again" box on macOS (NSAlert suppression button) | Batch 4a | Windows has it (task dialog); macOS shows the three buttons only |

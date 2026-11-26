@@ -1,4 +1,8 @@
 """Checks the files scenario_v11.ps1 saved (s0..s6.chipdaw in the work dir)."""
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "batch4a", "tools"))
+import v7compat  # noqa: E402  (Batch 4a: format 7 read as 6, RUNLOG B4A-D17)
+v7compat.install()
 import json, sys, os
 
 work = sys.argv[1]

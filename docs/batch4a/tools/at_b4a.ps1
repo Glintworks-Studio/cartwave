@@ -107,5 +107,142 @@ if (Want "B4A-03") {
   Stop-App
 }
 
+
+# A menu item's centre: a menu opened at (mx, my); `rows` items above (28 px) and `seps` separators (8 px).
+function MenuItemAt($mx, $my, $rows, $seps = 0) { @(($mx + 40), ($my + 4 + 28 * $rows + 8 * $seps + 14)) }
+function Badge($i) { @(318, ((RowY $i) + 49)) }   # the badge's left part (name column x 309 + 9)
+function NameAt($i) { @(420, ((RowY $i) + 22)) }
+$MainY = 823                                       # the Main row's top (client px at 1440 x 920)
+
+# ─────────── B4A-04 / AT-13: insert a track (Ctrl+Shift+T), drag it to the top, delete it, colour ───────────
+if (Want "B4A-04") {
+  $p = Fx "fx_basic" "b404"; $d = Join-Path $Work "d404"
+  Launch -Project $p -Data $d
+  $n = NameAt 0; ClickL $n[0] $n[1]; Start-Sleep -Milliseconds 400
+  CtrlShift 0x54; Start-Sleep -Milliseconds 500        # Ctrl+Shift+T: a studio track below track 1
+  Save; Keep $p "b404_inserted"
+  Shot "insert-track"
+  $a = NameAt 1; $b = NameAt 0
+  DragL $a[0] $a[1] $a[0] ($b[1] - 20); Start-Sleep -Milliseconds 400   # drag it above track 1
+  Save; Keep $p "b404_moved"
+  K 0x2E; Start-Sleep -Milliseconds 400                 # Delete: the selected (moved) track
+  Save; Keep $p "b404_deleted"
+  # Colour from the header's menu (AT-13's last step; the polish grid).
+  $mx = 400; $my = (RowY 2) + 5
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 500
+  $c = Cell $mx $my 1 1 8; ClickL $c[0] $c[1]; Start-Sleep -Milliseconds 300
+  Save; Keep $p "b404_colour"
+  $obs.b404_dev = @(DevLines $d "^dev: (insert|move) track")
+  Stop-App
+}
+
+# ─────────── B4A-05: lock with reset ("Reset and lock"), one undo, unlock restores ───────────
+if (Want "B4A-05") {
+  $p = Fx "fx4_studio" "b405"; $d = Join-Path $Work "d405"
+  Launch -Project $p -Data $d
+  $bd = Badge 0; ClickL $bd[0] $bd[1]; Start-Sleep -Milliseconds 500
+  Shot "lock-menu"
+  $obs.b405_menu = @(DevLines $d "^dev: menu Badge")
+  $mi = MenuItemAt 309 ((RowY 0) + 58 + 2) 1 1; ClickL $mi[0] $mi[1]  # "2A03 Pulse 1" (Studio, separator, P1)
+  Start-Sleep -Milliseconds 800
+  $obs.b405_dialog = Dialog-Text
+  pwsh -NoProfile -File "$Repo\docs\batch4a\tools\screen.ps1" -Out "$Work\lock-reset-dialog.png" | Out-Null
+  Press-Button "Reset and lock" | Out-Null; Start-Sleep -Milliseconds 500
+  Save; Keep $p "b405_locked"
+  Shot "locked-header"
+  Ctrl 0x5A; Start-Sleep -Milliseconds 300; Save; Keep $p "b405_undone"
+  Ctrl 0x59; Start-Sleep -Milliseconds 300; Save; Keep $p "b405_redone"
+  $bd = Badge 0; ClickL $bd[0] $bd[1]; Start-Sleep -Milliseconds 500
+  $mi = MenuItemAt 309 ((RowY 0) + 58 + 2) 0 0; ClickL $mi[0] $mi[1]  # "Studio (unlocked)"
+  Start-Sleep -Milliseconds 500; Save; Keep $p "b405_unlocked"
+  # A taken channel is disabled: track 2's badge lists 2A03 Pulse 1 (taken by nobody now) and P2.
+  $obs.b405_dev = @(DevLines $d "^dev: lock track")
+  Stop-App
+}
+
+# ─────────── B4A-06: profile switching asks; Unlock / Switch anyway / Cancel ───────────
+if (Want "B4A-06") {
+  foreach ($ans in @("unlock", "fit", "cancel")) {
+    $p = Fx "fx4_studio" "b406_$ans"; $d = Join-Path $Work "d406$ans"
+    $env:CHIPDAW_WARN_ANSWER = $ans
+    Launch -Project $p -Data $d
+    Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
+    $obs."b406_click_$ans" = Click-Text "NES (2A03)"
+    Start-Sleep -Milliseconds 500
+    if ($ans -eq "unlock") { Shot "budget" }
+    K 0x1B; Start-Sleep -Milliseconds 300
+    Save; Keep $p "b406_$ans"
+    $obs."b406_warn_$ans" = @(DevLines $d "^dev: warning")
+    Stop-App
+    Remove-Item Env:CHIPDAW_WARN_ANSWER
+  }
+}
+
+# ─────────── B4A-07: a chord on a locked track asks; Fit / Unlock / Cancel ───────────
+if (Want "B4A-07") {
+  foreach ($ans in @("fit", "unlock", "cancel")) {
+    $p = Fx "fx4_chord" "b407_$ans"; $d = Join-Path $Work "d407$ans"
+    $env:CHIPDAW_WARN_ANSWER = $ans
+    Launch -Project $p -Data $d
+    $cl = @(((BarX 1) + 40), ((RowY 0) + 40)); DblL $cl[0] $cl[1]; Start-Sleep -Milliseconds 800   # open the clip
+    K 0x42; Start-Sleep -Milliseconds 300                         # B: draw mode
+    $ln = DevLines $d "^dev: piano roll bounds"
+    $obs."b407_bounds_$ans" = @($ln)
+    $bx = 0; $by = 0; $bw = 0; $bh = 0
+    if ($ln.Count -gt 0) { $f = ($ln[-1] -split " "); $bx = [double]$f[4]; $by = [double]$f[5]; $bw = [double]$f[6]; $bh = [double]$f[7] }
+    # Two notes at the same time on two rows: a chord.
+    $x = $bx + 120; ClickL $x ($by + $bh * 0.45); Start-Sleep -Milliseconds 700
+    ClickL $x ($by + $bh * 0.30); Start-Sleep -Milliseconds 900
+    if ($ans -eq "fit") { Shot "profile-warning-after" }
+    K 0x1B; Start-Sleep -Milliseconds 300
+    Save; Keep $p "b407_$ans"
+    $obs."b407_warn_$ans" = @(DevLines $d "^dev: warning")
+    Stop-App
+    Remove-Item Env:CHIPDAW_WARN_ANSWER
+  }
+}
+
+# ─────────── B4A-08: the Main gain (wheel), PEAK resets, saved ───────────
+if (Want "B4A-08") {
+  $p = Fx "fx_basic" "b408"; $d = Join-Path $Work "d408"
+  Launch -Project $p -Data $d
+  Shot "main-track"
+  MoveL 589 ($MainY + 30); Start-Sleep -Milliseconds 200
+  Wheel -1; Start-Sleep -Milliseconds 200; Wheel -1; Start-Sleep -Milliseconds 200; Wheel -1; Start-Sleep -Milliseconds 300
+  $obs.b408_title = Title
+  Save; Keep $p "b408_minus3"
+  MoveL 520 ($MainY + 22); Start-Sleep -Milliseconds 300
+  $obs.b408_help = @(DevLines $d "^dev: help .*PEAK")
+  Stop-App
+}
+
+# ─────────── B4A-09: Insert Track ▸ a type from the header menu; Voices; Duplicate ───────────
+if (Want "B4A-09") {
+  $p = Fx "fx4_studio" "b409"; $d = Join-Path $Work "d409"
+  Launch -Project $p -Data $d
+  $mx = 400; $my = (RowY 0) + 5
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  $obs.b409_menu = @(DevLines $d "^dev: menu Track")
+  # Rename, Colour, sep, Insert Track ▸ (row 2 after one separator): its submenu, then "Noise" (3rd).
+  $it = MenuItemAt $mx $my 2 1; MoveL $it[0] $it[1]; Start-Sleep -Milliseconds 500
+  $sub = DevLines $d "^dev: submenu InsertTrack"
+  $obs.b409_sub = @($sub)
+  if ($sub.Count -gt 0) { $f = ($sub[-1] -split " "); $sx = [double]$f[4]; $sy = [double]$f[5]; $n = MenuItemAt $sx $sy 2 0; ClickL $n[0] $n[1] }
+  Start-Sleep -Milliseconds 500
+  Save; Keep $p "b409_noise"
+  # Voices ▸ 4 on track 1 (studio): Rename, Colour, sep, Insert, Duplicate, Delete, sep, Lock, Voices.
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  $it = MenuItemAt $mx $my 6 2; MoveL $it[0] $it[1]; Start-Sleep -Milliseconds 500
+  $sub = DevLines $d "^dev: submenu Voices"
+  if ($sub.Count -gt 0) { $f = ($sub[-1] -split " "); $sx = [double]$f[4]; $sy = [double]$f[5]; $n = MenuItemAt $sx $sy 4 0; ClickL $n[0] $n[1] }
+  Start-Sleep -Milliseconds 500
+  Save; Keep $p "b409_voices"
+  $n = NameAt 0; ClickL $n[0] $n[1]; Start-Sleep -Milliseconds 300
+  Ctrl 0x44; Start-Sleep -Milliseconds 500              # Ctrl+D with the track selected: Duplicate Track
+  Save; Keep $p "b409_dup"
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4a\tools\check_b4a.py" $Work

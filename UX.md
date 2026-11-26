@@ -83,7 +83,10 @@ Edit (Windows convention), Exit under File.
 ### Create
 | Item | Windows | macOS | Does | Pri | CEO |
 |---|---|---|---|---|---|
-| Track | Ctrl+Shift+T | ⇧⌘T | New studio track after the selected one (R84) | M (model) | ✓ |
+| Insert Track | Ctrl+Shift+T | ⇧⌘T | A studio track of the current track's type below it (R84) | M (model) | ✓ · **done** (4a) |
+| Insert Track ▸ Pulse / Triangle / Noise / DPCM / VRC6 Pulse / Saw | — | — | A studio track of that type below the current one, named "Pulse 2"…, coloured by `next_track_color` (§4a C5) | M (model) | ✓ · **done** (4a) |
+| Duplicate Track | (Ctrl+D with a track selected) | (⌘D) | Copies below, with copies of its clips; a copy of a locked track is a studio track (R87 unverified) | M (model) | ✓ · **done** (4a) |
+| Delete Track | (Del with a track selected) | (⌫) | The track and its clips (R86); the last track stays | M (model) | ✓ · **done** (4a) |
 | MIDI Clip | Ctrl+Shift+M | ⇧⌘M | In the time selection (R93) | M | ✓ |
 | Time Signature Change | — | — | At the insert marker (R117) | L | ✓ |
 
@@ -156,8 +159,8 @@ Stored **in the project file** (v5 since the design pass).
 
 | Setting | Default | Notes | Pri | CEO |
 |---|---|---|---|---|
-| Hardware profile | None (all studio tracks) after the model change; **2A03 + VRC6** until then | Changing it checks locked tracks and asks first (P5) | M | ✓ |
-| Output filter | Profile's default (NES / Famicom / Off) | Moves here from the top bar | M | ✓ |
+| Hardware profile | **None (studio only)** for a new project (4a); NES (2A03) / Famicom + VRC6 | The channel budget is shown under it (§4e). Switching to a profile without a channel in use lists the tracks and asks: Unlock tracks / Switch anyway / Cancel (P5) | M | ✓ · **done** (4a) |
+| Output filter | Profile's default (NES / Famicom / Off for None) | Moves here from the top bar | M | ✓ · **done** |
 | Tempo | — | **Not here: it lives in the top bar** (decision 1, R116) | — | ✓ |
 | Time signature | — | **Not here: the top bar**, next to tempo (decision 1, R116) | L | ✓ |
 | Root and scale | Off | VISION "Scales" | L | ✓ |
@@ -238,6 +241,24 @@ P2-R39). We copy the behaviour, not the look.
 | N7 | The Overview (32 px above the ruler) | The whole arrangement, one row per track (several per row past 14), the visible part outlined (P2-R1, P2-R2); drag sideways scrolls, up/down zooms where grabbed (P2-R3); a click outside the outline jumps there (ours: P2-R5 unverified); double-click as the ruler (P2-R4) | S | done |
 | N8 | View ▸ Show Overview, Ctrl+Alt+O (⌥⌘O) | Shows / hides it (P2-R6); on by default, saved per user; hidden, its 32 px go back to the lanes | S | done |
 
+## 4e. Tracks, profiles, locks and Main (Batch 4a)
+
+VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, warnings),
+`engine::studio` / `engine::mixdown` (voices), `views/main_track.rs`. Decisions: RUNLOG B4A-D6…D16.
+
+| # | Behaviour | Pri | Status |
+|---|---|---|---|
+| M1 | **A track is an instrument** of one voice type (Pulse, Triangle, Noise, DPCM, VRC6 Pulse, Saw). **Studio** (default): unlimited tracks, unlimited polyphony (a pool of voices grown from the UI thread; the quietest voice is stolen if a pool is ever full), fader and pan work. **Locked**: bound to one real channel, the full chip emulator, monophonic (the last note wins), fader at 0 dB and pan centred | M | done |
+| M2 | **Voices ▸** (studio tracks): Unlimited, 1 … 16: a cap on the track's voices | S | done |
+| M3 | **The badge**: locked: the lock and the channel ("2A03 P1", "VRC6 SAW"); studio: the type ("PULSE"); an amber warning mark when the track is locked to a channel the profile lacks. A click opens the lock menu | M | done |
+| M4 | **Locking** a track whose fader isn't at 0 dB or pan isn't centred asks ("This track's fader is at −6.0 dB. Locking resets it to 0 dB and centre": Reset and lock / Cancel); one undo step restores lock, fader and pan. **Unlocking** restores the fader and pan from before locking | M | done |
+| M5 | **Locked header**: the fader thumb at 0 dB, disabled (40% opacity); a lock glyph instead of the dB value; pan centred and disabled; hover help "Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)" | M | done |
+| M6 | **The channel budget** (`Pulse 2/2 · Triangle 1/1 · …`), red when over: in Project Settings, and compact in the TRACKS cell (`P 2/2 · T 1/1 · …`, hover help in full). One expansion chip per project | M | done |
+| M7 | **Profile warnings** ask before an action breaks the profile: a chord or overlap on a locked track (Unlock / Fit: the last note wins / Cancel), a note outside the channel's range (Fit: by octaves / Cancel), DPCM notes without a sample (Fit: removed / Cancel), a layout for another chip (Switch profile / Load on studio tracks / Cancel), a profile without a channel in use (Unlock tracks / Switch anyway / Cancel). "Don't ask again" (Settings ▸ Warnings resets it). No dialog when nothing conflicts; an old file over budget is a status-bar problem | M | done |
+| M8 | **Authentic presets** are the channel layouts: loading one puts the project under its profile and locks the tracks it fills (B4A-D14) | L | done (layouts) |
+| M9 | **The Main track**: pinned at the bottom of the track list (Live 12 manual, ch. 18 Mixing, §18.4: "the bottom end of the Arrangement View"; never scrolling is ours), a black strip, "Main", OUT and the output device, PEAK (held; a click resets), the master fader (−inf … +6 dB) applied after the whole mix, saved in the project and the export JSON. It follows the header layouts. Its lane: the grid and the playhead (Batch 5: master automation) | M | done |
+| M10 | **Migration**: older projects open with every track locked to its channel; rendered audio is bit-identical (golden render and v2…v6 hashes) | M | done |
+
 ## 5. Behaviour tables
 
 ### 5.1 Arrangement
@@ -271,11 +292,11 @@ P2-R39). We copy the behaviour, not the look.
 |---|---|---|---|---|
 | T1 | Click | Select the track (Shift/Ctrl add) | S | ✓ · **done** (B3) |
 | T2 | Cmd+R / double-click name | Rename (Tab → next track, R9) | M | ✓ · **done** (B3) |
-| T3 | Right-click | Rename, Colour ▸, Insert Track, Duplicate, Delete, Lock/Unlock (L) | M | ✓ · **done** (B3): Rename, Colour ▸. Insert / Duplicate / Delete Track wait for the model change (Batch 4); Lock is L |
-| T4 | Drag header | Reorder (R88) | M (model) | ✓ |
+| T3 | Right-click | Rename, Colour ▸, Insert Track ▸, Duplicate Track, Delete Track, Lock ▸, Voices ▸ | M | ✓ · **done** (4a) |
+| T4 | Drag header | Reorder (R88: drag a track by its title bar, Live 12 §6.1 item 11, §18.2); a 2 px line shows where it lands; clips move with their track; one undo step | M (model) | ✓ · **done** (4a) |
 | T5 | M / S | Mute / solo (today); Cmd-click solo adds (R143) | S | ✓ · **done** (B3) |
-| T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ |
-| T7 | Click 🔒 | Unlock: becomes a studio track that sounds the same (VISION) | L | ✓ |
+| T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ · **done** (4a) |
+| T7 | Click the badge | The lock menu: Studio (unlocked) and the profile's channels of the track's type; a taken channel is disabled and names its owner (§4e) | L | ✓ · **done** (4a) |
 | T8 | Volume meter-fader | **Polish 2:** a vertical fader in **dB** (−inf … +6 dB, position `(dB + 48) / 54`): a gain after the chip on every track (RUNLOG P2-D4). Drag (press sets the value) or wheel (1 dB); **double-click the dB value to type it** (`-3`, `-3 dB`, `−3`, `+2.5`, `-inf`; Enter commits, Esc cancels, a click away commits; clamped; one undo step; unsaved mark; P2-R31). The post-fader meter fills from the bottom on the same scale, hot at 0 dB, never past the thumb. dB scale marks (0 6 12 24) on rows ≥ 96 px | S | polish 2 · **done** |
 | T9 | Pan | **Polish 2:** editable and saved (−50 … +50, shown 50L … C … 50R): drag, wheel, or double-click the value to type `C`, `0`, `25L`, `30R`, `-25`, `+25`. Heard once stereo mixing arrives (Batch 4); its hover help says so | L | polish 2 · **done** (not heard yet) |
 | T10 | Strip | Lights on each note-on and fades over ~250 ms; toned down ~20% (polish 2) | S | design pass · **done** |
@@ -386,6 +407,20 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | P2-11 (T13, §5.4) | In all four layouts: M, S, the dB value, the pan value, the fader, a row's bottom edge, the name (rename), the width boundary, the ruler and the Overview hit what they should (saved file, settings.json) |
 | [unit] (polish 2) | `state::fader_tests` (dB scale round trip, meter rule, value parsing, scale marks, row heights), `header_layout::tests` (the order table, width), `overview::tests` (row plan, the shared nav drag), `palette` (strips lit/unlit apart ≥ 0.15 ΔE, the overview recipe), `chip::mixer` (gained mix = plain mix at unity, a lone channel ×2), `tests/migration.rs` (v5 → v6 hashes, heights/pan/volume saved) |
 
+| B4A-01 (MC-D9) | A clip selected, Export open: Backspace, Delete; Settings open: Return, Backspace, Delete: the clips are unchanged and the piano roll never opens |
+| B4A-02 (C2, MC-D15) | Hover a colour, Esc: the old colour, nothing unsaved; hover A, pick B, Ctrl+Z: the original colour |
+| B4A-03 (A4, R28) | Ctrl-click toggles a clip (no copies); Shift-click selects the range; Ctrl-drag still copies |
+| B4A-04 (AT-13) | Ctrl+Shift+T adds a studio track below track 1; drag it above track 1 (clips move with tracks); Delete removes it; a colour from the header menu is saved |
+| B4A-05 (M3, M4) | The badge's menu (a taken channel disabled); lock with "Reset and lock" (0 dB / C, old values kept); one Ctrl+Z restores; unlocking restores the fader and pan |
+| B4A-06 (M7) | Switching Famicom + VRC6 → NES with a locked VRC6 track asks: Unlock / Switch anyway / Cancel each do what they say |
+| B4A-07 (M7) | A chord on a locked track asks: Fit (no overlaps), Unlock (the chord on a studio track), Cancel (the edit undone) |
+| B4A-08 (M9) | Three wheel notches on the Main fader: −3 dB, saved; PEAK's hover help |
+| B4A-09 (T3, M2) | Insert Track ▸ Noise from the header menu; Voices ▸ 4; Ctrl+D on a selected track duplicates it with its clip |
+| [unit] (Batch 4a) | `engine::mixdown::tests` (bit-identity without studio tracks, 8-voice chords, quietest-voice stealing, the Voices cap, pool growth, Main gain), `core::studio_rack_plays_and_grows_without_allocating`, `chip::voice::tests` (one implementation; a lone voice = the console within 0.1 dB), `tracks::tests` (names, insert/delete/move/duplicate, lock/unlock, budget, mute/solo), `params::tests`, `palette::black_is_reserved_for_main`, `warn::tests`, `edit::colour_preview_tests`, `selection_tests`, `tests/glyphs.rs`, `tests/migration.rs` (v6 → v7 hashes, the profile rules, the −3 dB report) |
+
+Batch 4a results: B4A-01…B4A-09 in `docs/batch4a/tools/at_b4a.ps1` (checker `check_b4a.py`); see
+[BATCH4A.md](BATCH4A.md).
+
 Polish 2 results: P2-01…P2-11 pass in `docs/polish2/tools/at_p2.ps1` (checker `check_p2.py`); the
 earlier suites run through `docs/polish2/tools/run_old_suites.ps1` (see POLISH2.md §5).
 
@@ -418,8 +453,9 @@ Batches 1 and 2 were built on `app-shell/batch-1-2` (SHELL.md).
 | **1. Safety + shell foundation** | Save prompts and dirty flag, debug keys gated, text-field focus rule, one shortcut table, VRC6-off dimming | F-01, F-02, F-03, F-04, F-30 | ~1 week |
 | **2. App shell** | Native menus (File/Edit/Create/View/Help, macOS App menu), Open Recent, About, shortcut sheet, Settings window, Project Settings; top bar slimmed (file keys, CHIP, FILTER, SNAP out) | F-06, F-15, F-16, F-18, F-19, F-20, F-21, F-31 | ~2 weeks |
 | **3. Ableton-parity quick fixes** | Piano roll double-click/draw mode, zoom keys, rename, context menus, copy/paste, split/consolidate, time-selection editing, keyboard navigation, shortcut conflicts, empty-project guide, export dialog fixes, tooltips | F-07–F-12, F-14, F-22–F-29, F-32–F-39 | ~2–3 weeks |
-| **4. The model change** | FEASIBILITY.md §4.6 M0–M4: tracks as instruments, voice pool, profiles and locked tracks, MIDI import as tracks (+ drop preview when FEASIBILITY §2 allows) | F-13, F-17 (full), F-40, F-42, F-43, F-47, F-48 | ~6–8 weeks |
-| **5. Time and pitch** | Time signatures, scales | F-45, F-46 | ~2 weeks |
-| **6. Automation** | Lanes, clip envelopes, tempo automation (then effects, after the CEO's list) | F-44 | ~3–4 weeks |
+| **4a. The model change** | Tracks as instruments, voice pools, profiles and locks, the Main track (BATCH4A.md) | F-13, F-40, F-42, F-43, F-48 | **done** |
+| **4b.** | Stereo pan audible, the mixer view, MIDI import as tracks with the drop preview | F-17 (full), F-47 | next |
+| **5. Automation** | Lanes, clip envelopes, tempo automation (the registry is ready: docs/batch4a/parameters.md) | F-44 | ~3–4 weeks |
+| **Then** | Input and recording → time signatures and scales (F-45, F-46) → effects → the arcade FM board → the SNES (VISION.md roadmap) | | |
 
 Every batch ends with its acceptance tests in the scenario harness (VISION.md, "How we work").

@@ -207,6 +207,12 @@ formats. The arcade FM and SNES systems come after the app shell is solid. See I
 signatures and tempo work exactly as in Ableton, including mid-song changes and tempo
 automation. The second system is the 1989 arcade FM board.
 
+## Build roadmap (updated by Batch 4a, 2026-11-26)
+**4a** (done: tracks as instruments, hardware profiles and locks, the Main track) → **4b** (stereo
+pan audible, the mixer view, MIDI import as tracks with the drop preview) → **Batch 5: automation**
+(the parameter registry is ready: docs/batch4a/parameters.md) → **input and recording** → **time
+signatures and scales** → **effects** → **the arcade FM board** → **the SNES**.
+
 ## How we work from here
 1. **Every prompt starts with VISION.md.** Claude reads it first.
 2. **New ideas go to IDEAS.md**, not straight into a build.

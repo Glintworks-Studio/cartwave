@@ -1,6 +1,10 @@
 """Checks what at_b3.ps1 saw (obs.json), saved (*.chipdaw, settings) and drew (*.png) in its
 work dir. Prints PASS/FAIL per check and a line per acceptance test; exit 1 on a failure.
 A test whose files are missing (not run, see -Only) is SKIPPED."""
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "batch4a", "tools"))
+import v7compat  # noqa: E402  (Batch 4a: format 7 read as 6, RUNLOG B4A-D17)
+v7compat.install()
 import json, os, sys, re, struct, zlib
 
 work = sys.argv[1]

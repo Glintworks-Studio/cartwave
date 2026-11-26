@@ -116,6 +116,23 @@ The TRACKS and OVERVIEW cells sit in the header column (their label 16 px in fro
 browser moves across as a whole, unmirrored, with its 1 px divider on the lanes' side. The width
 boundary is a 4 px grab band inside the column on the lanes' side (ew-resize cursor).
 
+## 4b. Tracks as instruments: badges, the locked state, the Main row (Batch 4a)
+
+Code: `views/chrome.rs` (`badge_of`, `badge_rect`, the locked fader and pan), `views/main_track.rs`,
+`theme/palette.rs` (`main_strip`). The CEO's `B4a-main-track` board was not provided (RUNLOG
+B4A-D1): the Main row follows the prompt's text on the E1 grid (B4A-D15).
+
+| Element | Spec |
+|---|---|
+| **Badge** (x 68, y 40, 18 px, radius 4, 1 px `#383838` ring, Inter 600 11 `#9A9A9A`, 4 px padding) | Locked: the drawn lock glyph (9 × 11; Inter has no 🔒, `docs/batch4a/cmap.txt`) and the channel: `2A03 P1`, `2A03 P2`, `2A03 TRI`, `2A03 NOI`, `2A03 DPCM`, `VRC6 P1`, `VRC6 P2`, `VRC6 SAW`. Studio: the type without a lock: `PULSE`, `TRIANGLE`, `NOISE`, `DPCM`, `VRC6 PULSE`, `SAW`. A track locked to a channel the profile lacks: an amber (`#F0A23A`, the status bar's) 9 × 8 warning triangle first and an amber ring. A click opens the lock menu; the hand cursor over it |
+| **Locked header** | The fader thumb at 0 dB and the pan thumb centred, drawn at **40% opacity** (the disabled style of drawn controls, `DISABLED_ALPHA`); the dB value replaced by the lock glyph in `#9A9A9A`, centred in column B; no gestures; hover help names the channel and the register |
+| **Channel budget** | TRACKS cell: `P 2/2 · T 1/1 · N 1/1 · D 0/1 · V 1/2 · S 0/1`, Inter 600 10, tracking .1em, `#808080`, right-aligned 16 px in (the "24 BARS" style); a type over budget in `#F07075` (the record red `#E5484D` lightened to 5.3:1 on `#0F0F0F`; never lime). Project Settings lists the full form |
+| **Header drag** | A 2 px `#E6E6E6` line on the row where the track lands (top edge moving up, bottom edge moving down); the dragged row lifts by white 4% |
+| **Main row** | Pinned under the rows and lanes: a 1 px `#2E2E2E` divider, then 72 px (73 in all: the lanes give it up); an 8 px soft shadow (black 0 → 28%) on the rows above |
+| **`main_strip`** | Black → `#1C1C1C` (50%) → `#363636` across the 16 px strip (dark at the outer edge), a 1 px `#4A4A4A` highlight on the outer edge, a 1 px white-6% inner ring. **Black is Main's**: no palette colour or automatic pick has a brightest channel under `#40` (unit test) |
+| **Main header** | No number, no M/S. "Main" in the name's place (Inter 600 14 `#E6E6E6`); an `OUT` badge in the badge's place and the output device after it (Inter 500 12 `#808080`, ellipsis); PEAK in column A: label Inter 600 10 tracked .1em `#808080` at y 16, value Inter 600 12 `#E6E6E6` at y 32 (dBFS, one decimal, `−inf`); the master fader in column B (the tracks' meter-fader) with its dB value. It follows the header layouts (side, strip order, width) |
+| **Main lane** | `#0D0D0D`, bar lines `#262626`, beat lines `#1D1D1D` (from 48 px per bar), the playhead 1 px `#E6E6E6` at 85%; nothing else (Batch 5: master automation) |
+
 ## 5. Lanes and clips
 
 Rows alternate `#171717` / `#141414` over their `#1A1A1A` hairline, each as tall as its track
