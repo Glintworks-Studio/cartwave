@@ -6,7 +6,9 @@ any conflict; this page is the build spec under it. Each line keeps its acceptan
 Background: [findings](docs/ux-audit/FINDINGS.md), [feasibility](docs/ux-audit/FEASIBILITY.md),
 [manual references](docs/ux-audit/manual-refs.md).*
 
-Conventions: **Cmd** = Ctrl on Windows, ⌘ on macOS. Keys follow the Live 12 manual where the audit
+Conventions: **Cmd** = Ctrl on Windows, ⌘ on macOS; **Alt** = ⌥ Option on macOS. macOS keys are
+written in Apple's modifier order (⌃⌥⇧⌘), exactly as the menu bar and the shortcut sheet show them
+(verified with real key events, MAC-CATCHUP.md §4). Keys follow the Live 12 manual where the audit
 verified them (R-numbers → [manual-refs.md](docs/ux-audit/manual-refs.md)); keys marked **(ours)**
 are not from the reference. Priority: **M** must · **S** should · **L** later.
 
@@ -30,8 +32,20 @@ dev mode (`CHIPDAW_DEV=1`).
 
 ## 1. Menu structure
 
-Native menus (docs/ux-audit/FEASIBILITY.md §1). On macOS the App menu holds About, Settings… (⌘,), Hide, Quit.
-On Windows, About goes under Help and Settings… under Edit (Windows convention), Exit under File.
+Native menus (docs/ux-audit/FEASIBILITY.md §1). On Windows, About goes under Help and Settings… under
+Edit (Windows convention), Exit under File.
+
+**macOS (as built, MAC-CATCHUP.md):** the system menu bar: App, File, Edit, Create, View, Window, Help.
+- **App menu:** About ChipDAW (our About: version, commit, licences, font credits), Settings… ⌘,,
+  Services ▸, Hide ChipDAW ⌘H, Hide Others ⌥⌘H, Show All, Quit ChipDAW ⌘Q. (Unbundled, the menu bar's
+  bold title reads the process name, "app", until the app ships as an `.app` bundle.)
+- **File** has no Quit; **Edit** has no Settings; **Help** has no About. macOS adds its own Edit items
+  (Writing Tools, AutoFill, Start Dictation…, Emoji & Symbols) and View ▸ Enter Full Screen.
+- **Window:** Minimize ⌘M, Zoom, Bring All to Front. No window tabs (View has no Show Tab Bar).
+- While a text field is being edited, Edit ▸ Cut / Copy / Paste / Select All (⌘X / ⌘C / ⌘V / ⌘A)
+  act on the field; editor commands do nothing; File and app commands still work. While a dialog
+  is open, only File and app commands work from the menu bar.
+- Closing the window quits (one window), with the same save sheet as ⌘Q.
 
 ### File
 | Item | Windows | macOS | Does | Pri | CEO |
@@ -41,11 +55,11 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Open… | Ctrl+O | ⌘O | Open a `.chipdaw` (asks to save if dirty) | M | ✓ |
 | Open Recent ▸ | — | — | Last 10 projects; "Clear Menu" | M | ✓ |
 | Save | Ctrl+S | ⌘S | Save | M | ✓ |
-| Save As… | Ctrl+Shift+S | ⌘⇧S | Save under a new name | M | ✓ |
+| Save As… | Ctrl+Shift+S | ⇧⌘S | Save under a new name | M | ✓ |
 | Import ▸ MIDI File… | — | — | Adds the file's parts as new tracks at the insert marker (F-17) | M | ✓ |
 | Import ▸ Audio as DPCM Sample… | — | — | WAV → DPCM slot | M | ✓ |
-| Export Audio… | Ctrl+Shift+R | ⌘⇧R | Export dialog (R124) | M | ✓ |
-| Export MIDI Clip… | Ctrl+Shift+E | ⌘⇧E | Selected clip as `.mid` (R125) | L | ✓ |
+| Export Audio… | Ctrl+Shift+R | ⇧⌘R | Export dialog (R124) | M | ✓ |
+| Export MIDI Clip… | Ctrl+Shift+E | ⇧⌘E | Selected clip as `.mid` (R125) | L | ✓ |
 | Project Settings… | — | — | Profile, filter (§3) | M | ✓ |
 | Exit (Windows) | Alt+F4 | (App menu: Quit ⌘Q) | Quit (asks to save if dirty) | M | ✓ |
 
@@ -53,11 +67,11 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Item | Windows | macOS | Does | Pri | CEO |
 |---|---|---|---|---|---|
 | Undo | Ctrl+Z | ⌘Z | Undo (R21) | M | ✓ |
-| Redo | Ctrl+Y (also Ctrl+Shift+Z, ours) | ⌘⇧Z | Redo (R22; Ctrl+Shift+Z on Windows is not in the manual, R23) | M | ✓ |
+| Redo | Ctrl+Y (also Ctrl+Shift+Z, ours) | ⇧⌘Z | Redo (R22; Ctrl+Shift+Z on Windows is not in the manual, R23) | M | ✓ |
 | Cut / Copy / Paste | Ctrl+X / C / V | ⌘X / C / V | Clips, notes, or the time selection (R24) | M | ✓ · **done** (B3) |
 | Duplicate | Ctrl+D | ⌘D | Clips/notes/time, placed right after (R25) | M | ✓ · **done** (B3) |
 | Delete | Del | ⌫ / Del | Clips/notes/time (R26) | M | ✓ · **done** (B3) |
-| Cut / Copy / Paste / Duplicate / Delete Time | Ctrl+Shift+X/C/V/D/Del | ⌘⇧ + same | Time commands (R46) | S | ✓ · **done** (B3) |
+| Cut / Copy / Paste / Duplicate / Delete Time | Ctrl+Shift+X/C/V/D/Del | ⇧⌘ + same | Time commands (R46) | S | ✓ · **done** (B3) |
 | Insert Silence | Ctrl+I | ⌘I | At the time selection (R47; decision 3: no longer MIDI import) | S | ✓ · **done** (B3) |
 | Split | Ctrl+E | ⌘E | Clips at the insert marker or selection edges; notes in the piano roll (R38, R73) | M | ✓ · **done** (B3) |
 | Consolidate | Ctrl+J | ⌘J | Selected clips on a track → one clip (R39) | M | ✓ · **done** (B3) |
@@ -69,14 +83,14 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 ### Create
 | Item | Windows | macOS | Does | Pri | CEO |
 |---|---|---|---|---|---|
-| Track | Ctrl+Shift+T | ⌘⇧T | New studio track after the selected one (R84) | M (model) | ✓ |
-| MIDI Clip | Ctrl+Shift+M | ⌘⇧M | In the time selection (R93) | M | ✓ |
+| Track | Ctrl+Shift+T | ⇧⌘T | New studio track after the selected one (R84) | M (model) | ✓ |
+| MIDI Clip | Ctrl+Shift+M | ⇧⌘M | In the time selection (R93) | M | ✓ |
 | Time Signature Change | — | — | At the insert marker (R117) | L | ✓ |
 
 ### View
 | Item | Windows | macOS | Does | Pri | CEO |
 |---|---|---|---|---|---|
-| Browser | Ctrl+Alt+B | ⌘⌥B | Show/hide (R80) | M | ✓ |
+| Browser | Ctrl+Alt+B | ⌥⌘B | Show/hide (R80) | M | ✓ |
 | Piano Roll / Inspector | Shift+Tab | ⇧Tab | Toggle the bottom panel between clip editor and instrument (R78) | S | ✓ |
 | Follow | Ctrl+Shift+F | ⌥⇧F | Auto-scroll while playing, both editors (R135; decision 3) | S | ✓ |
 | Zoom In / Out | + / − | + / − | Time zoom of the focused editor (R34) | M | ✓ · **done** (B3) |
@@ -84,7 +98,7 @@ On Windows, About goes under Help and Settings… under Edit (Windows convention
 | Zoom Back | X | X | (R31) | M | ✓ · **done** (B3) |
 | Zoom to Fit | (double-click the ruler) | same | Whole song (R32) | M | ✓ · **done** (B3) |
 | Fit the Whole Song | W | W | The whole song in view; pressed again, back (the manual's Optimize Arrangement Width, P2-R13) | M | polish 2 · **done** |
-| Show Overview | Ctrl+Alt+O | ⌘⌥O | The Overview strip above the ruler, with a checkmark; on by default, saved per user (P2-R6) | S | polish 2 · **done** |
+| Show Overview | Ctrl+Alt+O | ⌥⌘O | The Overview strip above the ruler, with a checkmark; on by default, saved per user (P2-R6) | S | polish 2 · **done** |
 | Draw Mode | B | B | Toggle (R5) | M | ✓ · **done** (B3) |
 | Clock: Bars / Time | — | — | Replaces the click-on-clock toggle (F-38); Home rewinds | S | ✓ · **retired** (design pass): the display shows TIME and POSITION together |
 | Automation Mode | A | A | (R104) | L | ✓ |
@@ -222,7 +236,7 @@ P2-R39). We copy the behaviour, not the look.
 | N5 | W | Fits the whole song; again, back (P2-R13) | M | done |
 | N6 | + / − | Zoom in / out (P2-R15) | M | done (B3) |
 | N7 | The Overview (32 px above the ruler) | The whole arrangement, one row per track (several per row past 14), the visible part outlined (P2-R1, P2-R2); drag sideways scrolls, up/down zooms where grabbed (P2-R3); a click outside the outline jumps there (ours: P2-R5 unverified); double-click as the ruler (P2-R4) | S | done |
-| N8 | View ▸ Show Overview, Ctrl+Alt+O | Shows / hides it (P2-R6); on by default, saved per user; hidden, its 32 px go back to the lanes | S | done |
+| N8 | View ▸ Show Overview, Ctrl+Alt+O (⌥⌘O) | Shows / hides it (P2-R6); on by default, saved per user; hidden, its 32 px go back to the lanes | S | done |
 
 ## 5. Behaviour tables
 
@@ -232,9 +246,9 @@ P2-R39). We copy the behaviour, not the look.
 | A1 | Click empty space | Insert marker there; clears clip selection (today) | M | ✓ |
 | A2 | Drag empty space | Time selection across tracks (today) | M | ✓ |
 | A3 | Shift-click | Extends the time selection, across tracks (R44) | S | ✓ · **done** (B3) |
-| A4 | Click / Shift-click / Ctrl-click a clip | Select / add range / toggle (R28) | M | ✓ |
+| A4 | Click / Shift-click / Ctrl-click a clip | Select / add range / toggle (R28). As built on both platforms: Shift-click toggles; Ctrl/⌘-click is a plain click (MAC-CATCHUP.md) | M | ✓ |
 | A5 | Drag clip, edges | Move (also to another track) / resize (today) | M | ✓ |
-| A6 | Ctrl-drag (⌥-drag) clip | Copy (today; unverified for the arrangement, R48) | S | ✓ |
+| A6 | Ctrl-drag (⌥-drag on macOS; ⌘-drag there bypasses the snap) clip | Copy (today; unverified for the arrangement, R48) | S | ✓ |
 | A7 | Double-click clip | Open in the piano roll (today; R150) | M | ✓ |
 | A8 | Double-click empty lane | New 1-bar clip (today; ours) | S | ✓ |
 | A9 | Cmd+C / X / V | Copy / cut / paste clips at the insert marker | M | ✓ · **done** (B3) |
@@ -265,7 +279,7 @@ P2-R39). We copy the behaviour, not the look.
 | T8 | Volume meter-fader | **Polish 2:** a vertical fader in **dB** (−inf … +6 dB, position `(dB + 48) / 54`): a gain after the chip on every track (RUNLOG P2-D4). Drag (press sets the value) or wheel (1 dB); **double-click the dB value to type it** (`-3`, `-3 dB`, `−3`, `+2.5`, `-inf`; Enter commits, Esc cancels, a click away commits; clamped; one undo step; unsaved mark; P2-R31). The post-fader meter fills from the bottom on the same scale, hot at 0 dB, never past the thumb. dB scale marks (0 6 12 24) on rows ≥ 96 px | S | polish 2 · **done** |
 | T9 | Pan | **Polish 2:** editable and saved (−50 … +50, shown 50L … C … 50R): drag, wheel, or double-click the value to type `C`, `0`, `25L`, `30R`, `-25`, `+25`. Heard once stereo mixing arrives (Batch 4); its hover help says so | L | polish 2 · **done** (not heard yet) |
 | T10 | Strip | Lights on each note-on and fades over ~250 ms; toned down ~20% (polish 2) | S | design pass · **done** |
-| T11 | Row height | 72 (minimum) … 300 px in 4 px steps: **drag a track's bottom edge** (P2-R19; Alt while dragging: every track, P2-R20) or **Alt+wheel** over a track (P2-R21). Saved per track in the project (format v6), undoable. Taller rows keep the number, name and column A in a 72 px band; only the fader stretches | S | polish 2 · **done** |
+| T11 | Row height | 72 (minimum) … 300 px in 4 px steps: **drag a track's bottom edge** (P2-R19; Alt / ⌥ while dragging: every track, P2-R20) or **Alt+wheel** (⌥+wheel; on a trackpad the steps accumulate, MC-D14) over a track (P2-R21). Saved per track in the project (format v6), undoable. Taller rows keep the number, name and column A in a 72 px band; only the fader stretches | S | polish 2 · **done** |
 | T12 | Header width | Drag the boundary between headers and lanes: 380 … 600 px, extra width to the name only; saved per user. (The manual doesn't describe one: P2-R29, ours) | S | polish 2 · **done** |
 | T13 | Layout | Settings ▸ Look & Feel: headers Left / Right, strip Outside / By the clips (the order table, VISUAL-SPEC.md §4a); the TRACKS and OVERVIEW cells move with the headers | S | polish 2 · **done** |
 
