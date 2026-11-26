@@ -827,3 +827,24 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   the undo base before the pick; proposed: restore the preview before the pick's commit, and a
   unit test of hover-A/pick-B/undo. Both paths have no platform code, so they are Windows bugs
   too; fixing them would hold the merge. In the harness as NOTE lines (`--only colors`).
+- **MC-D16 (the 60 fps cap broke during clip drags: fork commit 14).** The 200-clip drag presented
+  **122–126 fps at 32–33% CPU** under the 60 fps cap on the 320 Hz display; PERF-macos.md's build
+  (24c9d9c) drags at 60.1 fps, 18.7%. `git bisect` (results/drag_bisect.txt) found 281ee66 (DPCM
+  import): the browser binds `s.arrangement` to `Handle::modify` (refresh the sample list), and
+  vizia's `modify` emits `WindowEvent::Redraw`, which the winit window answered with
+  `request_redraw()` at once, outside the frame limiter's slots. A clip drag changes the
+  arrangement on every mouse event (125 Hz), so every event presented a frame. Removing the binding
+  (experiment) restored 59.8 fps, which confirmed the path; the fix belongs in the limiter, not
+  the binding, because any `modify` binding on a fast signal does the same. **Fork commit 14**
+  (9110e982, `chipdaw-perf`, pin updated): on macOS the event sets a pending flag that
+  `about_to_wait` requests within the slots. After: **59.8 fps, 20.1%, 538 mW** (was 121.8 fps,
+  32.2%, 874 mW); demo and 200 clips unchanged (60.0 fps, the same instructions per frame).
+  `#[cfg(target_os = "macos")]` in the fork: Windows keeps the direct request (its swap paces at
+  the display rate; on a 144 Hz Windows display the same bypass would show, proposed for the
+  Windows pass). Windows never saw this: its 60 Hz swap hides it.
+- **MC-D17 (idle +0.25 point from MEM).** Idle reads 1.0% / 10.5 mW against main's 0.8% / 5 mW. With
+  `CHIPDAW_FROZEN_METERS=1` (MEM pinned) the two builds are equal (0.81%, 5 mW, 21 wakeups/s); with
+  the MEM fix on the old fork it is 1.07% / 11 mW. Cause: MEM now changes about once a second; the
+  top bar redraws, and any presented frame keeps the UI pump fast for 250 ms (`adapt_pump`,
+  `STAY_FAST`): +25 wakeups/s. Windows has always paid this (MEM was live there). Under the 1-point
+  rule; kept.

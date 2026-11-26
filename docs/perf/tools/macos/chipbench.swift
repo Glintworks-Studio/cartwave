@@ -21,6 +21,10 @@
 //     separate runs without it.
 // --pos moves the window (top-left, global points) before measuring, e.g. to cover
 // other animating content so it doesn't add display updates.
+// --grab X,Y and --sway AX,AY (MAC_CATCHUP): where the drag presses (content points)
+// and how far it sways (default 300,160 and 120,64: the pre-design layout; the Polish 2
+// layout's clip grab is 760,172). Scenarios "play-drag" (Space, then the drag: the piano
+// roll's note drag) and "200-drag" (= drag) take them; --drag-mods alt|cmd holds a key.
 // Prints one JSON line with the results. Needs Accessibility (input) and Screen
 // Recording (SCK) permission for the calling terminal.
 //
@@ -127,13 +131,17 @@ let kSpace: CGKeyCode = 49, kF4: CGKeyCode = 118
 NSRunningApplication(processIdentifier: pid)?.activate()
 let tb = CGPoint(x: win.rect.midX + 200, y: win.rect.minY + titleBar / 2)
 mouse(.mouseMoved, tb); pause(0.05); mouse(.leftMouseDown, tb); pause(0.05); mouse(.leftMouseUp, tb); pause(0.2)
-// Park the cursor over the transport bar, as bench.ps1 does.
-mouse(.mouseMoved, screen(700, 40)); pause(0.3)
+// Park the cursor over the transport bar, as bench.ps1 once did; --park X,Y elsewhere
+// (the Polish 2 benches park on empty canvas, 1300,800: the display's hover help at
+// 700,40 redraws and costs CPU, DESIGNPASS.md §6).
+let park = (opt("--park") ?? "700,40").split(separator: ",").map { Double($0)! }
+mouse(.mouseMoved, screen(park[0], park[1])); pause(0.3)
 
 switch scenario {
 case "idle": break
 case "demo": key(kSpace); pause(2)
-case "200", "drag": key(kF4); pause(3)  // F4 also starts playback
+case "200", "drag", "200-drag": key(kF4); pause(3)  // F4 also starts playback
+case "play-drag": key(kSpace); pause(2)
 default: fatalError("unknown scenario \(scenario)")
 }
 
@@ -141,17 +149,28 @@ default: fatalError("unknown scenario \(scenario)")
 
 var dragging = true
 var dragThread: Thread?
-if scenario == "drag" {
+let grab = (opt("--grab") ?? "300,160").split(separator: ",").map { Double($0)! }
+let sway = (opt("--sway") ?? "120,64").split(separator: ",").map { Double($0)! }
+let dragFlags: CGEventFlags = opt("--drag-mods") == "alt" ? .maskAlternate : opt("--drag-mods") == "cmd" ? .maskCommand : []
+let isDrag = ["drag", "200-drag", "play-drag"].contains(scenario)
+if isDrag {
     // Same path as bench.ps1 (client 300,160; sine 120 px / 64 px), parameterized by
     // time so the motion speed matches it (one step per ~38 ms there), but with
     // events at --drag-hz, like a real mouse.
-    let p0 = screen(300, 160)
-    mouse(.mouseMoved, p0); pause(0.03); mouse(.leftMouseDown, p0); pause(0.04)
+    let p0 = screen(grab[0], grab[1])
+    if !dragFlags.isEmpty {
+        let code: CGKeyCode = dragFlags == .maskAlternate ? 58 : 55
+        let e = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true); e?.flags = dragFlags; post(e); pause(0.05)
+    }
+    func dm(_ t: CGEventType, _ p: CGPoint) {
+        let e = CGEvent(mouseEventSource: nil, mouseType: t, mouseCursorPosition: p, mouseButton: .left); e?.flags = dragFlags; post(e)
+    }
+    dm(.mouseMoved, p0); pause(0.03); dm(.leftMouseDown, p0); pause(0.04)
     dragThread = Thread {
         let t0 = Date()
         while dragging {
             let i = Date().timeIntervalSince(t0) / 0.038
-            mouse(.leftMouseDragged, screen(300 + (120 * sin(i / 12)).rounded(), 160 + (64 * sin(i / 30)).rounded()))
+            dm(.leftMouseDragged, screen(grab[0] + (sway[0] * sin(i / 12)).rounded(), grab[1] + (sway[1] * sin(i / 30)).rounded()))
             pause(1 / dragHz)
         }
     }
@@ -236,7 +255,10 @@ let r1 = rusage(); let ps1 = psCpuSeconds(); let t1 = mach_absolute_time()
 
 tracer?.waitUntilExit()
 dragging = false
-if scenario == "drag" { pause(0.05); mouse(.leftMouseUp, screen(300, 160)) }
+if isDrag {
+    pause(0.05); mouse(.leftMouseUp, screen(grab[0], grab[1]))
+    if !dragFlags.isEmpty { let e = CGEvent(keyboardEventSource: nil, virtualKey: dragFlags == .maskAlternate ? 58 : 55, keyDown: false); post(e) }
+}
 if let s = stream {
     let sem = DispatchSemaphore(value: 0)
     Task { try? await s.stopCapture(); sem.signal() }

@@ -1,0 +1,6 @@
+1ca4a75 drag fps 135.2
+8fdc043 drag fps 59.8
+cf5c314 drag fps 129.2
+a0b6848 drag fps 146.0
+f0f705d drag fps 146.6
+281ee66 drag fps 143.4

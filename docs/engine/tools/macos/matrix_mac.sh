@@ -12,6 +12,10 @@
 #   CHIPDAW_NO_TAP=1     run without tapmon
 #   CHIPDAW_PILOT_HZ     pilot frequency (default 23000: above the band-limited
 #                        synthesis, so music can't mask it; ENGINE-macos.md §3)
+#   CHIPDAW_DEVICE       output device to test by name (MAC_CATCHUP): each run gets its
+#                        own data dir whose settings.json names it, and tapmon taps it;
+#                        the system default output is not touched (test E still switches
+#                        the default: leave E out unless that is allowed)
 #
 # The macOS counterpart of ../matrix.ps1 (ENGINE.md §7). Each run writes
 # <test>_<buffer>.csv (the app's per-second log and summary, see
@@ -40,6 +44,7 @@ for t in tapmon coreaudio winctl; do
 done
 TAPMON="$W/bin/tapmon"; CA="$W/bin/coreaudio"; WINCTL="$W/bin/winctl"
 ORIG_DEFAULT="$("$CA" default | cut -f2)"
+TAPDEV="${CHIPDAW_DEVICE:-$ORIG_DEFAULT}"
 restore_default() { "$CA" set-default "$ORIG_DEFAULT" >/dev/null 2>&1; }
 trap 'restore_default; pkill -x tapmon 2>/dev/null; exit 130' INT TERM
 
@@ -49,7 +54,7 @@ run() {
   local log="$W/$name.csv" tap=""
   rm -f "$log" "$W/$name.tap.csv" "$W/$name.tap.txt" "$W/$name.actions.txt"
   if [ "${CHIPDAW_NO_TAP:-0}" != 1 ]; then
-    "$TAPMON" --secs $((secs + 60)) --device "$ORIG_DEFAULT" --pilot "$PILOT" --events "$W/$name.tap.csv" --quiet \
+    "$TAPMON" --secs $((secs + 60)) --device "$TAPDEV" --pilot "$PILOT" --events "$W/$name.tap.csv" --quiet \
       > "$W/$name.tap.txt" 2>&1 &
     tap=$!
     for _ in $(seq 1 50); do grep -q "tapping" "$W/$name.tap.txt" 2>/dev/null && break; sleep 0.1; done
@@ -58,7 +63,10 @@ run() {
       kill "$tap" 2>/dev/null; tap=""
     fi
   fi
-  env CHIPDAW_AUDIOLOG="$log" CHIPDAW_QUIT_AFTER="$secs" CHIPDAW_PILOT=1 CHIPDAW_PILOT_HZ="$PILOT" CHIPDAW_GAIN="$GAIN" \
+  local data="$W/data-$name"
+  rm -rf "$data"; mkdir -p "$data"
+  [ -n "${CHIPDAW_DEVICE:-}" ] && printf '{"audio_device": "%s"}\n' "$CHIPDAW_DEVICE" > "$data/settings.json"
+  env CHIPDAW_DATA_DIR="$data" CHIPDAW_AUDIOLOG="$log" CHIPDAW_QUIT_AFTER="$secs" CHIPDAW_PILOT=1 CHIPDAW_PILOT_HZ="$PILOT" CHIPDAW_GAIN="$GAIN" \
     CHIPDAW_FPS_CAP=60 "$@" "$APP" >/dev/null 2>&1 &
   local app=$!
   case "$action" in
