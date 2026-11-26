@@ -1,0 +1,8 @@
+Inter-Bold.ttf ▸ U+25B8: NO, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+Inter-ExtraBoldItalic.ttf ▸ U+25B8: NO, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+Inter-Medium.ttf ▸ U+25B8: NO, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+Inter-Regular.ttf ▸ U+25B8: NO, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+Inter-SemiBold.ttf ▸ U+25B8: NO, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+JetBrainsMono-Medium.ttf ▸ U+25B8: yes, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+JetBrainsMono-Regular.ttf ▸ U+25B8: yes, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO
+JetBrainsMono-SemiBold.ttf ▸ U+25B8: yes, ▶ U+25B6: yes, › U+203A: yes, > U+003E: yes, → U+2192: yes, − U+2212: yes, … U+2026: yes, 🔒 U+1F512: NO

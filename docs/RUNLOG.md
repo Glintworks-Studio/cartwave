@@ -930,3 +930,10 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   Windows (the hover-time commit was later overwritten by the restore), but it left two stray
   undo steps; now none. Unit tests `edit::colour_preview_tests` (Esc after hover; hover A / pick B
   / undo for a track and a clip, exactly one step) and B4A-02 pass.
+- **B4A-D4 (fixup 3: "▸" isn't in Inter).** `docs/batch4a/tools/cmap_check.py` reads the bundled
+  fonts' `cmap` tables (no fontTools on this PC): every Inter face lacks **U+25B8 ▸** and
+  **U+1F512 🔒**; it has ▶ › > → − …; JetBrains Mono has ▸ ([`docs/batch4a/cmap.txt`](batch4a/cmap.txt)).
+  The three status messages (no device, device won't open, dropouts) now write "Settings > Audio"
+  as the clip panel does. `tests/glyphs.rs` fails on either character inside a string literal in
+  `crates/ui/src`. Consequence for §5: the lock badge's 🔒 is **drawn** (a procedural glyph), not
+  typed.

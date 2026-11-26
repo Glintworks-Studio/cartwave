@@ -1619,9 +1619,9 @@ impl AppState {
             // dropouts (until 10 s pass without one).
             let msg: String = match sh.device_error.load(Relaxed) {
                 _ if running => String::new(),
-                engine::device_error::NO_DEVICE => "Audio: no output device. Connect one or pick another in Settings ▸ Audio.".into(),
+                engine::device_error::NO_DEVICE => "Audio: no output device. Connect one or pick another in Settings > Audio.".into(),
                 engine::device_error::REBUILDING => "Audio: the device changed; reconnecting.".into(),
-                engine::device_error::BUILD_FAILED => "Audio: can't open the output device. Pick another in Settings ▸ Audio.".into(),
+                engine::device_error::BUILD_FAILED => "Audio: can't open the output device. Pick another in Settings > Audio.".into(),
                 _ => "Audio: starting.".into(),
             };
             if stats.underruns > self.underruns_seen.0 {
@@ -1638,7 +1638,7 @@ impl AppState {
                 problems.push(msg.clone());
             }
             if dropouts && running {
-                problems.push(format!("Audio dropouts: {} buffer underruns so far. A larger buffer (Settings ▸ Audio) helps.", self.underruns_seen.0));
+                problems.push(format!("Audio dropouts: {} buffer underruns so far. A larger buffer (Settings > Audio) helps.", self.underruns_seen.0));
             }
             self.s.problems.set_if_changed(problems);
             let _ = &self.device_notice;
