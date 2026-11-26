@@ -235,6 +235,11 @@ fn display(cx: &mut Context, st: &Settings) {
         });
         note(cx, "Draws the menu bar's dropdowns dark. Applies the next time a menu opens.");
     }
+    // macOS draws the menu bar itself, light or dark with the system's
+    // appearance; the Windows-only Dark menus choice has no meaning there.
+    if cfg!(target_os = "macos") {
+        note(cx, "Menus follow the system's appearance (System Settings ▸ Appearance).");
+    }
 }
 
 /// Settings ▸ Look & Feel (polish 2 §5.2): three independent choices that

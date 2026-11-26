@@ -765,3 +765,18 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   unreachable on the Mac. The App menu now opens our own About (the Windows Help ▸ About
   dialog), and "Hide app" reads "Hide ChipDAW". Only `spec(mac = true)` changes, which Windows
   never builds a menu from; `menus::tests::no_placeholders` checks the App menu.
+- **MC-D2, update (04:46).** The MOTU M2 was plugged in during the run (not at the start): it
+  appeared in `coreaudio list` and `system_profiler`, and macOS made it the default output by
+  itself. The built-in output stays the main matrix device (named in each run's settings); the
+  M2 gets the matrix too (§5 of the prompt), and the device switch tests use it.
+- **MC-D6 (closing the last window quits).** ChipDAW is a single-window app, so closing the
+  window quits it, with the same save sheet as ⌘Q (Save / Don't Save / Cancel); Don't Save keeps
+  the recovery file. This is today's behaviour, kept: a Mac app that stays running with no
+  window would need a way to reopen one (File ▸ New Window, the Dock icon), which is new work.
+- **MC-D7 (Dark menus on macOS).** The setting was already hidden outside Windows
+  (`cfg!(all(windows, feature = "menus"))`). Settings ▸ Display now says, on macOS only, that menus
+  follow the system's appearance. No API is called.
+- **MC-D8 (the macOS title bar is 32 pt).** The harness's content coordinates use the measured
+  title bar (twice the close button's centre below the window top = 32 pt on macOS 26), not the
+  28 pt assumed by `chipbench`; the content layout then matches Windows' client coordinates
+  exactly (top bar 0–75, Overview 76–107, ruler 108–135, rows from 136).

@@ -1,0 +1,65 @@
+PASS  Cmd+D marks unsaved (title): 'file — ChipDAW' -> '*file — ChipDAW'
+PASS  Cmd+S saves: 5 clips, title 'file — ChipDAW'
+PASS  Cmd+N (clean): no prompt, Untitled: Untitled — ChipDAW
+PASS  Cmd+N (dirty): Save / Don't Save / Cancel sheet: Save Don't Save Cancel
+PASS  … Cancel keeps the edit: *file2 — ChipDAW
+PASS  … Don't Save: a new Untitled project: Untitled — ChipDAW
+PASS  Cmd+O: the open panel: window role=AXWindow subrole=AXDialog title='Open' | window role=AXWindow subrole=AXStandardWindow title='Untitled — ChipDAW' |   text 'Untitled — ChipDAW' | 
+PASS  … Esc closes it: 
+PASS  Cmd+, opens Settings (a panel over the lanes): luma 22.0 -> 9.7
+PASS  Shift+Cmd+R opens Export, Esc closes it: luma 42.3 -> 19.1 -> 42.3
+PASS  Cmd+C, click bar 7 on lane 2, Cmd+V: pasted at lane 1 start 7.0
+PASS  Cmd+X cuts: 4 clips
+PASS  Cmd+Z restores: 5 clips
+PASS  Cmd+Y redoes: 4 clips
+PASS  Delete (⌫) deletes the clip: 4 clips
+PASS  Forward delete (fn+⌫) deletes the clip: 4 clips
+PASS  Cmd+A selects every clip (Duplicate enabled): (True, False, '⌘D')
+PASS  Esc clears the selection (Duplicate disabled): (False, False, '⌘D')
+PASS  Cmd+E splits A at bar 2: A@1+1 A@2+1 B@3+2
+PASS  Shift-click adds, Cmd+J consolidates: A@1+2 n8 B@3+2 n8
+PASS  Shift-click toggles a clip (two selected, then one): 
+PASS  Cmd+R renames the clip: ['A', 'B', 'C', 'D', 'Verse']
+PASS  → → nudges 2 × 1/16, Cmd+2 then → one 1/8: 480 then 480 ticks
+PASS  Shift+Cmd+M inserts a MIDI clip in the time selection: [(7, 1.0)]
+PASS  Cmd+I inserts a bar of silence on every track: D now at bar 6
+PASS  Shift+Cmd+⌫ deletes the time again: D at bar 5
+PASS  Shift+Cmd+D duplicates the time: 7 clips; D starts [6, 7]
+PASS  Shift+Cmd+C, Shift+Cmd+V pastes time: lane 4 starts [6, 8]
+PASS  Shift+Cmd+X cuts time: lane 4: []
+PASS  Cmd+L loops the selection: loop True 0..7680
+PASS  Space plays (the display's TIME moves): 45 px differ (> 20) in box x 50…192 y 0…55
+PASS  Home rewinds (TIME and POSITION back to 0:00.00, 1.1.1): 0 px differ (> 20)
+PASS  T taps the tempo (4 taps 0.5 s apart: ~120): bpm ['117.83', '116.73', '116.14']
+PASS  cmd,alt+b toggles View ▸ Browser (key text '⌥⌘B'): True -> False -> True
+PASS  alt,shift+f toggles View ▸ Follow (key text '⌥⇧F'): True -> False -> True
+PASS  cmd,alt+o toggles View ▸ Show Overview (key text '⌥⌘O'): True -> False -> True
+PASS  b toggles View ▸ Draw Mode (key text 'B'): False -> True -> False
+PASS  W fits the song, W again goes back: FitSong / ZoomBack
+PASS  = zooms in, - zooms out (the ruler changes, then is back): 49595 px differ (> 8) in box x 621…1438 y 110…923 / 0 px differ (> 8)
+PASS  Z zooms to the time selection, X back: ZoomToSelection / ZoomBack
+PASS  Return opens the clip in the piano roll: dev: piano roll bounds 8 480 1424 408 scale 1.00
+PASS  CHIPDAW_OPEN_CLIP opens clip A: piano roll bounds 8 480 1424 408
+PASS  ↑ transposes a semitone: 72 -> 73
+PASS  Shift+↑ transposes an octave: 73 -> 85
+PASS  → nudges by the grid (1/16): 0 -> 240
+PASS  Shift+→ lengthens by the grid: 480 -> 720
+PASS  Cmd+U quantizes (the 37-tick note snaps): off-grid [2917] -> []
+PASS  Cmd+E chops the notes on the grid: 8 -> 16 notes
+PASS  Cmd+J joins them: 16 -> 8 notes
+PASS  Cmd+D duplicates the notes: 8 -> 16
+PASS  ⌫ deletes the selected notes: 16 -> 8
+PASS  ⌥-drag copies a clip (original stays): [(0, 1.0), (1, 5.0)]
+PASS  A drag snaps; ⌘-drag doesn't: snapped 14880, ⌘ 14861
+PASS  ⌥+wheel over track 2 grows it 12 px: heights [None, 84.0, None, None, None, None, None, None]
+PASS  ⌥-drag of a row's bottom edge sets every track: heights [144.0, 144.0, 144.0, 144.0, 144.0, 144.0, 144.0, 144.0]
+PASS  S on 1 then 2 = only 2; ⌘-click S on 3 adds: [False, True, True, False]
+PASS  ⌘+wheel zooms the lanes: 41068 px differ (> 8) in box x 530…1439 y 110…695
+PASS  Shift+wheel back the other way returns to bar 1: 457 px differ (> 8) in box x 530…551 y 325…346
+PASS  Wheel and Shift+wheel scroll in time: wheel 145851 px differ (> 8) in box x 241…1435 y 168…695; shift 89921 px differ (> 8) in box x 530…1438 y 110…695
+PASS  Cmd+Q with changes: the save sheet: Save Don't Save Cancel
+PASS  … Cancel: still running: 
+PASS  The close button with changes: the same sheet: Save Don't Save Cancel
+PASS  … Don't Save: the app quits (closing the last window quits, MC-D6): exit 0
+PASS  … and keeps the recovery file: ['recovery.chipdaw']
+PASS  Cmd+Q, clean: quits at once: exit 0

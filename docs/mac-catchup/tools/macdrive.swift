@@ -55,11 +55,20 @@ func axAttr(_ e: AXUIElement, _ a: String) -> CFTypeRef? {
 }
 func axWindow() -> AXUIElement? { (axAttr(axApp, kAXWindowsAttribute) as? [AXUIElement])?.first }
 
-// Title-bar height: window frame minus the content size. The content size comes
-// from MACDRIVE_CONTENT_H, else from the AX window's first child group (vizia's view).
+// Title-bar height: from MACDRIVE_CONTENT_H if set, else twice the close button's centre
+// below the window's top (the traffic lights sit centred in the title bar): 32 pt on
+// macOS 26 at 1x and 2x. Fallback 32.
 func titleBar(_ rect: CGRect) -> Double {
     if contentH > 0 { return rect.height - contentH }
-    return 28  // standard NSWindow title bar on macOS 26 at 1x and 2x (checked with `info`)
+    if let w = axWindow() {
+        for c in (axAttr(w, kAXChildrenAttribute) as? [AXUIElement]) ?? [] where (axAttr(c, kAXSubroleAttribute) as? String) == "AXCloseButton" {
+            var p = CGPoint.zero, sz = CGSize.zero
+            if let v = axAttr(c, kAXPositionAttribute) { AXValueGetValue(v as! AXValue, .cgPoint, &p) }
+            if let v = axAttr(c, kAXSizeAttribute) { AXValueGetValue(v as! AXValue, .cgSize, &sz) }
+            if sz.height > 0 { return 2 * (p.y + sz.height / 2 - rect.minY) }
+        }
+    }
+    return 32
 }
 
 var win = windowInfo()

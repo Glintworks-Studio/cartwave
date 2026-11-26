@@ -104,6 +104,14 @@ case "diff":
         }
     } }
     print("\(n) px differ (> \(thr))" + (n > 0 ? " in box x \(box.0)…\(box.2) y \(box.1)…\(box.3)" : ""))
+case "col":
+    // img col <png> x y0 y1: sRGB values down a column (layout edges)
+    let (p, w, _) = pixels(load(a[1]), CGColorSpace(name: CGColorSpace.sRGB))
+    for y in i(3)..<i(4) { let k = (y * w + i(2)) * 4; print("\(y) #" + String(format: "%02X%02X%02X", p[k], p[k + 1], p[k + 2])) }
+case "row":
+    // img row <png> y x0 x1
+    let (p, w, _) = pixels(load(a[1]), CGColorSpace(name: CGColorSpace.sRGB))
+    for x in i(3)..<i(4) { let k = (i(2) * w + x) * 4; print("\(x) #" + String(format: "%02X%02X%02X", p[k], p[k + 1], p[k + 2])) }
 case "runs":
     let (p, w, _) = pixels(load(a[1]), CGColorSpace(name: CGColorSpace.sRGB))
     let (x0, y0, h) = (i(2), i(3), i(4))
