@@ -244,7 +244,8 @@ pub fn step_meters(
     const LIGHT_DECAY_PER_SEC: f32 = 4.0;
 
     let ph = playhead as u32;
-    for lane in 0..8 {
+    m.fit(arr.lanes.len());
+    for lane in 0..arr.lanes.len() {
         // Find a note sounding on this lane at the playhead.
         let mut sounding: Option<(u32, u8)> = None;
         if playing {
@@ -304,14 +305,15 @@ pub fn step_meters(
 /// Real meters: `levels` are the per-channel peaks the engine measured since
 /// the last frame (0..1); `note_on` marks channels whose note-on became
 /// audible this frame. Same ballistics as the mock meters.
-pub fn step_meters_engine(m: &mut Meters, levels: [f32; 8], note_on: [bool; 8], dt: f32) {
+pub fn step_meters_engine(m: &mut Meters, levels: &[f32], note_on: &[bool], dt: f32) {
     const DECAY_PER_SEC: f32 = 1.8;
     const PEAK_HOLD_SECS: f32 = 0.9;
     const PEAK_FALL_PER_SEC: f32 = 0.5;
     // The strip light fades over 250 ms (design pass §3.5).
     const LIGHT_DECAY_PER_SEC: f32 = 4.0;
-    for lane in 0..8 {
-        if note_on[lane] {
+    m.fit(levels.len());
+    for lane in 0..levels.len() {
+        if note_on.get(lane).copied().unwrap_or(false) {
             m.light[lane] = 1.0;
         }
         m.light[lane] =

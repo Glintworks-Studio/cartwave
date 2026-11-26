@@ -118,7 +118,8 @@ impl AppState {
     /// Tracks that take edits (F-04: not the dimmed VRC6 lanes).
     fn lane_open(&self) -> impl Fn(usize) -> bool {
         let chip = self.s.chip.get_untracked();
-        move |l| !state::lane_off(chip, l)
+        let off: Vec<bool> = self.s.arrangement.with_untracked(|a| (0..a.lanes.len()).map(|l| state::lane_off(chip, a, l)).collect());
+        move |l| !off.get(l).copied().unwrap_or(false)
     }
 
     /// The time selection, else the selected clips' span.

@@ -312,6 +312,70 @@ pub fn note_name(pitch: u8) -> String {
 /// are resolved last: sorted by start, an equal start keeps the later winner
 /// in `winners` order, and each note is cut at the next one's start. The
 /// result is sorted by start and has no overlaps.
+/// A studio track's rule (Batch 4a: polyphonic): notes may overlap (chords),
+/// but **a pitch never overlaps itself**: `resolve_mono` within each pitch.
+/// The result is sorted by start, then pitch.
+pub fn resolve_poly(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
+    let mut pitches: Vec<u8> = notes.iter().map(|n| n.pitch).collect();
+    pitches.sort_unstable();
+    pitches.dedup();
+    let mut out = Vec::with_capacity(notes.len());
+    for p in pitches {
+        let mut group: Vec<Note> = notes.iter().filter(|n| n.pitch == p).cloned().collect();
+        resolve_mono(&mut group, winners, next_id);
+        out.extend(group);
+    }
+    out.sort_by_key(|n| (n.start, n.pitch));
+    *notes = out;
+}
+
+/// `resolve_poly` with no winners: a loaded studio clip's invariant.
+pub fn sort_poly(notes: &mut Vec<Note>) {
+    let mut next = notes.iter().map(|n| n.id.saturating_add(1)).max().unwrap_or(1);
+    resolve_poly(notes, &[], &mut next);
+}
+
+/// Locked tracks are monophonic, studio tracks polyphonic: the right rule.
+pub fn resolve(poly: bool, notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
+    if poly {
+        resolve_poly(notes, winners, next_id)
+    } else {
+        resolve_mono(notes, winners, next_id)
+    }
+}
+
+thread_local! {
+    /// The overlap rule the note operations below end with: monophonic (the
+    /// default: locked tracks and every older caller) or polyphonic (a studio
+    /// track's clip). Set for the length of one edit with `rule_scope`.
+    static POLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While the guard lives, note operations on this thread use the
+/// polyphonic rule if `poly` (a studio track), else the monophonic one.
+pub fn rule_scope(poly: bool) -> RuleScope {
+    RuleScope(POLY.with(|p| p.replace(poly)))
+}
+
+/// Puts the previous rule back when dropped.
+pub struct RuleScope(bool);
+
+impl Drop for RuleScope {
+    fn drop(&mut self) {
+        POLY.with(|p| p.set(self.0));
+    }
+}
+
+/// Whether the polyphonic rule is in force.
+pub fn poly_rule() -> bool {
+    POLY.with(|p| p.get())
+}
+
+/// The rule in force (`rule_scope`).
+fn resolve_rule(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
+    resolve(poly_rule(), notes, winners, next_id)
+}
+
 pub fn resolve_mono(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
     let spans: Vec<(u32, u32)> = notes
         .iter()
@@ -366,7 +430,7 @@ pub fn add(notes: &mut Vec<Note>, next_id: &mut u32, start: u32, len: u32, pitch
     let id = *next_id;
     *next_id += 1;
     notes.push(Note::new(id, start, len.max(1), pitch));
-    resolve_mono(notes, &[id], next_id);
+    resolve_rule(notes, &[id], next_id);
     id
 }
 
@@ -390,7 +454,7 @@ pub fn transpose(notes: &mut Vec<Note>, ids: &[u32], rows: i32, kind: RowKind, n
     for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
         n.pitch = kind.pitch_of((kind.row_of(n.pitch) as i32 + rows) as u32);
     }
-    resolve_mono(notes, ids, next_id);
+    resolve_rule(notes, ids, next_id);
     rows
 }
 
@@ -407,7 +471,7 @@ pub fn nudge(notes: &mut Vec<Note>, ids: &[u32], dt: i64, next_id: &mut u32) -> 
     for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
         n.start = (n.start as i64 + dt) as u32;
     }
-    resolve_mono(notes, ids, next_id);
+    resolve_rule(notes, ids, next_id);
     dt
 }
 
@@ -416,7 +480,7 @@ pub fn quantize(notes: &mut Vec<Note>, ids: &[u32], grid: Grid, next_id: &mut u3
     for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
         n.start = grid.round(n.start as i64).max(0) as u32;
     }
-    resolve_mono(notes, ids, next_id);
+    resolve_rule(notes, ids, next_id);
 }
 
 /// Copies of `ids`, with starts relative to the earliest one: the clipboard.
@@ -443,7 +507,7 @@ pub fn paste(notes: &mut Vec<Note>, next_id: &mut u32, clip: &[Note], at: u32, k
         let row = kind.row_of(n.pitch).clamp(plo, phi);
         notes.push(Note { id, start: at + n.start, pitch: kind.pitch_of(row), ..*n });
     }
-    resolve_mono(notes, &ids, next_id);
+    resolve_rule(notes, &ids, next_id);
     ids
 }
 
@@ -479,7 +543,7 @@ pub fn resize(notes: &mut Vec<Note>, ids: &[u32], dt: i64, min: u32, next_id: &m
     for n in notes.iter_mut().filter(|n| ids.contains(&n.id)) {
         n.len = (n.len as i64 + dt).max(min.max(1) as i64) as u32;
     }
-    resolve_mono(notes, ids, next_id);
+    resolve_rule(notes, ids, next_id);
 }
 
 /// Cmd+E in the piano roll (P9, R73: chop on the grid): each note of `ids`
@@ -543,7 +607,7 @@ pub fn join(notes: &mut Vec<Note>, ids: &[u32]) -> Vec<u32> {
     }
     let mut next = notes.iter().map(|n| n.id + 1).max().unwrap_or(1);
     let keep: Vec<u32> = ids.iter().copied().filter(|id| !gone.contains(id)).collect();
-    resolve_mono(notes, &keep, &mut next);
+    resolve_rule(notes, &keep, &mut next);
     keep
 }
 

@@ -15,7 +15,7 @@ fn showcase() -> file::Project {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs");
     let song = midi::parse(&std::fs::read(root.join("showcase.mid")).unwrap()).unwrap();
     let imp = midi::arrange(&song, true);
-    let mut p = file::Project::new_empty();
+    let mut p = file::Project::new_legacy();
     p.arrangement = imp.arrangement;
     p.bpm = imp.bpm.unwrap();
     p.loop_end_ticks = imp.loop_end;
@@ -88,7 +88,7 @@ fn intro_plus_loop_three_times_is_sample_identical_to_a_continuous_render() {
 /// Counts rising zero crossings of a 2A03 pulse A4 over 1 s at `rate`.
 fn a4_frequency(rate: u32) -> f64 {
     use ui::notes::Note;
-    let mut p = file::Project::new_empty();
+    let mut p = file::Project::new_legacy();
     p.loop_end_ticks = 16 * TICKS_PER_BAR;
     p.arrangement.instruments = ui::instruments::InstrumentTable::from_lanes(vec![ui::instruments::LaneInstrument::plain(); 8]);
     p.filter = engine::FilterMode::Off;
@@ -155,7 +155,7 @@ fn the_latch_only_matters_after_the_second_pass() {
     pl.set_bpm(p.bpm as f64);
     pl.set_vrc6(true);
     pl.synth.set_filter(p.filter);
-    pl.driver.params = p.params;
+    pl.driver.params = p.arrangement.console_params();
     pl.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&snap.dpcm.data);
     pl.driver.set_user_samples(snap.dpcm.refs);
     let (ls, le) = gx::loop_ticks(&p);

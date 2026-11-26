@@ -98,16 +98,19 @@ fn version_3_files_render_bit_identically_in_version_4() {
         assert!(text.contains("\"version\": 3"), "{name} is a version 3 file");
         let p = file::from_str(&text).unwrap();
         assert!(p.load_report.is_empty(), "{name}: v3 -> v4 changes nothing audible: {:?}", p.load_report);
-        assert_eq!(p.arrangement.lanes, ui::state::default_lanes(), "{name}: default names and colours");
+        let names = |l: &[ui::state::Lane]| l.iter().map(|x| (x.name.clone(), ui::state::rgb_hex(x.color))).collect::<Vec<_>>();
+        assert_eq!(names(&p.arrangement.lanes), names(&ui::state::default_lanes()), "{name}: default names and colours");
         assert!(p.arrangement.clips.iter().all(|c| c.color.is_none()));
         let r = render::hash(&render::render(&p, secs(&p)));
         let e = render::hash(&export::render(&p));
         if (r, e) != (want_r, want_e) {
             bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
         }
-        // Saved as the current version (no colour fields for default colours) and reloaded.
+        // Saved as the current version and reloaded (format 7 writes every
+        // track's colour; clips have none).
         let v4 = file::to_string(&p);
-        assert!(v4.contains(&format!("\"version\": {}", file::VERSION)) && !v4.contains("\"color\""), "{name}");
+        assert!(v4.contains(&format!("\"version\": {}", file::VERSION)), "{name}");
+        assert!(!v4.contains("\"color\": null"), "{name}");
         let again = file::from_str(&v4).unwrap();
         assert_eq!(again.arrangement.lanes, p.arrangement.lanes);
         assert_eq!(render::hash(&export::render(&again)), e, "{name}: v4 round trip");
@@ -187,7 +190,7 @@ fn version_4_files_render_bit_identically_in_version_5() {
 
 #[test]
 fn project_format_is_saved_and_checked() {
-    let mut p = file::Project::new_empty();
+    let mut p = file::Project::new_legacy();
     assert_eq!((p.rate, p.bits), (file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH));
     p.rate = 44_100;
     p.bits = 16;
@@ -223,7 +226,7 @@ fn version_5_files_render_bit_identically_in_version_6() {
             bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
         }
         let v6 = file::to_string(&p);
-        assert!(v6.contains("\"version\": 6") && !v6.contains("\"height\"") && !v6.contains("\"pan\"") && !v6.contains("\"volume_db\""), "{name}");
+        assert!(v6.contains(&format!("\"version\": {}", file::VERSION)) && !v6.contains("\"height\"") && !v6.contains("\"pan\"") && !v6.contains("\"volume_db\""), "{name}");
         let again = file::from_str(&v6).unwrap();
         assert_eq!(again.arrangement.lanes, p.arrangement.lanes);
         assert_eq!(render::hash(&export::render(&again)), e, "{name}: v6 round trip");

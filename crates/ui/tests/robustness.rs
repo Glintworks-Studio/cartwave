@@ -215,7 +215,7 @@ fn check_midi(b: Vec<u8>) {
     if let Ok(song) = midi::parse(&b) {
         for vrc6 in [false, true] {
             let imp = midi::arrange(&song, vrc6);
-            let mut p = file::Project::new_empty();
+            let mut p = file::Project::new_legacy();
             p.arrangement = imp.arrangement;
             p.bpm = imp.bpm.unwrap_or(p.bpm).clamp(40.0, 300.0);
             p.loop_end_ticks = imp.loop_end;
@@ -277,17 +277,17 @@ fn wav_reader_never_panics_or_hangs() {
 // ───────────────────────────── .chipdaw ─────────────────────────────
 
 fn project_seeds() -> Vec<Vec<u8>> {
-    let mut demo = file::Project::new_empty();
+    let mut demo = file::Project::new_legacy();
     demo.arrangement = mock::demo_arrangement();
-    let mut heavy = file::Project::new_empty();
+    let mut heavy = file::Project::new_legacy();
     heavy.arrangement = mock::heavy_arrangement();
     let (pcm, sr) = dpcm::read_wav(&wav(1, 1, 44_100, 16, &tone(0.2, 44_100))).unwrap();
     let (s, _) = dpcm::convert("hit", &pcm, sr, chip::samples::USER_ROM).unwrap();
     heavy.arrangement.samples = vec![Some(s.clone()), None, Some(s), None];
-    let mut stress = file::Project::new_empty();
+    let mut stress = file::Project::new_legacy();
     stress.arrangement = mock::stress_arrangement();
     // Version 3 instrument table with clip overrides (one shared, one own).
-    let mut overrides = file::Project::new_empty();
+    let mut overrides = file::Project::new_legacy();
     overrides.arrangement = mock::demo_arrangement();
     let a = &mut overrides.arrangement;
     let cello = a.instruments.add(ui::instruments::LaneInstrument::named("Cello")).unwrap();
@@ -302,7 +302,7 @@ fn project_seeds() -> Vec<Vec<u8>> {
         a.clip_mut(id).unwrap().instrument = inst;
     }
     // Version 4: renamed and recoloured tracks, coloured clips.
-    let mut named = file::Project::new_empty();
+    let mut named = file::Project::new_legacy();
     named.arrangement = mock::demo_arrangement();
     let a = &mut named.arrangement;
     a.lanes[0].name = "Lead — ünïcode".into();
@@ -476,7 +476,7 @@ fn known_crashers_are_errors_now() {
 /// (control characters dropped, length capped, empty -> the default).
 #[test]
 fn version_4_names_and_colours_are_checked() {
-    let mut p = file::Project::new_empty();
+    let mut p = file::Project::new_legacy();
     p.arrangement.lanes[1].color = ui::theme::tokens::Rgba::hex(0x123456);
     let text = file::to_string(&p);
     assert!(text.contains(r##""color": "#123456""##));

@@ -47,7 +47,7 @@ const MINOR: [u8; 8] = [0, 2, 3, 5, 7, 8, 10, 12];
 /// "Scales and arpeggios on every channel": not a demo, a test song. Two
 /// 4-bar clips per lane (scales, then arpeggios or patterns), 150 BPM, 8 bars.
 pub fn scale_test() -> Project {
-    let mut p = Project::new_empty();
+    let mut p = Project::new_legacy();
     let mut clips = Vec::new();
     let mut id = 0;
     let mut add = |lane, bar, name: &str, notes| {
@@ -111,7 +111,7 @@ pub fn scale_test() -> Project {
 /// A project with `total` notes spread over 8 lanes in 4-bar clips of
 /// `per_clip` notes each (for snapshot scaling).
 pub fn many_notes(total: usize, per_clip: usize) -> Project {
-    let mut p = Project::new_empty();
+    let mut p = Project::new_legacy();
     let clips_n = total.div_ceil(per_clip);
     let step = 4 * TICKS_PER_BAR / per_clip as u32;
     let mut clips = Vec::with_capacity(clips_n);
@@ -135,7 +135,7 @@ pub fn many_notes(total: usize, per_clip: usize) -> Project {
 /// "handle" note at C4 (dragged by the benchmark) and 2,000 short notes
 /// between C3 and A#4, all visible at 32 px per bar.
 pub fn piano_bench() -> Project {
-    let mut p = Project::new_empty();
+    let mut p = Project::new_legacy();
     let mut notes = vec![n(0, TICKS_PER_BAR, 60)];
     let span = 41 * TICKS_PER_BAR;
     let step = span / 2000;

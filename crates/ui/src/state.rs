@@ -1,10 +1,10 @@
 //! The arrangement model: lanes, clips (with their notes), selection and view.
 //! Notes and their editing operations live in `notes.rs`.
 
-use crate::instruments::{self, default_instruments, LaneInstrument};
+use crate::instruments::{default_instruments, LaneInstrument};
 use crate::notes::{self, Note};
 use crate::theme::tokens::{self, Rgba};
-use engine::{ClipInput, ParamId, SongSnapshot};
+use engine::ParamId;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -89,8 +89,31 @@ impl Clip {
     }
 }
 
+/// The channel controls a track keeps (the driver's lane row: Duty,
+/// Volume, Envelope… whichever its voice type has).
+pub type TrackParams = [i8; chip::driver::ParamId::ALL.len()];
+
+/// A track (Batch 4a: **a track is an instrument** of one voice type). A
+/// *studio* track (`lock: None`) plays through its own pool of voices; a
+/// *locked* track is bound to one real channel of the project's hardware
+/// profile and plays through the full chip emulator (`tracks.rs`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lane {
+    /// Stable id (never reused in a project): the engine's studio rack, the
+    /// mute/solo sets and the file refer to it.
+    pub id: u32,
+    /// The voice type (Pulse, Triangle, Noise, DPCM, VRC6 Pulse, Saw).
+    pub voice: chip::voice::VoiceKind,
+    /// The console channel (0..8, `chip::driver::LANE_*`) a locked track is
+    /// bound to; `None`: a studio track.
+    pub lock: Option<usize>,
+    /// The Voices setting: most voices at once (0 = unlimited; studio tracks).
+    pub voices: u16,
+    /// The fader and pan before locking (locking pins them at 0 dB and
+    /// centre; unlocking restores them).
+    pub before_lock: Option<(f32, i8)>,
+    /// The channel controls (the inspector's dials).
+    pub params: TrackParams,
     /// The track's name: the hardware channel's by default, renamable
     /// (Cmd+R, T2; saved from format v4).
     pub name: String,
@@ -109,8 +132,52 @@ pub struct Lane {
 }
 
 impl Lane {
+    /// A track locked to console channel `chan` (the legacy layout's lanes).
     pub fn new(name: &str, short: &'static str, color: Rgba) -> Self {
-        Self { name: name.into(), short, color, height: ROW_H_MIN, pan: 0, vol_db: 0.0 }
+        let chan = CHANNEL_SHORT.iter().position(|s| *s == short).unwrap_or(0);
+        Self {
+            id: chan as u32 + 1,
+            voice: chip::voice::VoiceKind::of_lane(chan),
+            lock: Some(chan),
+            voices: 0,
+            before_lock: None,
+            params: engine::Params::default().values[chan],
+            name: name.into(),
+            short,
+            color,
+            height: ROW_H_MIN,
+            pan: 0,
+            vol_db: 0.0,
+        }
+    }
+
+    /// A new studio track of `voice` (Insert Track).
+    pub fn studio(id: u32, voice: chip::voice::VoiceKind, name: String, color: Rgba) -> Self {
+        Self {
+            id,
+            voice,
+            lock: None,
+            voices: 0,
+            before_lock: None,
+            params: engine::Params::default().values[voice.lane()],
+            name,
+            short: crate::tracks::kind_short(voice),
+            color,
+            height: ROW_H_MIN,
+            pan: 0,
+            vol_db: 0.0,
+        }
+    }
+
+    /// The console lane whose controls and register layout this track uses:
+    /// its channel when locked, else its type's first channel. The dials,
+    /// `ParamId::for_lane` and `range` take this.
+    pub fn chan(&self) -> usize {
+        self.lock.unwrap_or(self.voice.lane())
+    }
+
+    pub fn locked(&self) -> bool {
+        self.lock.is_some()
     }
 
     /// The row's pitch: its height plus the hairline under it.
@@ -255,6 +322,11 @@ pub fn rgb_hex(c: Rgba) -> u32 {
     (ch(c.r) << 16) | (ch(c.g) << 8) | ch(c.b)
 }
 
+/// The console channels' short names, in lane order.
+pub const CHANNEL_SHORT: [&str; 8] = ["P1", "P2", "TRI", "NOI", "DMC", "V1", "V2", "SAW"];
+
+/// The legacy layout: the eight console channels, each a track locked to its
+/// channel (projects from before format 7 open this way).
 pub fn default_lanes() -> Vec<Lane> {
     vec![
         Lane::new("Pulse 1", "P1", tokens::LANE_PULSE),
@@ -578,10 +650,16 @@ pub struct Arrangement {
 }
 
 impl Arrangement {
-    /// An empty project: the 8 lanes and no clips (File > New).
+    /// An empty legacy project: the 8 lanes (each locked to its channel, on
+    /// the default band's channel controls) and no clips.
     pub fn empty() -> Self {
+        let mut lanes = default_lanes();
+        let params = crate::instruments::default_params();
+        for (i, l) in lanes.iter_mut().enumerate() {
+            l.params = params.values[i];
+        }
         Self {
-            lanes: default_lanes(),
+            lanes,
             clips: Vec::new(),
             selection: Vec::new(),
             snap: Snap::Sixteenth,
@@ -633,15 +711,6 @@ impl Arrangement {
         } else {
             self.lane_at(y).unwrap_or(self.lanes.len().saturating_sub(1))
         }
-    }
-
-    /// Each track's volume as a linear gain (the engine's `LaneGains`).
-    pub fn gains(&self) -> [f32; 8] {
-        let mut g = [1.0; 8];
-        for (i, l) in self.lanes.iter().take(8).enumerate() {
-            g[i] = db_to_gain(l.vol_db);
-        }
-        g
     }
 
     pub fn is_selected(&self, id: u32) -> bool {
@@ -800,6 +869,11 @@ impl Arrangement {
         for c in &self.clips {
             (c.id, c.rev.0).hash(&mut h);
         }
+        // The track layout decides where every clip plays (console channel or
+        // studio voices).
+        for l in &self.lanes {
+            (l.id, l.lock, l.voice, l.voices).hash(&mut h);
+        }
         self.editing.hash(&mut h);
         self.editing_notes.hash(&mut h);
         self.instruments.hash(&mut h);
@@ -808,28 +882,6 @@ impl Arrangement {
         h.finish()
     }
 
-    /// Builds the engine's immutable snapshot (UI thread).
-    pub fn song_snapshot(&self, version: u64) -> SongSnapshot {
-        let clips = self.resolved_clips();
-        let notes: Vec<Vec<engine::NoteInput>> = clips
-            .iter()
-            .map(|c| c.audible_notes().map(|n| (n.start, n.len, n.pitch, n.volume)).collect())
-            .collect();
-        let b = instruments::bank(&self.instruments, self.audition.as_ref());
-        SongSnapshot::build(
-            clips.iter().zip(&notes).map(|(c, n)| ClipInput {
-                lane: c.lane,
-                start: c.start_ticks,
-                len: c.len_ticks,
-                // Only a real override: lane-default clips follow the lane.
-                inst: c.instrument.filter(|id| self.instruments.contains(*id)).map_or(chip::instrument::NONE, |id| b.of(id)),
-                notes: n,
-            }),
-            version,
-        )
-        .with_instruments(b.bank, b.lane_inst, b.preview)
-        .with_dpcm(crate::dpcm::bank(&self.samples))
-    }
 }
 
 impl Clip {
@@ -1315,11 +1367,29 @@ impl Transport {
 /// Per-channel mock meter levels, written by the 60fps tick.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Meters {
-    pub level: [f32; 8],
-    pub peak: [f32; 8],
-    pub peak_hold: [f32; 8],
-    /// 0..1 brightness of the channel light (pulses on note-on).
-    pub light: [f32; 8],
+    /// Per track (by index), resized as tracks come and go (`fit`).
+    pub level: Vec<f32>,
+    pub peak: Vec<f32>,
+    pub peak_hold: Vec<f32>,
+    /// 0..1 brightness of the track's light (pulses on note-on).
+    pub light: Vec<f32>,
+}
+
+impl Meters {
+    /// One entry per track.
+    pub fn fit(&mut self, n: usize) {
+        for v in [&mut self.level, &mut self.peak, &mut self.peak_hold, &mut self.light] {
+            v.resize(n, 0.0);
+        }
+    }
+
+    pub fn level_of(&self, i: usize) -> f32 {
+        self.level.get(i).copied().unwrap_or(0.0)
+    }
+
+    pub fn light_of(&self, i: usize) -> f32 {
+        self.light.get(i).copied().unwrap_or(0.0)
+    }
 }
 
 /// Most dials any channel shows (pulse: duty, volume, envelope, sweep, rate).
@@ -1488,27 +1558,56 @@ pub struct AudioStats {
     pub edit_tick_ms: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The project's **hardware profile** (Batch 4a §5): which real channels
+/// locked tracks can use. (The type keeps its old name: before the model
+/// change it was the chip setting, and the two older values are the NES and
+/// Famicom + VRC6 profiles.)
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SoundChip {
+    /// None (studio only): no real channels; every track is a studio track.
+    StudioOnly,
+    /// NES (2A03): Pulse 1, Pulse 2, Triangle, Noise, DPCM.
     Base2A03,
+    /// Famicom + VRC6: the 2A03 plus VRC6 Pulse 1, Pulse 2 and Saw.
     WithVrc6,
 }
 
-/// F-04: under the 2A03 profile the VRC6 lanes are silent, so they are drawn
-/// dimmed and can't be edited ("nothing pretends to work").
-pub fn lane_off(chip: SoundChip, lane: usize) -> bool {
-    chip == SoundChip::Base2A03 && lane >= chip::driver::LANE_V1
+/// The hardware profile (the same type).
+pub type Profile = SoundChip;
+
+/// F-04 / Batch 4a: a track locked to a channel the profile doesn't have is
+/// silent, so it is drawn dimmed and can't be edited ("nothing pretends to
+/// work"); the status bar lists it as a problem. Studio tracks are never off.
+pub fn lane_off(chip: SoundChip, a: &Arrangement, lane: usize) -> bool {
+    a.lanes.get(lane).and_then(|l| l.lock).is_some_and(|c| !chip.has_channel(c))
 }
 
-/// What a dimmed VRC6 lane says on hover.
-pub const VRC6_OFF_HINT: &str = "VRC6 is off in this project's hardware profile. Turn it on in File > Project Settings…";
+/// What a dimmed track says on hover.
+pub const VRC6_OFF_HINT: &str = "This track is locked to a channel the project's hardware profile doesn't have. Change the profile in File > Project Settings…, or unlock the track (its badge).";
 
 impl SoundChip {
+    pub const ALL: [SoundChip; 3] = [SoundChip::StudioOnly, SoundChip::Base2A03, SoundChip::WithVrc6];
+
     pub fn label(self) -> &'static str {
         match self {
-            SoundChip::Base2A03 => "2A03",
-            SoundChip::WithVrc6 => "2A03 + VRC6",
+            SoundChip::StudioOnly => "None (studio only)",
+            SoundChip::Base2A03 => "NES (2A03)",
+            SoundChip::WithVrc6 => "Famicom + VRC6",
         }
+    }
+
+    /// Whether the profile has console channel `c` (0..8).
+    pub fn has_channel(self, c: usize) -> bool {
+        match self {
+            SoundChip::StudioOnly => false,
+            SoundChip::Base2A03 => c < chip::driver::LANE_V1,
+            SoundChip::WithVrc6 => c < chip::driver::LANES,
+        }
+    }
+
+    /// The console's VRC6 is plugged in.
+    pub fn vrc6(self) -> bool {
+        self == SoundChip::WithVrc6
     }
 }
 

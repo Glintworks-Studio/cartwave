@@ -1,33 +1,23 @@
 //! Offline rendering of a project through the same `Player` the engine uses
 //! (no audio device): for the golden render test and listening checks.
 
-use engine::chip::player::Player;
-
 use crate::file::Project;
-use crate::state::SoundChip;
 
 /// Output sample rate of offline renders (the engine's default).
 pub const SAMPLE_RATE: u32 = 48_000;
 /// Render buffer size (frames); the result doesn't depend on it.
 const CHUNK: usize = 512;
 
-/// Renders `secs` seconds of `p` from the start, mono, at [`SAMPLE_RATE`].
+/// Renders `secs` seconds of `p` from the start, mono, at [`SAMPLE_RATE`],
+/// through the engine's `Mixdown` (console, studio tracks, Main gain).
 pub fn render(p: &Project, secs: f64) -> Vec<f32> {
-    let snap = p.arrangement.song_snapshot(1);
-    let mut pl = Box::new(Player::new(SAMPLE_RATE as f64));
-    pl.set_bpm(p.bpm as f64);
-    pl.set_loop_end(p.loop_end_ticks as f64);
-    pl.driver.params = p.params;
-    pl.driver.mute = p.mute;
-    pl.driver.solo = p.solo;
-    pl.set_vrc6(p.chip == SoundChip::WithVrc6);
-    pl.synth.set_filter(p.filter);
-    // The track volumes (polish 2 §3): a post-chip gain per track.
-    pl.synth.set_gains(p.arrangement.gains());
-    pl.play();
+    let heard = crate::tracks::audible(&p.arrangement, &p.mute, &p.solo);
+    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, SAMPLE_RATE, &heard, p.master_db, false);
+    m.player.set_loop_end(p.loop_end_ticks as f64);
+    m.player.play();
     let mut out = vec![0f32; (secs * SAMPLE_RATE as f64) as usize];
     for chunk in out.chunks_mut(CHUNK) {
-        pl.render(&snap.view(), chunk);
+        m.render(&snap, chunk);
     }
     out
 }

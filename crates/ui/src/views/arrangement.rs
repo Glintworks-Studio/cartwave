@@ -283,7 +283,7 @@ impl Arrangement {
 
         // F-04: a dimmed VRC6 lane takes no edits (its hover says why).
         let lane = arr.with_untracked(|a| a.lane_at_clamped(my));
-        if crate::state::lane_off(self.s.chip.get_untracked(), lane) {
+        if arr.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, lane)) {
             if !mods.shift() {
                 arr.update(|a| a.selection.clear());
             }
@@ -488,8 +488,9 @@ impl Arrangement {
             let Some(anchor) = drag.origins.iter().find(|o| o.id == drag.anchor) else {
                 return;
             };
-            // Clips can't be moved onto a dimmed VRC6 lane (F-04).
-            let open_lanes = (0..a.lanes.len()).take_while(|&l| !crate::state::lane_off(self.s.chip.get_untracked(), l)).count();
+            // Clips can't be moved onto a dimmed track (F-04).
+            let chip = self.s.chip.get_untracked();
+            let open_lanes = (0..a.lanes.len()).take_while(|&l| !crate::state::lane_off(chip, a, l)).count();
             let lanes = open_lanes.max(1) as i64;
 
             match drag.mode {
@@ -593,7 +594,7 @@ impl Arrangement {
         let (mx, my) = self.local_mouse(cx);
         let lane = self.s.arrangement.with_untracked(|a| a.lane_at(my));
         if lane != self.hover_lane {
-            let off = |l: Option<usize>| l.is_some_and(|l| crate::state::lane_off(self.s.chip.get_untracked(), l));
+            let off = |l: Option<usize>| l.is_some_and(|l| self.s.arrangement.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, l)));
             if off(lane) || off(self.hover_lane) {
                 cx.needs_redraw();
             }
@@ -616,7 +617,7 @@ impl Arrangement {
     /// selection is made where you clicked).
     fn on_context_menu(&mut self, cx: &mut EventContext) {
         let (mx, my) = self.local_mouse(cx);
-        if crate::state::lane_off(self.s.chip.get_untracked(), self.s.arrangement.with_untracked(|a| a.lane_at_clamped(my))) {
+        if self.s.arrangement.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, a.lane_at_clamped(my))) {
             return;
         }
         let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my));
@@ -875,7 +876,7 @@ impl View for Arrangement {
                 // new 1-bar clip at the snapped position (it wins overlaps).
                 let (mx, my) = self.local_mouse(cx);
                 let hit = self.s.arrangement.with_untracked(|a| Self::hit_test(a, mx, my));
-                let off = crate::state::lane_off(self.s.chip.get_untracked(), self.s.arrangement.with_untracked(|a| a.lane_at_clamped(my)));
+                let off = self.s.arrangement.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, a.lane_at_clamped(my)));
                 match hit {
                     _ if off => {}
                     Some((id, _)) => cx.emit(crate::AppEvent::OpenPiano(id)),
@@ -996,7 +997,7 @@ impl View for Arrangement {
                     Some(Action::SelectAll) => {
                         let chip = self.s.chip.get_untracked();
                         self.s.arrangement.update(|a| {
-                            a.selection = a.clips.iter().filter(|c| !crate::state::lane_off(chip, c.lane)).map(|c| c.id).collect()
+                            a.selection = a.clips.iter().filter(|c| !crate::state::lane_off(chip, a, c.lane)).map(|c| c.id).collect()
                         });
                         meta.consume();
                     }
@@ -1349,11 +1350,12 @@ impl View for Arrangement {
         // F-04: the VRC6 lanes under the 2A03 profile are dimmed; the lane
         // under the mouse says why.
         let chip = self.s.chip.get_untracked();
-        if crate::state::lane_off(chip, chip::driver::LANE_V1) {
+        let offs: Vec<bool> = self.s.arrangement.with_untracked(|a| (0..a.lanes.len()).map(|l| crate::state::lane_off(chip, a, l)).collect());
+        if offs.iter().any(|&o| o) {
             let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
             let (lanes, tops): (usize, Vec<(f32, f32)>) = self.s.arrangement.with_untracked(|a| (a.lanes.len(), (0..a.lanes.len()).map(|i| (a.lane_top(i), a.lanes[i].pitch())).collect()));
             let f = gfx::font(Face::Medium, OFF_HINT_PX * s);
-            for lane in (0..lanes).filter(|&l| crate::state::lane_off(chip, l)) {
+            for lane in (0..lanes).filter(|&l| offs[l]) {
                 let band = vg::Rect::from_xywh(rect.left, lanes_top + tops[lane].0 * s, rect.width(), tops[lane].1 * s);
                 canvas.draw_rect(band, &gfx::fill(Rgba::black(OFF_DIM)));
                 if self.hover_lane == Some(lane) {

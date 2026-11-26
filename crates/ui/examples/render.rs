@@ -17,7 +17,7 @@ fn main() -> Result<(), String> {
         let song = midi::parse(&std::fs::read(first).map_err(|e| e.to_string())?)?;
         let imp = midi::arrange(&song, true);
         println!("{}", imp.report);
-        let mut p = file::Project::new_empty();
+        let mut p = file::Project::new_legacy();
         p.arrangement = imp.arrangement;
         p.bpm = imp.bpm.unwrap_or(p.bpm);
         p.loop_end_ticks = imp.loop_end;

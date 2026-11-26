@@ -53,7 +53,7 @@ fn main() -> Result<(), String> {
     let first = inputs.first().ok_or("no input")?;
     let mut p = if first.ends_with(".mid") || first.ends_with(".midi") {
         let imp = midi::arrange(&midi::parse(&std::fs::read(first).map_err(|e| e.to_string())?)?, true);
-        let mut p = file::Project::new_empty();
+        let mut p = file::Project::new_legacy();
         p.arrangement = imp.arrangement;
         p.bpm = imp.bpm.unwrap_or(p.bpm);
         p.loop_end_ticks = imp.loop_end;

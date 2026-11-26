@@ -96,8 +96,8 @@ impl Key {
 
     fn lit(&self) -> bool {
         match self.action {
-            KeyAction::Mute(i) => self.s.mute.get_untracked() & (1 << i) != 0,
-            KeyAction::Solo(i) => self.s.solo.get_untracked() & (1 << i) != 0,
+            KeyAction::Mute(i) => self.s.arrangement.with_untracked(|a| a.lanes.get(i).is_some_and(|l| self.s.mute.with_untracked(|m| m.contains(l.id)))),
+            KeyAction::Solo(i) => self.s.arrangement.with_untracked(|a| a.lanes.get(i).is_some_and(|l| self.s.solo.with_untracked(|m| m.contains(l.id)))),
             _ => false,
         }
     }
@@ -343,8 +343,19 @@ impl SpectrumBox {
         // Stopped: let everything fall (the engine can report a held DC
         // level on a silent channel).
         let playing = self.s.transport.with_untracked(|t| t.playing);
+        // Each band follows the tracks of its channel type (a studio Pulse
+        // track lights the pulse band).
         let level = if playing {
-            self.s.meters.with_untracked(|m| m.level)
+            let mut l = [0.0f32; 8];
+            self.s.arrangement.with_untracked(|a| {
+                self.s.meters.with_untracked(|m| {
+                    for (i, t) in a.lanes.iter().enumerate() {
+                        let c = t.chan();
+                        l[c] = l[c].max(m.level_of(i));
+                    }
+                })
+            });
+            l
         } else {
             [0.0; 8]
         };
@@ -1142,7 +1153,7 @@ impl TrackRow {
             })
             .class("track-row")
             .bind(s.meters, move |mut h| {
-                let l = (s.meters.with_untracked(|m| (m.light[lane] * 64.0).round() as u8), VolumeFader::state(&s, lane));
+                let l = (s.meters.with_untracked(|m| (m.light_of(lane) * 64.0).round() as u8), VolumeFader::state(&s, lane));
                 if light.get() != l {
                     light.set(l);
                     h.needs_redraw();
@@ -1193,7 +1204,7 @@ impl View for TrackRow {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        let off = crate::state::lane_off(self.s.chip.get_untracked(), self.lane);
+        let off = self.s.arrangement.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, self.lane));
         event.map(|we, meta| {
             match we {
                 WindowEvent::MouseEnter => {
@@ -1312,7 +1323,7 @@ impl View for TrackRow {
             let l = &a.lanes[self.lane];
             (l.color, l.name.clone(), l.height, l.pan, l.vol_db)
         });
-        let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
+        let light = self.s.meters.with_untracked(|m| m.light_of(self.lane));
 
         // Row surface (selection lifts it) and the 1 px bottom hairline (the
         // header's divider is its own view beside the rows).
@@ -1387,7 +1398,7 @@ impl View for TrackRow {
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
         let bb = (r.top + BADGE_BASELINE * s).round();
-        if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {
+        if self.s.arrangement.with_untracked(|a| crate::state::lane_off(self.s.chip.get_untracked(), a, self.lane)) {
             canvas.draw_rect(body, &gfx::fill(Rgba::black(super::arrangement::OFF_DIM)));
             let fh = gfx::font(Face::Medium, PRESET_PX * s);
             let text = if self.hover { "Off: turn on VRC6 in File > Project Settings…" } else { "Off in the 2A03 profile" };
@@ -1515,7 +1526,8 @@ impl VolumeFader {
     pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16) {
         let (db, h) = s.arrangement.with_untracked(|a| (a.lanes[lane].vol_db, a.lanes[lane].height));
         let len = row::fader_len(h);
-        let level = if s.mute.get_untracked() & (1 << lane) != 0 { 0.0 } else { s.meters.with_untracked(|m| m.level[lane]) };
+        let muted = s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| s.mute.with_untracked(|m| m.contains(l.id))));
+        let level = if muted { 0.0 } else { s.meters.with_untracked(|m| m.level_of(lane)) };
         let fill = crate::state::meter_fill(level, db, len);
         ((fill * 4.0).round() as u16, (crate::state::fader_y(db, len) * 4.0).round() as u16)
     }

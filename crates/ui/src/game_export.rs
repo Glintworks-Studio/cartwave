@@ -23,10 +23,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
-use chip::player::Player;
 
 use crate::file::Project;
-use crate::state::{SoundChip, PPQ, TICKS_PER_BAR};
+use crate::state::{PPQ, TICKS_PER_BAR};
 
 /// Release tail after a song or selection export (not after a loop: its
 /// tail is baked into the loop start).
@@ -121,19 +120,15 @@ pub struct Control {
 
 pub const CANCELLED: &str = "Export cancelled.";
 
-/// The player for `p` at `rate`, playing `solo` (a lane mask; 0 = the
-/// project's own mute/solo).
-fn player_for(p: &Project, rate: u32, solo: u8) -> Player {
-    let mut pl = Player::new(rate as f64);
-    pl.set_bpm(p.bpm as f64);
-    pl.set_vrc6(p.chip == SoundChip::WithVrc6);
-    pl.synth.set_filter(p.filter);
-    // The track volumes (polish 2 §3): a post-chip gain per track.
-    pl.synth.set_gains(p.arrangement.gains());
-    pl.driver.params = p.params;
-    pl.driver.mute = p.mute;
-    pl.driver.solo = if solo != 0 { solo } else { p.solo };
-    pl
+/// Which tracks a render plays: `mask` (bit per console lane type: a
+/// track is in when its lane's bit is set; 0 = the project's own mute and
+/// solo).
+pub fn heard_for_mask(p: &Project, mask: u8) -> Vec<bool> {
+    if mask == 0 {
+        crate::tracks::audible(&p.arrangement, &p.mute, &p.solo)
+    } else {
+        p.arrangement.lanes.iter().map(|l| mask & (1 << l.chan()) != 0).collect()
+    }
 }
 
 fn ticks_to_samples(ticks: f64, bpm: f64, rate: u32) -> usize {
@@ -146,15 +141,17 @@ pub fn loop_ticks(p: &Project) -> (u32, u32) {
     (p.loop_start_ticks.min(end - PPQ), end)
 }
 
-/// Renders one track (the mix, or a stem with `solo`) for `range`. Loops:
-/// intro, first pass, then `passes - 1` passes replayed from the state at
-/// the start of the second pass.
+/// Renders one track (the mix, or a stem with `solo`, a lane-type mask:
+/// `heard_for_mask`) for `range`. Loops: intro, first pass, then
+/// `passes - 1` passes replayed from the state at the start of the second
+/// pass.
 pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl: Option<(&Control, f64, f64)>) -> Result<(Vec<f32>, Layout), String> {
-    let snap = p.arrangement.song_snapshot(0);
-    let song = snap.view();
-    let mut pl = player_for(p, rate, solo);
-    pl.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&snap.dpcm.data);
-    pl.driver.set_user_samples(snap.dpcm.refs);
+    render_heard(p, rate, &heard_for_mask(p, solo), range, passes, ctl)
+}
+
+/// `render` with the tracks heard given one by one (a stem per track).
+pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes: usize, ctl: Option<(&Control, f64, f64)>) -> Result<(Vec<f32>, Layout), String> {
+    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, rate, heard, p.master_db, true);
     let bpm = p.bpm as f64;
     // Progress within this track's share of the whole export.
     let report = |done: usize, total: usize| -> Result<(), String> {
@@ -167,13 +164,13 @@ pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl
         }
         Ok(())
     };
-    let run = |pl: &mut Player, out: &mut Vec<f32>, n: usize, base: usize, total: usize| -> Result<(), String> {
+    let run = |pl: &mut engine::Mixdown, out: &mut Vec<f32>, n: usize, base: usize, total: usize| -> Result<(), String> {
         let mut done = 0;
         while done < n {
             let k = CHUNK.min(n - done);
             let at = out.len();
             out.resize(at + k, 0.0);
-            pl.render(&song, &mut out[at..]);
+            pl.render(&snap, &mut out[at..]);
             done += k;
             report(base + done, total)?;
         }
@@ -186,13 +183,14 @@ pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl
             let len = ticks_to_samples((le - ls) as f64, bpm, rate).max(1);
             let passes = passes.max(2);
             let total = intro + passes * len;
-            pl.set_loop_start(ls as f64);
-            pl.set_loop_end(le as f64);
-            pl.play();
+            m.player.set_loop_start(ls as f64);
+            m.player.set_loop_end(le as f64);
+            m.player.play();
             let mut out = Vec::with_capacity(total);
-            run(&mut pl, &mut out, intro + len, 0, total)?;
-            // The latch: the whole emulator at the start of the second pass.
-            let latch = pl.clone();
+            run(&mut m, &mut out, intro + len, 0, total)?;
+            // The latch: the whole emulator (console, studio voices, Main) at
+            // the start of the second pass.
+            let latch = m.clone();
             for k in 1..passes {
                 let mut q = latch.clone();
                 run(&mut q, &mut out, len, intro + k * len, total)?;
@@ -207,14 +205,14 @@ pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl
             let body = ticks_to_samples((end - start) as f64, bpm, rate);
             let tail = (TAIL_SECONDS * rate as f64) as usize;
             let total = body + tail;
-            pl.set_loop_end(1.0e12);
-            pl.seek(start as f64);
-            pl.play();
+            m.player.set_loop_end(1.0e12);
+            m.player.seek(start as f64);
+            m.player.play();
             let mut out = Vec::with_capacity(total);
-            run(&mut pl, &mut out, body, 0, total)?;
+            run(&mut m, &mut out, body, 0, total)?;
             // Stop so held notes release and their tails ring out.
-            pl.stop();
-            run(&mut pl, &mut out, tail, body, total)?;
+            m.player.stop();
+            run(&mut m, &mut out, tail, body, total)?;
             Ok((out, Layout { total, loop_: None, musical_loop_start: 0 }))
         }
     }
@@ -391,20 +389,33 @@ pub struct Report {
     pub layout: Option<Layout>,
 }
 
-/// One rendered track and its name ("mix", a channel or a group).
-fn tracks(o: &Options) -> Vec<(String, u8)> {
-    let mut t = vec![("mix".to_string(), 0u8)];
+/// File-name text: lower case, anything but letters and digits as "_".
+fn file_word(s: &str) -> String {
+    s.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect()
+}
+
+/// Each rendered file and its name ("mix", a track or a group) with the
+/// tracks it plays. Batch 4a: **stems are per track** (named after it; two
+/// tracks with one name get "_2", "_3"…).
+fn tracks(p: &Project, o: &Options) -> Vec<(String, Vec<bool>)> {
+    let mut t = vec![("mix".to_string(), heard_for_mask(p, 0))];
     match &o.stems {
         Stems::None => {}
         Stems::Channels => {
-            for (lane, l) in crate::state::default_lanes().iter().enumerate() {
-                t.push((l.name.to_lowercase().replace(' ', "_"), 1 << lane));
+            let n = p.arrangement.lanes.len();
+            for (i, l) in p.arrangement.lanes.iter().enumerate() {
+                let mut name = file_word(&l.name);
+                let mut k = 2;
+                while t.iter().any(|x| x.0 == name) {
+                    name = format!("{}_{k}", file_word(&l.name));
+                    k += 1;
+                }
+                t.push((name, (0..n).map(|j| j == i).collect()));
             }
         }
         Stems::Groups(g) => {
             for x in g.iter().filter(|x| x.lanes != 0) {
-                let name: String = x.name.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
-                t.push((name, x.lanes));
+                t.push((file_word(&x.name), heard_for_mask(p, x.lanes)));
             }
         }
     }
@@ -414,11 +425,11 @@ fn tracks(o: &Options) -> Vec<(String, u8)> {
 /// Renders and writes everything `o` asks for into `dir`, named after `base`.
 /// Runs on a worker thread; `ctl` reports progress and can cancel.
 pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -> Result<Report, String> {
-    let tracks = tracks(o);
+    let tracks = tracks(p, o);
     let share = 1.0 / tracks.len() as f64;
     let mut rendered = Vec::with_capacity(tracks.len());
-    for (i, (name, solo)) in tracks.iter().enumerate() {
-        let (x, layout) = render(p, o.rate, *solo, o.range, 2, Some((ctl, i as f64 * share, share)))?;
+    for (i, (name, heard)) in tracks.iter().enumerate() {
+        let (x, layout) = render_heard(p, o.rate, heard, o.range, 2, Some((ctl, i as f64 * share, share)))?;
         rendered.push((name.clone(), x, layout));
     }
     let layout = rendered[0].2;
@@ -481,6 +492,7 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
             "loop_end_bar": le as f64 / TICKS_PER_BAR as f64 + 1.0,
             "bars_in_loop": (le - ls) as f64 / TICKS_PER_BAR as f64,
             "gain_db": 20.0 * (gain as f64).log10(),
+            "master_gain_db": if p.master_db.is_finite() { serde_json::json!(p.master_db) } else { serde_json::json!("-inf") },
             "tracks": names,
             "files": {
                 "single": o.single.then(|| format!("{base}.wav")),

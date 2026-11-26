@@ -5,10 +5,8 @@
 use std::io::Write;
 use std::path::Path;
 
-use chip::player::Player;
 
 use crate::file::Project;
-use crate::state::SoundChip;
 
 pub const SAMPLE_RATE: u32 = 48_000;
 /// Silence-detection tail after the song end, so release tails ring out.
@@ -26,36 +24,24 @@ pub fn render(p: &Project) -> Vec<f32> {
 
 /// `render`, cut off after `max_seconds` (song and tail together).
 pub fn render_limited(p: &Project, max_seconds: f64) -> Vec<f32> {
-    let mut player = Player::new(SAMPLE_RATE as f64);
-    player.set_bpm(p.bpm as f64);
-    player.set_vrc6(p.chip == SoundChip::WithVrc6);
-    player.synth.set_filter(p.filter);
-    // The track volumes (polish 2 §3): a post-chip gain per track.
-    player.synth.set_gains(p.arrangement.gains());
-    player.driver.params = p.params;
-    player.driver.mute = p.mute;
-    player.driver.solo = p.solo;
+    let heard = crate::tracks::audible(&p.arrangement, &p.mute, &p.solo);
+    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, SAMPLE_RATE, &heard, p.master_db, true);
     let end = p.loop_end_ticks as f64;
     // Render past the end without wrapping.
-    player.set_loop_end(1.0e12);
-    let snap = p.arrangement.song_snapshot(0);
-    // Imported samples into the ROM, as the engine does.
-    player.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&snap.dpcm.data);
-    player.driver.set_user_samples(snap.dpcm.refs);
-    let song = snap.view();
+    m.player.set_loop_end(1.0e12);
     let seconds = end / (crate::state::PPQ as f64) * 60.0 / p.bpm as f64;
     let frames = ((seconds + TAIL_SECONDS).min(max_seconds) * SAMPLE_RATE as f64) as usize;
     let mut out = vec![0f32; frames];
-    player.play();
+    m.player.play();
     let song_frames = (seconds * SAMPLE_RATE as f64) as usize;
     let mut done = 0;
     while done < frames {
         let n = BLOCK.min(frames - done);
-        if done >= song_frames && player.playing() {
+        if done >= song_frames && m.player.playing() {
             // Song over: stop so held notes release and their tails play out.
-            player.stop();
+            m.player.stop();
         }
-        player.render(&song, &mut out[done..done + n]);
+        m.render(&snap, &mut out[done..done + n]);
         done += n;
     }
     out
@@ -94,7 +80,7 @@ mod tests {
 
     #[test]
     fn demo_renders_audio_and_a_valid_header() {
-        let mut p = Project::new_empty();
+        let mut p = Project::new_legacy();
         p.arrangement = crate::mock::demo_arrangement();
         p.loop_end_ticks = 4 * crate::state::TICKS_PER_BAR;
         let s = render(&p);
@@ -118,9 +104,11 @@ mod tests {
         let mut p = Project::new_empty();
         p.arrangement.samples = vec![None, Some(smp)];
         p.loop_end_ticks = crate::state::TICKS_PER_BAR;
+        // A studio DPCM track (Batch 4a: its voices read the same ROM).
+        let lane = p.arrangement.insert_track(4, chip::voice::VoiceKind::Dpcm, crate::theme::tokens::Rgba::hex(0xE39A42));
         let row = crate::notes::RowKind::for_lane(4).pitch_of(5); // "User 2"
         let n = Note { id: 1, start: 0, len: PPQ, pitch: row, volume: None, fx: NoteFx::default() };
-        p.arrangement.clips.push(std::sync::Arc::new(Clip::new(1, 4, 0, PPQ * 4, "s".into(), vec![n])));
+        p.arrangement.clips.push(std::sync::Arc::new(Clip::new(1, lane, 0, PPQ * 4, "s".into(), vec![n])));
         let out = render(&p);
         let peak = out[..24_000].iter().fold(0f32, |m, x| m.max(x.abs()));
         assert!(peak > 0.02, "peak {peak}");

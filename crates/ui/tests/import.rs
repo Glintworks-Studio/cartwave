@@ -214,7 +214,7 @@ fn wav_rom_full_is_refused_clearly() {
 // ───────────────────────────── export ─────────────────────────────
 
 fn project(bars: u32) -> file::Project {
-    let mut p = file::Project::new_empty();
+    let mut p = file::Project::new_legacy();
     p.arrangement = mock::demo_arrangement();
     p.loop_end_ticks = bars * TICKS_PER_BAR;
     p
@@ -316,7 +316,7 @@ fn dpcm_all_four_user_slots_full_play_with_the_built_ins() {
     // Each of the 8 DPCM rows (4 built-in, 4 user) on its own beat, twice.
     let notes: Vec<Note> = (0..16).map(|i| Note::new(i + 1, i * PPQ, PPQ, 36 + (i % 8) as u8)).collect();
     p.arrangement.clips.push(std::sync::Arc::new(ui::state::Clip::new(999, 4, 0, 16 * PPQ, "dpcm".into(), notes)));
-    p.solo = 1 << 4;
+    p.solo = ui::tracks::TrackSet(vec![p.arrangement.lanes[4].id]);
     let t0 = std::time::Instant::now();
     let audio = export::render(&p);
     let ms = t0.elapsed().as_secs_f64() * 1000.0;

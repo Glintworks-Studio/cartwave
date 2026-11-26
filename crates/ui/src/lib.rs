@@ -20,6 +20,7 @@ pub mod render;
 pub mod shortcuts;
 pub mod songs;
 pub mod state;
+pub mod tracks;
 pub mod tap;
 pub mod testing;
 pub mod theme;
@@ -27,7 +28,7 @@ pub mod views;
 
 use vizia::prelude::*;
 
-use engine::{Command, Engine, EngineConfig, FilterMode, ParamId, Params};
+use engine::{Command, Engine, EngineConfig, FilterMode, ParamId};
 
 use crate::file::{Project, Recovery};
 use crate::shortcuts::{Action, Ctx};
@@ -63,9 +64,13 @@ pub struct Signals {
     pub dial_state: Signal<[state::DialState; MAX_DIALS]>,
     /// Lane whose hardware controls the device panel shows.
     pub lane_sel: Signal<usize>,
-    /// Bit per lane.
-    pub mute: Signal<u8>,
-    pub solo: Signal<u8>,
+    /// Muted and soloed tracks (by track id: they follow a track that moves).
+    pub mute: Signal<tracks::TrackSet>,
+    pub solo: Signal<tracks::TrackSet>,
+    /// The Main track's gain in dB (−inf … +6; saved in the project).
+    pub master_db: Signal<f32>,
+    /// The Main track's sample peak since the last reset (linear, held).
+    pub master_peak: Signal<f32>,
     pub audio: Signal<AudioStats>,
     /// Shown in the transport bar when the audio device has a problem.
     pub audio_msg: Signal<String>,
@@ -161,7 +166,7 @@ impl Signals {
 
 /// Project fields outside undo that a save writes (F-01: changing them
 /// leaves unsaved changes too).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct Extras {
     chip: SoundChip,
     filter: FilterMode,
@@ -169,8 +174,9 @@ struct Extras {
     loop_start: u32,
     loop_end: u32,
     loop_on: bool,
-    mute: u8,
-    solo: u8,
+    mute: tracks::TrackSet,
+    solo: tracks::TrackSet,
+    master_db: f32,
     /// The project's format (sample rate, bit depth).
     format: (u32, u16),
 }
@@ -212,14 +218,25 @@ pub struct AppState {
     /// The real-time audio engine (`None` if `CHIPDAW_AUDIO=0`).
     engine: Option<Engine>,
     /// UI copy of every lane's hardware parameters.
-    params: Params,
+    /// What the engine last got: the console's channel controls and mute
+    /// mask (`None`: send everything), the studio rack's shape and its live
+    /// controls, the Main gain.
+    sent_params: Option<engine::Params>,
+    sent_mute: Option<u8>,
+    rack_shape: Vec<tracks::RackSlot>,
+    rack_ctls: Vec<(u32, std::sync::Arc<engine::TrackCtl>)>,
+    rack_key: u64,
+    sent_master: Option<f32>,
     song_key: u64,
     song_version: u64,
     filter: FilterMode,
     /// The user picked the filter (F7 or `CHIPDAW_FILTER`); it no longer
     /// follows the chip.
     filter_manual: bool,
+    /// The last note-on counts seen: per console channel, and per studio
+    /// track id.
     note_ons: [u32; 8],
+    studio_note_ons: Vec<(u32, u32)>,
     /// When each lane's last note-on becomes audible (lights wait for it).
     light_due: [Option<Instant>; 8],
     last_audio_stats: Option<Instant>,
@@ -691,17 +708,24 @@ impl Model for AppState {
             AppEvent::EditorFocus(c) => self.editor = *c,
             AppEvent::OpenRecent(i) => self.open_recent(cx, *i),
             AppEvent::ToggleMute(i) => {
-                self.s.mute.update(|m| *m ^= 1 << *i);
-                let m = self.s.mute.get_untracked();
-                self.send(Command::Mute(m));
+                if let Some(id) = self.s.arrangement.with_untracked(|a| a.lanes.get(*i).map(|l| l.id)) {
+                    self.s.mute.update(|m| m.toggle(id));
+                    self.sync_tracks();
+                }
             }
             AppEvent::ToggleSolo(i) => {
                 // Exclusive solo; Ctrl / Cmd-click adds or removes (R143, T5).
                 let add = crate::input::command(cx.modifiers());
-                let bit = 1u8 << *i;
-                self.s.solo.update(|m| *m = if add || *m & bit != 0 { *m ^ bit } else { bit });
-                let m = self.s.solo.get_untracked();
-                self.send(Command::Solo(m));
+                if let Some(id) = self.s.arrangement.with_untracked(|a| a.lanes.get(*i).map(|l| l.id)) {
+                    self.s.solo.update(|m| {
+                        if add || m.contains(id) {
+                            m.toggle(id);
+                        } else {
+                            *m = tracks::TrackSet(vec![id]);
+                        }
+                    });
+                    self.sync_tracks();
+                }
             }
             AppEvent::CycleFilter => {
                 let all = FilterMode::ALL;
@@ -810,7 +834,8 @@ impl Model for AppState {
                 // No audition during playback (the engine ignores it too).
                 let playing = self.s.transport.with_untracked(|t| t.playing);
                 if !playing || note.is_none() {
-                    self.send(Command::Preview { lane: *lane as u8, note: *note });
+                    let chan = self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).map_or(*lane, |l| l.chan()));
+                    self.send(Command::Preview { lane: chan as u8, note: *note });
                 }
             }
             AppEvent::GestureBegin => self.gesture_depth += 1,
@@ -1115,12 +1140,12 @@ impl AppState {
         let mut m = meters.get_untracked();
         if let Some(e) = self.engine.as_ref() {
             let sh = e.shared();
-            let levels = sh.take_levels();
+            let chan_levels = sh.take_levels();
             let now = Instant::now();
             let latency = Duration::from_nanos(
                 sh.position().map_or(0, |p| p.latency_ns),
             );
-            let mut fire = [false; 8];
+            let mut fire_chan = [false; 8];
             for lane in 0..8 {
                 let n = sh.note_ons[lane].load(std::sync::atomic::Ordering::Relaxed);
                 if n != self.note_ons[lane] {
@@ -1129,10 +1154,29 @@ impl AppState {
                 }
                 if self.light_due[lane].is_some_and(|d| now >= d) {
                     self.light_due[lane] = None;
-                    fire[lane] = true;
+                    fire_chan[lane] = true;
                 }
             }
-            mock::step_meters_engine(&mut m, levels, fire, dt);
+            // Per track: a locked track reads its channel, a studio track its
+            // rack controls (the light fires at once: no latency queue yet).
+            let (levels, fire): (Vec<f32>, Vec<bool>) = self.s.arrangement.with_untracked(|a| {
+                a.lanes
+                    .iter()
+                    .map(|l| match l.lock {
+                        Some(c) => (chan_levels[c], fire_chan[c]),
+                        None => match self.rack_ctls.iter().find(|(id, _)| *id == l.id) {
+                            Some((id, c)) => {
+                                let n = c.note_ons.load(std::sync::atomic::Ordering::Relaxed);
+                                let seen = self.studio_note_ons.iter().find(|x| x.0 == *id).map(|x| x.1);
+                                (c.take_level(), seen.is_some_and(|s| s != n))
+                            }
+                            None => (0.0, false),
+                        },
+                    })
+                    .unzip()
+            });
+            self.studio_note_ons = self.rack_ctls.iter().map(|(id, c)| (*id, c.note_ons.load(std::sync::atomic::Ordering::Relaxed))).collect();
+            mock::step_meters_engine(&mut m, &levels, &fire, dt);
         } else {
             let rng = &mut self.rng;
             self.s.arrangement.with_untracked(|a| {
@@ -1210,7 +1254,7 @@ impl AppState {
     /// Loads preset `p` on a lane, with its channel controls; one undo step.
     fn assign_preset(&mut self, lane: Option<usize>, p: usize) {
         let Some(pr) = self.preset(p) else { return };
-        if lane.is_some_and(|l| state::lane_off(self.s.chip.get_untracked(), l)) {
+        if lane.is_some_and(|l| self.s.arrangement.with_untracked(|a| state::lane_off(self.s.chip.get_untracked(), a, l))) {
             return self.set_status(state::VRC6_OFF_HINT.into());
         }
         let Some(lane) = self.lane_for(p, lane) else {
@@ -1229,7 +1273,7 @@ impl AppState {
     fn assign_preset_to_clip(&mut self, clip: u32, p: usize) {
         let Some(pr) = self.preset(p) else { return };
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(clip).map(|c| c.lane)) else { return };
-        if state::lane_off(self.s.chip.get_untracked(), lane) {
+        if self.s.arrangement.with_untracked(|a| state::lane_off(self.s.chip.get_untracked(), a, lane)) {
             return self.set_status(state::VRC6_OFF_HINT.into());
         }
         if self.lane_for(p, Some(lane)) != Some(lane) {
@@ -1337,11 +1381,18 @@ impl AppState {
             let clips = a.clips.clone();
             a.instruments.prune(&clips);
         });
-        for &(id, v) in params {
-            self.params.set(lane, id, v as i32);
-            let value = self.params.get(lane, id) as i8;
-            self.send(Command::Param { lane: lane as u8, id, value });
-        }
+        self.s.arrangement.update(|a| {
+            if let Some(l) = a.lanes.get_mut(lane) {
+                let chan = l.chan();
+                let mut row = engine::Params::default();
+                row.values[chan] = l.params;
+                for &(id, v) in params {
+                    row.set(chan, id, v as i32);
+                }
+                l.params = row.values[chan];
+            }
+        });
+        self.sync_tracks();
         if lane == self.s.lane_sel.get_untracked() {
             self.s.dials.set(self.dial_values(lane));
         }
@@ -1387,9 +1438,9 @@ impl AppState {
     fn set_chip(&mut self, chip: SoundChip) {
         self.s.chip.set(chip);
         // Clips on lanes that just went silent leave the selection (F-04).
-        if chip == SoundChip::Base2A03 {
+        {
             self.s.arrangement.update(|a| {
-                let off: Vec<u32> = a.clips.iter().filter(|c| state::lane_off(chip, c.lane)).map(|c| c.id).collect();
+                let off: Vec<u32> = a.clips.iter().filter(|c| state::lane_off(chip, a, c.lane)).map(|c| c.id).collect();
                 a.selection.retain(|id| !off.contains(id));
             });
         }
@@ -1422,15 +1473,17 @@ impl AppState {
 
     /// Dial slot `slot` of `lane` changed: store, show, send to the engine.
     fn set_param(&mut self, lane: usize, slot: usize, v: f32) {
-        let dials = lane_dials(lane);
+        let Some(chan) = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.chan())) else { return };
+        let dials = lane_dials(chan);
         let Some(&(pid, _)) = dials.get(slot) else { return };
-        self.params.set(lane, pid, v.round() as i32);
-        let stored = self.params.get(lane, pid);
-        self.send(Command::Param {
-            lane: lane as u8,
-            id: pid,
-            value: stored as i8,
+        self.s.arrangement.update(|a| {
+            let l = &mut a.lanes[lane];
+            let mut row = engine::Params::default();
+            row.values[chan] = l.params;
+            row.set(chan, pid, v.round() as i32);
+            l.params = row.values[chan];
         });
+        self.sync_tracks();
         if lane == self.s.lane_sel.get_untracked() {
             self.s.dials.update(|d| d[slot] = v);
         }
@@ -1486,10 +1539,69 @@ impl AppState {
 
     fn dial_values(&self, lane: usize) -> [f32; MAX_DIALS] {
         let mut d = [0f32; MAX_DIALS];
-        for (slot, (pid, _)) in lane_dials(lane).into_iter().enumerate() {
-            d[slot] = self.params.get(lane, pid) as f32;
+        let Some((chan, p)) = self.track_params(lane) else { return d };
+        for (slot, (pid, _)) in lane_dials(chan).into_iter().enumerate() {
+            d[slot] = p.get(chan, pid) as f32;
         }
         d
+    }
+
+    /// Track `lane`'s console lane (its controls' layout) and its controls in
+    /// that lane's row.
+    fn track_params(&self, lane: usize) -> Option<(usize, engine::Params)> {
+        self.s.arrangement.with_untracked(|a| {
+            let l = a.lanes.get(lane)?;
+            let mut p = engine::Params::default();
+            p.values[l.chan()] = l.params;
+            Some((l.chan(), p))
+        })
+    }
+
+    /// Brings the engine in line with the tracks (once per pump tick, and
+    /// right after a mute, solo or control change): the console's mute mask
+    /// and channel controls (locked tracks), each studio track's live
+    /// controls, a new rack when a studio track was added, removed, reordered
+    /// or needs a bigger pool, the Main gain. Sends only what changed.
+    fn sync_tracks(&mut self) {
+        let (heard, mute, params) = self.s.arrangement.with_untracked(|a| {
+            let heard = self.s.mute.with_untracked(|m| self.s.solo.with_untracked(|so| tracks::audible(a, m, so)));
+            let mute = tracks::console_mute(a, &heard);
+            (heard, mute, a.console_params())
+        });
+        if self.sent_mute != Some(mute) {
+            self.sent_mute = Some(mute);
+            self.send(Command::Mute(mute));
+            self.send(Command::Solo(0));
+        }
+        if self.sent_params != Some(params) {
+            for lane in 0..engine::LANES {
+                for &id in ParamId::for_lane(lane) {
+                    let v = params.get(lane, id);
+                    if self.sent_params.is_none_or(|old| old.get(lane, id) != v) {
+                        self.send(Command::Param { lane: lane as u8, id, value: v as i8 });
+                    }
+                }
+            }
+            self.sent_params = Some(params);
+        }
+        // The rack: rebuilt only when the clips or the tracks changed (the
+        // content key) and the shape then differs.
+        let key = self.s.arrangement.with_untracked(|a| a.content_key());
+        if key != self.rack_key {
+            self.rack_key = key;
+            let shape = self.s.arrangement.with_untracked(|a| a.rack_shape());
+            if shape != self.rack_shape {
+                let rack = self.s.arrangement.with_untracked(|a| tracks::build_rack(&shape, &mut self.rack_ctls, a, &heard));
+                self.rack_shape = shape;
+                self.send(Command::Rack(rack));
+            }
+        }
+        self.s.arrangement.with_untracked(|a| tracks::sync_ctls(&self.rack_ctls, a, &heard));
+        let g = state::db_to_gain(self.s.master_db.get_untracked());
+        if self.sent_master != Some(g) {
+            self.sent_master = Some(g);
+            self.send(Command::MasterGain(g));
+        }
     }
 
     /// Once per pump tick: keep the engine's song in step with the
@@ -1527,9 +1639,13 @@ impl AppState {
         self.s.inspector.set_if_changed(any);
         // Which dials an instrument overrides (cheap; set only on change).
         let lane = self.s.lane_sel.get_untracked();
-        let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(a.current_instrument(lane))));
+        let st = match self.track_params(lane) {
+            Some((chan, p)) => self.s.arrangement.with_untracked(|a| state::dial_states(chan, &p, a.instruments.get(a.current_instrument(lane)))),
+            None => Default::default(),
+        };
         self.s.dial_state.set_if_changed(st);
         self.sync_gains();
+        self.sync_tracks();
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -1537,20 +1653,21 @@ impl AppState {
                 .arrangement
                 .update(|a| dial = self.tests.auto_edit(a));
             if let Some((lane, pid, v)) = dial {
-                if let Some(slot) = lane_dials(lane).iter().position(|(p, _)| *p == pid) {
+                let chan = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(lane, |l| l.chan()));
+                if let Some(slot) = lane_dials(chan).iter().position(|(p, _)| *p == pid) {
                     self.set_param(lane, slot, v as f32);
                 }
             }
             if let Some((mute, lane)) = self.tests.auto_mute() {
-                let sig = if mute { self.s.mute } else { self.s.solo };
-                sig.update(|m| *m ^= 1 << lane);
-                // Never leave a solo on for long: it would silence the test.
-                if !mute && self.s.solo.get_untracked().count_ones() > 1 {
-                    self.s.solo.set(0);
+                if let Some(id) = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.id)) {
+                    let sig = if mute { self.s.mute } else { self.s.solo };
+                    sig.update(|m| m.toggle(id));
+                    // Never leave a solo on for long: it would silence the test.
+                    if !mute && self.s.solo.with_untracked(|so| so.0.len() > 1) {
+                        self.s.solo.set(tracks::TrackSet::default());
+                    }
+                    self.sync_tracks();
                 }
-                let (m, so) = (self.s.mute.get_untracked(), self.s.solo.get_untracked());
-                self.send(Command::Mute(m));
-                self.send(Command::Solo(so));
             }
         }
         let Some(e) = self.engine.as_mut() else { return };
@@ -1876,8 +1993,10 @@ pub fn build_ui(cx: &mut Context) {
         dials: Signal::new([0.0; MAX_DIALS]),
         dial_state: Signal::new([state::DialState::default(); MAX_DIALS]),
         lane_sel: Signal::new(usize::MAX),
-        mute: Signal::new(0),
-        solo: Signal::new(0),
+        mute: Signal::new(tracks::TrackSet::default()),
+        solo: Signal::new(tracks::TrackSet::default()),
+        master_db: Signal::new(0.0),
+        master_peak: Signal::new(0.0),
         audio: Signal::new(AudioStats::default()),
         audio_msg: Signal::new(String::new()),
         chip: Signal::new(chip),
@@ -1954,7 +2073,12 @@ pub fn build_ui(cx: &mut Context) {
         cap: FrameCap::from_setting(settings.frame_cap),
         applied: None,
         engine: None,
-        params: instruments::default_params(),
+        sent_params: None,
+        sent_mute: None,
+        rack_shape: Vec::new(),
+        rack_ctls: Vec::new(),
+        rack_key: 0,
+        sent_master: None,
         song_key: 0,
         song_version: 0,
         filter: tests
@@ -1962,6 +2086,7 @@ pub fn build_ui(cx: &mut Context) {
             .unwrap_or(FilterMode::default_for(chip == SoundChip::WithVrc6)),
         filter_manual: tests.filter.is_some(),
         note_ons: [0; 8],
+        studio_note_ons: Vec::new(),
         light_due: [None; 8],
         last_audio_stats: None,
         audio_generation: 0,
@@ -1991,8 +2116,9 @@ pub fn build_ui(cx: &mut Context) {
             loop_start: 0,
             loop_end: 0,
             loop_on: true,
-            mute: 0,
-            solo: 0,
+            mute: tracks::TrackSet::default(),
+            solo: tracks::TrackSet::default(),
+            master_db: 0.0,
             format: (file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH),
         }),
         quitting: false,
@@ -2162,8 +2288,9 @@ impl AppState {
                 .transport
                 .update(|t| t.loop_end_ticks = testing::AV_LOOP_TICKS);
             self.send(Command::LoopEnd(testing::AV_LOOP_TICKS));
-            self.s.mute.set(0xFF);
-            self.send(Command::Mute(0xFF));
+            let all = self.s.arrangement.with_untracked(|a| tracks::TrackSet(a.lanes.iter().map(|l| l.id).collect()));
+            self.s.mute.set(all);
+            self.sync_tracks();
             self.send(Command::TestClickAt(testing::AV_MARKER_TICKS));
         }
         if self.tests.autoplay || self.tests.avsync || self.tests.stress {
@@ -2549,7 +2676,7 @@ impl AppState {
     /// The undoable document as it is now.
     fn doc(&self) -> Doc {
         let bpm = self.s.transport.with_untracked(|t| t.bpm);
-        self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, self.params)).with_song(self.song_state())
+        self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, a.console_params())).with_song(self.song_state())
     }
 
     /// The undoable song settings (F-33).
@@ -2613,15 +2740,11 @@ impl AppState {
             self.send(Command::Bpm(d.bpm as f64));
             self.s.transport.update(|t| t.bpm = d.bpm);
         }
-        if self.params != d.params {
-            self.params = d.params;
-            self.send_all_params();
-            let lane = self.s.lane_sel.get_untracked();
-            if lane < engine::LANES {
-                self.s.dials.set(self.dial_values(lane));
-            }
-            self.sync_piano_lane_volume();
-        }
+        // Track controls came back with the tracks: show and send them.
+        let lane = self.s.lane_sel.get_untracked();
+        self.s.dials.set(self.dial_values(lane));
+        self.sync_piano_lane_volume();
+        self.sync_tracks();
         // The open clip may be gone; notes that no longer exist leave the selection.
         let alive = self.s.piano.with_untracked(|p| p.clip).and_then(|id| {
             self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.notes.iter().map(|n| n.id).collect::<Vec<_>>()))
@@ -2633,13 +2756,15 @@ impl AppState {
         }
     }
 
+    /// The engine forgets what it was sent (a new engine, a new project):
+    /// the next `sync_tracks` sends everything.
     fn send_all_params(&mut self) {
-        for lane in 0..engine::LANES {
-            for &id in ParamId::for_lane(lane) {
-                let value = self.params.get(lane, id) as i8;
-                self.send(Command::Param { lane: lane as u8, id, value });
-            }
-        }
+        self.sent_params = None;
+        self.sent_mute = None;
+        self.sent_master = None;
+        self.rack_key = 0;
+        self.rack_shape.clear();
+        self.sync_tracks();
     }
 
     fn project(&self) -> Project {
@@ -2663,7 +2788,7 @@ impl AppState {
             loop_on: self.s.loop_on.get_untracked(),
             mute: self.s.mute.get_untracked(),
             solo: self.s.solo.get_untracked(),
-            params: self.params,
+            master_db: self.s.master_db.get_untracked(),
             rate: self.s.project_format.get_untracked().0,
             bits: self.s.project_format.get_untracked().1,
             load_report: Vec::new(),
@@ -2701,7 +2826,7 @@ impl AppState {
         self.send(Command::LoopStart(p.loop_start_ticks as f64));
         self.send(Command::LoopEnd(self.engine_loop_end(p.loop_end_ticks as f64)));
         self.s.chip.set(p.chip);
-        self.send(Command::Vrc6(p.chip == SoundChip::WithVrc6));
+        self.send(Command::Vrc6(p.chip.vrc6()));
         self.filter = p.filter;
         self.filter_manual = !p.filter_auto;
         self.send(Command::Filter(self.filter));
@@ -2709,14 +2834,13 @@ impl AppState {
         self.s.filter_state.set((self.filter, p.filter_auto));
         self.s.mute.set(p.mute);
         self.s.solo.set(p.solo);
-        self.send(Command::Mute(p.mute));
-        self.send(Command::Solo(p.solo));
-        self.params = p.params;
+        self.s.master_db.set(p.master_db);
+        self.s.master_peak.set(0.0);
+        self.rack_ctls.clear();
         self.send_all_params();
-        let lane = self.s.lane_sel.get_untracked();
-        if lane < engine::LANES {
-            self.s.dials.set(self.dial_values(lane));
-        }
+        let lane = self.s.lane_sel.get_untracked().min(self.s.arrangement.with_untracked(|a| a.lanes.len().saturating_sub(1)));
+        self.s.lane_sel.set(lane);
+        self.s.dials.set(self.dial_values(lane));
         let d = self.doc();
         self.history.reset(d);
         self.last_audio_stats = None;
@@ -2789,8 +2913,8 @@ impl AppState {
             p.bpm = bpm.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
         }
         p.loop_end_ticks = imp.loop_end;
-        p.mute = 0;
-        p.solo = 0;
+        p.mute = tracks::TrackSet::default();
+        p.solo = tracks::TrackSet::default();
         self.load_project(p);
         self.s.file_path.set(String::new());
         // A new song nobody has saved yet.
@@ -2959,12 +3083,12 @@ impl AppState {
             eprintln!("dev: open piano roll {id}");
         }
         let chip = self.s.chip.get_untracked();
-        if self.s.arrangement.with_untracked(|a| a.clip(id).is_some_and(|c| state::lane_off(chip, c.lane))) {
+        if self.s.arrangement.with_untracked(|a| a.clip(id).is_some_and(|c| state::lane_off(chip, a, c.lane))) {
             return self.set_status(state::VRC6_OFF_HINT.into());
         }
         let Some((lane, notes_mid)) = self.s.arrangement.with_untracked(|a| {
             a.clip(id).map(|c| {
-                let kind = RowKind::for_lane(c.lane);
+                let kind = RowKind::for_lane(a.lanes[c.lane].chan());
                 let rows: Vec<u32> = c.audible_notes().map(|n| kind.row_of(n.pitch)).collect();
                 let mid = if rows.is_empty() {
                     match kind {
@@ -2981,7 +3105,7 @@ impl AppState {
         };
         let (kind, mid) = notes_mid;
         self.s.arrangement.update(|a| a.selection = vec![id]);
-        let lane_volume = self.params.get(lane, ParamId::Volume) as u8;
+        let lane_volume = self.track_params(lane).map_or(15, |(chan, p)| p.get(chan, ParamId::Volume) as u8);
         self.s.piano.update(|p| {
             if p.clip != Some(id) {
                 p.sel.clear();
@@ -3073,8 +3197,9 @@ impl AppState {
         let Some(lane) = self.s.arrangement.with_untracked(|a| a.clip(id).map(|c| c.lane)) else { return };
         // A note without a volume plays at full (15), scaled by the channel
         // volume; in the hardware decay modes the control is its decay speed.
-        let decay = ParamId::for_lane(lane).contains(&ParamId::Envelope) && self.params.get(lane, ParamId::Envelope) != 0;
-        let v = if decay { self.params.get(lane, ParamId::Volume) as u8 } else { notes::MAX_VOLUME };
+        let Some((chan, params)) = self.track_params(lane) else { return };
+        let decay = ParamId::for_lane(chan).contains(&ParamId::Envelope) && params.get(chan, ParamId::Envelope) != 0;
+        let v = if decay { params.get(chan, ParamId::Volume) as u8 } else { notes::MAX_VOLUME };
         if self.s.piano.with_untracked(|p| p.lane_volume) != v {
             self.s.piano.update(|p| p.lane_volume = v);
         }
@@ -3178,8 +3303,11 @@ impl AppState {
         let clipboard = self.clipboard.clone();
         let mut new = Vec::new();
         self.s.arrangement.update(|a| {
+            let chan = a.clip(id).map_or(0, |c| a.lanes[c.lane].chan());
+            let poly = a.clip(id).is_some_and(|c| !a.lanes[c.lane].locked());
+            let _rule = notes::rule_scope(poly);
             let Some(c) = a.clip_mut(id) else { return };
-            let kind = RowKind::for_lane(c.lane);
+            let kind = RowKind::for_lane(chan);
             let rel = playhead - c.start_ticks as f64;
             let at = if let Some((_, end)) = notes::span(&c.notes, &p.sel) {
                 end
@@ -3313,6 +3441,7 @@ impl AppState {
             loop_on: self.s.loop_on.get_untracked(),
             mute: self.s.mute.get_untracked(),
             solo: self.s.solo.get_untracked(),
+            master_db: self.s.master_db.get_untracked(),
             format: self.s.project_format.get_untracked(),
         }
     }
@@ -3423,7 +3552,7 @@ impl AppState {
 
     /// Clips on the VRC6 lanes (silent under the 2A03 profile).
     fn vrc6_clip_count(&self) -> usize {
-        self.s.arrangement.with_untracked(|a| a.clips.iter().filter(|c| c.lane >= chip::driver::LANE_V1).count())
+        self.s.arrangement.with_untracked(|a| a.clips.iter().filter(|c| a.lanes[c.lane].lock.is_some_and(|ch| ch >= chip::driver::LANE_V1)).count())
     }
 
     /// Project Settings: the hardware profile. Switching VRC6 off while its
@@ -3450,7 +3579,7 @@ impl AppState {
         match m {
             None => {
                 self.filter_manual = false;
-                self.filter = FilterMode::default_for(self.s.chip.get_untracked() == SoundChip::WithVrc6);
+                self.filter = tracks::default_filter(self.s.chip.get_untracked());
             }
             Some(m) => {
                 self.filter_manual = true;
@@ -3628,7 +3757,7 @@ impl AppState {
             Action::SelectAll | Action::OpenClip if !menu => return false,
             Action::SelectAll => {
                 let chip = self.s.chip.get_untracked();
-                self.s.arrangement.update(|a| a.selection = a.clips.iter().filter(|c| !state::lane_off(chip, c.lane)).map(|c| c.id).collect());
+                self.s.arrangement.update(|a| a.selection = a.clips.iter().filter(|c| !state::lane_off(chip, a, c.lane)).map(|c| c.id).collect());
             }
             Action::OpenClip => return false,
             Action::Settings => self.open_modal(Modal::Settings(SettingsTab::Audio)),

@@ -22,7 +22,7 @@ fn scale_test_renders_to_the_golden_hash() {
     // Every channel sounds on its own (solo each lane for the first 4 bars).
     for lane in 0..8 {
         let mut solo = p.clone();
-        solo.solo = 1 << lane;
+        solo.solo = ui::tracks::TrackSet(vec![p.arrangement.lanes[lane].id]);
         let x = ui::render::render(&solo, secs / 2.0);
         let peak = x.iter().fold(0f32, |m, v| m.max(v.abs()));
         assert!(peak > 0.01, "lane {lane} is silent (peak {peak})");

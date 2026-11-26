@@ -9,8 +9,12 @@
 //! project's format, sample rate and bit depth: the design pass. Older files
 //! open as 48 kHz / 16-bit, the export default they had), 6 (each track's row
 //! height, pan and volume in dB: polish 2. Older files open at 72 px, centre
-//! and 0 dB, which renders exactly as before). Older files are migrated on load so they
-//! sound exactly as before (`migrate_v2`).
+//! and 0 dB, which renders exactly as before), 7 (Batch 4a: **tracks are
+//! instruments**. A list of tracks, each with an id, a voice type, an optional
+//! lock to a console channel, a Voices setting, its channel controls and
+//! instrument; the hardware profile; the Main track's gain. Older files open
+//! with every track locked to its channel (`legacy_tracks`)). Older files are
+//! migrated on load so they sound exactly as before (`migrate_v2`).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
 //! in-memory model is converted to and from the file structs below, so the
@@ -21,6 +25,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use engine::{FilterMode, ParamId, Params, LANES};
+use chip::voice::VoiceKind;
+use crate::tracks::TrackSet;
 use serde::{Deserialize, Serialize};
 
 use crate::instruments::{KitPiece, LaneInstrument};
@@ -31,7 +37,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 6;
+pub const VERSION: u32 = 7;
 /// A new project's format (the display's indicators, the export default).
 pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
 pub const DEFAULT_BIT_DEPTH: u16 = 24;
@@ -56,9 +62,11 @@ pub struct Project {
     pub loop_start_ticks: u32,
     /// The song loop is switched on (version 3; older files: on, the app's default).
     pub loop_on: bool,
-    pub mute: u8,
-    pub solo: u8,
-    pub params: Params,
+    /// Muted and soloed tracks (by id).
+    pub mute: TrackSet,
+    pub solo: TrackSet,
+    /// The Main track's gain in dB (version 7; older files: 0 dB).
+    pub master_db: f32,
     /// The project's format (version 5): sample rate and bit depth.
     pub rate: u32,
     pub bits: u16,
@@ -67,20 +75,28 @@ pub struct Project {
 }
 
 impl Project {
-    /// File > New: the 8 lanes, no clips, default settings.
+    /// The project File > New made before the model change: the legacy eight
+    /// locked lanes on the default band, 2A03 + VRC6, the Famicom filter.
+    /// Tests, demo songs and tools that build a song lane by lane start here.
+    pub fn new_legacy() -> Self {
+        Self { arrangement: Arrangement::empty(), chip: SoundChip::WithVrc6, filter: FilterMode::default_for(true), ..Self::new_empty() }
+    }
+
+    /// File > New (Batch 4a): studio tracks, no hardware profile (VISION.md
+    /// principle 4: authenticity is opt-in), no clips, default settings.
     pub fn new_empty() -> Self {
         Self {
-            arrangement: Arrangement::empty(),
+            arrangement: Arrangement::new_project(),
             bpm: 150.0,
-            chip: SoundChip::WithVrc6,
-            filter: FilterMode::default_for(true),
+            chip: SoundChip::StudioOnly,
+            filter: crate::tracks::default_filter(SoundChip::StudioOnly),
             filter_auto: true,
             loop_end_ticks: 32 * crate::state::TICKS_PER_BAR,
             loop_start_ticks: 0,
             loop_on: true,
-            mute: 0,
-            solo: 0,
-            params: crate::instruments::default_params(),
+            mute: TrackSet::default(),
+            solo: TrackSet::default(),
+            master_db: 0.0,
             rate: DEFAULT_PROJECT_RATE,
             bits: DEFAULT_BIT_DEPTH,
             load_report: Vec::new(),
@@ -120,6 +136,94 @@ struct FileV1 {
     rate: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     bits: Option<u16>,
+}
+
+/// Version 7: the project file.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileV7 {
+    format: String,
+    version: u32,
+    bpm: f32,
+    /// The hardware profile: "none", "nes" or "famicom+vrc6".
+    profile: String,
+    /// "auto" (follows the profile), or "nes", "nes+440", "famicom", "off".
+    filter: String,
+    loop_end: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    instruments: Vec<InstV2>,
+    #[serde(default)]
+    loop_start: u32,
+    #[serde(default = "yes", rename = "loop")]
+    loop_on: bool,
+    /// The Main track's gain in dB (a number, or "-inf"), when not 0 dB.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    master_db: Option<DbValue>,
+    tracks: Vec<TrackV7>,
+    /// Each clip's `lane` is its track's index in `tracks`.
+    clips: Vec<ClipV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    samples: Vec<SampleV2>,
+    rate: u32,
+    bits: u16,
+}
+
+/// Version 7: one track.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TrackV7 {
+    id: u32,
+    name: String,
+    /// "pulse", "triangle", "noise", "dpcm", "vrc6_pulse" or "saw".
+    voice: String,
+    /// A locked track's channel: "2a03_p1", "2a03_p2", "2a03_tri",
+    /// "2a03_noise", "2a03_dpcm", "vrc6_p1", "vrc6_p2", "vrc6_saw".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lock: Option<String>,
+    /// The Voices setting (most voices at once), when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    voices: Option<u16>,
+    /// The fader (dB) and pan a locked track had before locking.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    before_lock: Option<(DbValue, i8)>,
+    color: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    mute: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    solo: bool,
+    /// Only the controls the voice type has; missing ones are the defaults.
+    #[serde(default)]
+    params: BTreeMap<String, i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    height: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pan: Option<i8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    volume_db: Option<DbValue>,
+    /// The track's instrument (an id in `instruments`).
+    inst: u32,
+}
+
+const VOICE_KEYS: [(VoiceKind, &str); 6] = [
+    (VoiceKind::Pulse, "pulse"),
+    (VoiceKind::Triangle, "triangle"),
+    (VoiceKind::Noise, "noise"),
+    (VoiceKind::Dpcm, "dpcm"),
+    (VoiceKind::Vrc6Pulse, "vrc6_pulse"),
+    (VoiceKind::Saw, "saw"),
+];
+const CHANNEL_KEYS: [&str; 8] = ["2a03_p1", "2a03_p2", "2a03_tri", "2a03_noise", "2a03_dpcm", "vrc6_p1", "vrc6_p2", "vrc6_saw"];
+
+fn voice_key(k: VoiceKind) -> &'static str {
+    VOICE_KEYS.iter().find(|v| v.0 == k).map_or("pulse", |v| v.1)
+}
+
+fn profile_key(p: SoundChip) -> &'static str {
+    match p {
+        SoundChip::StudioOnly => "none",
+        SoundChip::Base2A03 => "nes",
+        SoundChip::WithVrc6 => "famicom+vrc6",
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -393,31 +497,29 @@ pub fn parse_hex(t: &str) -> Result<crate::theme::tokens::Rgba, String> {
 
 /// The project as file text (pretty-printed JSON, one note per line).
 pub fn to_string(p: &Project) -> String {
-    let lanes = (0..LANES)
-        .map(|lane| LaneV1 {
-            name: p.arrangement.lanes.get(lane).map_or_else(|| default_lanes()[lane].name.clone(), |l| l.name.clone()),
-            color: p
-                .arrangement
-                .lanes
-                .get(lane)
-                .map(|l| crate::state::rgb_hex(l.color))
-                .filter(|c| *c != crate::state::rgb_hex(default_lanes()[lane].color))
-                .map(hex_text),
-            height: p.arrangement.lanes.get(lane).map(|l| l.height).filter(|h| *h != crate::state::ROW_H_MIN),
-            pan: p.arrangement.lanes.get(lane).map(|l| l.pan).filter(|v| *v != 0),
-            volume_db: p.arrangement.lanes.get(lane).and_then(|l| DbValue::of(l.vol_db)),
-            mute: p.mute & (1 << lane) != 0,
-            solo: p.solo & (1 << lane) != 0,
-            params: ParamId::for_lane(lane)
-                .iter()
-                .map(|&id| (param_key(id).to_string(), p.params.get(lane, id)))
-                .collect(),
-            instrument: None,
-            inst: Some(p.arrangement.instruments.lane_id(lane)),
+    let a = &p.arrangement;
+    let tracks = a
+        .lanes
+        .iter()
+        .enumerate()
+        .map(|(i, l)| TrackV7 {
+            id: l.id,
+            name: l.name.clone(),
+            voice: voice_key(l.voice).into(),
+            lock: l.lock.map(|c| CHANNEL_KEYS[c.min(7)].into()),
+            voices: (l.voices > 0).then_some(l.voices),
+            before_lock: l.before_lock.map(|(db, pan)| (DbValue::of(db).unwrap_or(DbValue::Db(0.0)), pan)),
+            color: hex_text(crate::state::rgb_hex(l.color)),
+            mute: p.mute.contains(l.id),
+            solo: p.solo.contains(l.id),
+            params: ParamId::for_lane(l.chan()).iter().map(|&id| (param_key(id).to_string(), l.params[id as usize] as i32)).collect(),
+            height: Some(l.height).filter(|h| *h != crate::state::ROW_H_MIN),
+            pan: Some(l.pan).filter(|v| *v != 0),
+            volume_db: DbValue::of(l.vol_db),
+            inst: a.instruments.lane_id(i),
         })
         .collect();
-    let clips = p
-        .arrangement
+    let clips = a
         .clips
         .iter()
         .map(|c| ClipV1 {
@@ -431,44 +533,33 @@ pub fn to_string(p: &Project) -> String {
             notes: c.notes.clone(),
         })
         .collect();
-    let instruments = p
-        .arrangement
-        .instruments
-        .entries
-        .iter()
-        .map(|e| InstV2 { id: Some(e.id), ..lane_inst_to_file(&e.inst) })
-        .collect();
-    let f = FileV1 {
+    let instruments = a.instruments.entries.iter().map(|e| InstV2 { id: Some(e.id), ..lane_inst_to_file(&e.inst) }).collect();
+    let f = FileV7 {
         format: FORMAT.into(),
         version: VERSION,
         bpm: p.bpm,
-        chip: match p.chip {
-            SoundChip::Base2A03 => "2A03",
-            SoundChip::WithVrc6 => "2A03+VRC6",
-        }
-        .into(),
+        profile: profile_key(p.chip).into(),
         filter: if p.filter_auto { "auto".into() } else { filter_key(p.filter).into() },
         loop_end: p.loop_end_ticks,
         instruments,
         loop_start: p.loop_start_ticks,
         loop_on: p.loop_on,
-        lanes,
+        master_db: DbValue::of(p.master_db),
+        tracks,
         clips,
-        samples: p
-            .arrangement
+        samples: a
             .samples
             .iter()
             .enumerate()
             .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             .map(|(i, s)| SampleV2 { slot: i as u8, name: s.name.clone(), rate: s.rate, data: crate::dpcm::to_hex(&s.bytes) })
             .collect(),
-        rate: Some(p.rate),
-        bits: Some(p.bits),
+        rate: p.rate,
+        bits: p.bits,
     };
     compact_notes(&serde_json::to_string_pretty(&f).expect("project serialises"))
 }
 
-/// Puts each note object on one line: the file stays readable and diffable
 /// without one line per field (a 50k-note song is ~50k lines, not ~300k).
 fn compact_notes(pretty: &str) -> String {
     let mut out = String::with_capacity(pretty.len());
@@ -532,6 +623,9 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         }
         Some(v) => return Err(format!("Unsupported file format version {v}.")),
         None => return Err("The project file has no format version.".into()),
+    }
+    if h.version == Some(7) {
+        return from_v7(text);
     }
     let f: FileV1 = serde_json::from_str(text).map_err(|e| format!("The project file is damaged: {e}"))?;
 
@@ -599,10 +693,99 @@ pub fn from_str(text: &str) -> Result<Project, String> {
             }
         }
     }
+    let clips = load_clips(f.clips, &arrangement, h.version.unwrap_or(VERSION))?;
+    arrangement.clips = clips;
+    arrangement.next_id = arrangement.clips.iter().map(|c| c.id + 1).max().unwrap_or(1);
+    arrangement.samples = load_samples(&f.samples)?;
+    let loop_end_ticks = f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS);
+    let mut p = Project {
+        arrangement,
+        bpm: f.bpm.clamp(crate::state::Transport::MIN_BPM, crate::state::Transport::MAX_BPM),
+        chip,
+        filter,
+        filter_auto,
+        loop_end_ticks,
+        loop_start_ticks: f.loop_start.min(loop_end_ticks.saturating_sub(crate::state::PPQ)),
+        loop_on: f.loop_on,
+        mute: TrackSet::default(),
+        solo: TrackSet::default(),
+        master_db: 0.0,
+        // Version 5: the project's format; older files had 48 kHz / 16-bit
+        // as their export default.
+        rate: match f.rate {
+            Some(r) if PROJECT_RATES.contains(&r) => r,
+            Some(r) => return Err(format!("Unsupported project sample rate {r} Hz.")),
+            None => DEFAULT_PROJECT_RATE,
+        },
+        bits: match f.bits {
+            Some(b) if BIT_DEPTHS.contains(&b) => b,
+            Some(b) => return Err(format!("Unsupported project bit depth {b}.")),
+            None => OLD_BIT_DEPTH,
+        },
+        load_report: Vec::new(),
+    };
+    if h.version.unwrap_or(VERSION) < 3 {
+        migrate_v2(&mut p.arrangement, &mut params, &mut p.load_report);
+    }
+    legacy_tracks(&mut p, &params, mute, solo);
+    Ok(p)
+}
+
+/// Format 6 and older → 7 (Batch 4a §4.2): the eight lanes become eight
+/// tracks, **each locked to its channel**, so the song plays exactly as
+/// before. The profile: the old chip setting, except that a 2A03 + VRC6
+/// project whose VRC6 lanes have no clips becomes NES (2A03). Its "auto"
+/// filter followed the old chip (the Famicom stage), so it is kept as an
+/// explicit choice: the render stays bit-identical. Empty VRC6 lanes under
+/// the NES profile become studio tracks (a lock onto a channel the profile
+/// lacks would show as a problem in every such project). A lane whose fader
+/// or pan wasn't at 0 dB / centre (format 6) is locked at 0 dB / centre like
+/// any locked track, its values kept for unlocking, and the report says so.
+fn legacy_tracks(p: &mut Project, params: &Params, mute: u8, solo: u8) {
+    let a = &mut p.arrangement;
+    let vrc6_clips = a.clips.iter().any(|c| c.lane >= chip::driver::LANE_V1);
+    if p.chip == SoundChip::WithVrc6 && !vrc6_clips {
+        p.chip = SoundChip::Base2A03;
+        if p.filter_auto {
+            p.filter_auto = false;
+            p.filter = FilterMode::default_for(true);
+        }
+    }
+    for (i, l) in a.lanes.iter_mut().enumerate() {
+        l.params = params.values[i];
+        if mute & (1 << i) != 0 {
+            p.mute.set(l.id, true);
+        }
+        if solo & (1 << i) != 0 {
+            p.solo.set(l.id, true);
+        }
+        let in_profile = p.chip.has_channel(i);
+        let empty = !a.clips.iter().any(|c| c.lane == i);
+        if !in_profile && empty {
+            l.lock = None;
+            l.short = crate::tracks::short_for(l);
+        } else if l.vol_db != 0.0 || l.pan != 0 {
+            p.load_report.push(format!(
+                "{}: locked to its channel, so its fader and pan are at 0 dB and centre now (they were {} and {}); unlock it to get them back.",
+                l.name,
+                crate::state::format_db(l.vol_db),
+                crate::state::format_pan(l.pan)
+            ));
+            l.before_lock = Some((l.vol_db, l.pan));
+            l.vol_db = 0.0;
+            l.pan = 0;
+        }
+    }
+}
+
+/// Reads and checks the clips (any version) against the tracks.
+fn load_clips(clips: Vec<ClipV1>, arrangement: &Arrangement, version: u32) -> Result<Vec<Arc<Clip>>, String> {
+    let tracks = arrangement.lanes.len();
+    let mut out = Vec::with_capacity(clips.len());
     let mut seen = std::collections::HashSet::new();
-    for c in f.clips {
-        if c.lane >= LANES {
-            return Err(format!("Clip {} is on lane {}; there are {LANES}.", c.id, c.lane));
+    for c in clips {
+        if c.lane >= tracks {
+            return Err(format!("Clip {} is on track {}; there are {tracks}.", c.id, c.lane + 1));
         }
         if !seen.insert(c.id) {
             return Err(format!("Two clips have the id {}.", c.id));
@@ -621,7 +804,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
             return Err(format!("Clip {} uses instrument {i}, which isn't in the file.", c.id));
         }
         let color = match &c.color {
-            Some(t) if h.version.unwrap_or(VERSION) >= 4 => Some(parse_hex(t)?),
+            Some(t) if version >= 4 => Some(parse_hex(t)?),
             _ => None,
         };
         let mut clip = Clip::new(c.id, c.lane, c.start, c.len.max(1), c.name, c.notes);
@@ -641,31 +824,136 @@ pub fn from_str(text: &str) -> Result<Project, String> {
                 next += 1;
             }
         }
-        notes::resolve_mono(&mut clip.notes, &[], &mut next);
+        // Locked tracks are monophonic (the tracker rule); a studio track
+        // keeps its chords.
+        if arrangement.lanes[clip.lane].locked() {
+            notes::resolve_mono(&mut clip.notes, &[], &mut next);
+        } else {
+            notes::sort_poly(&mut clip.notes);
+        }
         clip.next_note_id = next;
-        arrangement.clips.push(Arc::new(clip));
+        out.push(Arc::new(clip));
     }
-    arrangement.next_id = arrangement.clips.iter().map(|c| c.id + 1).max().unwrap_or(1);
-    arrangement.samples = vec![None; chip::samples::USER_SLOTS];
-    for s in &f.samples {
-        let slot = arrangement
-            .samples
-            .get_mut(s.slot as usize)
-            .ok_or_else(|| format!("Sample slot {} doesn't exist.", s.slot))?;
+    Ok(out)
+}
+
+/// Reads the imported DPCM samples.
+fn load_samples(samples: &[SampleV2]) -> Result<Vec<Option<crate::dpcm::UserSample>>, String> {
+    let mut out: Vec<Option<crate::dpcm::UserSample>> = vec![None; chip::samples::USER_SLOTS];
+    for s in samples {
+        let slot = out.get_mut(s.slot as usize).ok_or_else(|| format!("Sample slot {} doesn't exist.", s.slot))?;
         *slot = Some(crate::dpcm::UserSample {
             name: s.name.clone(),
             rate: s.rate.min(15),
             bytes: crate::dpcm::from_hex(&s.data)?.into_iter().take(chip::samples::MAX_SAMPLE_BYTES).collect(),
         });
     }
-    if crate::dpcm::used_bytes(&arrangement.samples) > chip::samples::USER_ROM {
+    if crate::dpcm::used_bytes(&out) > chip::samples::USER_ROM {
         return Err("The project's DPCM samples don't fit in the sample memory.".into());
     }
-    if arrangement.samples.iter().all(|s| s.is_none()) {
-        arrangement.samples.clear();
+    if out.iter().all(|s| s.is_none()) {
+        out.clear();
     }
+    Ok(out)
+}
+
+/// A version 7 file.
+fn from_v7(text: &str) -> Result<Project, String> {
+    use crate::instruments::{Entry, InstrumentTable, MAX_INSTRUMENTS};
+    let f: FileV7 = serde_json::from_str(text).map_err(|e| format!("The project file is damaged: {e}"))?;
+    let chip = match f.profile.as_str() {
+        "none" => SoundChip::StudioOnly,
+        "nes" => SoundChip::Base2A03,
+        "famicom+vrc6" => SoundChip::WithVrc6,
+        other => return Err(format!("Unknown hardware profile \"{other}\".")),
+    };
+    let (filter, filter_auto) = match f.filter.as_str() {
+        "auto" => (crate::tracks::default_filter(chip), true),
+        key => (FilterMode::ALL.into_iter().find(|m| filter_key(*m) == key).ok_or_else(|| format!("Unknown filter \"{key}\"."))?, false),
+    };
+    if f.tracks.is_empty() {
+        return Err("The project has no tracks.".into());
+    }
+    if f.instruments.len() > MAX_INSTRUMENTS {
+        return Err(format!("The file has {} instruments; the most is {MAX_INSTRUMENTS}.", f.instruments.len()));
+    }
+    let mut entries: Vec<Entry> = Vec::with_capacity(f.instruments.len());
+    for i in &f.instruments {
+        let id = i.id.ok_or("An instrument in the table has no id.")?;
+        if id == 0 || id >= crate::state::MAX_ID || entries.iter().any(|e| e.id == id) {
+            return Err(format!("Instrument id {id} is out of range or used twice."));
+        }
+        entries.push(Entry { id, inst: lane_inst_from_file(i)? });
+    }
+    let mut arrangement = Arrangement::empty();
+    arrangement.lanes.clear();
+    let (mut mute, mut solo) = (TrackSet::default(), TrackSet::default());
+    let mut lanes_inst = Vec::with_capacity(f.tracks.len());
+    let mut taken = [false; LANES];
+    for (n, t) in f.tracks.iter().enumerate() {
+        let voice = VOICE_KEYS.iter().find(|v| v.1 == t.voice).map(|v| v.0).ok_or_else(|| format!("Track {} has an unknown voice type \"{}\".", n + 1, t.voice))?;
+        if t.id == 0 || t.id >= crate::state::MAX_ID || arrangement.lanes.iter().any(|l| l.id == t.id) {
+            return Err(format!("Track {} has a bad or repeated id {}.", n + 1, t.id));
+        }
+        let lock = match &t.lock {
+            None => None,
+            Some(k) => {
+                let c = CHANNEL_KEYS.iter().position(|x| x == k).ok_or_else(|| format!("Track {} is locked to an unknown channel \"{k}\".", n + 1))?;
+                if chip::voice::VoiceKind::of_lane(c) != voice {
+                    return Err(format!("Track {} is a {} track locked to a {} channel.", n + 1, crate::tracks::kind_name(voice), crate::tracks::kind_name(VoiceKind::of_lane(c))));
+                }
+                if std::mem::replace(&mut taken[c], true) {
+                    return Err(format!("Two tracks are locked to {}.", crate::tracks::channel_name(c)));
+                }
+                Some(c)
+            }
+        };
+        let name: String = t.name.trim().chars().filter(|c| !c.is_control()).take(crate::user_presets::MAX_NAME).collect();
+        // An empty name: a locked track's channel name ("Pulse 1"), else the type's.
+        let fallback = match lock {
+            Some(c) => default_lanes()[c].name.clone(),
+            None => crate::tracks::kind_name(voice).into(),
+        };
+        let mut l = crate::state::Lane::studio(t.id, voice, if name.is_empty() { fallback } else { name }, parse_hex(&t.color)?);
+        l.lock = lock;
+        l.short = crate::tracks::short_for(&l);
+        l.voices = t.voices.unwrap_or(0);
+        if let Some((db, pan)) = &t.before_lock {
+            l.before_lock = Some((db.db()?, (*pan).clamp(-crate::state::PAN_MAX, crate::state::PAN_MAX)));
+        }
+        let chan = l.chan();
+        let mut row = Params::default();
+        for (k, v) in &t.params {
+            let id = ParamId::for_lane(chan).iter().copied().find(|p| param_key(*p) == k).ok_or_else(|| format!("Track {} has no control \"{k}\".", n + 1))?;
+            row.set(chan, id, *v);
+        }
+        l.params = row.values[chan];
+        if let Some(hgt) = t.height {
+            if !hgt.is_finite() {
+                return Err(format!("Track {} has a bad height.", n + 1));
+            }
+            l.height = crate::state::clamp_row_h(hgt);
+        }
+        l.pan = t.pan.unwrap_or(0).clamp(-crate::state::PAN_MAX, crate::state::PAN_MAX);
+        if let Some(v) = &t.volume_db {
+            l.vol_db = v.db()?;
+        }
+        if !entries.iter().any(|e| e.id == t.inst) {
+            return Err(format!("Track {} uses instrument {}, which isn't in the file.", n + 1, t.inst));
+        }
+        lanes_inst.push(t.inst);
+        mute.set(t.id, t.mute);
+        solo.set(t.id, t.solo);
+        arrangement.lanes.push(l);
+    }
+    let next_id = entries.iter().map(|e| e.id).max().unwrap_or(0) + 1;
+    arrangement.instruments = InstrumentTable { entries, lanes: lanes_inst, next_id };
+    arrangement.clips = load_clips(f.clips, &arrangement, 7)?;
+    arrangement.next_id = arrangement.clips.iter().map(|c| c.id + 1).max().unwrap_or(1);
+    arrangement.samples = load_samples(&f.samples)?;
+    arrangement.insert = (0, 0);
     let loop_end_ticks = f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS);
-    let mut p = Project {
+    Ok(Project {
         arrangement,
         bpm: f.bpm.clamp(crate::state::Transport::MIN_BPM, crate::state::Transport::MAX_BPM),
         chip,
@@ -676,25 +964,14 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         loop_on: f.loop_on,
         mute,
         solo,
-        params,
-        // Version 5: the project's format; older files had 48 kHz / 16-bit
-        // as their export default.
-        rate: match f.rate {
-            Some(r) if PROJECT_RATES.contains(&r) => r,
-            Some(r) => return Err(format!("Unsupported project sample rate {r} Hz.")),
-            None => DEFAULT_PROJECT_RATE,
+        master_db: match &f.master_db {
+            Some(v) => v.db()?,
+            None => 0.0,
         },
-        bits: match f.bits {
-            Some(b) if BIT_DEPTHS.contains(&b) => b,
-            Some(b) => return Err(format!("Unsupported project bit depth {b}.")),
-            None => OLD_BIT_DEPTH,
-        },
+        rate: if PROJECT_RATES.contains(&f.rate) { f.rate } else { return Err(format!("Unsupported project sample rate {} Hz.", f.rate)) },
+        bits: if BIT_DEPTHS.contains(&f.bits) { f.bits } else { return Err(format!("Unsupported project bit depth {}.", f.bits)) },
         load_report: Vec::new(),
-    };
-    if h.version.unwrap_or(VERSION) < 3 {
-        migrate_v2(&mut p);
-    }
-    Ok(p)
+    })
 }
 
 /// The instrument table: version 3's `instruments` (lanes refer to ids), or
@@ -720,7 +997,7 @@ fn instrument_table(f: &FileV1) -> Result<crate::instruments::InstrumentTable, S
         }
         entries.push(Entry { id, inst: lane_inst_from_file(i)? });
     }
-    let mut lanes = [0; LANES];
+    let mut lanes = vec![0; LANES];
     for (lane, l) in f.lanes.iter().enumerate() {
         if l.instrument.is_some() {
             return Err(format!("Lane {} has an inline instrument next to an instrument table.", lane + 1));
@@ -743,46 +1020,46 @@ fn instrument_table(f: &FileV1) -> Result<crate::instruments::InstrumentTable, S
 /// (which scales by exactly 1). The saw does the same with its Rate control
 /// (42 = scale 1); a rate no note volume can express is approximated and
 /// reported.
-pub fn migrate_v2(p: &mut Project) {
+pub fn migrate_v2(a: &mut Arrangement, params: &mut Params, report: &mut Vec<String>) {
     use chip::driver::saw_rate_for_volume;
     const VOLUME_LANES: [usize; 5] = [0, 1, 3, 5, 6];
     const SAW: usize = 7;
     let has: [bool; LANES] =
-        std::array::from_fn(|lane| p.arrangement.clips.iter().any(|c| c.lane == lane && c.notes.iter().any(|n| n.volume.is_some())));
+        std::array::from_fn(|lane| a.clips.iter().any(|c| c.lane == lane && c.notes.iter().any(|n| n.volume.is_some())));
     let has_volumes = |lane: usize| has[lane];
     let mut fill: Vec<(usize, u8)> = Vec::new();
     for lane in VOLUME_LANES {
-        let v = p.params.get(lane, ParamId::Volume) as u8;
+        let v = params.get(lane, ParamId::Volume) as u8;
         if v != 15 && has_volumes(lane) {
             fill.push((lane, v));
-            p.params.set(lane, ParamId::Volume, 15);
+            params.set(lane, ParamId::Volume, 15);
         }
     }
-    let r = p.params.get(SAW, ParamId::Rate) as u8;
+    let r = params.get(SAW, ParamId::Rate) as u8;
     if r != 42 && has_volumes(SAW) {
         let exact = (0..=15u8).find(|&v| saw_rate_for_volume(v) == r);
         let v = exact.unwrap_or_else(|| (0..=15u8).min_by_key(|&v| (saw_rate_for_volume(v) as i32 - r as i32).abs()).unwrap_or(15));
         if exact.is_none() {
-            p.load_report.push(format!(
+            report.push(format!(
                 "VRC6 Saw: the Rate control ({r}) can't be kept exactly next to per-note volumes; notes without a volume now play at rate {}.",
                 saw_rate_for_volume(v)
             ));
         }
         fill.push((SAW, v));
-        p.params.set(SAW, ParamId::Rate, 42);
+        params.set(SAW, ParamId::Rate, 42);
     }
     if fill.is_empty() {
         return;
     }
-    let ids: Vec<u32> = p.arrangement.clips.iter().filter(|c| fill.iter().any(|f| f.0 == c.lane)).map(|c| c.id).collect();
+    let ids: Vec<u32> = a.clips.iter().filter(|c| fill.iter().any(|f| f.0 == c.lane)).map(|c| c.id).collect();
     for id in ids {
-        let Some(c) = p.arrangement.clip_mut(id) else { continue };
+        let Some(c) = a.clip_mut(id) else { continue };
         let v = fill.iter().find(|f| f.0 == c.lane).map_or(15, |f| f.1);
         for n in &mut c.notes {
             n.volume.get_or_insert(v);
         }
     }
-    p.load_report.push(format!(
+    report.push(format!(
         "Upgraded from an older version: {} lane(s) moved their volume into the notes, so the song sounds the same.",
         fill.len()
     ));
@@ -1093,6 +1370,12 @@ mod tests {
         params.set(0, ParamId::Duty, 1);
         params.set(3, ParamId::NoisePeriod, 5);
         params.set(7, ParamId::Rate, 50);
+        for (i, l) in a.lanes.iter_mut().enumerate() {
+            l.params = params.values[i];
+        }
+        let (mut mute, mut solo) = (TrackSet::default(), TrackSet::default());
+        mute.set(a.lanes[2].id, true);
+        solo.set(a.lanes[7].id, true);
         Project {
             arrangement: a,
             bpm: 133.5,
@@ -1102,9 +1385,9 @@ mod tests {
             loop_end_ticks: 16 * crate::state::TICKS_PER_BAR,
             loop_start_ticks: 4 * crate::state::TICKS_PER_BAR,
             loop_on: true,
-            mute: 0b0000_0100,
-            solo: 0b1000_0000,
-            params,
+            mute,
+            solo,
+            master_db: -2.5,
             rate: 44_100,
             bits: 16,
             load_report: Vec::new(),
@@ -1112,7 +1395,7 @@ mod tests {
     }
 
     /// The parts of a project that are saved (view, selection: not).
-    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, (u32, u32, bool), u8, u8, Params, (u32, u16));
+    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, (u32, u32, bool), TrackSet, TrackSet, Vec<crate::state::Lane>, f32, (u32, u16));
 
     fn saved_parts(p: &Project) -> SavedParts {
         (
@@ -1123,9 +1406,10 @@ mod tests {
             p.filter,
             p.filter_auto,
             (p.loop_end_ticks, p.loop_start_ticks, p.loop_on),
-            p.mute,
-            p.solo,
-            p.params,
+            p.mute.clone(),
+            p.solo.clone(),
+            p.arrangement.lanes.clone(),
+            p.master_db,
             (p.rate, p.bits),
         )
     }
@@ -1152,19 +1436,21 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 6,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 7,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
         let v: serde_json::Value = serde_json::from_str(&text).expect("still valid JSON");
-        assert_eq!(v["lanes"][2]["params"], serde_json::json!({}), "triangle has no controls");
+        assert_eq!(v["tracks"][2]["params"], serde_json::json!({}), "triangle has no controls");
+        assert_eq!(v["tracks"][0]["lock"], "2a03_p1");
+        assert_eq!(v["profile"], "nes");
     }
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 6,", "\"version\": 7,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 7,", "\"version\": 8,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 7"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 8"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);
@@ -1200,25 +1486,19 @@ mod tests {
         let bad = text.replacen(&format!("\"instrument\": {flute},"), "\"instrument\": 777,", 1);
         assert!(from_str(&bad).unwrap_err().contains("instrument 777"));
         // A version 1 file (no instruments) plays the raw channels, as it did.
-        let v1: String = {
-            let mut v: serde_json::Value = serde_json::from_str(&text).unwrap();
-            v["version"] = 1.into();
-            v.as_object_mut().unwrap().remove("instruments");
-            for l in v["lanes"].as_array_mut().unwrap() {
-                l.as_object_mut().unwrap().remove("inst");
-            }
-            for c in v["clips"].as_array_mut().unwrap() {
-                c.as_object_mut().unwrap().remove("instrument");
-            }
-            v.to_string()
-        };
+        let v1 = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/scale_test.chipdaw")).unwrap();
+        assert!(v1.contains("\"version\": 1"));
         let old = from_str(&v1).unwrap();
         assert!(old.arrangement.instruments.lane_instruments().iter().all(|i| *i == LaneInstrument::plain()));
     }
 
     #[test]
     fn hand_edited_overlaps_are_repaired_on_load() {
-        let mut text = to_string(&Project::new_empty());
+        // A locked track (the legacy layout's Pulse 1): monophonic.
+        let mut legacy = Project::new_empty();
+        legacy.arrangement = Arrangement::empty();
+        legacy.chip = SoundChip::WithVrc6;
+        let mut text = to_string(&legacy);
         text = text.replacen(
             "\"clips\": []",
             "\"clips\": [ { \"id\": 4, \"lane\": 0, \"start\": 0, \"len\": 3840, \"name\": \"x\", \"notes\": [\
@@ -1232,6 +1512,21 @@ mod tests {
         assert_ne!(c.notes[0].id, c.notes[1].id, "duplicate ids renumbered");
         assert_eq!(c.notes[1].volume, Some(15));
         assert_eq!(p.arrangement.next_id, 5);
+        // A studio track keeps a chord; one pitch never overlaps itself.
+        let mut text = to_string(&Project::new_empty());
+        text = text.replacen(
+            "\"clips\": []",
+            "\"clips\": [ { \"id\": 4, \"lane\": 0, \"start\": 0, \"len\": 3840, \"name\": \"x\", \"notes\": [\
+             { \"id\": 1, \"start\": 0, \"len\": 960, \"pitch\": 60 }, { \"id\": 2, \"start\": 0, \"len\": 960, \"pitch\": 64 },\
+             { \"id\": 3, \"start\": 480, \"len\": 960, \"pitch\": 60 } ] } ]",
+            1,
+        );
+        let p = from_str(&text).expect("loads");
+        let n = &p.arrangement.clips[0].notes;
+        assert_eq!(n.len(), 3);
+        assert!(n.iter().any(|x| x.pitch == 64 && x.start == 0 && x.len == 960), "the chord's other note stays: {n:?}");
+        let c60: Vec<_> = n.iter().filter(|x| x.pitch == 60).map(|x| (x.start, x.len)).collect();
+        assert_eq!(c60, vec![(0, 480), (480, 960)], "the same pitch is cut where it restarts");
     }
 
     #[test]

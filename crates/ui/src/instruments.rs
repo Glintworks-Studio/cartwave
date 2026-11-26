@@ -95,10 +95,18 @@ pub fn default_instruments() -> InstrumentTable {
 /// project is open, so undo snapshots and clip references stay valid).
 pub type InstId = u32;
 
-/// Most instruments a project holds. With kits (up to 7 bank entries each)
-/// and an audition preset this keeps the engine's bank under its 255-entry
-/// index (`u8`, `NONE` = 255).
-pub const MAX_INSTRUMENTS: usize = 32;
+/// Most instruments a project holds (Batch 4a: tracks are unlimited, each
+/// with its own instrument). The engine's bank has a 255-entry index (`u8`,
+/// `NONE` = 255): identical instruments share an entry, so many tracks on
+/// the same presets fit; past the index an instrument plays plain, and the
+/// inspector says so (`Bank::fits`).
+pub const MAX_INSTRUMENTS: usize = 128;
+
+/// The preset a new track of `k` starts with: the default band's for that
+/// channel type (DEFAULT_LAYOUT is in console lane order).
+pub fn default_preset_for(k: chip::voice::VoiceKind) -> &'static str {
+    presets::DEFAULT_LAYOUT.get(k.lane()).copied().unwrap_or("Raw Channel")
+}
 
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct Entry {
@@ -113,8 +121,9 @@ pub struct Entry {
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub struct InstrumentTable {
     pub entries: Vec<Entry>,
-    /// Each lane's default instrument.
-    pub lanes: [InstId; LANES],
+    /// Each track's default instrument, in track order (kept in step with
+    /// the arrangement's tracks: insert, remove, reorder).
+    pub lanes: Vec<InstId>,
     pub next_id: InstId,
 }
 
@@ -124,7 +133,31 @@ impl InstrumentTable {
         let mut v = v;
         v.resize(LANES, LaneInstrument::plain());
         let entries: Vec<Entry> = v.into_iter().take(LANES).enumerate().map(|(i, inst)| Entry { id: i as InstId + 1, inst }).collect();
-        Self { entries, lanes: std::array::from_fn(|i| i as InstId + 1), next_id: LANES as InstId + 1 }
+        Self { entries, lanes: (1..=LANES as InstId).collect(), next_id: LANES as InstId + 1 }
+    }
+
+    /// A new track at `at` playing `inst` (a new entry; a full table shares
+    /// the plain instrument with another track, or the first entry).
+    pub fn insert_lane(&mut self, at: usize, inst: LaneInstrument) {
+        let at = at.min(self.lanes.len());
+        let id = match self.add(inst) {
+            Some(id) => id,
+            None => self.entries.iter().find(|e| e.inst == LaneInstrument::plain()).or(self.entries.first()).map_or(0, |e| e.id),
+        };
+        self.lanes.insert(at, id);
+    }
+
+    /// The track at `i` is gone (its entry is pruned if nothing else plays it).
+    pub fn remove_lane(&mut self, i: usize) {
+        if i < self.lanes.len() {
+            self.lanes.remove(i);
+        }
+    }
+
+    /// Tracks reordered: `order[new] = old`.
+    pub fn reorder(&mut self, order: &[usize]) {
+        let old = self.lanes.clone();
+        self.lanes = order.iter().map(|&o| old.get(o).copied().unwrap_or(0)).collect();
     }
 
     pub fn get(&self, id: InstId) -> Option<&LaneInstrument> {
@@ -167,7 +200,7 @@ impl InstrumentTable {
     /// Makes `inst` the lane's default (a new entry; the old one is dropped
     /// by `prune` if nothing else plays it). `false` when the table is full.
     pub fn set_lane(&mut self, lane: usize, inst: LaneInstrument) -> bool {
-        if lane >= LANES {
+        if lane >= self.lanes.len() {
             return false;
         }
         // The only user of the old default is this lane: replace it in place
@@ -201,13 +234,13 @@ impl InstrumentTable {
 
     /// Drops entries no lane default and no clip refers to.
     pub fn prune(&mut self, clips: &[std::sync::Arc<crate::state::Clip>]) {
-        let lanes = self.lanes;
+        let lanes = self.lanes.clone();
         self.entries.retain(|e| lanes.contains(&e.id) || clips.iter().any(|c| c.instrument == Some(e.id)));
     }
 
     /// Lane defaults in lane order (for the old per-lane views and files).
     pub fn lane_instruments(&self) -> Vec<LaneInstrument> {
-        (0..LANES).map(|l| self.lane(l).cloned().unwrap_or_else(LaneInstrument::plain)).collect()
+        (0..self.lanes.len()).map(|l| self.lane(l).cloned().unwrap_or_else(LaneInstrument::plain)).collect()
     }
 }
 
@@ -225,11 +258,10 @@ pub fn default_params() -> engine::Params {
     p
 }
 
-/// The engine's bank built from the table: (instruments, each lane's
-/// default index, audition index, table id -> bank index).
+/// The engine's bank built from the table: (instruments, audition index,
+/// table id -> bank index).
 pub struct Bank {
     pub bank: Vec<Instrument>,
-    pub lane_inst: [u8; LANES],
     pub preview: u8,
     pub index: Vec<(InstId, u8)>,
 }
@@ -253,15 +285,19 @@ pub fn bank(table: &InstrumentTable, audition: Option<&LaneInstrument>) -> Bank 
     let mut bank = Vec::with_capacity(table.entries.len() * 2);
     let mut index = Vec::with_capacity(table.entries.len());
     let fits = |bank: &Vec<Instrument>, l: &LaneInstrument| bank.len() + bank_size(l) < NONE as usize;
+    // Identical instruments (many tracks on one preset) share their entries.
+    let mut seen: Vec<(&LaneInstrument, u8)> = Vec::new();
     for e in &table.entries {
-        if fits(&bank, &e.inst) {
-            index.push((e.id, e.inst.push_into(&mut bank)));
+        if let Some(&(_, at)) = seen.iter().find(|(l, _)| l.inst == e.inst.inst && l.kit == e.inst.kit) {
+            index.push((e.id, at));
+        } else if fits(&bank, &e.inst) {
+            let at = e.inst.push_into(&mut bank);
+            seen.push((&e.inst, at));
+            index.push((e.id, at));
         }
     }
-    let of = |id: InstId| index.iter().find(|e: &&(InstId, u8)| e.0 == id).map_or(NONE, |e| e.1);
-    let lane_inst = std::array::from_fn(|l| of(table.lanes[l]));
     let preview = audition.filter(|a| fits(&bank, a)).map_or(NONE, |a| a.push_into(&mut bank));
-    Bank { bank, lane_inst, preview, index }
+    Bank { bank, preview, index }
 }
 
 #[cfg(test)]
@@ -273,7 +309,7 @@ mod tests {
         let lanes = default_instruments();
         let b = bank(&lanes, Some(&LaneInstrument::named("Explosion")));
         assert_eq!(b.preview as usize, b.bank.len() - 1);
-        let kit = b.bank[b.lane_inst[3] as usize];
+        let kit = b.bank[b.of(lanes.lane_id(3)) as usize];
         assert!(kit.is_kit());
         let snare = kit.zone(60).unwrap();
         assert_eq!(b.bank[snare.inst as usize], presets::find("Snare").unwrap().inst);
