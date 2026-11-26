@@ -60,6 +60,13 @@ if (Want "PL-02") {
   $sx = $mx + 240 - 4; $sy = $cy - 14 - 4
   ClickL ($sx + 4 + 8 + 3 * 20 + 8) ($sy + 4 + 28 + 8 + 2 * 20 + 8)        # row 3, column 4
   Save; Keep $p "pl02_after"
+  # Clips keep their own colour when their track's changes (independent colours).
+  $mx = 400; $my = Ly 1
+  RightL $mx $my; Start-Sleep -Milliseconds 300
+  MoveL ($mx + 30) ($my + 4 + 28 + 14); Start-Sleep -Milliseconds 500
+  $c = Cell $mx $my 1 0 0                                                   # row 1, column 1
+  ClickL $c[0] $c[1]; Start-Sleep -Milliseconds 300
+  Save; Keep $p "pl02_track"
   Stop-App
 }
 

@@ -139,9 +139,40 @@ impl View for Key {
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let _perf = crate::perf::scope(crate::perf::Span::Chrome);
-        let b = cx.bounds();
         let s = cx.scale_factor();
-        let r = gfx::snap(b.into());
+        let r = gfx::snap(cx.bounds().into());
+        // The keys repaint whenever their row does (every frame while the
+        // meters move): each look is rendered once and blitted (polish pass).
+        let key = (self.label, self.lit(), self.hover, self.pressed, r.width() as i32, r.height() as i32, (s * 100.0).round() as u32);
+        let img = KEY_IMAGES.with(|c| {
+            c.borrow_mut()
+                .entry(key)
+                .or_insert_with(|| {
+                    let mut surface = vg::surfaces::raster_n32_premul((key.4.max(1), key.5.max(1)))?;
+                    let lc = surface.canvas();
+                    lc.clear(vg::Color::TRANSPARENT);
+                    self.draw_key(lc, vg::Rect::from_xywh(0.0, 0.0, key.4 as f32, key.5 as f32), s);
+                    Some(surface.image_snapshot())
+                })
+                .clone()
+        });
+        match img {
+            Some(img) => {
+                canvas.draw_image(&img, (r.left, r.top), None);
+            }
+            None => self.draw_key(canvas, r, s),
+        }
+    }
+}
+
+thread_local! {
+    /// Rendered key looks: (label, lit, hover, pressed, w, h, scale×100).
+    static KEY_IMAGES: RefCell<std::collections::HashMap<(&'static str, bool, bool, bool, i32, i32, u32), Option<vg::Image>>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+impl Key {
+    fn draw_key(&self, canvas: &Canvas, r: vg::Rect, s: f32) {
         let lit = self.lit();
         let lift = if self.hover && !self.pressed { 0.05 } else { 0.0 };
         // The key material (VISUAL-SPEC.md §1): unchanged when lit; only
@@ -945,6 +976,9 @@ fn render_row_text(lane: usize, k: &RowTextKey, s: f32) -> Option<vg::Image> {
     let canvas = surface.canvas();
     canvas.clear(vg::Color::TRANSPARENT);
     let r = vg::Rect::from_xywh(0.0, 0.0, k.w as f32, k.h as f32);
+    // The pan slider (where its view sits; see TrackRow::new).
+    let pan_left = TRACK_HEADER_WIDTH - CTRL_RIGHT - CTRL_W + FADER_W + SLIDER_GAP - THUMB_W * 0.5;
+    draw_pan(canvas, gfx::snap(vg::Rect::from_xywh(pan_left * s, SLIDER_VIEW_TOP * s, (PAN_W + THUMB_W) * s, THUMB_H * s)), s);
     let hl = gfx::hairline(s);
     let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
     let (selected, name) = (k.selected, &k.name);
@@ -989,8 +1023,11 @@ fn render_row_text(lane: usize, k: &RowTextKey, s: f32) -> Option<vg::Image> {
 impl TrackRow {
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
         let seen = RefCell::new((false, String::new()));
-        // Redraw on this lane's light only (PERF.md: only what changed).
-        let light = Cell::new(0u8);
+        // Redraw on this lane's light or meter (PERF.md: only what changed).
+        // The meter is the row's child, but redrawing the whole row keeps the
+        // damage one contiguous column (rows touch) instead of eight small
+        // rects that each cost the renderer a pass (polish pass, POLISH.md).
+        let light = Cell::new((0u8, (u16::MAX, 0u16, false)));
         Self { s, lane, hover: false, lit: RefCell::new(None), text: RefCell::new(None) }
             .build(cx, move |cx| {
                 let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
@@ -1018,7 +1055,7 @@ impl TrackRow {
             })
             .class("track-row")
             .bind(s.meters, move |mut h| {
-                let l = s.meters.with_untracked(|m| (m.light[lane] * 64.0).round() as u8);
+                let l = (s.meters.with_untracked(|m| (m.light[lane] * 64.0).round() as u8), VolumeFader::state(&s, lane));
                 if light.get() != l {
                     light.set(l);
                     h.needs_redraw();
@@ -1272,7 +1309,7 @@ impl VolumeFader {
     }
 
     /// (fill px ×4, thumb px ×4, disabled): what the view shows.
-    fn state(s: &Signals, lane: usize) -> (u16, u16, bool) {
+    pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16, bool) {
         let f = s.faders.with_untracked(|f| f[lane]);
         let level = if s.mute.get_untracked() & (1 << lane) != 0 { 0.0 } else { s.meters.with_untracked(|m| m.level[lane]) };
         let fill = crate::state::meter_fill(level, f.pos, FADER_W);
@@ -1387,9 +1424,15 @@ impl View for PanSlider {
         });
     }
 
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let s = cx.scale_factor();
-        let r = gfx::snap(cx.bounds().into());
+    fn draw(&self, _cx: &mut DrawContext, _canvas: &Canvas) {
+        // Drawn by the row (its cached layer: the pan is static until
+        // stereo arrives); this view carries the tooltip and eats clicks.
+    }
+}
+
+/// The disabled pan slider in the view rect `r` (device px).
+fn draw_pan(canvas: &Canvas, r: vg::Rect, s: f32) {
+    {
         let left = (r.left + THUMB_W * 0.5 * s).round();
         let track = vg::Rect::from_xywh(left, (r.center_y() - SLIDER_H * 0.5 * s).round(), (PAN_W * s).round(), (SLIDER_H * s).round());
         slider_track(canvas, track, s);

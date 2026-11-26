@@ -169,7 +169,7 @@ and doesn't describe the colour chooser itself, so the defaults and the grid bel
 | # | Behaviour | Pri | Status |
 |---|---|---|---|
 | C1 | **Palette**: our own 70 base colours, 5 × 14 (hue, then lightness), `theme/palette.rs`; today's colours kept; none passes for the toggle lime (one logged exception, the legacy pulse colour) | S | done |
-| C2 | **Colour grid**: Colour ▸ in the track and clip menus opens the 70 colours in the menu itself; hovering previews on the selection; a click applies to every selected track or clip (one undo step, unsaved mark, saved); the current colour is ringed | S | done |
+| C2 | **Colour grid**: Colour ▸ in the track and clip menus opens the 70 colours in the menu itself; hovering previews on the selection; a click applies to every selected track or clip (one undo step, unsaved mark, saved); the current colour is ringed. **A clip's colour is its own**: it stays when its track's colour changes; the clip menu's "Track Colour" clears it so the clip follows its track again (format v4) | S | done |
 | C3 | **Clip text** is `#111111` or `#F2F2F2`, whichever reaches 4.5:1 on the header | M | done |
 | C4 | **Settings ▸ Editing ▸ Track and Clip Colors** (§2) | S | done |
 | C5 | New clips follow **New clip colour**; `next_track_color` is ready for Create Track (Batch 4) | S | done (clips) / ready (tracks) |
@@ -324,7 +324,7 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | [unit] (A9–A12, F-22, P7, P9, R46, R47, format v4) | `state::edit_tests`, `notes::tests::batch3_note_ops`, the undo property test (split, consolidate, time commands, paste, rename, colour), `tests/migration.rs` (v3 → v4 hashes), `tests/robustness.rs` (v4 names and colours) |
 
 | PL-01 (C2) | Colour ▸ on a track, a click on a grid cell: the track takes it, one Ctrl+Z restores it, the file saves it |
-| PL-02 (C2) | Two clips selected, Colour ▸ cell: both take it |
+| PL-02 (C2) | Two clips selected, Colour ▸ cell: both take it; the track's colour then changes and the clips keep theirs |
 | PL-03 (C5) | New clip colour Random: a clip inserted with Ctrl+Shift+M gets a palette colour of its own |
 | PL-04 (polish §2.4) | At 1536×816 with the inspector open, the wheel over the headers scrolls the lanes |
 | PL-05 (polish §2.4) | The window can't be made smaller than 1296×720 (logical); the top bar's groups don't touch there |

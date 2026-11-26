@@ -48,6 +48,12 @@ if os.path.exists(os.path.join(work, "pl02_after.chipdaw")):
     a = load("pl02_after")
     cols = [c.get("color") for c in a["clips"] if c["lane"] == 1]
     check(S, len(cols) >= 2 and len(set(cols)) == 1 and cols[0] and cols[0].upper() in PALETTE, f"both selected clips take it: {cols}")
+    t = load("pl02_track")
+    if t:
+        lane = t["lanes"][1].get("color")
+        kept = [c.get("color") for c in t["clips"] if c["lane"] == 1 and c.get("color")]
+        check(S, lane is not None and lane != a["lanes"][1].get("color"), f"the track's colour changed: {lane}")
+        check(S, kept == cols, f"the clips keep their own colour, independent of the track: {kept}")
 
 if os.path.exists(os.path.join(work, "pl03_after.chipdaw")):
     S = "PL-03"
