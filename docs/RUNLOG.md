@@ -589,3 +589,25 @@ Every decision below was taken alone, as the prompt asked.
 - **PL-D12 (harness).** With dark menus on, an open popup can be the process's "main window":
   `shot.ps1` now picks the titled window (this had made AT-06/30 fail and, by moving the popup,
   AT-18). AT-26 clicks the colour grid. A new suite: PL-01…05.
+- **PL-D13 (the drag benchmark measured a resize).** `bench.ps1` / `pacing.ps1` grab a clip at
+  (720, 130). In the Option D layout (bars from x 621) that point is 7 px into a clip: its left
+  resize zone. The "drag" resized a clip to 2–6 px, each new size a ~12 ms CPU shadow blur;
+  DESIGNPASS.md's +1.3-point drag regression was this artifact. Both scripts now take
+  `-DragX/-DragY`: 760, 140 grabs the same clip spot in the new layout.
+- **PL-D14 (narrow shadows).** Per-size shadow masks for shapes long in one direction and narrow
+  in the other (a clip being resized) round up to 4 px and stretch, so a resize reuses a few
+  masks. Small fixed shapes (dial knobs) keep exact masks (the regression gate caught a 7-level
+  change on the knobs' rims before this distinction).
+- **PL-D15 (drag CPU).** The remaining drag cost was the renderer's passes: eight faders each
+  dirtied their own small rect (the fork repaints up to six damage rects, each a tree pass).
+  Rows now redraw with their meter, so the header column is one contiguous rect again; M/S keys
+  blit a per-look image (rendered on a GPU surface of the window's kind, so it matches drawing
+  in place); the static pan slider is drawn by its row. 200-clip drag, 5 interleaved rounds:
+  11.1% (polish) vs 12.1% (pre-design `main`).
+- **PL-D16 (regression hook for dials).** The dials ease towards their value and stop redrawing
+  within 0.001 of it, so where they stop depends on frame timing. `CHIPDAW_FROZEN_METERS=1`
+  (dev only, the regression screenshots) also turns that easing off; the same commit is in the
+  baseline worktree (720f84a: `design/option-d` + dev hooks only).
+- **PL-D17 (independent clip colours, owner's request mid-run).** Already in the model since format
+  v4 (`Clip.color`, `None` = the track's): the clip menu's Colour ▸ sets it, "Track Colour" clears
+  it, and a track colour change leaves clips with their own colour alone. PL-02 now checks it.

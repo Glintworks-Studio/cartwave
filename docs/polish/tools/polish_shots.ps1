@@ -46,9 +46,11 @@ Stop-Process -Id $p.Id -Force
 
 # The minimum window: 1536x816, then smaller than allowed (clamped to the minimum).
 $p = Start-App @("--size", "1536x816")
+Move-To 1200 760; Start-Sleep -Milliseconds 800   # empty canvas: no tooltip in the shot
 Shot "min-window-1536x816.png"
 Stop-Process -Id $p.Id -Force
 $p = Start-App @("--size", "800x600")
+Move-To 1100 700; Start-Sleep -Milliseconds 800
 Shot "min-window-minimum.png"
 Stop-Process -Id $p.Id -Force
 "shots -> $Out"
