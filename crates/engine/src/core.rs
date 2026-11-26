@@ -9,11 +9,12 @@
 
 use crate::alloc_check::NoAllocGuard;
 use crate::command::Command;
+use crate::mixdown::Mixdown;
+use crate::studio::Rack;
 use crate::shared::{PositionSnapshot, Shared};
 use crate::song::SongSnapshot;
 use chip::blep::DELAY as BLEP_DELAY;
 use chip::driver::LANES;
-use chip::player::Player;
 use chip::tables::CPU_HZ_NTSC;
 use rtrb::{Consumer, Producer};
 use std::sync::atomic::Ordering;
@@ -28,11 +29,17 @@ const WARMUP_CALLBACKS: u64 = 3;
 /// Length of the A/V sync test click.
 const CLICK_FRAMES: u32 = 48;
 
+/// What the audio thread hands back to the UI thread to free.
+pub enum Garbage {
+    Song(Box<SongSnapshot>),
+    Rack(Box<Rack>),
+}
+
 pub struct Core {
-    player: Box<Player>,
+    mix: Box<Mixdown>,
     song: Box<SongSnapshot>,
     cmds: Consumer<Command>,
-    garbage: Producer<Box<SongSnapshot>>,
+    garbage: Producer<Garbage>,
     shared: Arc<Shared>,
     epoch: Instant,
     scratch: Box<[f32; SCRATCH_FRAMES]>,
@@ -65,12 +72,12 @@ impl Core {
     pub fn new(
         sample_rate: u32,
         cmds: Consumer<Command>,
-        garbage: Producer<Box<SongSnapshot>>,
+        garbage: Producer<Garbage>,
         shared: Arc<Shared>,
         epoch: Instant,
     ) -> Box<Self> {
         Box::new(Self {
-            player: Box::new(Player::new(sample_rate as f64)),
+            mix: Box::new(Mixdown::new(sample_rate as f64)),
             song: Box::default(),
             cmds,
             garbage,
@@ -102,7 +109,7 @@ impl Core {
     /// A new output sample rate (host only, with no stream running).
     pub fn set_sample_rate(&mut self, sample_rate: u32) {
         if sample_rate != self.sample_rate {
-            self.player.synth.set_sample_rate(sample_rate as f64);
+            self.mix.set_sample_rate(sample_rate as f64);
             self.sample_rate = sample_rate;
         }
     }
@@ -121,16 +128,16 @@ impl Core {
 
     fn drain_commands(&mut self) {
         loop {
-            // A new song needs a free garbage slot for the old one; otherwise
-            // leave it queued until the UI has collected garbage.
-            if let Ok(Command::Song(_)) = self.cmds.peek() {
+            // A new song or rack needs a free garbage slot for the old one;
+            // otherwise leave it queued until the UI has collected garbage.
+            if let Ok(Command::Song(_) | Command::Rack(_)) = self.cmds.peek() {
                 if self.garbage.slots() == 0 {
                     break;
                 }
             }
             let Ok(cmd) = self.cmds.pop() else { break };
             self.commands_seen += 1;
-            let p = &mut self.player;
+            let mix = &mut self.mix;
             match cmd {
                 Command::Song(mut s) => {
                     let now = self.epoch.elapsed().as_nanos() as u64;
@@ -145,13 +152,14 @@ impl Core {
                     if self.song.dpcm.version != self.dpcm_version {
                         let d = &self.song.dpcm;
                         if d.data.len() == chip::samples::USER_ROM {
-                            p.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&d.data);
-                            p.driver.set_user_samples(d.refs);
+                            mix.player.synth.rom[chip::samples::USER_BASE..].copy_from_slice(&d.data);
+                            mix.set_user_samples(d.refs);
                         }
                         self.dpcm_version = d.version;
                     }
                     // Cannot fail: checked above.
-                    let _ = self.garbage.push(s);
+                    let _ = self.garbage.push(Garbage::Song(s));
+                    let p = &mut mix.player;
                     // The driver reads the song on every frame tick: the edit
                     // is heard at the next one.
                     let wait = p.next_tick_cycle().saturating_sub(p.synth.cycle);
@@ -159,13 +167,20 @@ impl Core {
                     self.shared.edit_to_tick_max_ns.fetch_max(wait_ns, Ordering::Relaxed);
                     self.shared.edits_applied.fetch_add(1, Ordering::Relaxed);
                 }
-                Command::Play => p.play(),
-                Command::Stop => p.stop(),
-                Command::Seek(t) => p.seek(t),
-                Command::Bpm(b) => p.set_bpm(b),
-                Command::LoopEnd(t) => p.set_loop_end(t),
-                Command::LoopStart(t) => p.set_loop_start(t),
+                Command::Rack(r) => {
+                    let old = mix.adopt_rack(r);
+                    // Cannot fail: checked above.
+                    let _ = self.garbage.push(Garbage::Rack(old));
+                }
+                Command::MasterGain(g) => mix.set_master(g),
+                Command::Play => mix.player.play(),
+                Command::Stop => mix.player.stop(),
+                Command::Seek(t) => mix.player.seek(t),
+                Command::Bpm(b) => mix.player.set_bpm(b),
+                Command::LoopEnd(t) => mix.player.set_loop_end(t),
+                Command::LoopStart(t) => mix.player.set_loop_start(t),
                 Command::Preview { lane, note } => {
+                    let p = &mut mix.player;
                     if let Some(slot) = p.driver.preview.get_mut(lane as usize) {
                         self.preview_serial = self.preview_serial.wrapping_add(1);
                         let serial = self.preview_serial;
@@ -178,17 +193,17 @@ impl Core {
                         });
                     }
                 }
-                Command::Mute(m) => p.driver.mute = m,
-                Command::Solo(m) => p.driver.solo = m,
+                Command::Mute(m) => mix.player.driver.mute = m,
+                Command::Solo(m) => mix.player.driver.solo = m,
                 Command::Param { lane, id, value } => {
                     if (lane as usize) < LANES {
-                        p.driver.params.set(lane as usize, id, value as i32)
+                        mix.player.driver.params.set(lane as usize, id, value as i32)
                     }
                 }
-                Command::Vrc6(on) => p.set_vrc6(on),
-                Command::Filter(m) => p.synth.set_filter(m),
+                Command::Vrc6(on) => mix.player.set_vrc6(on),
+                Command::Filter(m) => mix.set_filter(m),
                 Command::Gain(g) => self.gain = g,
-                Command::LaneGains(g) => p.synth.set_gains(g),
+                Command::LaneGains(g) => mix.player.synth.set_gains(g),
                 Command::TestStall(us) => self.stall_us = us,
                 Command::TestPilot(hz) => self.pilot_hz = hz,
                 Command::TestClickAt(t) => self.click_at = t,
@@ -265,15 +280,14 @@ impl Core {
         self.drain_commands();
 
         // ---- render
-        let pos0 = self.player.position();
-        let tpf = self.player.ticks_per_sample();
-        let playing = self.player.playing();
-        let song = self.song.view();
+        let pos0 = self.mix.player.position();
+        let tpf = self.mix.player.ticks_per_sample();
+        let playing = self.mix.player.playing();
         let mut done = 0usize;
         while done < frames as usize {
             let n = (frames as usize - done).min(SCRATCH_FRAMES);
             let buf = &mut self.scratch[..n];
-            self.player.render(&song, buf);
+            self.mix.render(&self.song, buf);
             // Test: click when the song position crosses `click_at`.
             if self.click_at >= 0.0 && playing && self.click_left == 0 {
                 let p = pos0 + done as f64 * tpf;
@@ -316,20 +330,20 @@ impl Core {
         sh.publish_position(&PositionSnapshot {
             ticks: pos0,
             ticks_per_frame: tpf,
-            loop_start: self.player.loop_start(),
-            loop_end: self.player.loop_end(),
+            loop_start: self.mix.player.loop_start(),
+            loop_end: self.mix.player.loop_end(),
             playing,
             callback_ns: t0,
             latency_ns: ahead_ns + blep_ns,
             sample_rate: self.sample_rate,
         });
-        let levels = self.player.synth.take_peaks();
+        let levels = self.mix.player.synth.take_peaks();
         sh.merge_levels(&levels);
-        for (a, &v) in sh.note_ons.iter().zip(self.player.driver.note_ons.iter()) {
+        for (a, &v) in sh.note_ons.iter().zip(self.mix.player.driver.note_ons.iter()) {
             a.store(v, Ordering::Relaxed);
         }
-        sh.sounding.store(self.player.driver.sounding, Ordering::Relaxed);
-        sh.driver_ticks.store(self.player.driver.ticks, Ordering::Relaxed);
+        sh.sounding.store(self.mix.player.driver.sounding, Ordering::Relaxed);
+        sh.driver_ticks.store(self.mix.player.driver.ticks, Ordering::Relaxed);
         sh.frames.fetch_add(frames as u64, Ordering::Relaxed);
         // After the position: a reader that sees this count sees that position.
         sh.commands.store(self.commands_seen, Ordering::Release);
@@ -356,7 +370,7 @@ mod tests {
     use super::*;
     use crate::song::ClipInput;
 
-    fn core() -> (Box<Core>, Producer<Command>, Consumer<Box<SongSnapshot>>, Arc<Shared>) {
+    fn core() -> (Box<Core>, Producer<Command>, Consumer<Garbage>, Arc<Shared>) {
         let (tx, rx) = rtrb::RingBuffer::new(64);
         let (gtx, grx) = rtrb::RingBuffer::new(4);
         let shared = Arc::new(Shared::default());
@@ -383,11 +397,11 @@ mod tests {
             c.process(&mut out, 2, 30_000_000);
         }
         assert_eq!(shared.note_ons[0].load(Ordering::Relaxed), 1);
-        assert_eq!(c.player.driver.sounding, 1, "only the pulse preview sounds");
+        assert_eq!(c.mix.player.driver.sounding, 1, "only the pulse preview sounds");
         // Play clears auditions.
         tx.push(Command::Play).ok().unwrap();
         c.process(&mut out, 2, 30_000_000);
-        assert!(c.player.driver.preview.iter().all(|p| p.is_none()));
+        assert!(c.mix.player.driver.preview.iter().all(|p| p.is_none()));
     }
 
     #[test]
@@ -411,6 +425,51 @@ mod tests {
         assert!(grx.pop().is_ok());
         let wait = shared.edit_to_tick_max_ns.load(Ordering::Relaxed);
         assert!(wait <= 16_640_000, "edit heard within one frame tick: {wait}");
+    }
+
+    /// Studio tracks in the engine: a rack (two tracks, 8-note chords) and a
+    /// bigger rack while playing, all inside `process` under the allocation
+    /// checker; the old racks come back to this thread.
+    #[test]
+    fn studio_rack_plays_and_grows_without_allocating() {
+        use crate::song::StudioLane;
+        use crate::studio::{StudioTrack, TrackCtl};
+        use chip::voice::VoiceKind;
+        let (mut c, mut tx, mut grx, _shared) = core();
+        let samples = chip::samples::build(&mut [0u8; chip::dmc::ROM_SIZE]);
+        let params = chip::driver::Params::default();
+        let ctl: Vec<_> = (0..2).map(|i| Arc::new(TrackCtl::new(1.0, true, 0, params.values[[0, 7][i]]))).collect();
+        let rack = |n: usize| {
+            Box::new(crate::studio::Rack::new(vec![
+                StudioTrack::new(1, VoiceKind::Pulse, ctl[0].clone(), n, samples),
+                StudioTrack::new(2, VoiceKind::Saw, ctl[1].clone(), n, samples),
+            ]))
+        };
+        let chord: Vec<_> = [48u8, 52, 55, 59, 62, 65, 69, 72].iter().map(|&p| (0, 19_200, p, None)).collect();
+        let lane = |id| StudioLane::build(id, chip::instrument::NONE, [ClipInput { lane: 0, start: 0, len: 19_200, inst: chip::instrument::NONE, notes: &chord }]);
+        let s = SongSnapshot::default().with_studio(vec![lane(1), lane(2)]);
+        tx.push(Command::Rack(rack(8))).ok().unwrap();
+        tx.push(Command::Song(Box::new(s))).ok().unwrap();
+        tx.push(Command::Play).ok().unwrap();
+        let mut out = vec![0f32; 256 * 2];
+        for _ in 0..40 {
+            c.process(&mut out, 2, 0);
+        }
+        assert_eq!(ctl[0].sounding.load(Ordering::Relaxed), 8);
+        assert_eq!(ctl[1].sounding.load(Ordering::Relaxed), 8);
+        tx.push(Command::Rack(rack(16))).ok().unwrap();
+        tx.push(Command::MasterGain(0.5)).ok().unwrap();
+        for _ in 0..40 {
+            c.process(&mut out, 2, 0);
+        }
+        assert_eq!(c.mix.rack.tracks[0].capacity(), 16);
+        assert_eq!(ctl[0].sounding.load(Ordering::Relaxed), 8, "the chord kept sounding through the swap");
+        assert!(out.iter().any(|&v| v != 0.0));
+        let mut racks = 0;
+        while let Ok(g) = grx.pop() {
+            racks += matches!(g, Garbage::Rack(_)) as usize;
+        }
+        assert_eq!(racks, 2, "the empty first rack and the 8-voice one came back");
     }
 
     #[test]

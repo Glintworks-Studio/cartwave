@@ -160,6 +160,36 @@ impl Blep {
         }
     }
 
+    /// Adds a step of `d` (fixed point, `AMP_BITS`) at `cycle`, independent of
+    /// any other step: many sources (studio voices) can share one buffer,
+    /// each emulated separately over the same span. `cycle` has `set`'s
+    /// limits. Don't mix with `set` on the same buffer.
+    #[inline]
+    pub fn add(&mut self, cycle: u64, d: i32) {
+        if d == 0 {
+            return;
+        }
+        let p = self.pos(cycle);
+        let i = (p >> FRAC_BITS) as usize;
+        let ph = ((p >> (FRAC_BITS - PHASE_BITS)) as usize) & (PHASES - 1);
+        let frac = ((p >> (FRAC_BITS - PHASE_BITS - INTERP_BITS)) & ((1 << INTERP_BITS) - 1)) as i64;
+        let d1 = (d as i64 * frac) >> INTERP_BITS;
+        let d0 = d as i64 - d1;
+        let (k0, k1) = (&self.kernel.taps[ph], &self.kernel.taps[ph + 1]);
+        for ((b, &t0), &t1) in self.buf[i..i + TAPS].iter_mut().zip(k0.iter()).zip(k1.iter()) {
+            *b += d0 * t0 as i64 + d1 * t1 as i64;
+        }
+    }
+
+    /// Takes over another buffer's timing (its cycle origin and position), so
+    /// two buffers read with the same `(n, now)` stay sample-aligned: the
+    /// studio bus follows the console's buffer.
+    pub fn sync_timing(&mut self, other: &Blep) {
+        self.step = other.step;
+        self.base_cycle = other.base_cycle;
+        self.base_pos = other.base_pos;
+    }
+
     /// Restarts the step buffer at CPU cycle `cycle` (the synth's current
     /// cycle) after a sample-rate change: the next output sample is `cycle`.
     pub fn rebase_at(&mut self, cycle: u64) {

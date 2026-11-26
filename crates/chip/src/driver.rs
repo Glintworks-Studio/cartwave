@@ -354,15 +354,7 @@ impl Driver {
     /// `playing == false` releases everything.
     pub fn tick(&mut self, song: &Song, prev: Option<f64>, pos: f64, playing: bool, w: &mut Writes) {
         self.ticks += 1;
-        if !self.initialised {
-            self.initialised = true;
-            w.push(0x4015, 0x0F);
-            w.push(0x4017, 0x40); // 4-step, IRQ inhibit
-            w.push(0x4001, 0x08);
-            w.push(0x4005, 0x08);
-            w.push(0x4008, 0x80);
-            w.push(0x9003, 0x00);
-        }
+        self.tick_init(w);
         let mut sounding = 0u8;
         for lane in 0..LANES {
             let vrc6_lane = lane >= LANE_V1;
@@ -379,6 +371,34 @@ impl Driver {
             } else {
                 (None, NONE)
             };
+            self.tick_lane(lane, song, want, base, audible, w);
+            if self.lanes[lane].note.is_some() {
+                sounding |= 1 << lane;
+            }
+        }
+        self.sounding = sounding;
+    }
+
+    /// The power-up writes, once, before the first tick's lanes.
+    pub fn tick_init(&mut self, w: &mut Writes) {
+        if !self.initialised {
+            self.initialised = true;
+            w.push(0x4015, 0x0F);
+            w.push(0x4017, 0x40); // 4-step, IRQ inhibit
+            w.push(0x4001, 0x08);
+            w.push(0x4005, 0x08);
+            w.push(0x4008, 0x80);
+            w.push(0x9003, 0x00);
+        }
+    }
+
+    /// One lane's part of a frame tick: `want` is the note that should sound
+    /// now (`None`: release), `base` the instrument it starts from, `audible`
+    /// whether a release tail may play out. The console runs it for each of
+    /// its lanes; a studio voice (`voice.rs`) runs it for its one lane, with
+    /// the note its track's voice allocator gave it.
+    pub fn tick_lane(&mut self, lane: usize, song: &Song, want: Option<Note>, base: u8, audible: bool, w: &mut Writes) {
+        {
             // Resolve the instrument (a kit picks one by pitch).
             let want = want.and_then(|n| {
                 let (inst, pitch) = song.resolve_with(base, n.pitch);
@@ -423,11 +443,18 @@ impl Driver {
                 }
                 None => {}
             }
-            if self.lanes[lane].note.is_some() {
-                sounding |= 1 << lane;
-            }
         }
-        self.sounding = sounding;
+    }
+
+    /// The note sounding on `lane` (start tick, pitch), if any (a release
+    /// tail counts as sounding).
+    pub fn lane_note(&self, lane: usize) -> Option<(u32, u8)> {
+        self.lanes[lane].note
+    }
+
+    /// Whether `lane`'s note is in its release tail.
+    pub fn lane_releasing(&self, lane: usize) -> bool {
+        self.lanes[lane].note.is_some() && self.lanes[lane].mac.released
     }
 
     fn osc(lane: usize) -> Option<Osc> {

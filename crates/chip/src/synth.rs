@@ -148,6 +148,11 @@ impl Synth {
         self.blep.sample_rate
     }
 
+    /// The step buffer (the studio bus follows its timing).
+    pub fn blep(&self) -> &Blep {
+        &self.blep
+    }
+
     /// A new output sample rate (the audio device changed). The chip's state
     /// is kept: only the band-limited step buffer and the output filter are
     /// rebuilt, at the current level, so a held note keeps sounding. Called

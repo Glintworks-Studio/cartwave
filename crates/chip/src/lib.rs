@@ -32,4 +32,5 @@ pub mod synth;
 pub mod tables;
 pub mod triangle;
 pub mod units;
+pub mod voice;
 pub mod vrc6;

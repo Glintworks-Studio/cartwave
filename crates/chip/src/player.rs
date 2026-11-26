@@ -30,6 +30,26 @@ pub fn wrap_loop(t: f64, start: f64, end: f64) -> f64 {
     start + (t - start) % (end - start)
 }
 
+/// Called by `Player::render_with` on the console's clock.
+pub trait TickHook {
+    /// A frame tick at CPU cycle `cycle` (before the console's own), with
+    /// the song positions the driver gets (`prev`: the previous tick's,
+    /// `None` after a seek or start; -1 after a loop wrap).
+    fn tick(&mut self, rom: &[u8; crate::dmc::ROM_SIZE], cycle: u64, prev: Option<f64>, pos: f64, playing: bool);
+    /// The console has rendered `out`, up to (excluding) CPU cycle `end`.
+    fn chunk(&mut self, rom: &[u8; crate::dmc::ROM_SIZE], end: u64, out: &mut [f32]);
+}
+
+/// The hook that does nothing (plain `render`).
+pub struct NoHook;
+
+impl TickHook for NoHook {
+    #[inline]
+    fn tick(&mut self, _: &[u8; crate::dmc::ROM_SIZE], _: u64, _: Option<f64>, _: f64, _: bool) {}
+    #[inline]
+    fn chunk(&mut self, _: &[u8; crate::dmc::ROM_SIZE], _: u64, _: &mut [f32]) {}
+}
+
 /// `Clone` copies the whole emulator state (the seamless-loop export latches
 /// it at the start of the second loop pass and replays every later pass from it).
 #[derive(Clone)]
@@ -164,13 +184,19 @@ impl Player {
         self.driver.vrc6 = on;
     }
 
-    fn frame_tick(&mut self, song: &Song) {
+    /// The (previous, current) song positions the next frame tick sees.
+    fn tick_positions(&self) -> (Option<f64>, f64) {
         let pos = self.position();
         let prev = match self.prev_tick_pos {
             // Wrapped at the loop end: everything from 0 counts as new.
             Some(p) if pos < p => Some(-1.0),
             p => p,
         };
+        (prev, pos)
+    }
+
+    fn frame_tick(&mut self, song: &Song) {
+        let (prev, pos) = self.tick_positions();
         self.writes.clear();
         self.driver.tick(song, prev, pos, self.playing, &mut self.writes);
         for &(a, v) in self.writes.as_slice() {
@@ -181,14 +207,26 @@ impl Player {
 
     /// Renders mono samples, running frame ticks at their exact cycles.
     pub fn render(&mut self, song: &Song, out: &mut [f32]) {
+        self.render_with(song, out, &mut NoHook);
+    }
+
+    /// `render`, telling `hook` about every frame tick (just before the
+    /// console's, with the positions its driver gets) and every rendered
+    /// chunk: the studio voices run on the console's clock this way. With a
+    /// hook that does nothing this is exactly `render`.
+    pub fn render_with<H: TickHook>(&mut self, song: &Song, out: &mut [f32], hook: &mut H) {
         for chunk in out.chunks_mut(MAX_FRAMES) {
             let end = self.synth.cycle_for_samples(chunk.len());
             while self.next_tick_x2 / 2 < end {
-                self.synth.run_until(self.next_tick_x2 / 2);
+                let t = self.next_tick_x2 / 2;
+                self.synth.run_until(t);
+                let (prev, pos) = self.tick_positions();
+                hook.tick(&self.synth.rom, t, prev, pos, self.playing);
                 self.frame_tick(song);
                 self.next_tick_x2 += CPU_CYCLES_PER_FRAME_X2;
             }
             self.synth.render(chunk);
+            hook.chunk(&self.synth.rom, end, chunk);
         }
     }
 

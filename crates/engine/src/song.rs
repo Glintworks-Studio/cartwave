@@ -22,11 +22,57 @@ impl Default for DpcmBank {
     }
 }
 
-/// The engine's own copy of the arrangement: per lane, notes in absolute
-/// ticks, sorted and non-overlapping.
+/// One studio track's notes (BATCH4A_PROMPT.md §4): absolute ticks, sorted
+/// by start, **overlapping allowed** (chords: the track is polyphonic).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StudioLane {
+    /// The UI's track id (the rack's track with the same id plays it).
+    pub id: u32,
+    pub notes: Vec<Note>,
+    /// The longest note (the allocator looks back this far).
+    pub max_len: u32,
+    /// The track's instrument (bank index; `NONE`: plain channel controls).
+    pub inst: u8,
+}
+
+impl StudioLane {
+    /// Flattens a studio track's clips: notes cut at their clip's end,
+    /// sorted by start (then pitch), exact duplicates (same start and pitch)
+    /// merged, the newer winning.
+    pub fn build<'a>(id: u32, inst: u8, clips: impl IntoIterator<Item = ClipInput<'a>>) -> Self {
+        let mut notes = Vec::new();
+        for c in clips {
+            let clip_end = c.start.saturating_add(c.len);
+            for &(s, l, pitch, volume) in c.notes {
+                let start = c.start.saturating_add(s);
+                let end = start.saturating_add(l).min(clip_end);
+                if start < end {
+                    notes.push(Note { start, end, pitch, volume, inst: c.inst });
+                }
+            }
+        }
+        notes.sort_by_key(|n: &Note| (n.start, n.pitch));
+        notes.dedup_by(|later, earlier| {
+            if later.start == earlier.start && later.pitch == earlier.pitch {
+                *earlier = *later;
+                true
+            } else {
+                false
+            }
+        });
+        let max_len = notes.iter().map(|n| n.end - n.start).max().unwrap_or(0);
+        Self { id, notes, max_len, inst }
+    }
+}
+
+/// The engine's own copy of the arrangement: per console lane (the locked
+/// tracks), notes in absolute ticks, sorted and non-overlapping; and the
+/// studio tracks' notes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongSnapshot {
     pub lanes: [Vec<Note>; LANES],
+    /// Studio tracks, in the rack's order.
+    pub studio: Vec<StudioLane>,
     /// The instrument bank (kits reference other entries by index).
     pub instruments: Vec<Instrument>,
     /// Each lane's bank index (`NONE`: plain channel controls).
@@ -110,6 +156,7 @@ impl SongSnapshot {
         }
         Self {
             lanes,
+            studio: Vec::new(),
             instruments: Vec::new(),
             lane_inst: [NONE; LANES],
             preview_inst: NONE,
@@ -117,6 +164,12 @@ impl SongSnapshot {
             version,
             sent_ns: 0,
         }
+    }
+
+    /// Adds the studio tracks' notes.
+    pub fn with_studio(mut self, studio: Vec<StudioLane>) -> Self {
+        self.studio = studio;
+        self
     }
 
     pub fn with_dpcm(mut self, dpcm: Arc<DpcmBank>) -> Self {
@@ -133,7 +186,7 @@ impl SongSnapshot {
     }
 
     pub fn note_count(&self) -> usize {
-        self.lanes.iter().map(|l| l.len()).sum()
+        self.lanes.iter().map(|l| l.len()).sum::<usize>() + self.studio.iter().map(|l| l.notes.len()).sum::<usize>()
     }
 }
 

@@ -1,6 +1,7 @@
 //! UI -> engine commands, carried by a lock-free SPSC queue.
 
 use crate::song::SongSnapshot;
+use crate::studio::Rack;
 use chip::driver::ParamId;
 use chip::filter::FilterMode;
 
@@ -30,6 +31,12 @@ pub enum Command {
     Gain(f32),
     /// Per-track gains (linear, lane order): the track volume faders.
     LaneGains([f32; 8]),
+    /// Replace the studio rack (a track added, removed, reordered, or a pool
+    /// grown). The sounding voices carry over; the old rack goes back to the
+    /// UI thread to be freed.
+    Rack(Box<Rack>),
+    /// The Main track's gain (linear), after the whole mix.
+    MasterGain(f32),
     /// Test only: busy-wait this many microseconds inside the next callback,
     /// to validate the underrun detectors.
     TestStall(u32),

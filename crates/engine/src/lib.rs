@@ -12,8 +12,10 @@ pub mod command;
 pub mod core;
 pub mod cpu;
 mod host;
+pub mod mixdown;
 pub mod shared;
 pub mod song;
+pub mod studio;
 pub mod testkit;
 
 pub use chip;
@@ -22,7 +24,9 @@ pub use chip::filter::FilterMode;
 pub use command::Command;
 pub use host::EngineConfig;
 pub use shared::{device_error, PositionSnapshot, Shared};
-pub use song::{ClipInput, DpcmBank, NoteInput, SongSnapshot};
+pub use song::{ClipInput, DpcmBank, NoteInput, SongSnapshot, StudioLane};
+pub use mixdown::Mixdown;
+pub use studio::{Rack, StudioTrack, TrackCtl};
 
 use host::CoreCell;
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -44,7 +48,7 @@ pub struct Engine {
     tx: Producer<Command>,
     reconfig: Arc<host::Reconfig>,
     cfg: EngineConfig,
-    garbage: Consumer<Box<SongSnapshot>>,
+    garbage: Consumer<core::Garbage>,
     shared: Arc<Shared>,
     epoch: Instant,
     stop: Arc<AtomicBool>,
