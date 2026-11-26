@@ -435,3 +435,15 @@ Branch `app-shell/batch-3` from `main` @ fb2d632. Unattended; decisions are numb
   5a3b035a). The window keeps its logical size, so at 200% on this 2560×1440 display it is
   2880×1800 px, larger than the screen.
 - **B3-D23 (Follow).** One Follow (View menu, Ctrl+Shift+F) pages both editors (F-32).
+- **Measurements.**
+  - UI A/B against the pre-run build (3 rounds each): demo 9.4 → 9.6%, 200 clips 10.0 → 9.5%,
+    drag 11.8 → 11.3%. Pacing 30 s: 0 frames > 20 ms, 0 stalls (demo, 200 clips, drag).
+    Piano roll 2,000 notes: playing 6.4 → 6.9%, dragging 6.7 → 6.6%. At 150%: demo 9.2–9.8%,
+    200 clips 8.2–9.2%, drag 11.5–11.8%.
+  - Engine matrix on the MOTU (frozen build): A, B, C, G, H full length and D at 128/256/512:
+    0 loopback dropouts, 0 starved/late, 0 allocation violations. Test E (first time: MOTU →
+    HDMI → MOTU default): 2 rebuilds, no crash, 399 ms gap, MOTU default again afterwards.
+    Settings > Audio while playing: 23–29 ms to HDMI, ~396 ms back to the MOTU.
+  - `trace_app.ps1`: still pending (needs elevation; not attempted).
+- **Gates:** all pass on the final build (17/17 Batch 3 ATs, 9/9 AT-01…19, 179 tests, clippy and
+  release build clean, contrast ≥ 4.66:1). Merge follows.

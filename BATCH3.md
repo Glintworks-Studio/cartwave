@@ -13,7 +13,7 @@ Windows 11, RTX 4070 SUPER, 59.951 Hz display, MOTU M Series connected · decisi
 | 1. Acceptance tests | **Batch 3: 17/17 PASS** (AT-07…12, 14, 22 and the new AT-23…31; 79 checks, `docs/batch3/tools/at_b3.ps1`). **AT-01…19: 9/9 PASS** (49 checks, `docs/shell/tools/at_shell.ps1`; AT-03 and AT-18 updated for the in-place rename and the new Help item) |
 | 2. `cargo test --release --workspace` | **179 pass** (167 before + 12 new), golden render included. Clippy clean, release build 0 warnings |
 | 3. Performance, 60 fps cap | A/B against the pre-run build, 3 rounds each: demo **9.4 → 9.6%** (≤ 10), 200 clips **10.0 → 9.5%** (≤ 20), 200-clip drag **11.8 → 11.3%** (≤ 25): no regression. Pacing (30 s): **0 frames > 20 ms, 0 stalls** in demo, 200 clips and drag. Piano roll, 2,000 notes: playing 6.4 → 6.9%, dragging 6.7 → 6.6%. **At 150% interface scale:** demo 9.2–9.8%, 200 clips 8.2–9.2%, drag 11.5–11.8% |
-| 4. Engine matrix on the MOTU | ENGINE_RESULT |
+| 4. Engine matrix on the MOTU | **0 loopback dropouts** in A, B, C, G, H (full length) and D, at 128 / 256 / 512 requested; 0 starved / late, 0 allocation violations. **E recovers with no crash** (2 rebuilds, MOTU default restored) |
 | 5. Contrast of new text | **≥ 4.66:1** everywhere (tooltips 12.9:1, menu reasons 6.1:1, the guide 13.3:1, hints 4.7:1) |
 
 **Built (by UX.md line; each marked done in UX.md)**
@@ -62,7 +62,11 @@ Windows 11, RTX 4070 SUPER, 59.951 Hz display, MOTU M Series connected · decisi
   route (owner-drawn items) can't recolour the popup's border, shadow or submenu arrow. Options
   in §5. **Found on the way:** muda's dark menu *bar* (shipped in Batch 2) relies on
   undocumented messages; flagged for the owner.
-- **Engine matrix on the MOTU, including test E:** ENGINE_SHORT
+- **Engine matrix on the MOTU, including test E:** all of A, B, C, G, H (10 min each where
+  ENGINE.md says full length) and D: 0 loopback dropouts, callback cost 0.09–0.23% mean, max
+  ≤ 3.6%. Test E ran for the first time: the default output switched MOTU → HDMI → MOTU while
+  playing; two rebuilds, no crash, one 399 ms gap. Settings ▸ Audio switches while playing:
+  23–29 ms to the HDMI output, ~396 ms back to the MOTU.
 - **`trace_app.ps1`:** still pending (it needs elevation; not attempted).
 
 **Decisions taken alone** (B3-D1…D23 in the RUNLOG), the ones that matter most:
@@ -75,7 +79,7 @@ Windows 11, RTX 4070 SUPER, 59.951 Hz display, MOTU M Series connected · decisi
   DPCM's Volume and Duty are hidden.
 - The fork's branch is `chipdaw-perf` (the prompt said `chipdaw`, which doesn't exist).
 
-**Merged:** MERGE_LINE
+**Merged:** yes. Every gate passes, so `app-shell/batch-3` was merged into `main` and pushed (the RUNLOG's last entry has the commit). The final acceptance runs, tests and clippy were repeated on the final build.
 
 ---
 
@@ -186,7 +190,44 @@ The Win32 popups stay light (see §5).
 
 ## 4. Engine matrix (§2.3)
 
-ENGINE_TABLE
+Method: ENGINE.md §7 (`docs/engine/tools/matrix.ps1`): WASAPI loopback of the 23 kHz pilot
+tone is the ground truth for dropouts. A frozen copy of this branch's release build
+(`app_frozen.exe`), MOTU M Series "Out 1-2" at 48 kHz (the Windows default, as a 6 s probe
+showed first). Results (`docs/engine/tools/summarize.py`):
+
+| Test | Requested buffer | Run | Granted frames/cb | Underruns (loopback dropouts / starved / late) | Callback cost mean / p99 / max (% of period) | Audio thread k-cycles / callback | UI thread k-cycles / frame | Other |
+|---|---|---|---|---|---|---|---|---|
+| A. Demo set playing | 128 | 600 s | 512..1126 | **0** / 0 / 0 | 0.227 / 0.6 / 3.6 | 149.5 | 4120.1 | alloc violations 0 |
+| A. Demo set playing | 256 | 600 s | 512..1126 | **0** / 0 / 0 | 0.226 / 0.6 / 3.2 | 149.7 | 4153.0 | alloc violations 0 |
+| A. Demo set playing | 512 | 600 s | 512..1126 | **0** / 0 / 0 | 0.223 / 0.6 / 3.2 | 147.3 | 4148.7 | alloc violations 0 |
+| B. 200 clips + continuous scripted edits | 128 | 600 s | 512..1126 | **0** / 0 / 0 | 0.085 / 0.3 / 3.1 | 91.7 | 9091.3 | 149995 scripted edits, 141182 snapshots applied, edit→tick max 16.64 ms, send→engine max 10.79 ms, dropped 0; alloc violations 0 |
+| B. 200 clips + continuous scripted edits | 256 | 600 s | 512..1126 | **0** / 0 / 0 | 0.087 / 0.3 / 3.0 | 92.3 | 9075.7 | 149994 scripted edits, 141182 snapshots applied, edit→tick max 16.64 ms, send→engine max 10.83 ms, dropped 0; alloc violations 0 |
+| B. 200 clips + continuous scripted edits | 512 | 600 s | 512..1126 | **0** / 0 / 0 | 0.087 / 0.3 / 3.0 | 92.3 | 9110.9 | 149995 scripted edits, 141182 snapshots applied, edit→tick max 16.64 ms, send→engine max 10.78 ms, dropped 0; alloc violations 0 |
+| C. UI stall 250 ms every 2 s | 128 | 120 s | 512..1126 | **0** / 0 / 0 | 0.228 / 0.6 / 3.1 | 150.5 | 15302.3 | 60 UI stalls; alloc violations 0 |
+| C. UI stall 250 ms every 2 s | 256 | 120 s | 512..1126 | **0** / 0 / 0 | 0.224 / 0.6 / 3.2 | 148.4 | 15229.7 | 60 UI stalls; alloc violations 0 |
+| C. UI stall 250 ms every 2 s | 512 | 120 s | 512..1126 | **0** / 0 / 0 | 0.228 / 0.6 / 3.0 | 150.4 | 15211.8 | 60 UI stalls; alloc violations 0 |
+| D. Resize / minimise / restore | 128 | 120 s | 512..1126 | **0** / 0 / 0 | 0.164 / 0.3 / 2.8 | 112.4 | 2690.8 | 75 pairs (75 crossings, 75 clicks); offset ms mean -11.03 sd 0.35 min -11.77 max -9.53; alloc violations 0 |
+| D. Resize / minimise / restore | 256 | 120 s | 512..1126 | **0** / 0 / 0 | 0.167 / 0.3 / 3.1 | 114.7 | 2944.3 | 75 pairs (75 crossings, 75 clicks); offset ms mean -10.95 sd 0.71 min -14.03 max -7.69; alloc violations 0 |
+| D. Resize / minimise / restore | 512 | 120 s | 512..1126 | **0** / 0 / 0 | 0.167 / 0.3 / 2.9 | 114.1 | 2791.5 | 75 pairs (75 crossings, 75 clicks); offset ms mean -10.95 sd 0.34 min -11.77 max -9.77; alloc violations 0 |
+| G. A/V sync | 128 | 120 s | 512..1126 | **0** / 0 / 0 | 0.161 / 0.3 / 0.4 | 111.9 | 2245.6 | 75 pairs (75 crossings, 75 clicks); offset ms mean -10.96 sd 0.11 min -11.23 max -10.65; alloc violations 0 |
+| G. A/V sync | 256 | 120 s | 512..1126 | **0** / 0 / 0 | 0.163 / 0.3 / 3.1 | 111.2 | 2241.4 | 75 pairs (75 crossings, 75 clicks); offset ms mean -10.98 sd 0.11 min -11.31 max -10.75; alloc violations 0 |
+| G. A/V sync | 512 | 120 s | 512..1126 | **0** / 0 / 0 | 0.163 / 0.3 / 2.8 | 111.8 | 2235.4 | 75 pairs (75 crossings, 75 clicks); offset ms mean -10.99 sd 0.10 min -11.35 max -10.78; alloc violations 0 |
+| E. Default output switched away and back | default | 50 s | 480..1126 | **0** / 1 / 1 | 0.223 / 0.6 / 1.2 | 148.6 | 4326.8 | 2 rebuilds, no crash; alloc violations 0 |
+
+- **Against ENGINE.md and STABILIZE.md:** the same picture as the 15-run matrix (0 dropouts,
+  cost ~0.2%, p99 ≤ 0.6%, max ≤ 3.6%), now on the MOTU instead of the HDMI endpoint. A/V
+  offset −11.0 ms (sd 0.1), as before.
+- **Requested buffers:** WASAPI shared mode gives the MOTU 512–1126 frames per callback whatever
+  is requested, so the 128 / 256 / 512 rows ran the same real buffer (as on the HDMI endpoint).
+- **Test E (first run):** `set_default_audio.ps1` switched the default to "VX3211-2K" after
+  15 s and back to "MOTU" 15 s later. The stream rebuilt twice; the longest gap between
+  callbacks was 399 ms (the MOTU's stream start, the same as the Settings switch below), with 1
+  starved and 1 late callback around it; no crash, no allocation, and the loopback (which
+  follows the default) recorded 0 pilot dropouts while a stream ran. The MOTU was the default
+  again at the end.
+- **Settings ▸ Audio while playing** (`docs/batch3/tools/device_switch.ps1`, twice each way):
+  to the HDMI output 29.4 / 23.2 ms, back to the MOTU 395.8 / 395.4 ms. The MOTU's driver takes
+  ~0.4 s to start a stream; the switch path itself (Batch 2) is the same 23–34 ms as before.
 
 ## 5. Dark native menus: the options
 
