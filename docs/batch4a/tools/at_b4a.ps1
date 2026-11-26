@@ -192,7 +192,7 @@ if (Want "B4A-07") {
     Launch -Project $p -Data $d; Place
     $cl = @(((BarX 1) + 40), ((RowY 0) + 40)); DblL $cl[0] $cl[1]; Start-Sleep -Milliseconds 800   # open the clip
     K 0x42; Start-Sleep -Milliseconds 300                         # B: draw mode
-    $ln = DevLines $d "^dev: piano roll bounds"
+    $ln = @(DevLines $d "^dev: piano roll bounds")
     $obs."b407_bounds_$ans" = @($ln)
     $bx = 0; $by = 0; $bw = 0; $bh = 0
     if ($ln.Count -gt 0) { $f = ($ln[-1] -split " "); $bx = [double]$f[4]; $by = [double]$f[5]; $bw = [double]$f[6]; $bh = [double]$f[7] }
@@ -231,7 +231,7 @@ if (Want "B4A-09") {
   $obs.b409_menu = @(DevLines $d "^dev: menu Track")
   # Rename, Colour, sep, Insert Track ▸ (row 2 after one separator): its submenu, then "Noise" (3rd).
   $it = MenuItemAt $mx $my 2 1; MoveL $it[0] $it[1]; Start-Sleep -Milliseconds 500
-  $sub = DevLines $d "^dev: submenu InsertTrack"
+  $sub = @(DevLines $d "^dev: submenu InsertTrack")
   $obs.b409_sub = @($sub)
   if ($sub.Count -gt 0) { $f = ($sub[-1] -split " "); $sx = [double]$f[4]; $sy = [double]$f[5]; $n = MenuItemAt $sx $sy 2 0; ClickL $n[0] $n[1] }
   Start-Sleep -Milliseconds 500
@@ -239,7 +239,7 @@ if (Want "B4A-09") {
   # Voices ▸ 4 on track 1 (studio): Rename, Colour, sep, Insert, Duplicate, Delete, sep, Lock, Voices.
   RightL $mx $my; Start-Sleep -Milliseconds 300
   $it = MenuItemAt $mx $my 6 2; MoveL $it[0] $it[1]; Start-Sleep -Milliseconds 500
-  $sub = DevLines $d "^dev: submenu Voices"
+  $sub = @(DevLines $d "^dev: submenu Voices")
   if ($sub.Count -gt 0) { $f = ($sub[-1] -split " "); $sx = [double]$f[4]; $sy = [double]$f[5]; $n = MenuItemAt $sx $sy 4 0; ClickL $n[0] $n[1] }
   Start-Sleep -Milliseconds 500
   Save; Keep $p "b409_voices"
