@@ -13,7 +13,6 @@ use vizia::prelude::*;
 use vizia::vg;
 
 use super::gfx::{self, Face};
-use crate::state::{Transport, PPQ};
 use crate::theme::tokens::*;
 use crate::{AppEvent, Signals};
 
@@ -60,7 +59,7 @@ impl KeyAction {
 }
 
 /// Glyph size of single-letter keys and of word keys (logical px).
-const KEY_LETTER_PX: f32 = 13.0;
+const KEY_LETTER_PX: f32 = 12.0;
 const KEY_WORD_PX: f32 = 9.0;
 
 /// A small hardware-style key: lit from below (dark top, lighter bottom),
@@ -143,55 +142,23 @@ impl View for Key {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
-        let rr = gfx::rrect(r, RADIUS_KEY * s);
         let lit = self.lit();
         let lift = if self.hover && !self.pressed { 0.05 } else { 0.0 };
+        // The key material (VISUAL-SPEC.md §1): unchanged when lit; only
+        // the glyph turns lime.
+        gfx::key_material(canvas, r, RADIUS_KEY * s, s, gfx::KeyLook { lift, pressed: self.pressed });
 
-        // Body: lit from below; pressed keys flatten and darken.
-        let (top, bottom) = if self.pressed {
-            (KEY_TOP.darken(0.25), KEY_BOTTOM.darken(0.3))
-        } else {
-            (KEY_TOP.lighten(lift), KEY_BOTTOM.lighten(lift))
-        };
-        canvas.draw_rrect(rr, &gfx::vgrad(r, top, bottom));
-        if lit {
-            // A faint accent wash from the bottom, as if the glyph lit the key.
-            let mut wash = vg::Paint::default();
-            wash.set_anti_alias(true);
-            wash.set_shader(gfx::linear(
-                (r.left, r.top),
-                (r.left, r.bottom),
-                &[ACCENT.with_alpha(0.0), ACCENT.with_alpha(0.10)],
-                None,
-            ));
-            canvas.draw_rrect(rr, &wash);
-        }
-
-        // Stroke: plain sides and bottom, a sheen along the top edge.
-        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(KEY_STROKE));
-        let sheen = if self.pressed {
-            KEY_STROKE.lighten(0.1)
-        } else if lit {
-            ACCENT.mix(KEY_SHEEN, 0.35)
-        } else {
-            KEY_SHEEN.lighten(lift)
-        };
-        gfx::top_sheen(canvas, &rr, gfx::hairline(s), KEY_STROKE, sheen);
-
-        // Glyph, nudged down 1 px while pressed.
-        let px = if self.label.chars().count() == 1 {
-            KEY_LETTER_PX
-        } else {
-            KEY_WORD_PX
-        };
-        let face = if px > KEY_WORD_PX { Face::SemiBold } else { Face::Bold };
-        let f = gfx::font(face, px * s);
+        // Glyph (Inter 700 12), nudged down 1 px while pressed.
+        let px = if self.label.chars().count() == 1 { KEY_LETTER_PX } else { KEY_WORD_PX };
+        let f = gfx::font(Face::Bold, px * s);
         let w = gfx::text_width(&f, self.label);
         let x = (r.left + (r.width() - w) * 0.5).round();
         let press_dy = if self.pressed { s } else { 0.0 };
         let base = gfx::baseline_for_center(&f, r.center_y()).round() + press_dy;
         if lit {
-            canvas.draw_str(self.label, (x, base), &f, &glow_paint(ACCENT.with_alpha(0.8), 3.0 * s));
+            // text-shadow: 0 0 6px lime .85, 0 0 2px lime .9.
+            canvas.draw_str(self.label, (x, base), &f, &super::topbar::glow(ACCENT.with_alpha(0.85), 6.0 * s));
+            canvas.draw_str(self.label, (x, base), &f, &super::topbar::glow(ACCENT.with_alpha(0.9), 2.0 * s));
             gfx::draw_text(canvas, self.label, x, base, &f, ACCENT);
         } else {
             let ink = if self.hover { TEXT_MID.lighten(0.2) } else { TEXT_MID };
@@ -200,443 +167,10 @@ impl View for Key {
     }
 }
 
-// ─────────────────────────────── Stat pills ───────────────────────────────
-
-/// What a split pill shows, and what it does when used.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PillKind {
-    /// Audio callback load, % of the buffer period.
-    Cpu,
-    /// Output sample rate.
-    Khz,
-    /// Tempo: drag vertically or use the wheel to change it.
-    Bpm,
-}
-
-/// BPM change per logical pixel of vertical drag (Shift: 10x finer).
-const BPM_PER_PX: f32 = 0.25;
-/// Pill glyph size (logical px).
-const PILL_TEXT_PX: f32 = 10.0;
-
-/// A split pill: a lighter label segment and a darker value segment under
-/// one stroke with a top sheen (the prototype's CPU / kHz read-outs).
-pub struct StatPill {
-    s: Signals,
-    kind: PillKind,
-    /// Width of the label segment (logical px).
-    label_w: f32,
-    /// Vertical BPM scrub in progress: (press y, BPM at press).
-    scrub: Option<(f32, f32)>,
-    pressed: bool,
-    hover: bool,
-    wheel: crate::input::WheelSteps,
-}
-
-impl StatPill {
-    pub fn new(cx: &mut Context, s: Signals, kind: PillKind, label_w: f32) -> Handle<'_, Self> {
-        let h = Self {
-            s,
-            kind,
-            label_w,
-            scrub: None,
-            pressed: false,
-            hover: false,
-            wheel: Default::default(),
-        }
-        .build(cx, |_| {})
-        .class("pill")
-        .cursor(match kind {
-            PillKind::Bpm => CursorIcon::NsResize,
-            _ => CursorIcon::Default,
-        });
-        // Redraw only when the shown text changes.
-        let shown = RefCell::new(Self::value(s, kind));
-        let redraw_on_change = move |mut h: Handle<'_, Self>| {
-            let v = Self::value(s, kind);
-            if *shown.borrow() != v {
-                *shown.borrow_mut() = v;
-                h.needs_redraw();
-            }
-        };
-        match kind {
-            PillKind::Cpu | PillKind::Khz => h.bind(s.audio_load, redraw_on_change),
-            PillKind::Bpm => h.bind(s.transport, redraw_on_change),
-        }
-    }
-
-    fn label(&self) -> &'static str {
-        match self.kind {
-            PillKind::Cpu => "CPU",
-            PillKind::Khz => "kHz",
-            PillKind::Bpm => "BPM",
-        }
-    }
-
-    fn value(s: Signals, kind: PillKind) -> String {
-        match kind {
-            PillKind::Cpu => {
-                // F-38: no running output says so instead of "0%".
-                let (pct, hz) = s.audio_load.get_untracked();
-                if hz == 0 {
-                    "OFF".into()
-                } else {
-                    format!("{pct}%")
-                }
-            }
-            PillKind::Khz => {
-                let (_, hz) = s.audio_load.get_untracked();
-                if hz == 0 {
-                    "--".into()
-                } else {
-                    format!("{:.1}", hz as f32 / 1000.0)
-                }
-            }
-            PillKind::Bpm => format!("{:.1}", s.transport.with_untracked(|t| t.bpm)),
-        }
-    }
-}
-
-impl View for StatPill {
-    fn element(&self) -> Option<&'static str> {
-        Some("stat-pill")
-    }
-
-    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        event.map(|we, meta| match we {
-            WindowEvent::MouseDown(MouseButton::Left) => {
-                match self.kind {
-                    PillKind::Bpm => {
-                        let bpm = self.s.transport.with_untracked(|t| t.bpm);
-                        self.scrub = Some((local_mouse(cx).1, bpm));
-                        cx.emit(AppEvent::GestureBegin);
-                    }
-                    _ => return,
-                }
-                cx.capture();
-                cx.needs_redraw();
-                meta.consume();
-            }
-            WindowEvent::MouseMove(_, _) => {
-                if let Some((y0, bpm0)) = self.scrub {
-                    let fine = if cx.modifiers().shift() { 0.1 } else { 1.0 };
-                    let dy = y0 - local_mouse(cx).1;
-                    let bpm = bpm0 + dy * BPM_PER_PX * fine;
-                    // Whole tenths, as displayed.
-                    cx.emit(AppEvent::SetBpm((bpm * 10.0).round() / 10.0));
-                }
-            }
-            WindowEvent::MouseUp(MouseButton::Left) => {
-                if self.scrub.take().is_some() {
-                    cx.emit(AppEvent::GestureEnd);
-                    cx.release();
-                }
-                cx.needs_redraw();
-            }
-            WindowEvent::MouseDoubleClick(MouseButton::Left) if self.kind == PillKind::Bpm => {
-                cx.emit(AppEvent::SetBpm(Transport::DEFAULT_BPM));
-                cx.emit(AppEvent::Commit);
-                meta.consume();
-            }
-            WindowEvent::MouseScroll(_, y) if self.kind == PillKind::Bpm => {
-                let steps = self.wheel.steps(*y);
-                if steps != 0 {
-                    let bpm = self.s.transport.with_untracked(|t| t.bpm);
-                    cx.emit(AppEvent::SetBpm(bpm.round() + steps as f32));
-                    cx.emit(AppEvent::Commit);
-                }
-                meta.consume();
-            }
-            WindowEvent::MouseEnter => {
-                self.hover = true;
-                cx.needs_redraw();
-            }
-            WindowEvent::MouseLeave => {
-                self.hover = false;
-                cx.needs_redraw();
-            }
-            _ => {}
-        });
-    }
-
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Pills);
-        let b = cx.bounds();
-        let s = cx.scale_factor();
-        let r = gfx::snap(b.into());
-        let rr = gfx::rrect(r, r.height() * 0.5);
-        let interactive = !matches!(self.kind, PillKind::Cpu | PillKind::Khz);
-        let active = self.scrub.is_some() || self.pressed;
-        let lift = if interactive && self.hover && !active { 0.05 } else { 0.0 };
-        let split = (r.left + self.label_w * s).round();
-
-        canvas.save();
-        canvas.clip_rrect(rr, vg::ClipOp::Intersect, true);
-        let lab = vg::Rect::from_ltrb(r.left, r.top, split, r.bottom);
-        canvas.draw_rect(lab, &gfx::vgrad(lab, PILL_LABEL_TOP, PILL_LABEL_BOTTOM));
-        let val = vg::Rect::from_ltrb(split, r.top, r.right, r.bottom);
-        let (vt, vb) = if active {
-            (KEY_TOP.darken(0.3), KEY_BOTTOM.darken(0.3))
-        } else {
-            (KEY_TOP.lighten(lift), KEY_BOTTOM.lighten(lift))
-        };
-        canvas.draw_rect(val, &gfx::vgrad(val, vt, vb));
-        canvas.restore();
-
-        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(KEY_STROKE));
-        gfx::top_sheen(canvas, &rr, gfx::hairline(s), KEY_STROKE, KEY_SHEEN.lighten(lift));
-
-        let f = gfx::font(Face::Bold, PILL_TEXT_PX * s);
-        let base = gfx::baseline_for_center(&f, r.center_y()).round();
-        let label = self.label();
-        let lw = gfx::text_width(&f, label);
-        gfx::draw_text(canvas, label, (r.left + (split - r.left - lw) * 0.5).round(), base, &f, TEXT_HI);
-        let v = Self::value(self.s, self.kind);
-        let vw = gfx::text_width(&f, &v);
-        let ink = if self.scrub.is_some() { ACCENT } else { Rgba::white(1.0) };
-        gfx::draw_text(canvas, &v, (split + (r.right - split - vw) * 0.5).round(), base, &f, ink);
-    }
-}
-
-// ──────────────────────────── Transport capsule ────────────────────────────
-
-/// Hit zones at the capsule's ends (logical px): play on the left, loop on the right.
-const CAPSULE_END_ZONE: f32 = 32.0;
-/// The time read-out's glyph size (logical px) and horizontal squeeze: the
-/// prototype's read-out is a condensed face; Inter Bold at 88% width matches it.
-const READOUT_PX: f32 = 24.0;
-const READOUT_SCALE_X: f32 = 0.88;
-/// Logical px of horizontal drag per sixteenth note when scrubbing the time.
-const PX_PER_SIXTEENTH: f32 = 4.0;
-/// Play and loop glyph boxes, from the capsule's top-left / top-right (logical px).
-const GLYPH_INSET_X: f32 = 8.0;
-const GLYPH_INSET_Y: f32 = 4.0;
-const GLYPH_BOX: f32 = 16.0;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum CapsuleZone {
-    Play,
-    Time,
-    Loop,
-}
-
-/// The centre capsule: play light, the time read-out (m:ss.cc, or
-/// bars.beats.sixteenths), loop light. Click the play light to play/pause,
-/// the loop light to toggle looping; drag the time to scrub. The format is
-/// in View > Clock Shows Bars and Settings; Home rewinds (UX.md §4).
-pub struct TimeCapsule {
-    s: Signals,
-    scrub: Option<(f32, f64)>,
-    pressed: Option<CapsuleZone>,
-    hover: Option<CapsuleZone>,
-}
-
-impl TimeCapsule {
-    pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        let shown = RefCell::new(Self::time_text(s));
-        Self {
-            s,
-            scrub: None,
-            pressed: None,
-            hover: None,
-        }
-        .build(cx, |_| {})
-        .class("capsule")
-        // Redraw when the text or the play state changes, not per tick.
-        .bind(s.transport, move |mut h| {
-            let t = Self::time_text(s);
-            if *shown.borrow() != t {
-                *shown.borrow_mut() = t;
-                h.needs_redraw();
-            }
-        })
-        .bind(s.loop_on, |mut h| h.needs_redraw())
-        .bind(s.clock_bars, |mut h| h.needs_redraw())
-    }
-
-    /// m:ss.cc (minutes, seconds, hundredths) or bars.beats.sixteenths of
-    /// the playhead. The playing flag rides along so a play/pause change also
-    /// redraws.
-    fn time_text(s: Signals) -> String {
-        let (ticks, bpm, playing) =
-            s.transport.with_untracked(|t| (t.playhead_ticks, t.bpm, t.playing));
-        let pad = if playing { "" } else { " " };
-        if s.clock_bars.get_untracked() {
-            return format!("{}{pad}", crate::state::Transport::position_string(ticks));
-        }
-        format!("{}{pad}", clock_string(ticks / PPQ as f64 * 60.0 / bpm.max(1.0) as f64))
-    }
-
-    fn zone_at(&self, x: f32, w: f32) -> CapsuleZone {
-        if x < CAPSULE_END_ZONE {
-            CapsuleZone::Play
-        } else if x > w - CAPSULE_END_ZONE {
-            CapsuleZone::Loop
-        } else {
-            CapsuleZone::Time
-        }
-    }
-}
-
-impl View for TimeCapsule {
-    fn element(&self) -> Option<&'static str> {
-        Some("time-capsule")
-    }
-
-    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        event.map(|we, meta| match we {
-            WindowEvent::MouseDown(MouseButton::Left) => {
-                let (x, _) = local_mouse(cx);
-                let w = cx.bounds().w / cx.scale_factor();
-                let zone = self.zone_at(x, w);
-                if zone == CapsuleZone::Time {
-                    let ph = self.s.transport.with_untracked(|t| t.playhead_ticks);
-                    self.scrub = Some((x, ph));
-                }
-                self.pressed = Some(zone);
-                cx.capture();
-                cx.needs_redraw();
-                meta.consume();
-            }
-            WindowEvent::MouseMove(_, _) => {
-                let (x, _) = local_mouse(cx);
-                if let Some((x0, t0)) = self.scrub {
-                    let sixteenth = PPQ as f64 / 4.0;
-                    let steps = ((x - x0) / PX_PER_SIXTEENTH).round() as f64;
-                    cx.emit(AppEvent::SetPlayhead((t0 + steps * sixteenth).max(0.0)));
-                } else if self.pressed.is_none() {
-                    let w = cx.bounds().w / cx.scale_factor();
-                    let z = Some(self.zone_at(x, w));
-                    if z != self.hover {
-                        self.hover = z;
-                        cx.needs_redraw();
-                        cx.emit(WindowEvent::SetCursor(match z {
-                            Some(CapsuleZone::Time) => CursorIcon::EwResize,
-                            _ => CursorIcon::Hand,
-                        }));
-                    }
-                }
-            }
-            WindowEvent::MouseUp(MouseButton::Left) => {
-                self.scrub = None;
-                if let Some(zone) = self.pressed.take() {
-                    cx.release();
-                    if mouse_inside(cx) {
-                        match zone {
-                            CapsuleZone::Play => cx.emit(AppEvent::TogglePlay),
-                            CapsuleZone::Loop => cx.emit(AppEvent::ToggleLoop),
-                            CapsuleZone::Time => {}
-                        }
-                    }
-                }
-                cx.needs_redraw();
-            }
-            // No hidden double-click: Home rewinds (F-38).
-            WindowEvent::MouseDoubleClick(MouseButton::Left) => meta.consume(),
-            WindowEvent::MouseLeave => {
-                self.hover = None;
-                cx.emit(WindowEvent::SetCursor(CursorIcon::Default));
-                cx.needs_redraw();
-            }
-            _ => {}
-        });
-    }
-
-    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let _perf = crate::perf::scope(crate::perf::Span::Chrome);
-        let b = cx.bounds();
-        let s = cx.scale_factor();
-        let r = gfx::snap(b.into());
-        let rr = gfx::rrect(r, RADIUS_BOX * s);
-        draw_box(canvas, &rr, s);
-
-        let playing = self.s.transport.with_untracked(|t| t.playing);
-        let loop_on = self.s.loop_on.get_untracked();
-
-        // Play / pause light, top-left.
-        let g = vg::Rect::from_xywh(
-            r.left + GLYPH_INSET_X * s,
-            r.top + GLYPH_INSET_Y * s,
-            GLYPH_BOX * s,
-            GLYPH_BOX * s,
-        );
-        let press = |z| if self.pressed == Some(z) { s } else { 0.0 };
-        let hover = |z| self.hover == Some(z) && self.pressed.is_none();
-        let g = g.with_offset((0.0, press(CapsuleZone::Play)));
-        let path = if playing { pause_path(g, s) } else { play_path(g, s) };
-        if playing {
-            canvas.draw_path(&path, &glow_paint(ACCENT.with_alpha(0.75), 3.0 * s));
-            canvas.draw_path(&path, &gfx::fill(ACCENT));
-        } else {
-            let lift = if hover(CapsuleZone::Play) { 0.15 } else { 0.0 };
-            canvas.draw_path(
-                &path,
-                &gfx::vgrad(g, READOUT_TOP.lighten(lift), READOUT_BOTTOM.lighten(lift)),
-            );
-        }
-
-        // Loop light, top-right.
-        let lg = vg::Rect::from_xywh(
-            r.right - (GLYPH_INSET_X + GLYPH_BOX) * s,
-            r.top + GLYPH_INSET_Y * s,
-            GLYPH_BOX * s,
-            GLYPH_BOX * s,
-        )
-        .with_offset((0.0, press(CapsuleZone::Loop)));
-        let lp = loop_path(lg, s);
-        let mut stroke = gfx::stroke(ACCENT, 2.0 * s);
-        stroke.set_stroke_cap(vg::PaintCap::Round);
-        stroke.set_stroke_join(vg::PaintJoin::Round);
-        stroke.set_path_effect(vg::PathEffect::corner_path(3.0 * s));
-        if loop_on {
-            let mut glow = glow_paint(ACCENT.with_alpha(0.8), 3.0 * s);
-            glow.set_style(vg::PaintStyle::Stroke);
-            glow.set_stroke_width(3.0 * s);
-            glow.set_path_effect(vg::PathEffect::corner_path(3.0 * s));
-            canvas.draw_path(&lp, &glow);
-        } else {
-            stroke.set_color4f(
-                if hover(CapsuleZone::Loop) { TEXT_MID } else { TEXT_LO }.c4f(),
-                None,
-            );
-        }
-        canvas.draw_path(&lp, &stroke);
-        let head = loop_heads(lg, s);
-        let mut hp = gfx::fill(if loop_on {
-            ACCENT
-        } else if hover(CapsuleZone::Loop) {
-            TEXT_MID
-        } else {
-            TEXT_LO
-        });
-        hp.set_anti_alias(true);
-        canvas.draw_path(&head, &hp);
-
-        // Time read-out: tabular cells so digits never shift.
-        let text = Self::time_text(self.s);
-        let text = text.trim_end();
-        let mut f = gfx::font(Face::Bold, READOUT_PX * s);
-        f.set_scale_x(READOUT_SCALE_X);
-        let cell = ('0'..='9')
-            .map(|d| gfx::text_width(&f, d.encode_utf8(&mut [0; 4])))
-            .fold(0.0f32, f32::max);
-        let width_of = |c: char| if c.is_ascii_digit() { cell } else { gfx::text_width(&f, c.encode_utf8(&mut [0; 4])) };
-        let total: f32 = text.chars().map(width_of).sum();
-        let mut x = (r.center_x() - total * 0.5).round();
-        let base = gfx::baseline_for_center(&f, r.center_y()).round();
-        let (top, bottom) = if self.scrub.is_some() {
-            (ACCENT.lighten(0.2), ACCENT.darken(0.15))
-        } else {
-            (READOUT_TOP, READOUT_BOTTOM)
-        };
-        let mut buf = [0u8; 4];
-        for c in text.chars() {
-            let cw = width_of(c);
-            let g = c.encode_utf8(&mut buf);
-            let gw = gfx::text_width(&f, g);
-            gfx::draw_text_vgrad(canvas, g, x + (cw - gw) * 0.5, base, &f, top, bottom);
-            x += cw;
-        }
-    }
+/// A menu panel: flat interior, flat 1 px stroke (prototype values).
+fn draw_box(canvas: &Canvas, rr: &vg::RRect, s: f32) {
+    canvas.draw_rrect(*rr, &gfx::fill(BG_2));
+    gfx::ring(canvas, rr, gfx::hairline(s), &gfx::fill(STROKE));
 }
 
 /// m:ss.cc: minutes, seconds and hundredths (a full stop before the
@@ -646,95 +180,73 @@ pub fn clock_string(secs: f64) -> String {
     format!("{}:{:02}.{:02}", cs / 6000, (cs / 100) % 60, cs % 100)
 }
 
-/// A capsule / box: flat interior, flat 1 px stroke (prototype values).
-fn draw_box(canvas: &Canvas, rr: &vg::RRect, s: f32) {
-    canvas.draw_rrect(*rr, &gfx::fill(BG_2));
-    gfx::ring(canvas, rr, gfx::hairline(s), &gfx::fill(STROKE));
-}
+// ───────────────────────────── Spectrum well ─────────────────────────────
 
-fn play_path(g: vg::Rect, s: f32) -> vg::Path {
-    // A 10 x 12 triangle, left-aligned in the glyph box like the prototype.
-    let (x, y) = (g.left + 2.0 * s, g.top + 2.0 * s);
-    let mut pb = vg::PathBuilder::new();
-    pb.move_to((x, y));
-    pb.line_to((x + 10.0 * s, y + 6.0 * s));
-    pb.line_to((x, y + 12.0 * s));
-    pb.close();
-    pb.detach()
-}
-
-fn pause_path(g: vg::Rect, s: f32) -> vg::Path {
-    let (x, y) = (g.left + 2.0 * s, g.top + 2.0 * s);
-    let mut pb = vg::PathBuilder::new();
-    for bx in [x, x + 7.0 * s] {
-        pb.move_to((bx, y));
-        pb.line_to((bx + 4.0 * s, y));
-        pb.line_to((bx + 4.0 * s, y + 12.0 * s));
-        pb.line_to((bx, y + 12.0 * s));
-        pb.close();
-    }
-    pb.detach()
-}
-
-/// The two rails of the repeat glyph (stroked).
-fn loop_path(g: vg::Rect, s: f32) -> vg::Path {
-    let (l, t) = (g.left + 2.0 * s, g.top + 3.0 * s);
-    let (w, h) = (12.0 * s, 10.0 * s);
-    let mut pb = vg::PathBuilder::new();
-    // Upper rail: from the left end down-turn, across to before the arrowhead.
-    pb.move_to((l, t + h * 0.55));
-    pb.line_to((l, t + 1.0 * s));
-    pb.line_to((l + w - 3.0 * s, t + 1.0 * s));
-    // Lower rail, mirrored.
-    pb.move_to((l + w, t + h * 0.45));
-    pb.line_to((l + w, t + h - 1.0 * s));
-    pb.line_to((l + 3.0 * s, t + h - 1.0 * s));
-    pb.detach()
-}
-
-/// The two arrowheads of the repeat glyph (filled).
-fn loop_heads(g: vg::Rect, s: f32) -> vg::Path {
-    let (l, t) = (g.left + 2.0 * s, g.top + 3.0 * s);
-    let (w, h) = (12.0 * s, 10.0 * s);
-    let a = 3.5 * s;
-    let mut pb = vg::PathBuilder::new();
-    // Right-pointing head at the end of the upper rail.
-    let (hx, hy) = (l + w - 3.0 * s, t + 1.0 * s);
-    pb.move_to((hx - 0.5 * s, hy - a));
-    pb.line_to((hx + a, hy));
-    pb.line_to((hx - 0.5 * s, hy + a));
-    pb.close();
-    // Left-pointing head at the end of the lower rail.
-    let (hx, hy) = (l + 3.0 * s, t + h - 1.0 * s);
-    pb.move_to((hx + 0.5 * s, hy - a));
-    pb.line_to((hx - a, hy));
-    pb.line_to((hx + 0.5 * s, hy + a));
-    pb.close();
-    pb.detach()
-}
-
-// ───────────────────────────── Spectrum box ─────────────────────────────
-
-/// Bars in the spectrum box: 4 px bars on an 8 px pitch fill the 204 px box
-/// with 8 px padding on both sides.
+/// The spectrum well (VISUAL-SPEC.md §2.2): 24 square bars, 4 px wide on an
+/// 8 px pitch, 12 px side padding, 8 px bottom padding.
 const SPECTRUM_BARS: usize = 24;
 const SPECTRUM_BAR_W: f32 = 4.0;
 const SPECTRUM_PITCH: f32 = 8.0;
-const SPECTRUM_PAD: f32 = 8.0;
-/// Peak dash height and its gap above the bar area (logical px).
+const SPECTRUM_PAD_X: f32 = 12.0;
+const SPECTRUM_PAD_BOTTOM: f32 = 8.0;
+/// The peak mark: 2 px, 4 px above its bar.
 const PEAK_H: f32 = 2.0;
+const PEAK_GAP: f32 = 4.0;
 /// Attack / release time constants (s) and peak hold / fall.
 const SPEC_ATTACK: f32 = 0.02;
 const SPEC_RELEASE: f32 = 0.16;
 const PEAK_HOLD: f32 = 0.6;
 const PEAK_FALL_PER_SEC: f32 = 0.5;
-/// Bar ink, top of each bar → its foot.
+/// Bar gradient, foot → 60% → top (the mockup's `0deg` gradient), and the
+/// peak mark (`#C8C8C8` at 55%).
+const BAR_FOOT: Rgba = Rgba::hex(0x4A4A4A);
+const BAR_MID: Rgba = Rgba::hex(0x9A9A9A);
 const BAR_TOP: Rgba = Rgba::hex(0xD6D6D6);
-const BAR_FOOT: Rgba = Rgba::hex(0x464646);
-const PEAK_INK: Rgba = Rgba::hex(0xBFBFBF);
+const PEAK_INK: Rgba = Rgba::hex(0xC8C8C8);
+const PEAK_ALPHA: f32 = 0.55;
+/// LED segments: 2 px lit, 2 px gap.
+const LED_H: f32 = 2.0;
+const LED_PITCH: f32 = 4.0;
+
+/// How the spectrum draws (its right-click menu; settings.json).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpectrumStyle {
+    Bars,
+    Leds,
+    Line,
+    Dots,
+}
+
+impl SpectrumStyle {
+    pub const ALL: [SpectrumStyle; 4] = [SpectrumStyle::Bars, SpectrumStyle::Leds, SpectrumStyle::Line, SpectrumStyle::Dots];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            SpectrumStyle::Bars => "bars",
+            SpectrumStyle::Leds => "leds",
+            SpectrumStyle::Line => "line",
+            SpectrumStyle::Dots => "dots",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SpectrumStyle::Bars => "Bars",
+            SpectrumStyle::Leds => "LED Segments",
+            SpectrumStyle::Line => "Line",
+            SpectrumStyle::Dots => "Peak Dots",
+        }
+    }
+
+    /// Unknown keys fall back to Bars (settings.json never fails).
+    pub fn from_key(k: &str) -> Self {
+        Self::ALL.into_iter().find(|s| s.key() == k).unwrap_or(SpectrumStyle::Bars)
+    }
+}
 
 /// Where each channel sits in the spectrum: (centre bar, spread in bars,
-/// gain). Low channels left, noise spread wide on the right.
+/// gain). Low channels left, noise spread wide on the right. The bars are
+/// the whole mix: the channels sum into one neutral display.
 const CHANNEL_BANDS: [(f32, f32, f32); 8] = [
     (10.0, 3.0, 0.85), // Pulse 1
     (12.0, 3.0, 0.8),  // Pulse 2
@@ -755,8 +267,8 @@ struct SpectrumState {
     phase: f32,
 }
 
-/// The spectrum box: per-channel levels spread into frequency bands, with
-/// peak-hold dashes. Grey bars, lit from the top, as in the prototype.
+/// The spectrum well: the mix's levels spread into frequency bands, with
+/// peak marks. Right-click for its styles.
 pub struct SpectrumBox {
     s: Signals,
     st: RefCell<SpectrumState>,
@@ -767,6 +279,7 @@ pub struct SpectrumBox {
 impl SpectrumBox {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
         let animating = std::rc::Rc::new(Cell::new(false));
+        let style = RefCell::new(s.settings.with_untracked(|st| st.spectrum_style.clone()));
         Self {
             s,
             st: RefCell::new(SpectrumState::default()),
@@ -775,8 +288,15 @@ impl SpectrumBox {
         }
         .build(cx, |_| {})
         .class("spectrum")
-        .hoverable(false)
+        .id("spectrum")
         .bind(s.meters, |mut h| h.needs_redraw())
+        .bind(s.settings, move |mut h| {
+            let now = s.settings.with_untracked(|st| st.spectrum_style.clone());
+            if *style.borrow() != now {
+                *style.borrow_mut() = now;
+                h.needs_redraw();
+            }
+        })
         .bind(s.frame, move |mut h| {
             if animating.get() {
                 h.needs_redraw();
@@ -831,6 +351,16 @@ impl View for SpectrumBox {
         Some("spectrum-box")
     }
 
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, meta| {
+            if let WindowEvent::MouseDown(MouseButton::Right) = we {
+                let s = cx.scale_factor();
+                cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Spectrum, cx.mouse().cursor_x / s, cx.mouse().cursor_y / s));
+                meta.consume();
+            }
+        });
+    }
+
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
         let _perf = crate::perf::scope(crate::perf::Span::Spectrum);
         let b = cx.bounds();
@@ -838,35 +368,76 @@ impl View for SpectrumBox {
         let r = gfx::snap(b.into());
         let dt = gfx::frame_dt(&self.last_draw);
         self.animating.set(self.step(dt));
-
-        let rr = gfx::rrect(r, RADIUS_BOX * s);
-        draw_box(canvas, &rr, s);
+        gfx::well(canvas, r, RADIUS_KEY_BIG * s, s);
+        let style = SpectrumStyle::from_key(&self.s.settings.with_untracked(|st| st.spectrum_style.clone()));
 
         let st = self.st.borrow();
-        let top = r.top + SPECTRUM_PAD * s;
-        let foot = r.bottom - SPECTRUM_PAD * s * 0.5;
-        // The dashes need room above the tallest bar.
-        let bar_area = foot - top - (PEAK_H + 2.0) * s;
+        let hl = gfx::hairline(s);
+        let foot = (r.bottom - hl - SPECTRUM_PAD_BOTTOM * s).round();
+        // The tallest bar leaves room for its peak mark under the top border.
+        let full = foot - (r.top + hl) - (PEAK_H + PEAK_GAP) * s;
+        let w = (SPECTRUM_BAR_W * s).round();
+        let x_of = |k: usize| (r.left + hl + (SPECTRUM_PAD_X + k as f32 * SPECTRUM_PITCH) * s).round();
+        let bar_paint = |top: f32| {
+            gfx::shaded(gfx::linear((0.0, foot), (0.0, top), &[BAR_FOOT, BAR_MID, BAR_TOP], Some(&[0.0, 0.6, 1.0])))
+        };
+        let peak = gfx::fill(PEAK_INK.with_alpha(PEAK_ALPHA));
+        let mut line = vg::PathBuilder::new();
         for k in 0..SPECTRUM_BARS {
-            let x = (r.left + (SPECTRUM_PAD + k as f32 * SPECTRUM_PITCH) * s).round();
-            let w = (SPECTRUM_BAR_W * s).round();
-            let h = (st.bars[k] * bar_area).round();
-            if h >= 1.0 {
-                let bar = vg::Rect::from_ltrb(x, foot - h, x + w, foot);
-                canvas.draw_rect(bar, &gfx::vgrad(bar, BAR_TOP, BAR_FOOT));
+            let x = x_of(k);
+            let h = (st.bars[k] * full).round();
+            let ph = (st.peaks[k] * full).round();
+            match style {
+                SpectrumStyle::Bars => {
+                    if h >= 1.0 {
+                        canvas.draw_rect(vg::Rect::from_ltrb(x, foot - h, x + w, foot), &bar_paint(foot - h));
+                    }
+                }
+                SpectrumStyle::Leds => {
+                    // Segments share one gradient over the full height, so
+                    // taller columns reach the brighter LEDs.
+                    let paint = bar_paint(foot - full);
+                    let n = (h / (LED_PITCH * s)).floor() as i32;
+                    for i in 0..n {
+                        let y = foot - (i as f32 + 1.0) * LED_PITCH * s + (LED_PITCH - LED_H) * s;
+                        canvas.draw_rect(vg::Rect::from_xywh(x, y.round(), w, (LED_H * s).round()), &paint);
+                    }
+                }
+                SpectrumStyle::Line => {
+                    let p = (x + w * 0.5, foot - h);
+                    if k == 0 {
+                        line.move_to(p);
+                    } else {
+                        line.line_to(p);
+                    }
+                }
+                SpectrumStyle::Dots => {
+                    if h >= 1.0 {
+                        canvas.draw_rect(vg::Rect::from_xywh(x, foot - h, w, w), &gfx::fill(BAR_TOP));
+                    }
+                }
             }
-            if st.peaks[k] > 0.01 {
-                let py = (foot - st.peaks[k] * bar_area - (PEAK_H + 2.0) * s).round();
-                canvas.draw_rect(
-                    vg::Rect::from_xywh(x, py, w, (PEAK_H * s).round()),
-                    &gfx::vgrad(vg::Rect::from_xywh(x, py, w, PEAK_H * s), PEAK_INK, PEAK_INK.darken(0.3)),
-                );
+            // The peak mark (not on the line, which is its own peak).
+            if style != SpectrumStyle::Line && st.peaks[k] > 0.01 {
+                let top = foot - ph.max(h) - (PEAK_GAP + PEAK_H) * s;
+                canvas.draw_rect(vg::Rect::from_xywh(x, top.round(), w, (PEAK_H * s).round()), &peak);
             }
+        }
+        if style == SpectrumStyle::Line && st.bars.iter().any(|b| *b > 0.0) {
+            let path = line.detach();
+            // A faint fill under the line, then the line.
+            let mut area = vg::PathBuilder::new();
+            area.add_path(&path);
+            area.line_to((x_of(SPECTRUM_BARS - 1) + w * 0.5, foot));
+            area.line_to((x_of(0) + w * 0.5, foot));
+            area.close();
+            canvas.draw_path(&area.detach(), &gfx::fill(BAR_MID.with_alpha(0.15)));
+            let mut p = gfx::stroke(BAR_TOP, 1.5 * s);
+            p.set_stroke_join(vg::PaintJoin::Round);
+            canvas.draw_path(&path, &p);
         }
     }
 }
-
-// ─────────────────────────────── Track rows ───────────────────────────────
 
 // ─────────────────────────────── Context menu ───────────────────────────────
 
@@ -1031,7 +602,7 @@ impl View for ContextMenu {
             }
             let hot = self.hover == Some(i) && item.enabled;
             if hot {
-                canvas.draw_rrect(gfx::rrect(row, RADIUS_KEY * s), &gfx::vgrad(row, ACCENT.lighten(0.05), ACCENT.darken(0.15)));
+                canvas.draw_rrect(gfx::rrect(row, RADIUS_KEY * s), &gfx::vgrad(row, NEUTRAL_HI.lighten(0.05), NEUTRAL_HI.darken(0.15)));
             }
             let base = gfx::baseline_for_center(&f, row.center_y()).round();
             let ink = if hot {
@@ -1126,7 +697,7 @@ impl SplitHandle {
         let win_h = cx.cache.get_bounds(Entity::root()).h / s;
         let room = win_h - TOPBAR_HEIGHT - RULER_HEIGHT - SPLIT_HANDLE_H - PIANO_MIN_H;
         let room = (room / SP_1).floor() * SP_1;
-        room.clamp(crate::state::PIANO_PANE_MIN, 8.0 * LANE_HEIGHT)
+        room.clamp(crate::state::PIANO_PANE_MIN, 8.0 * crate::state::LANE_H_NORMAL)
     }
 }
 
@@ -1195,9 +766,9 @@ impl View for SplitHandle {
         let grr = gfx::rrect(g, g.height() * 0.5);
         let active = self.drag.is_some();
         if active || self.hover {
-            let c = if active { ACCENT } else { TEXT_MID };
+            let c = if active { NEUTRAL_HI } else { TEXT_MID };
             if active {
-                canvas.draw_rrect(grr, &glow_paint(ACCENT.with_alpha(0.5), 3.0 * s));
+                canvas.draw_rrect(grr, &glow_paint(NEUTRAL_HI.with_alpha(0.5), 3.0 * s));
             }
             canvas.draw_rrect(grr, &gfx::vgrad(g, c.lighten(0.1), c.darken(0.2)));
         } else {
@@ -1207,27 +778,78 @@ impl View for SplitHandle {
     }
 }
 
-/// Track name size and its baseline below the row top (logical px).
-const ROW_NAME_PX: f32 = 13.0;
-const ROW_NAME_BASELINE: f32 = 20.0;
-/// Chip badge geometry (logical px).
-const BADGE_Y: f32 = 32.0;
-const BADGE_W: f32 = 52.0;
-const BADGE_H: f32 = 16.0;
-const BADGE_PX: f32 = 11.0;
-/// Instrument name in the track row, and the room kept free for the M/S keys.
-const INST_PX: f32 = 11.0;
-const INST_RIGHT_RESERVE: f32 = 80.0;
-/// The big italic lane number: size, centre x and baseline (logical px).
-const WATERMARK_PX: f32 = 48.0;
-const WATERMARK_X: f32 = 180.0;
-const WATERMARK_BASELINE: f32 = 48.0;
-/// Text column start: strip + 8.
-const ROW_TEXT_X: f32 = LANE_STRIP_W + SP_2;
+// ─────────────────────────────── Track rows ───────────────────────────────
+//
+// VISUAL-SPEC.md §2.4. Positions are logical px from the row's top-left
+// (the row is 72 px plus its 1 px bottom hairline); they match the mockup's
+// layout boxes (docs/design/mockup-boxes.jsonl), snapped to whole px.
 
-/// One track row in the header column: colour strip (pulses with the
-/// channel's notes), name, chip badge, a big ghosted lane number, and the
-/// M/S keys (child views, laid out by the stylesheet).
+/// The channel number: Inter 800 italic 40, centred in 28 px after the strip
+/// and a 12 px gap, on a 40 px line box from y 16; tracking −.02em.
+const NUMBER_PX: f32 = 40.0;
+const NUMBER_X: f32 = 28.0;
+const NUMBER_W: f32 = 28.0;
+const NUMBER_TOP: f32 = 16.0;
+const NUMBER_TRACKING: f32 = -0.02;
+/// Name: Inter 600 14 from x 68, its line box (normal line height) from y 14.5.
+const NAME_X: f32 = 68.0;
+const NAME_PX: f32 = 14.0;
+const NAME_TOP: f32 = 14.5;
+/// The name column ends where the control block's 12 px gap starts.
+const NAME_RIGHT: f32 = 236.0;
+/// The profile badge: 16 px inside a 1 px border (18 px), radius 4, a lock
+/// and the chip name (Inter 600 11, #A8A8A8) with 4 px padding and gap.
+const BADGE_Y: f32 = 39.0;
+const BADGE_H: f32 = 18.0;
+const BADGE_PAD: f32 = 4.0;
+const BADGE_PX: f32 = 11.0;
+const LOCK_W: f32 = 9.0;
+const LOCK_H: f32 = 11.0;
+/// Badge text and preset name share this baseline.
+const BADGE_BASELINE: f32 = 52.0;
+/// The preset name: Inter 500 12, #808080, 8 px after the badge.
+const PRESET_PX: f32 = 12.0;
+const PRESET_GAP: f32 = 8.0;
+/// The control block: 120 px wide, 12 px from the row's right edge, its
+/// 40 px (keys, 12 px gap, sliders) centred in the row.
+pub const CTRL_W: f32 = 120.0;
+pub const CTRL_RIGHT: f32 = 12.0;
+pub const CTRL_TOP: f32 = 16.0;
+/// Volume meter-fader and pan: track widths, track height, the gap between.
+pub const FADER_W: f32 = 68.0;
+pub const PAN_W: f32 = 40.0;
+pub const SLIDER_H: f32 = 4.0;
+pub const SLIDER_GAP: f32 = 12.0;
+/// The thumb: 8 × 12, centred on the track; the slider views are thumb-tall.
+pub const THUMB_W: f32 = 8.0;
+pub const THUMB_H: f32 = 12.0;
+/// Where the slider views sit (their top) below the keys.
+pub const SLIDER_VIEW_TOP: f32 = CTRL_TOP + KEY_SIZE + 8.0;
+/// The strip's lit look (`inset 0 0 10px rgba(255,255,255,.55)`, and a
+/// `0 0 10px` spill in the track colour at 35%).
+const STRIP_GLOW_A: f32 = 0.55;
+const STRIP_GLOW_R: f32 = 10.0;
+const STRIP_SPILL_A: f32 = 0.35;
+
+/// The strip's fill stops (left → right) and its edge colours, unlit and
+/// lit, mixed by the note-on light (0..1).
+fn strip_colours(c: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
+    let l = light.clamp(0.0, 1.0);
+    let off_a = c.darken(0.62);
+    let off_b = c.darken(0.35);
+    // The unlit gradient has two stops; its midpoint stands in for the lit one's middle.
+    let off = [off_a, off_a.mix(off_b, 0.55), off_b];
+    let on = [c, c.lighten(0.35), c.lighten(0.7)];
+    let fill = [off[0].mix(on[0], l), off[1].mix(on[1], l), off[2].mix(on[2], l)];
+    let left = c.darken(0.2).mix(c.lighten(0.6), l);
+    let right = c.darken(0.5);
+    (fill, left, right)
+}
+
+/// One track row in the header column: colour strip (lights on each
+/// note-on), channel number, name, profile badge and preset, and the
+/// control block (M/S keys, the volume meter-fader, the pan slider: child
+/// views).
 pub struct TrackRow {
     s: Signals,
     lane: usize,
@@ -1237,29 +859,67 @@ pub struct TrackRow {
 impl TrackRow {
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
         let seen = RefCell::new((false, String::new()));
+        // Redraw on this lane's light only (PERF.md: only what changed).
+        let light = Cell::new(0u8);
         Self { s, lane, hover: false }
-        .build(cx, move |cx| {
-            let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
-            Key::new(cx, s, "M", KeyAction::Mute(lane)).tooltip(|cx| crate::tip(cx, "Mute this track."));
-            Key::new(cx, s, "S", KeyAction::Solo(lane)).tooltip(move |cx| crate::tip(cx, &format!("Solo this track only. {ctrl}-click to solo several.")));
-        })
-        .class("track-row")
-        .bind(s.meters, |mut h| h.needs_redraw())
-        .bind(s.lane_h, |mut h| h.needs_redraw())
-        .bind(s.drag_preset, |mut h| h.needs_redraw())
-        .bind(s.chip, |mut h| h.needs_redraw())
-        .bind(s.arrangement, move |mut h| {
-            let now = s.arrangement.with_untracked(|a| {
-                (
-                    a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
-                    format!("{}\u{1}{}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), a.lanes[lane].name, a.lanes[lane].color),
-                )
-            });
-            if *seen.borrow() != now {
-                *seen.borrow_mut() = now;
-                h.needs_redraw();
-            }
-        })
+            .build(cx, move |cx| {
+                let ctrl = if crate::shortcuts::MACOS { "Cmd" } else { "Ctrl" };
+                let left = TRACK_HEADER_WIDTH - 1.0 - CTRL_RIGHT - CTRL_W;
+                Key::new(cx, s, "M", KeyAction::Mute(lane))
+                    .position_type(PositionType::Absolute)
+                    .left(Pixels(left + CTRL_W - 2.0 * KEY_SIZE - 8.0))
+                    .top(Pixels(CTRL_TOP))
+                    .tooltip(|cx| crate::tip(cx, "Mute this track."));
+                Key::new(cx, s, "S", KeyAction::Solo(lane))
+                    .position_type(PositionType::Absolute)
+                    .left(Pixels(left + CTRL_W - KEY_SIZE))
+                    .top(Pixels(CTRL_TOP))
+                    .tooltip(move |cx| crate::tip(cx, &format!("Solo this track only. {ctrl}-click to solo several.")));
+                VolumeFader::new(cx, s, lane)
+                    .position_type(PositionType::Absolute)
+                    .left(Pixels(left - THUMB_W * 0.5))
+                    .top(Pixels(SLIDER_VIEW_TOP))
+                    .tooltip(move |cx| crate::tip(cx, &VolumeFader::tip(s, lane)));
+                PanSlider::new(cx)
+                    .position_type(PositionType::Absolute)
+                    .left(Pixels(left + FADER_W + SLIDER_GAP - THUMB_W * 0.5))
+                    .top(Pixels(SLIDER_VIEW_TOP))
+                    .tooltip(|cx| crate::tip(cx, PanSlider::WHY));
+            })
+            .class("track-row")
+            .bind(s.meters, move |mut h| {
+                let l = s.meters.with_untracked(|m| (m.light[lane] * 64.0).round() as u8);
+                if light.get() != l {
+                    light.set(l);
+                    h.needs_redraw();
+                }
+            })
+            .bind(s.lane_h, |mut h| h.needs_redraw())
+            .bind(s.drag_preset, |mut h| h.needs_redraw())
+            .bind(s.chip, |mut h| h.needs_redraw())
+            .bind(s.arrangement, move |mut h| {
+                let now = s.arrangement.with_untracked(|a| {
+                    (
+                        a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
+                        format!("{}\u{1}{}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), a.lanes[lane].name, a.lanes[lane].color),
+                    )
+                });
+                if *seen.borrow() != now {
+                    *seen.borrow_mut() = now;
+                    h.needs_redraw();
+                }
+            })
+            .tooltip(move |cx| {
+                // The full name, profile and preset (both texts truncate in the row).
+                let text = s.arrangement.map(move |a| {
+                    let inst = a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default();
+                    format!("{} · {} · {inst}", a.lanes[lane].name, if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" })
+                });
+                Tooltip::new(cx, move |cx| {
+                    Label::new(cx, text).class("tip-text").class("long");
+                })
+                .class("tip")
+            })
     }
 }
 
@@ -1303,9 +963,7 @@ impl View for TrackRow {
             // The header column scrolls with the lanes.
             if let WindowEvent::MouseScroll(_, sy) = we {
                 if self.s.lane_scroll_max.get_untracked() > 0.0 && *sy != 0.0 {
-                    cx.emit(AppEvent::ScrollLanes(
-                        -*sy * super::arrangement::LANE_SCROLL_PER_NOTCH,
-                    ));
+                    cx.emit(AppEvent::ScrollLanes(-*sy * super::arrangement::LANE_SCROLL_PER_NOTCH));
                     meta.consume();
                 }
             }
@@ -1318,152 +976,288 @@ impl View for TrackRow {
         super::browser::register_lane_row(self.lane, b);
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
-        // Below this there's no room for the badge under the name.
-        let compact = r.height() < 56.0 * s;
+        let hl = gfx::hairline(s);
+        let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
         let selected = self
             .s
             .arrangement
             .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(self.lane) || a.track_sel.contains(&self.lane));
-        let (color, name) = self
-            .s
-            .arrangement
-            .with_untracked(|a| (a.lanes[self.lane].color, a.lanes[self.lane].name.clone()));
+        let (color, name) = self.s.arrangement.with_untracked(|a| (a.lanes[self.lane].color, a.lanes[self.lane].name.clone()));
         let light = self.s.meters.with_untracked(|m| m.light[self.lane]);
 
-        // Row surface and its top hairline.
-        let lift = if selected { 0.03 } else { 0.0 };
-        canvas.draw_rect(r, &gfx::vgrad(r, BAND_TOP.lighten(lift), BAND_BOTTOM.lighten(lift)));
-        let hl = gfx::hairline(s);
-        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(LINE));
-        let body = vg::Rect::from_ltrb(r.left, r.top + hl, r.right, r.bottom);
+        // Row surface (selection lifts it), and the 1 px bottom hairline.
+        let body = vg::Rect::from_ltrb(r.left, r.top, r.right, r.bottom - hl);
+        canvas.draw_rect(body, &gfx::fill(if selected { BG_0.lighten(0.03) } else { BG_0 }));
+        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE));
 
-        // Watermark lane number, ghosted into the surface.
-        canvas.save();
-        canvas.clip_rect(body, None, None);
-        let wf = gfx::font(
-            Face::HeavyItalic,
-            if compact { (r.height() / s - 8.0).min(WATERMARK_PX) } else { WATERMARK_PX } * s,
-        );
-        let num = format!("{}", self.lane + 1);
-        let ww = gfx::text_width(&wf, &num);
-        let wb = if compact {
-            gfx::baseline_for_center(&wf, r.center_y())
-        } else {
-            r.top + WATERMARK_BASELINE * s
-        };
-        let ghost = if selected { 0.05 } else { 0.0 };
-        gfx::draw_text_vgrad(
-            canvas,
-            &num,
-            (r.left + WATERMARK_X * s - ww * 0.5).round(),
-            wb.round(),
-            &wf,
-            Rgba::hex(0x1C1C1C).lighten(ghost),
-            Rgba::hex(0x0E0E0E),
-        );
-        canvas.restore();
-
-        // Colour strip: dark-left → bright-right fill, with a gradient stroke
-        // (bright left edge, dark right edge). Note-ons brighten it and spill
-        // a little light into the row.
-        let strip = vg::Rect::from_ltrb(r.left, body.top, r.left + LANE_STRIP_W * s, r.bottom);
-        let c = color.lighten(0.22 * light);
-        let mut fill = vg::Paint::default();
-        fill.set_anti_alias(true);
-        fill.set_shader(gfx::linear(
-            (strip.left, strip.top),
-            (strip.right, strip.top),
-            &[c.darken(0.35), c],
-            None,
-        ));
-        canvas.draw_rect(strip, &fill);
-        let srr = gfx::rrect(strip, 0.0);
-        // Edge values sampled from the prototype's strips: the left edge sits
-        // just under the bright end, the right edge falls to ~half.
-        gfx::ring_hgrad(canvas, &srr, gfx::hairline(s), c.lighten(0.1).darken(0.08), c.darken(0.5));
+        // The colour strip: full height, square, light left edge → dark
+        // right edge; lit by note-ons (inner glow and a soft spill).
+        let strip = vg::Rect::from_ltrb(r.left, body.top, (r.left + LANE_STRIP_W * s).round(), body.bottom);
+        let (fill, edge_l, edge_r) = strip_colours(color, light);
         if light > 0.01 {
-            let spill = vg::Rect::from_ltrb(strip.right, body.top, strip.right + 48.0 * s, r.bottom);
-            let mut p = vg::Paint::default();
-            p.set_shader(gfx::linear(
-                (spill.left, spill.top),
-                (spill.right, spill.top),
-                &[color.with_alpha(0.16 * light), color.with_alpha(0.0)],
-                None,
-            ));
-            canvas.draw_rect(spill, &p);
+            let mut spill = gfx::fill(color.with_alpha(STRIP_SPILL_A * light));
+            spill.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, STRIP_GLOW_R * 0.5 * s, false));
+            canvas.save();
+            canvas.clip_rect(body, None, None);
+            canvas.draw_rect(strip, &spill);
+            canvas.restore();
+        }
+        canvas.draw_rect(
+            strip,
+            &gfx::shaded(gfx::linear((strip.left, strip.top), (strip.right, strip.top), &fill, Some(&[0.0, 0.55, 1.0]))),
+        );
+        canvas.draw_rect(vg::Rect::from_xywh(strip.left, strip.top, hl, strip.height()), &gfx::fill(edge_l));
+        canvas.draw_rect(vg::Rect::from_xywh(strip.right - hl, strip.top, hl, strip.height()), &gfx::fill(edge_r));
+        if light > 0.01 {
+            let pad = gfx::rrect(strip.with_inset((hl, 0.0)), 0.0);
+            gfx::css_inset_shadow(canvas, &pad, 0.0, 0.0, STRIP_GLOW_R * s, 0.0, Rgba::white(STRIP_GLOW_A * light));
         }
 
-        // Name and chip badge.
-        let x = r.left + ROW_TEXT_X * s;
-        let f = gfx::font(Face::SemiBold, ROW_NAME_PX * s);
-        let base = if compact {
-            gfx::baseline_for_center(&f, r.center_y())
-        } else {
-            r.top + ROW_NAME_BASELINE * s
-        };
-        let ink = if selected { TEXT_HI } else { TEXT_MID };
-        // Stop before the M/S keys (a long name is cut with an ellipsis).
-        gfx::draw_text_clipped(canvas, &name, x.round(), base.round(), r.right - INST_RIGHT_RESERVE * s - x, &f, ink);
+        // The channel number.
+        let nf = gfx::font(Face::HeavyItalic, NUMBER_PX * s);
+        let num = format!("{}", self.lane + 1);
+        let ntr = NUMBER_TRACKING * NUMBER_PX * s;
+        let nw = gfx::tracked_width(&num, &nf, ntr);
+        let (nx, ny) = at(NUMBER_X + NUMBER_W * 0.5, NUMBER_TOP);
+        let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
+        gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
 
-        if !compact {
-            let badge = vg::Rect::from_xywh(x, r.top + BADGE_Y * s, BADGE_W * s, BADGE_H * s);
-            let brr = gfx::rrect(badge, badge.height() * 0.5);
-            gfx::ring(canvas, &brr, gfx::hairline(s), &gfx::fill(STROKE));
-            let chip = if self.lane >= 5 { "VRC6" } else { "2A03" };
-            let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-            let bw = gfx::text_width(&bf, chip);
-            let bb = gfx::baseline_for_center(&bf, badge.center_y());
-            gfx::draw_text(
-                canvas,
-                chip,
-                (badge.center_x() - bw * 0.5).round(),
-                bb.round(),
-                &bf,
-                if selected { TEXT_MID } else { TEXT_LO },
-            );
-        }
+        // Name.
+        let f = gfx::font(Face::SemiBold, NAME_PX * s);
+        let (x, y) = at(NAME_X, NAME_TOP);
+        let (_, m) = f.metrics();
+        let base = (y - m.ascent).round();
+        let max_w = (NAME_RIGHT - NAME_X) * s;
+        gfx::draw_text_clipped(canvas, &name, x.round(), base, max_w, &f, TEXT_HI);
 
-        // The lane's instrument, after the name (or the badge).
-        let inst = self
-            .s
-            .arrangement
-            .with_untracked(|a| a.instruments.lane(self.lane).map(|i| (i.label(), i.is_kit())));
+        // The profile badge and the preset.
+        let chip = if self.lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
+        let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
+        let bw = gfx::text_width(&bf, chip);
+        let (bx, by) = at(NAME_X, BADGE_Y);
+        let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
+        gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
+        let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
+        draw_lock(canvas, lock_o, s, BADGE_INK);
+        let bb = (r.top + BADGE_BASELINE * s).round();
+        gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
+        let inst = self.s.arrangement.with_untracked(|a| a.instruments.lane(self.lane).map(|i| (i.label(), i.is_kit())));
         if let Some((label, kit)) = inst {
-            let fi = gfx::font(Face::Medium, INST_PX * s);
-            let (ix, ib) = if compact {
-                (x + gfx::text_width(&f, &name) + 12.0 * s, base)
-            } else {
-                (x + BADGE_W * s + 8.0 * s, gfx::baseline_for_center(&fi, r.top + (BADGE_Y + BADGE_H * 0.5) * s))
-            };
-            // Stop before the M/S keys.
-            let max_w = r.right - INST_RIGHT_RESERVE * s - ix;
+            let fi = gfx::font(Face::Medium, PRESET_PX * s);
+            let ix = badge.right + PRESET_GAP * s;
             let text = if kit { format!("{label}  (kit)") } else { label };
-            gfx::draw_text_clipped(canvas, &text, ix.round(), ib.round(), max_w, &fi, if selected { ACCENT } else { TEXT_LO });
+            gfx::draw_text_clipped(canvas, &text, ix.round(), bb, r.left + NAME_RIGHT * s - ix, &fi, if selected { TEXT_MID } else { TEXT_LO });
         }
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
         if crate::state::lane_off(self.s.chip.get_untracked(), self.lane) {
-            canvas.draw_rect(r, &gfx::fill(Rgba::black(super::arrangement::OFF_DIM)));
-            let fh = gfx::font(Face::Medium, INST_PX * s);
+            canvas.draw_rect(body, &gfx::fill(Rgba::black(super::arrangement::OFF_DIM)));
+            let fh = gfx::font(Face::Medium, PRESET_PX * s);
             let text = if self.hover { "Off: turn on VRC6 in File > Project Settings…" } else { "Off in the 2A03 profile" };
-            let hb = if compact { r.bottom - 6.0 * s } else { gfx::baseline_for_center(&fh, r.top + (BADGE_Y + BADGE_H * 0.5) * s) };
-            let hx = r.left + ROW_TEXT_X * s + if compact { 0.0 } else { BADGE_W * s + 8.0 * s };
-            let max_w = r.right - INST_RIGHT_RESERVE * s - hx;
-            // An opaque band under the text so the instrument name below it doesn't show through.
-            let band = vg::Rect::from_ltrb(hx - 2.0 * s, hb - 11.0 * s, hx + max_w, hb + 4.0 * s);
-            canvas.draw_rect(band, &gfx::fill(BAND_BOTTOM));
-            gfx::draw_text_clipped(canvas, text, hx.round(), hb.round(), max_w, &fh, TEXT_HI);
+            let hx = (r.left + NAME_X * s).round();
+            let max_w = r.right - CTRL_RIGHT * s - hx;
+            // An opaque band under the text so the badge below it doesn't show through.
+            let band = vg::Rect::from_ltrb(hx - 2.0 * s, bb - 12.0 * s, hx + max_w, bb + 5.0 * s);
+            canvas.draw_rect(band, &gfx::fill(BG_0));
+            gfx::draw_text_clipped(canvas, text, hx, bb, max_w, &fh, TEXT_HI);
         }
 
         // Dragging a preset from the browser: dim the lanes it can't play
-        // on, outline the one it would land on.
+        // on, outline the one it would land on (neutral, not lime).
         if let Some((fits, target)) = super::browser::drag_state(&self.s, self.lane) {
             if !fits {
                 canvas.draw_rect(body, &gfx::fill(Rgba::black(0.62)));
             } else if target {
-                canvas.draw_rect(body, &gfx::fill(ACCENT.with_alpha(0.08)));
-                gfx::ring(canvas, &gfx::rrect(body, 0.0), 2.0 * s, &gfx::fill(ACCENT.with_alpha(0.8)));
+                canvas.draw_rect(body, &gfx::fill(Rgba::white(0.05)));
+                gfx::ring(canvas, &gfx::rrect(body, 0.0), 2.0 * s, &gfx::fill(NEUTRAL_HI.with_alpha(0.8)));
             }
         }
+    }
+}
+
+/// The badge's lock (the mockup's 9 × 11 icon).
+fn draw_lock(canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba) {
+    let body = vg::Rect::from_xywh(o.0 + 0.5 * s, o.1 + 4.5 * s, 8.0 * s, 6.0 * s);
+    canvas.draw_rrect(gfx::rrect(body, 1.2 * s), &gfx::fill(ink));
+    let shackle = gfx::svg_path("M2.3 4.5V3a2.2 2.2 0 0 1 4.4 0v1.5", o, s);
+    canvas.draw_path(&shackle, &gfx::stroke(ink, 1.2 * s));
+}
+
+/// The slider track: `#050505` with `inset 0 1px 0 #000` and `0 1px 0 #262626` below.
+fn slider_track(canvas: &Canvas, t: vg::Rect, s: f32) {
+    let hl = gfx::hairline(s);
+    canvas.draw_rect(vg::Rect::from_xywh(t.left, t.bottom, t.width(), hl), &gfx::fill(Rgba::hex(0x262626)));
+    canvas.draw_rect(t, &gfx::fill(Rgba::hex(0x050505)));
+    canvas.draw_rect(vg::Rect::from_xywh(t.left, t.top, t.width(), hl), &gfx::fill(Rgba::black(1.0)));
+}
+
+/// The 8 × 12 thumb: square, `#4A4A4A` border, `#5A5A5A → #2E2E2E`, a
+/// `#A0A0A0` inner top line.
+fn slider_thumb(canvas: &Canvas, th: vg::Rect, s: f32, lift: f32) {
+    let hl = gfx::hairline(s);
+    canvas.draw_rect(th, &gfx::vgrad(th, Rgba::hex(0x5A5A5A).lighten(lift), Rgba::hex(0x2E2E2E).lighten(lift)));
+    gfx::ring(canvas, &gfx::rrect(th, 0.0), hl, &gfx::fill(Rgba::hex(0x4A4A4A)));
+    canvas.draw_rect(vg::Rect::from_xywh(th.left + hl, th.top + hl, th.width() - 2.0 * hl, hl), &gfx::fill(Rgba::hex(0xA0A0A0)));
+}
+
+/// The track's volume meter-fader: a 68 × 4 track whose fill is a
+/// post-fader level meter (cool → hot over the full 68 px, never past the
+/// thumb), and the 8 × 12 thumb that sets the channel volume (the
+/// inspector's Volume dial: undoable, saved). The view is the thumb's
+/// height and the track plus half a thumb on each side, so the thumb can
+/// be grabbed at both ends.
+pub struct VolumeFader {
+    s: Signals,
+    lane: usize,
+    drag: bool,
+    hover: bool,
+    wheel: crate::input::WheelSteps,
+}
+
+impl VolumeFader {
+    pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
+        let shown = Cell::new((u16::MAX, 0u16, false));
+        Self { s, lane, drag: false, hover: false, wheel: Default::default() }
+            .build(cx, |_| {})
+            .class("fader")
+            .width(Pixels(FADER_W + THUMB_W))
+            .height(Pixels(THUMB_H))
+            .bind(s.meters, move |mut h| {
+                let v = Self::state(&s, lane);
+                if shown.get() != v {
+                    shown.set(v);
+                    h.needs_redraw();
+                }
+            })
+            .bind(s.faders, |mut h| h.needs_redraw())
+    }
+
+    /// (fill px ×4, thumb px ×4, disabled): what the view shows.
+    fn state(s: &Signals, lane: usize) -> (u16, u16, bool) {
+        let f = s.faders.with_untracked(|f| f[lane]);
+        let level = if s.mute.get_untracked() & (1 << lane) != 0 { 0.0 } else { s.meters.with_untracked(|m| m.level[lane]) };
+        let fill = crate::state::meter_fill(level, f.pos, FADER_W);
+        ((fill * 4.0).round() as u16, (f.pos * FADER_W * 4.0).round() as u16, f.reason.is_some())
+    }
+
+    pub fn tip(s: Signals, lane: usize) -> String {
+        match s.faders.with_untracked(|f| f[lane].reason) {
+            Some(why) => why.into(),
+            None => "Volume: drag the thumb or use the wheel. The bar shows the track's level after the fader.".into(),
+        }
+    }
+
+    fn set_from_x(&self, cx: &mut EventContext) {
+        let x = local_mouse(cx).0 - THUMB_W * 0.5;
+        cx.emit(AppEvent::SetLaneVolume(self.lane, x / FADER_W));
+    }
+}
+
+impl View for VolumeFader {
+    fn element(&self) -> Option<&'static str> {
+        Some("fader")
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        let off = self.s.faders.with_untracked(|f| f[self.lane].reason.is_some());
+        event.map(|we, meta| match we {
+            WindowEvent::MouseDown(MouseButton::Left) if !off => {
+                self.drag = true;
+                cx.emit(AppEvent::GestureBegin);
+                cx.capture();
+                self.set_from_x(cx);
+                meta.consume();
+            }
+            WindowEvent::MouseMove(_, _) if self.drag => self.set_from_x(cx),
+            WindowEvent::MouseUp(MouseButton::Left) if self.drag => {
+                self.drag = false;
+                cx.release();
+                cx.emit(AppEvent::GestureEnd);
+                meta.consume();
+            }
+            WindowEvent::MouseScroll(_, y) if !off => {
+                let steps = self.wheel.steps(*y);
+                if steps != 0 {
+                    let pos = self.s.faders.with_untracked(|f| f[self.lane].pos);
+                    let (lo, hi, _) = crate::state::fader_param(self.lane).map_or((0, 15, 0), |p| p.range(self.lane));
+                    cx.emit(AppEvent::SetLaneVolume(self.lane, pos + steps as f32 / (hi - lo) as f32));
+                    cx.emit(AppEvent::Commit);
+                }
+                meta.consume();
+            }
+            WindowEvent::MouseEnter => {
+                self.hover = true;
+                cx.needs_redraw();
+            }
+            WindowEvent::MouseLeave => {
+                self.hover = false;
+                cx.needs_redraw();
+            }
+            // Keep a press on the fader from selecting the track.
+            WindowEvent::MouseDown(MouseButton::Left) => meta.consume(),
+            _ => {}
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Rows);
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        let (fill4, thumb4, off) = Self::state(&self.s, self.lane);
+        let left = (r.left + THUMB_W * 0.5 * s).round();
+        let track = vg::Rect::from_xywh(left, (r.center_y() - SLIDER_H * 0.5 * s).round(), (FADER_W * s).round(), (SLIDER_H * s).round());
+        slider_track(canvas, track, s);
+        let fill = fill4 as f32 / 4.0;
+        if fill > 0.0 {
+            // The gradient spans the full track; the fill reveals its left part.
+            let stops: Vec<Rgba> = FADER_STOPS.iter().map(|(_, c)| *c).collect();
+            let pos: Vec<f32> = FADER_STOPS.iter().map(|(x, _)| x / FADER_W).collect();
+            let paint = gfx::shaded(gfx::linear((track.left, 0.0), (track.right, 0.0), &stops, Some(&pos)));
+            canvas.draw_rect(vg::Rect::from_xywh(track.left, track.top, (fill * s).round(), track.height()), &paint);
+        }
+        let tx = (left + thumb4 as f32 / 4.0 * s - THUMB_W * 0.5 * s).round();
+        let th = vg::Rect::from_xywh(tx, r.top, THUMB_W * s, THUMB_H * s);
+        let lift = if (self.hover || self.drag) && !off { 0.08 } else { 0.0 };
+        slider_thumb(canvas, th, s, lift);
+    }
+}
+
+/// The pan slider: drawn (40 × 4, a centre detent) but disabled until
+/// stereo mixing arrives.
+pub struct PanSlider;
+
+impl PanSlider {
+    pub const WHY: &'static str = "Pan arrives with stereo mixing (Batch 4).";
+
+    pub fn new(cx: &mut Context) -> Handle<'_, Self> {
+        Self.build(cx, |_| {}).class("pan").width(Pixels(PAN_W + THUMB_W)).height(Pixels(THUMB_H))
+    }
+}
+
+impl View for PanSlider {
+    fn element(&self) -> Option<&'static str> {
+        Some("pan")
+    }
+
+    fn event(&mut self, _cx: &mut EventContext, event: &mut Event) {
+        // Disabled: a press does nothing (and doesn't select the track).
+        event.map(|we, meta| {
+            if let WindowEvent::MouseDown(_) = we {
+                meta.consume();
+            }
+        });
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        let left = (r.left + THUMB_W * 0.5 * s).round();
+        let track = vg::Rect::from_xywh(left, (r.center_y() - SLIDER_H * 0.5 * s).round(), (PAN_W * s).round(), (SLIDER_H * s).round());
+        slider_track(canvas, track, s);
+        // The centre detent: 1 × 8 at 19.5 px (the mockup's half-pixel, snapped).
+        let dx = (track.left + 19.5 * s).round();
+        canvas.draw_rect(vg::Rect::from_xywh(dx, (r.center_y() - 4.0 * s).round(), gfx::hairline(s), 8.0 * s), &gfx::fill(Rgba::hex(0x4A4A4A)));
+        let th = vg::Rect::from_xywh((track.left + (PAN_W * 0.5 - THUMB_W * 0.5) * s).round(), r.top, THUMB_W * s, THUMB_H * s);
+        slider_thumb(canvas, th, s, 0.0);
     }
 }

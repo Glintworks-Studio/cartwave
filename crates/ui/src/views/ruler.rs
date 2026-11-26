@@ -27,17 +27,25 @@ enum BracePart {
     Body,
 }
 
-/// Loop brace: top and height in the ruler, and the grab zone at its ends
-/// (logical px).
-const BRACE_TOP: f32 = 4.0;
-const BRACE_H: f32 = 8.0;
+/// Loop brace: 4 px along the ruler's top (VISUAL-SPEC.md §2.3); it can be
+/// grabbed a little below that, and at its ends (logical px).
+const BRACE_TOP: f32 = 0.0;
+const BRACE_H: f32 = 4.0;
+const BRACE_GRAB_H: f32 = 8.0;
 const BRACE_EDGE: f32 = 4.0;
+/// The brace's gradient while looping (top → bottom) and its glow; neutral
+/// grey while the loop is off.
+const BRACE_ON: [Rgba; 2] = [Rgba::hex(0xD3E05E), Rgba::hex(0xA9B83A)];
+const BRACE_OFF: [Rgba; 2] = [Rgba::hex(0x5A5A5A), Rgba::hex(0x404040)];
+const BRACE_GLOW_A: f32 = 0.45;
+const BRACE_GLOW_R: f32 = 6.0;
 
-/// Handle geometry (logical px): half width and height.
-const HANDLE_W: f32 = 6.0;
-const HANDLE_H: f32 = 12.0;
-/// Padding around the handle image for its glow (logical px).
-const HANDLE_PAD: f32 = 8.0;
+/// The playhead marker: the mockup's 12 × 18 pentagon-with-stem, its top
+/// 10 px below the ruler's top (logical px).
+const HANDLE_W: f32 = 12.0;
+const HANDLE_TOP: f32 = 10.0;
+/// Padding around the handle image (its 1 px stroke).
+const HANDLE_PAD: f32 = 2.0;
 
 impl Ruler {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
@@ -59,7 +67,7 @@ impl Ruler {
         let b = cx.bounds();
         let s = cx.scale_factor();
         let (x, y) = ((cx.mouse().cursor_x - b.x) / s, (cx.mouse().cursor_y - b.y) / s);
-        if !(BRACE_TOP - 2.0..=BRACE_TOP + BRACE_H + 2.0).contains(&y) {
+        if !(BRACE_TOP - 2.0..=BRACE_TOP + BRACE_GRAB_H).contains(&y) {
             return None;
         }
         let (view, (ls, le)) = (
@@ -248,9 +256,10 @@ impl View for Ruler {
                 *handle = render_handle(s).map(|img| (s, img));
             }
             if let Some((_, img)) = handle.as_ref() {
+                // The marker's centre sits on the playhead line's centre.
                 let pad = HANDLE_PAD * s;
-                let left = px - HANDLE_W * s - pad;
-                let top = rect.bottom - HANDLE_H * s - pad;
+                let left = (px + 0.5 * gfx::hairline(s) - HANDLE_W * 0.5 * s - pad).round();
+                let top = (rect.top + HANDLE_TOP * s - pad).round();
                 canvas.draw_image(img, (left, top), None);
             }
         }
@@ -258,14 +267,17 @@ impl View for Ruler {
     }
 }
 
-/// Bar label size and baseline (logical px).
-const LABEL_PX: f32 = 10.0;
-const LABEL_BASELINE: f32 = 20.0;
-/// Tick heights from the bottom edge (logical px).
-const TICK_MAJOR: f32 = 8.0;
-const TICK_MINOR: f32 = 4.0;
+/// Bar numbers: Inter 500 11, 4 px after the bar line, baseline 18
+/// (logical px); the TRACKS cell shares the baseline.
+const LABEL_PX: f32 = 11.0;
+pub const LABEL_BASELINE: f32 = 18.0;
+/// Tick heights from the bottom edge (logical px): beats, sixteenths.
+const TICK_BEAT: f32 = 8.0;
+const TICK_SIXTEENTH: f32 = 4.0;
+/// Narrowest sixteenth (logical px) that still gets a tick.
+const SIXTEENTH_MIN_PX: f32 = 5.0;
 
-/// Background, loop band, bar/beat ticks, labels and bottom divider.
+/// Background, loop brace, bar lines, ticks, labels and the bottom hairline.
 fn draw_static(
     canvas: &Canvas,
     rect: vg::Rect,
@@ -274,101 +286,80 @@ fn draw_static(
     (loop_start, loop_end): (f64, f64),
     loop_on: bool,
 ) {
-    // The band: same gradient and top hairline as the cell beside it.
-    canvas.draw_rect(rect, &gfx::vgrad(rect, BAND_TOP, BAND_BOTTOM));
-    canvas.draw_rect(vg::Rect::from_xywh(rect.left, rect.top, rect.width(), s), &gfx::fill(LINE));
-
-    // Loop brace: a bar over the loop range; drag the body to
-    // move it, the ends to resize. Lit while the loop light is on.
-    let lx0 = (rect.left + view.tick_to_x(loop_start) as f32 * s).round();
-    let lx1 = (rect.left + view.tick_to_x(loop_end) as f32 * s).round();
-    let brace = vg::Rect::from_ltrb(lx0, rect.top + BRACE_TOP * s, lx1, rect.top + (BRACE_TOP + BRACE_H) * s);
-    if brace.right > rect.left && brace.left < rect.right {
-        let rr = gfx::rrect(brace, 2.0 * s);
-        let hl = gfx::hairline(s);
-        if loop_on {
-            canvas.draw_rrect(rr, &gfx::vgrad(brace, ACCENT.with_alpha(0.45), ACCENT.with_alpha(0.25)));
-            gfx::ring_vgrad(canvas, &rr, hl, ACCENT.lighten(0.2), ACCENT.darken(0.3).with_alpha(0.6));
-        } else {
-            canvas.draw_rrect(rr, &gfx::fill(Rgba::white(0.06)));
-            gfx::ring(canvas, &rr, hl, &gfx::fill(Rgba::white(0.12)));
-        }
-    }
+    canvas.draw_rect(rect, &gfx::fill(RULER_BG));
+    let hl = gfx::hairline(s);
 
     let ppb = view.px_per_bar();
     let step = label_step(ppb);
     let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
     let bars_visible = (rect.width() as f64 / s as f64 / ppb).ceil() as i64 + 2;
     let f = gfx::font(Face::Medium, LABEL_PX * s);
-    let tick = gfx::fill(Rgba::hex(0x3A3A3A));
-    let tick_minor = gfx::fill(Rgba::hex(0x262626));
+    let major_ink = gfx::fill(RULER_TICK);
+    let minor_ink = gfx::fill(RULER_TICK_MINOR);
+    let ticks_bottom = rect.bottom - hl;
+    let six_px = ppb as f32 / 16.0;
     for bar in first_bar.max(0)..first_bar + bars_visible {
-        let x =
-            (rect.left + view.tick_to_x((bar as u32 * TICKS_PER_BAR) as f64) as f32 * s).round();
+        let x = (rect.left + view.tick_to_x((bar as u32 * TICKS_PER_BAR) as f64) as f32 * s).round();
         let major = (bar as u32).is_multiple_of(step);
-        let h = if major { TICK_MAJOR } else { TICK_MINOR } * s;
-        canvas.draw_rect(
-            vg::Rect::from_xywh(x, rect.bottom - s - h, s, h),
-            if major { &tick } else { &tick_minor },
-        );
         if major {
+            // A labelled bar: a line the ruler's full height, and its number.
+            canvas.draw_rect(vg::Rect::from_ltrb(x, rect.top, x + hl, ticks_bottom), &major_ink);
             let label = format!("{}", bar + 1);
-            gfx::draw_text(
-                canvas,
-                &label,
-                (x + 4.0 * s).round(),
-                (rect.top + LABEL_BASELINE * s).round(),
-                &f,
-                TEXT_LO,
-            );
+            gfx::draw_text(canvas, &label, (x + 4.0 * s).round(), (rect.top + LABEL_BASELINE * s).round(), &f, TEXT_LO);
+        } else {
+            canvas.draw_rect(vg::Rect::from_ltrb(x, ticks_bottom - TICK_BEAT * s, x + hl, ticks_bottom), &major_ink);
         }
-        // Beat ticks when there is room.
+        // Beat ticks (8 px) and sixteenth ticks (4 px) when there is room.
         if ppb >= 60.0 {
-            for beat in 1..BEATS_PER_BAR {
-                let bx = (x + (beat * PPQ) as f32 * view.px_per_tick as f32 * s).round();
-                canvas.draw_rect(
-                    vg::Rect::from_xywh(bx, rect.bottom - s - TICK_MINOR * s * 0.5, s, TICK_MINOR * s * 0.5),
-                    &tick_minor,
-                );
+            for k in 1..16u32 {
+                let beat = k % 4 == 0;
+                if !beat && six_px < SIXTEENTH_MIN_PX {
+                    continue;
+                }
+                let tx = (x + k as f32 * six_px * s).round();
+                let h = if beat { TICK_BEAT } else { TICK_SIXTEENTH } * s;
+                canvas.draw_rect(vg::Rect::from_ltrb(tx, ticks_bottom - h, tx + hl, ticks_bottom), if beat { &major_ink } else { &minor_ink });
             }
         }
     }
 
-    // Bottom edge: the dark line above the first track row's hairline.
-    canvas.draw_rect(
-        vg::Rect::from_xywh(rect.left, rect.bottom - s, rect.width(), s),
-        &gfx::fill(Rgba::hex(0x090909)),
-    );
+    // The loop brace over the loop range: lime while looping (with a soft
+    // glow), neutral grey while off. Drag the body to move it, the ends to
+    // resize it; a double-click switches the loop.
+    let lx0 = (rect.left + view.tick_to_x(loop_start) as f32 * s).round();
+    let lx1 = (rect.left + view.tick_to_x(loop_end) as f32 * s).round();
+    let brace = vg::Rect::from_ltrb(lx0, rect.top + BRACE_TOP * s, lx1, rect.top + (BRACE_TOP + BRACE_H) * s);
+    if brace.right > rect.left && brace.left < rect.right {
+        let [top, bottom] = if loop_on { BRACE_ON } else { BRACE_OFF };
+        if loop_on {
+            let mut g = gfx::fill(ACCENT.with_alpha(BRACE_GLOW_A));
+            g.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, BRACE_GLOW_R * 0.5 * s, false));
+            canvas.draw_rect(brace, &g);
+        }
+        canvas.draw_rect(brace, &gfx::vgrad(brace, top, bottom));
+    }
+
+    // The one hairline where the ruler meets the tracks.
+    canvas.draw_rect(vg::Rect::from_ltrb(rect.left, rect.bottom - hl, rect.right, rect.bottom), &gfx::fill(LINE_SOFT));
 }
 
-/// The playhead handle (soft glow + rounded pentagon) rendered once per scale.
+/// The playhead marker: a pentagon (`#E6E6E6`, 1 px white stroke) with a
+/// 1 px stem down to the ruler's bottom, rendered once per scale.
 fn render_handle(s: f32) -> Option<vg::Image> {
     let pad = HANDLE_PAD * s;
-    let (w, h) = (HANDLE_W * s, HANDLE_H * s);
-    let iw = (2.0 * (w + pad)).ceil() as i32;
-    let ih = (h + 2.0 * pad).ceil() as i32;
+    let stem_end = (RULER_HEIGHT - HANDLE_TOP) * s;
+    let iw = (HANDLE_W * s + 2.0 * pad).ceil() as i32;
+    let ih = (stem_end + 2.0 * pad).ceil() as i32;
     let mut surface = vg::surfaces::raster_n32_premul((iw, ih))?;
     let c = surface.canvas();
     c.clear(vg::Color::TRANSPARENT);
-    // Tip of the handle at (cx, bottom).
-    let (cx, bottom) = (w + pad, h + pad);
-    let mut pb = vg::PathBuilder::new();
-    pb.move_to((cx - w, bottom - h));
-    pb.line_to((cx + w, bottom - h));
-    pb.line_to((cx + w, bottom - 6.0 * s));
-    pb.line_to((cx, bottom));
-    pb.line_to((cx - w, bottom - 6.0 * s));
-    pb.close();
-    let path = pb.detach();
-    let mut glow = gfx::fill(ACCENT.with_alpha(0.5));
-    glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 3.0 * s, false));
-    c.draw_path(&path, &glow);
-    let mut p = gfx::vgrad(
-        vg::Rect::from_xywh(cx - w, bottom - h, 2.0 * w, h),
-        ACCENT.lighten(0.25),
-        ACCENT.darken(0.1),
-    );
-    p.set_path_effect(vg::PathEffect::corner_path(1.5 * s));
-    c.draw_path(&path, &p);
+    let o = (pad, pad);
+    let body = gfx::svg_path("M1 0.5H11V7.5L6 13L1 7.5Z", o, s);
+    c.draw_path(&body, &gfx::fill(NEUTRAL_HI));
+    let mut edge = gfx::stroke(Rgba::white(1.0), s);
+    edge.set_stroke_join(vg::PaintJoin::Round);
+    c.draw_path(&body, &edge);
+    // The stem: x 5.5..6.5 of the marker, from its tip to the ruler's bottom.
+    c.draw_rect(vg::Rect::from_ltrb(pad + 5.5 * s, pad + 13.0 * s, pad + 6.5 * s, pad + stem_end), &gfx::fill(NEUTRAL_HI));
     Some(surface.image_snapshot())
 }

@@ -15,6 +15,9 @@ pub const INTER_SEMIBOLD: &[u8] = include_bytes!("../../../../assets/fonts/Inter
 pub const MONO_REGULAR: &[u8] =
     include_bytes!("../../../../assets/fonts/JetBrainsMono-Regular.ttf");
 pub const MONO_MEDIUM: &[u8] = include_bytes!("../../../../assets/fonts/JetBrainsMono-Medium.ttf");
+/// The display's bar positions (Option D: JetBrains Mono 600).
+pub const MONO_SEMIBOLD: &[u8] =
+    include_bytes!("../../../../assets/fonts/JetBrainsMono-SemiBold.ttf");
 pub const INTER_BOLD: &[u8] = include_bytes!("../../../../assets/fonts/Inter-Bold.ttf");
 pub const INTER_XBOLD_ITALIC: &[u8] =
     include_bytes!("../../../../assets/fonts/Inter-ExtraBoldItalic.ttf");
@@ -29,10 +32,12 @@ pub enum Face {
     Bold,
     /// Watermark numerals in the track rows.
     HeavyItalic,
+    /// The display's bar positions.
+    MonoSemiBold,
 }
 
 struct Faces {
-    faces: [vg::Typeface; 7],
+    faces: [vg::Typeface; 8],
 }
 
 thread_local! {
@@ -54,6 +59,7 @@ fn typeface(face: Face) -> vg::Typeface {
                     load(MONO_MEDIUM),
                     load(INTER_BOLD),
                     load(INTER_XBOLD_ITALIC),
+                    load(MONO_SEMIBOLD),
                 ],
             }
         });
@@ -84,6 +90,24 @@ pub fn baseline_for_center(font: &vg::Font, cy: f32) -> f32 {
         -m.ascent * 0.7
     };
     cy + cap * 0.5
+}
+
+/// Gradient dithering (design pass §3.8): on, except with
+/// `CHIPDAW_NO_DITHER=1` in dev mode (the banding A/B in DESIGNPASS.md).
+pub fn dither_on() -> bool {
+    thread_local! {
+        static ON: bool = !crate::dev::var("CHIPDAW_NO_DITHER").is_some_and(|v| v == "1");
+    }
+    ON.with(|o| *o)
+}
+
+/// An anti-aliased, dithered paint for a gradient shader.
+pub fn shaded(shader: Option<vg::Shader>) -> vg::Paint {
+    let mut p = vg::Paint::default();
+    p.set_anti_alias(true);
+    p.set_dither(dither_on());
+    p.set_shader(shader);
+    p
 }
 
 pub fn fill(color: Rgba) -> vg::Paint {
@@ -147,6 +171,7 @@ pub fn radial(
 pub fn vgrad(rect: vg::Rect, top: Rgba, bottom: Rgba) -> vg::Paint {
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
+    p.set_dither(dither_on());
     p.set_shader(linear(
         (rect.left, rect.top),
         (rect.left, rect.bottom),
@@ -333,6 +358,7 @@ pub fn inner_shadow(canvas: &vg::Canvas, rr: &vg::RRect, dx: f32, dy: f32, blur:
     let strip = |from: (f32, f32), to: (f32, f32), rect: vg::Rect| {
         let mut p = vg::Paint::default();
         p.set_anti_alias(true);
+        p.set_dither(dither_on());
         p.set_shader(linear(from, to, &[color, clear], None));
         canvas.draw_rect(rect, &p);
     };
@@ -378,6 +404,7 @@ pub fn top_highlight(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, color: Rgb
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
     let rad = rr.radii(vg::rrect::Corner::UpperLeft).y.max(1.0);
+    p.set_dither(dither_on());
     p.set_shader(linear(
         (r.left, r.top),
         (r.left, r.top + rad + width),
@@ -439,6 +466,7 @@ pub fn ring_hgrad(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, left: Rgba, r
     let r = rr.rect();
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
+    p.set_dither(dither_on());
     p.set_shader(linear((r.left, r.top), (r.right, r.top), &[left, right], None));
     ring(canvas, rr, width, &p);
 }
@@ -451,6 +479,7 @@ pub fn top_sheen(canvas: &vg::Canvas, rr: &vg::RRect, width: f32, edge: Rgba, pe
     let rad = rr.radii(vg::rrect::Corner::UpperLeft).x;
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
+    p.set_dither(dither_on());
     p.set_shader(linear(
         (r.left + rad * 0.5, r.top),
         (r.right - rad * 0.5, r.top),
@@ -482,6 +511,7 @@ pub fn draw_text_vgrad(
     let cap = if m.cap_height > 0.0 { m.cap_height } else { -m.ascent * 0.7 };
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
+    p.set_dither(dither_on());
     p.set_shader(linear((x, baseline - cap), (x, baseline), &[top, bottom], None));
     canvas.draw_str(s, (x, baseline), font, &p);
 }
@@ -612,4 +642,133 @@ pub fn frame_dt(last: &std::cell::Cell<Option<vizia::prelude::Instant>>) -> f32 
 /// Exponential approach towards a target; frame-rate independent.
 pub fn approach(cur: f32, target: f32, dt: f32, tau: f32) -> f32 {
     cur + (target - cur) * (1.0 - (-dt / tau).exp())
+}
+
+// ───────────────────────── Option D materials ─────────────────────────
+//
+// docs/design/VISUAL-SPEC.md §1. The mockup draws its keys as a CSS box: a
+// 1 px #383838 border over a #161616 → #424242 body gradient that spans the
+// border box, and a 1 px sheen *inside* the border (the second pixel row),
+// clipped by the inner rounded corners. The wells are flat #151515 under a
+// 1 px #323232 border with a faint inner bottom highlight and an outer one.
+
+/// The key sheen's stops: corner, centre, corner (horizontal).
+pub const SHEEN_STOPS: [u32; 3] = [0x3E3E3E, 0x999999, 0x3A3A3A];
+
+/// How a key surface is drawn: `lift` brightens it (hover), `pressed`
+/// darkens and flattens it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct KeyLook {
+    pub lift: f32,
+    pub pressed: bool,
+}
+
+/// The key material: body gradient, 1 px border, inner top sheen.
+pub fn key_material(canvas: &vg::Canvas, r: vg::Rect, radius: f32, s: f32, look: KeyLook) {
+    use crate::theme::tokens::{KEY_BOTTOM, KEY_STROKE, KEY_TOP};
+    let rr = rrect(r, radius);
+    let (top, bottom) = if look.pressed {
+        (KEY_TOP.darken(0.25), KEY_BOTTOM.darken(0.3))
+    } else {
+        (KEY_TOP.lighten(look.lift), KEY_BOTTOM.lighten(look.lift))
+    };
+    canvas.draw_rrect(rr, &vgrad(r, top, bottom));
+    let hl = hairline(s);
+    ring(canvas, &rr, hl, &fill(KEY_STROKE));
+    // The sheen: one hairline under the top border, inside the inner corners.
+    let inner = ring_inner(&rr, hl);
+    let ir = *inner.rect();
+    let line = vg::Rect::from_ltrb(ir.left, ir.top, ir.right, ir.top + hl);
+    let [a, b, c] = SHEEN_STOPS.map(Rgba::hex);
+    let k = if look.pressed { -0.5 } else { look.lift };
+    let tone = |x: Rgba| if k < 0.0 { x.darken(-k) } else { x.lighten(k) };
+    canvas.save();
+    canvas.clip_rrect(inner, vg::ClipOp::Intersect, true);
+    canvas.draw_rect(
+        line,
+        &shaded(linear((ir.left, ir.top), (ir.right, ir.top), &[tone(a), tone(b), tone(c)], Some(&[0.0, 0.5, 1.0]))),
+    );
+    canvas.restore();
+}
+
+/// A recessed well (the display, the spectrum): fill, border, the inner
+/// bottom highlight (`inset 0 -1px 0 rgba(255,255,255,.07)`) and the outer
+/// one below it (`0 1px 0 rgba(255,255,255,.04)`).
+pub fn well(canvas: &vg::Canvas, r: vg::Rect, radius: f32, s: f32) {
+    use crate::theme::tokens::{BG_2, STROKE};
+    let hl = hairline(s);
+    let rr = rrect(r, radius);
+    // Outer highlight: the box shape moved down 1 px, outside the box.
+    let mut below = rr;
+    below.offset((0.0, hl));
+    canvas.save();
+    canvas.clip_rrect(rr, vg::ClipOp::Difference, true);
+    canvas.draw_rrect(below, &fill(Rgba::white(0.04)));
+    canvas.restore();
+    canvas.draw_rrect(rr, &fill(BG_2));
+    // Inner highlight: inside the border, the padding box's bottom edge.
+    let inner = ring_inner(&rr, hl);
+    let mut up = inner;
+    up.offset((0.0, -hl));
+    canvas.save();
+    canvas.clip_rrect(inner, vg::ClipOp::Intersect, true);
+    canvas.draw_drrect(inner, up, &fill(Rgba::white(0.07)));
+    canvas.restore();
+    ring(canvas, &rr, hl, &fill(STROKE));
+}
+
+/// A CSS inset box shadow (`inset dx dy blur spread color`) inside `rr`:
+/// everything outside the hole (`rr` grown by -spread and moved by dx, dy),
+/// blurred by blur/2 (CSS blur radius → Gaussian sigma), clipped to `rr`.
+pub fn css_inset_shadow(canvas: &vg::Canvas, rr: &vg::RRect, dx: f32, dy: f32, blur: f32, spread: f32, color: Rgba) {
+    let r = *rr.rect();
+    let mut hole = *rr;
+    hole.outset((-spread, -spread));
+    hole.offset((dx, dy));
+    let pad = blur * 2.0 + spread.abs() + dx.abs() + dy.abs() + 4.0;
+    let outer = vg::RRect::new_rect(r.with_outset((pad, pad)));
+    let mut p = fill(color);
+    if blur > 0.0 {
+        p.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, blur * 0.5, false));
+    }
+    canvas.save();
+    canvas.clip_rrect(rr, vg::ClipOp::Intersect, true);
+    canvas.draw_drrect(outer, hole, &p);
+    canvas.restore();
+}
+
+/// Draws `text` with CSS letter-spacing (`tracking` device px after every
+/// character) and returns the advance including the trailing spacing, as
+/// CSS lays it out.
+pub fn draw_text_tracked(canvas: &vg::Canvas, text: &str, x: f32, base: f32, font: &vg::Font, tracking: f32, color: Rgba) -> f32 {
+    let p = fill(color);
+    let mut cx = x;
+    let mut buf = [0u8; 4];
+    for ch in text.chars() {
+        let g = ch.encode_utf8(&mut buf);
+        canvas.draw_str(&*g, (cx, base), font, &p);
+        cx += text_width(font, g) + tracking;
+    }
+    cx - x
+}
+
+/// The advance of `text` with CSS letter-spacing (see [`draw_text_tracked`]).
+pub fn tracked_width(text: &str, font: &vg::Font, tracking: f32) -> f32 {
+    let mut buf = [0u8; 4];
+    text.chars().map(|ch| text_width(font, ch.encode_utf8(&mut buf)) + tracking).sum()
+}
+
+/// The baseline CSS gives a line box of `line_h` starting at `top`:
+/// half-leading around the font's ascent + descent.
+pub fn css_baseline(font: &vg::Font, top: f32, line_h: f32) -> f32 {
+    let (_, m) = font.metrics();
+    let (asc, desc) = (-m.ascent, m.descent);
+    top + (line_h - (asc + desc)) * 0.5 + asc
+}
+
+/// An SVG path (the mockup's icon data) placed at `origin` and scaled to
+/// device px.
+pub fn svg_path(d: &str, origin: (f32, f32), s: f32) -> vg::Path {
+    let p = vg::Path::from_svg(d).unwrap_or_default();
+    p.make_transform(&vg::Matrix::scale_translate((s, s), origin))
 }

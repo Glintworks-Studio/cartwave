@@ -316,7 +316,7 @@ impl View for InstrumentView {
         let color = self
             .s
             .arrangement
-            .with_untracked(|a| a.lanes.get(lane).map_or(ACCENT, |l| l.color));
+            .with_untracked(|a| a.lanes.get(lane).map_or(NEUTRAL_HI, |l| l.color));
         // F-39: informative text is at least 11 px.
         let fl = gfx::font(Face::SemiBold, 11.0 * s);
         let fm = gfx::font(Face::Mono, 11.0 * s);
@@ -394,7 +394,7 @@ impl View for InstrumentView {
                 canvas.draw_rect(bar, &gfx::vgrad(bar, c.lighten(0.1).with_alpha(alpha), c.darken(0.25).with_alpha(alpha)));
             }
             // Loop and release markers, each with a grab tab at the top.
-            for (idx, txt, col) in [(q.loop_at, "↺", ACCENT), (q.release_at, "R", RECORD)] {
+            for (idx, txt, col) in [(q.loop_at, "↺", NEUTRAL_HI), (q.release_at, "R", RECORD)] {
                 if idx != NONE {
                     let x = (r.left + bw * idx as f32).round();
                     canvas.draw_rect(vg::Rect::from_xywh(x, r.top, gfx::hairline(s), r.height()), &gfx::fill(col.with_alpha(0.7)));

@@ -26,6 +26,8 @@ pub enum MenuSite {
     Piano(bool),
     /// A user preset in the browser (browser index).
     Preset(usize),
+    /// The spectrum well: its styles.
+    Spectrum,
 }
 
 /// What an in-place rename edits.
@@ -34,6 +36,8 @@ pub enum RenameTarget {
     Clip(u32),
     Track(usize),
     Preset(usize),
+    /// The display's BPM (a double-click types a tempo).
+    Bpm,
 }
 
 /// The open rename field: its target, place (window logical px) and the
@@ -523,6 +527,11 @@ impl AppState {
                 let (x, y) = self.preset_rename_at;
                 RenameSpec { target, x, y, w: RENAME_TRACK_W + 40.0, text: p.name }
             }
+            RenameTarget::Bpm => {
+                let (x, y, w) = self.bpm_rename_at;
+                let bpm = self.s.transport.with_untracked(|t| t.bpm);
+                RenameSpec { target, x, y, w, text: format!("{bpm:.2}") }
+            }
         };
         self.rename_text = spec.text.clone();
         self.s.rename.set(Some(spec));
@@ -559,6 +568,14 @@ impl AppState {
                     self.rename_next(l);
                 }
             }
+            RenameTarget::Bpm => match crate::views::topbar::parse_bpm(&text) {
+                Some(b) => {
+                    self.send(engine::Command::Bpm(b as f64));
+                    self.s.transport.update(|t| t.bpm = b);
+                    self.commit();
+                }
+                None => self.set_status(format!("\"{text}\" isn't a tempo. Type a number of beats per minute.")),
+            },
             RenameTarget::Preset(i) => {
                 let user = i.saturating_sub(chip::presets::PRESETS.len());
                 match crate::user_presets::rename(user, &text) {
@@ -647,6 +664,13 @@ impl AppState {
                     MenuItem::sep(),
                     MenuItem::cmd(A::DrawMode).checked(self.s.piano.with_untracked(|p| p.draw)),
                 ]
+            }
+            MenuSite::Spectrum => {
+                let cur = crate::views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style);
+                crate::views::chrome::SpectrumStyle::ALL
+                    .iter()
+                    .map(|st| MenuItem::new(MenuAction::SpectrumStyle(*st), st.label()).checked(*st == cur))
+                    .collect()
             }
             MenuSite::Preset(i) => {
                 self.preset_rename_at = (x, y);
@@ -793,6 +817,7 @@ impl AppState {
                 }
             }
             MenuAction::PresetReveal(_) => reveal(crate::user_presets::file_path()),
+            MenuAction::SpectrumStyle(st) => cx.emit(crate::AppEvent::SetSpectrumStyle(st)),
             MenuAction::Sub(_) | MenuAction::Separator => {}
         }
     }

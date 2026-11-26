@@ -65,7 +65,7 @@ impl View for StatsOverlay {
         let rr = gfx::rrect(rect, 8.0 * s);
         gfx::drop_shadow(canvas, &rr, 0.0, 4.0 * s, 14.0 * s, 0.0, Rgba::black(0.5));
         canvas.draw_rrect(rr, &gfx::fill(Rgba::hex(0x0C0C0C).with_alpha(0.94)));
-        gfx::inner_border(canvas, &rr, s, ACCENT.with_alpha(0.45));
+        gfx::inner_border(canvas, &rr, s, NEUTRAL_HI.with_alpha(0.45));
 
         let f = gfx::font(Face::MonoMedium, 11.0 * s);
         let fps = if st.frame_ms > 0.0 {
@@ -116,7 +116,7 @@ impl View for StatsOverlay {
             ),
             (
                 format!("ui thread  {:6.2} ms", ui_total),
-                ACCENT.lighten(0.4),
+                NEUTRAL_HI.lighten(0.4),
             ),
         ];
         for (name, ms) in PHASE_NAMES.iter().zip(st.phases_ms) {
@@ -124,7 +124,7 @@ impl View for StatsOverlay {
         }
         lines.push((
             format!("custom draw {:5.2} ms", custom_total),
-            ACCENT.lighten(0.4),
+            NEUTRAL_HI.lighten(0.4),
         ));
         for ((_, name), ms) in SPANS.iter().zip(st.spans_ms) {
             lines.push((
@@ -136,7 +136,7 @@ impl View for StatsOverlay {
         let a = self.s.audio.get_untracked();
         lines.push((
             format!("audio  {}", if a.running { "running" } else { "STOPPED" }),
-            ACCENT.lighten(0.4),
+            NEUTRAL_HI.lighten(0.4),
         ));
         let dev: String = a.device.chars().take(36).collect();
         lines.push((format!("  {dev}"), TEXT_LO.mix(TEXT_HI, 0.5)));

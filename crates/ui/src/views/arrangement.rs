@@ -755,54 +755,52 @@ impl Arrangement {
         let x_of = |t: f64| rect.left + view.tick_to_x(t) as f32 * s;
         let lane_h = self.s.lane_h.get_untracked() * s;
         let lanes_top = lanes_bottom - a.lanes.len() as f32 * lane_h;
-        // The canvas: one gradient, lit from the top and falling to black,
-        // as in the prototype. Lanes are only hairlines on it.
+        // Below the lanes: the canvas gradient (no lanes to draw there).
         canvas.draw_rect(rect, &gfx::vgrad(rect, CANVAS_TOP, CANVAS_BOTTOM));
-        let lane_line = gfx::fill(Rgba::white(0.035));
-        for i in 1..=a.lanes.len() {
-            let y = (lanes_top + i as f32 * lane_h).round();
-            canvas.draw_rect(vg::Rect::from_xywh(rect.left, y - s, rect.width(), s), &lane_line);
+        // Lane rows (VISUAL-SPEC.md §2.4): alternating #171717 / #141414,
+        // each 72 px over its #1A1A1A hairline.
+        let hl = gfx::hairline(s);
+        for i in 0..a.lanes.len() {
+            let y0 = (lanes_top + i as f32 * lane_h).round();
+            let y1 = (lanes_top + (i + 1) as f32 * lane_h).round();
+            if y1 < rect.top || y0 > rect.bottom {
+                continue;
+            }
+            canvas.draw_rect(vg::Rect::from_ltrb(rect.left, y0, rect.right, y1 - hl), &gfx::fill(if i % 2 == 1 { ROW_B } else { ROW_A }));
+            canvas.draw_rect(vg::Rect::from_ltrb(rect.left, y1 - hl, rect.right, y1), &gfx::fill(LINE));
         }
 
-        // Grid: bars, beats, and sixteenths when zoomed in.
+        // Grid over the rows: bars #262626, beats #1D1D1D, sixteenths faint
+        // when zoomed in (hairlines stop at each row's hairline).
         let ppb = view.px_per_bar() as f32;
         let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
         let nbars = (rect.width() / s / ppb).ceil() as i64 + 2;
-        let bar_line = gfx::fill(Rgba::white(0.05));
-        let beat_line = gfx::fill(Rgba::white(0.022));
+        let bar_line = gfx::fill(GRID_BAR);
+        let beat_line = gfx::fill(GRID_BEAT);
         let six_line = gfx::fill(Rgba::white(0.01));
-        let grid_h = lanes_bottom - rect.top;
+        let grid_top = lanes_top.max(rect.top);
+        let grid_h = lanes_bottom - grid_top;
         for bar in first_bar.max(0)..first_bar + nbars {
             let bx = x_of((bar as u32 * TICKS_PER_BAR) as f64);
-            canvas.draw_rect(
-                vg::Rect::from_xywh(bx.round(), rect.top, s, grid_h),
-                &bar_line,
-            );
             let six_px = ppb / 16.0;
             for k in 1..16u32 {
-                let x = (bx + k as f32 * six_px).round();
+                let x = (bx + k as f32 * six_px * s).round();
                 if k % 4 == 0 {
                     if ppb >= 48.0 {
-                        canvas.draw_rect(vg::Rect::from_xywh(x, rect.top, s, grid_h), &beat_line);
+                        canvas.draw_rect(vg::Rect::from_xywh(x, grid_top, hl, grid_h), &beat_line);
                     }
                 } else if six_px >= 10.0 {
-                    canvas.draw_rect(vg::Rect::from_xywh(x, rect.top, s, grid_h), &six_line);
+                    canvas.draw_rect(vg::Rect::from_xywh(x, grid_top, hl, grid_h), &six_line);
                 }
             }
+            canvas.draw_rect(vg::Rect::from_xywh(bx.round(), grid_top, hl, grid_h), &bar_line);
         }
-
-        // Outside the loop: dimmed (only while the loop light is on).
-        if self.s.loop_on.get_untracked() {
-            let dim = gfx::fill(Rgba::black(0.28));
-            let lsx = x_of(self.s.transport.with_untracked(|t| t.loop_start_ticks));
-            if lsx > rect.left {
-                canvas.draw_rect(vg::Rect::from_ltrb(rect.left, rect.top, lsx.min(rect.right), lanes_bottom), &dim);
-            }
-            let lex = x_of(loop_end);
-            if lex < rect.right {
-                canvas.draw_rect(vg::Rect::from_ltrb(lex.max(rect.left), rect.top, rect.right, lanes_bottom), &dim);
-            }
+        // Row hairlines stay on top of the grid.
+        for i in 1..=a.lanes.len() {
+            let y1 = (lanes_top + i as f32 * lane_h).round();
+            canvas.draw_rect(vg::Rect::from_ltrb(rect.left, y1 - hl, rect.right, y1), &gfx::fill(LINE));
         }
+        let _ = loop_end;
     }
 }
 
@@ -1179,7 +1177,7 @@ impl View for Arrangement {
                     let gx = x_of(t as f64).round();
                     canvas.draw_rect(
                         vg::Rect::from_xywh(gx, rect.top, s, lanes_bottom - rect.top),
-                        &gfx::fill(ACCENT.with_alpha(0.6)),
+                        &gfx::fill(NEUTRAL_HI.with_alpha(0.6)),
                     );
                     let f = gfx::font(Face::MonoMedium, 10.0 * s);
                     let label = crate::state::Transport::position_string(t as f64);
@@ -1187,8 +1185,8 @@ impl View for Arrangement {
                     let pill = vg::Rect::from_xywh(gx + 4.0 * s, rect.top + 4.0 * s, w, 16.0 * s);
                     let rr = gfx::rrect(pill, 8.0 * s);
                     gfx::drop_shadow(canvas, &rr, 0.0, 2.0 * s, 6.0 * s, 0.0, Rgba::black(0.4));
-                    canvas.draw_rrect(rr, &gfx::vgrad(pill, ACCENT.lighten(0.05), ACCENT.darken(0.15)));
-                    gfx::top_sheen(canvas, &rr, s, ACCENT, Rgba::white(0.8));
+                    canvas.draw_rrect(rr, &gfx::vgrad(pill, NEUTRAL_HI.lighten(0.05), NEUTRAL_HI.darken(0.15)));
+                    gfx::top_sheen(canvas, &rr, s, NEUTRAL_HI, Rgba::white(0.8));
                     gfx::draw_text(
                         canvas,
                         &label,
@@ -1200,20 +1198,12 @@ impl View for Arrangement {
                 }
             }
 
-            // Playhead: the accent lime, glowing while playing.
+            // Playhead: 1 px #E6E6E6 at 85% (neutral; the display shows the state).
             let px = x_of(playhead).round();
             if px >= rect.left && px <= rect.right {
-                let glow_a = if playing { 0.5 } else { 0.22 };
-                let mut glow = gfx::fill(ACCENT.with_alpha(glow_a));
-                glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 3.0 * s, false));
                 canvas.draw_rect(
-                    vg::Rect::from_xywh(px - s, rect.top, 3.0 * s, lanes_bottom - rect.top),
-                    &glow,
-                );
-                let ink = if playing { ACCENT.lighten(0.2) } else { ACCENT.mix(TEXT_HI, 0.4) };
-                canvas.draw_rect(
-                    vg::Rect::from_xywh(px, rect.top, s, lanes_bottom - rect.top),
-                    &gfx::fill(ink),
+                    vg::Rect::from_xywh(px, rect.top, gfx::hairline(s), lanes_bottom - rect.top),
+                    &gfx::fill(NEUTRAL_HI.with_alpha(0.85)),
                 );
             }
 
@@ -1240,8 +1230,8 @@ impl View for Arrangement {
                     x_of(ts.end as f64).round(),
                     (lanes_top + (ts.lane1 + 1) as f32 * lane_h).round(),
                 );
-                canvas.draw_rect(sel, &gfx::fill(ACCENT.with_alpha(0.10)));
-                let edge = gfx::fill(ACCENT.with_alpha(0.6));
+                canvas.draw_rect(sel, &gfx::fill(Rgba::white(0.045)));
+                let edge = gfx::fill(Rgba::white(0.14));
                 let hl = gfx::hairline(s);
                 canvas.draw_rect(vg::Rect::from_xywh(sel.left, sel.top, hl, sel.height()), &edge);
                 canvas.draw_rect(vg::Rect::from_xywh(sel.right - hl, sel.top, hl, sel.height()), &edge);
@@ -1295,7 +1285,7 @@ impl View for Arrangement {
                 if !fits {
                     canvas.draw_rect(band, &gfx::fill(Rgba::black(0.55)));
                 } else if target {
-                    canvas.draw_rect(band, &gfx::fill(ACCENT.with_alpha(0.06)));
+                    canvas.draw_rect(band, &gfx::fill(NEUTRAL_HI.with_alpha(0.06)));
                 }
             }
             // Over a clip: the preset becomes that clip's own instrument.
@@ -1306,8 +1296,8 @@ impl View for Arrangement {
                     let x1 = rect.left + a.view.tick_to_x(c.end_ticks() as f64) as f32 * s;
                     let r = vg::Rect::from_ltrb(x0.max(rect.left), y0 + CLIP_V_INSET * s, x1.min(rect.right), y1 - CLIP_V_INSET * s);
                     let rr = gfx::rrect(r, RADIUS_CLIP * s);
-                    canvas.draw_rrect(rr, &gfx::fill(ACCENT.with_alpha(0.12)));
-                    gfx::ring(canvas, &rr, 2.0 * s, &gfx::fill(ACCENT));
+                    canvas.draw_rrect(rr, &gfx::fill(NEUTRAL_HI.with_alpha(0.12)));
+                    gfx::ring(canvas, &rr, 2.0 * s, &gfx::fill(NEUTRAL_HI));
                 });
             }
         }
@@ -1337,6 +1327,7 @@ impl View for Arrangement {
             vg::Rect::from_xywh(rect.left, rect.top, rect.width(), 8.0 * s),
             &{
                 let mut p = vg::Paint::default();
+                p.set_dither(gfx::dither_on());
                 p.set_shader(gfx::linear(
                     (rect.left, rect.top),
                     (rect.left, rect.top + 8.0 * s),
@@ -1372,7 +1363,7 @@ fn draw_guide(canvas: &Canvas, rect: vg::Rect, s: f32, dismiss: bool) {
     let f = gfx::font(Face::Medium, GUIDE_TEXT_PX * s);
     let x = card.left + GUIDE_PAD * s;
     let mut y = card.top + GUIDE_PAD * s;
-    gfx::draw_text(canvas, "GETTING STARTED", x.round(), (y + GUIDE_TITLE_PX * s).round(), &ft, ACCENT);
+    gfx::draw_text(canvas, "GETTING STARTED", x.round(), (y + GUIDE_TITLE_PX * s).round(), &ft, NEUTRAL_HI);
     y += GUIDE_TITLE_H * s;
     for l in &lines {
         gfx::draw_text_clipped(canvas, l, x.round(), (y + GUIDE_TEXT_PX * s).round(), w - 2.0 * GUIDE_PAD * s, &f, TEXT_HI);
@@ -1399,11 +1390,32 @@ const OFF_HINT_PX: f32 = 12.0;
 
 // ───────────────────────────── Track headers ─────────────────────────────
 
+/// The cell beside the ruler: "TRACKS" (Inter 600 11, tracking .08em,
+/// #808080, 16 px in) on the ruler's #0F0F0F, over its one #1E1E1E hairline.
+pub struct TracksCell;
+
+impl View for TracksCell {
+    fn element(&self) -> Option<&'static str> {
+        Some("tracks-cell")
+    }
+
+    fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let s = cx.scale_factor();
+        let r = gfx::snap(cx.bounds().into());
+        canvas.draw_rect(r, &gfx::fill(RULER_BG));
+        let hl = gfx::hairline(s);
+        canvas.draw_rect(vg::Rect::from_ltrb(r.left, r.bottom - hl, r.right, r.bottom), &gfx::fill(LINE_SOFT));
+        let f = gfx::font(Face::SemiBold, 11.0 * s);
+        let base = (r.top + super::ruler::LABEL_BASELINE * s).round();
+        gfx::draw_text_tracked(canvas, "TRACKS", (r.left + 16.0 * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+    }
+}
+
 /// Builds the track header column: the empty band cell beside the ruler,
 /// then one [`TrackRow`] per lane.
 pub fn track_headers(cx: &mut Context, s: Signals) -> Handle<'_, VStack> {
     VStack::new(cx, |cx| {
-        Element::new(cx).class("band-cell");
+        TracksCell.build(cx, |_| {}).class("band-cell");
         // The rows scroll with the lanes; the viewport clips them.
         VStack::new(cx, |cx| {
             VStack::new(cx, |cx| {

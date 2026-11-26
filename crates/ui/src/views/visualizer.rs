@@ -28,6 +28,7 @@ pub fn draw_light(canvas: &Canvas, x: f32, y: f32, r: f32, color: Rgba, level: f
     let lit = off.mix(color, 0.2 + 0.8 * level);
     let mut p = vg::Paint::default();
     p.set_anti_alias(true);
+    p.set_dither(gfx::dither_on());
     p.set_shader(gfx::radial(
         (x - r * 0.3, y - r * 0.35),
         r * 1.5,

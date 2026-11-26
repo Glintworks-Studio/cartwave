@@ -20,6 +20,7 @@ pub mod render;
 pub mod shortcuts;
 pub mod songs;
 pub mod state;
+pub mod tap;
 pub mod testing;
 pub mod theme;
 pub mod views;
@@ -38,10 +39,8 @@ use crate::state::*;
 use crate::views::{
     arrangement::{track_headers, Arrangement as ArrangementView},
     browser::{browser, DragGhost, PresetDrag},
-    chrome::{
-        ContextMenu, Key, KeyAction, MenuBackdrop, PillKind, SpectrumBox, SplitHandle, StatPill,
-        TimeCapsule,
-    },
+    chrome::{ContextMenu, Key, KeyAction, MenuBackdrop, SpectrumBox, SplitHandle},
+    topbar::{CpuMem, DisplayWell, TopKey, TopKeyView},
     dial::Dial,
     instrument::InstrumentView,
     piano_roll::PianoRoll,
@@ -138,6 +137,13 @@ pub struct Signals {
     /// The getting-started guide shown on demand (Help ▸ Getting Started)
     /// even when the project has clips (A22, F-14).
     pub guide: Signal<bool>,
+    /// The project's format: (sample rate Hz, bit depth). The display's
+    /// indicators show it; it's the export's default (Project Settings).
+    pub project_format: Signal<(u32, u16)>,
+    /// The process's private memory in MB (refreshed with the CPU read-out).
+    pub mem_mb: Signal<Option<u32>>,
+    /// Each track's volume fader: position 0..1, or why it's disabled.
+    pub faders: Signal<[state::Fader; 8]>,
 }
 
 /// Project fields outside undo that a save writes (F-01: changing them
@@ -152,6 +158,8 @@ struct Extras {
     loop_on: bool,
     mute: u8,
     solo: u8,
+    /// The project's format (sample rate, bit depth).
+    format: (u32, u16),
 }
 
 /// What the user chose in a "Save changes?" prompt.
@@ -265,6 +273,12 @@ pub struct AppState {
     /// The window's scale factor and logical size, as of the last tick.
     scale: f32,
     window_logical: (f32, f32),
+    /// TAP tempo: the current tap sequence, and the undo step count right
+    /// after its first commit (later taps amend that step).
+    tap: tap::TapTempo,
+    tap_step: Option<(usize, usize)>,
+    /// Where the BPM field opens (window logical x, y, width).
+    bpm_rename_at: (f32, f32, f32),
 }
 
 pub enum AppEvent {
@@ -276,6 +290,21 @@ pub enum AppEvent {
     SetBpm(f32),
     SetPlayhead(f64),
     SetDial(usize, f32),
+    /// TAP tempo (the TAP key, or its shortcut).
+    Tap,
+    /// Double-click on the display's BPM: type a tempo in a field at
+    /// (x, y, width), window logical px.
+    EditBpm(f32, f32, f32),
+    /// A track's volume fader: lane, 0..1 of the fader's travel.
+    SetLaneVolume(usize, f32),
+    /// The spectrum's style (its right-click menu; remembered in settings.json).
+    SetSpectrumStyle(views::chrome::SpectrumStyle),
+    /// The browser's Preview key: audition presets on select (remembered).
+    TogglePreviewOnSelect,
+    /// Project Settings: the project's bit depth (16 / 24).
+    SetBitDepth(u16),
+    /// Project Settings: the project's sample rate (44 100 / 48 000).
+    SetProjectRate(u32),
     /// The capsule's loop light: loop the song at its loop end, or play on.
     ToggleLoop,
     /// Click on the clock: m:ss.cc <-> bars.beats.sixteenths (remembered).
@@ -464,6 +493,41 @@ impl Model for AppState {
                     self.s.arrangement.update(|a| a.insert.0 = p as u32);
                 }
                 self.s.transport.update(|t| t.playhead_ticks = p);
+            }
+            AppEvent::Tap => self.tap(),
+            AppEvent::EditBpm(x, y, w) => {
+                self.bpm_rename_at = (*x, *y, *w);
+                self.open_rename(edit::RenameTarget::Bpm);
+            }
+            AppEvent::SetLaneVolume(lane, pos) => {
+                if let Some((pid, v)) = state::fader_value(*lane, *pos) {
+                    if self.s.faders.with_untracked(|f| f[*lane].reason.is_none()) && self.params.get(*lane, pid) != v {
+                        self.params.set(*lane, pid, v);
+                        self.send(Command::Param { lane: *lane as u8, id: pid, value: v as i8 });
+                        if *lane == self.s.lane_sel.get_untracked() {
+                            self.s.dials.set(self.dial_values(*lane));
+                        }
+                        self.sync_piano_lane_volume();
+                        self.refresh_faders();
+                    }
+                }
+            }
+            AppEvent::SetSpectrumStyle(st) => {
+                self.settings.spectrum_style = st.key().into();
+                self.save_settings();
+            }
+            AppEvent::TogglePreviewOnSelect => {
+                let on = !self.settings.preview_on_select;
+                self.settings.preview_on_select = on;
+                self.save_settings();
+            }
+            AppEvent::SetBitDepth(b) => {
+                self.s.project_format.update(|f| f.1 = *b);
+                self.update_dirty();
+            }
+            AppEvent::SetProjectRate(r) => {
+                self.s.project_format.update(|f| f.0 = *r);
+                self.update_dirty();
             }
             AppEvent::SetDial(i, v) => {
                 let lane = self.s.lane_sel.get_untracked();
@@ -1267,6 +1331,45 @@ impl AppState {
         self.sync_piano_lane_volume();
     }
 
+    /// The track headers' faders follow the channel parameters.
+    fn refresh_faders(&mut self) {
+        let mut f = [state::Fader::default(); 8];
+        for (lane, fd) in f.iter_mut().enumerate() {
+            *fd = state::fader_of(lane, &self.params);
+        }
+        self.s.faders.set_if_changed(f);
+    }
+
+    /// One TAP: the tempo from the last four intervals; a sequence is one
+    /// undo step (the first change commits, later ones amend it).
+    fn tap(&mut self) {
+        let now = Instant::now();
+        let t = self.tap.tap(now);
+        if t.restarted {
+            self.tap_step = None;
+        }
+        let Some(bpm) = t.bpm else { return };
+        let bpm = (bpm * 100.0).round() / 100.0;
+        let bpm = bpm.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
+        self.send(Command::Bpm(bpm as f64));
+        self.s.transport.update(|t| t.bpm = bpm);
+        let d = self.doc();
+        match self.tap_step {
+            // Nothing else was committed since this sequence's step.
+            Some(steps) if self.history.steps() == steps => {
+                self.history.amend(d);
+            }
+            _ => {
+                self.history.commit(d);
+                self.tap_step = Some(self.history.steps());
+            }
+        }
+        self.update_dirty();
+        if dev::enabled() {
+            eprintln!("dev: tap bpm {bpm:.2} undo steps {:?}", self.history.steps());
+        }
+    }
+
     fn dial_values(&self, lane: usize) -> [f32; MAX_DIALS] {
         let mut d = [0f32; MAX_DIALS];
         for (slot, (pid, _)) in lane_dials(lane).into_iter().enumerate() {
@@ -1303,6 +1406,7 @@ impl AppState {
         let lane = self.s.lane_sel.get_untracked();
         let st = self.s.arrangement.with_untracked(|a| state::dial_states(lane, &self.params, a.instruments.get(a.current_instrument(lane))));
         self.s.dial_state.set_if_changed(st);
+        self.refresh_faders();
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -1358,6 +1462,7 @@ impl AppState {
                 self.last_load = Some(now);
                 // At least 1% once audio runs, so the pill never reads "0%".
                 let pct = (mean.round() as u32).clamp(1, 999);
+                self.s.mem_mb.set_if_changed(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32));
                 self.s.audio_load.set_if_changed((pct, e.sample_rate()));
             }
             let running = sh.stream_running.load(Relaxed);
@@ -1648,6 +1753,9 @@ pub fn build_ui(cx: &mut Context) {
         recovery_msg: Signal::new(""),
         rename: Signal::new(None),
         guide: Signal::new(false),
+        project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
+        mem_mb: Signal::new(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32)),
+        faders: Signal::new([state::Fader::default(); 8]),
     };
 
     // Animation pump; frames themselves are paced by vsync (see PERF.md).
@@ -1713,6 +1821,7 @@ pub fn build_ui(cx: &mut Context) {
             loop_on: true,
             mute: 0,
             solo: 0,
+            format: (file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH),
         }),
         quitting: false,
         title: String::new(),
@@ -1728,6 +1837,9 @@ pub fn build_ui(cx: &mut Context) {
         preset_rename_at: (0.0, 0.0),
         scale: 1.0,
         window_logical: (MIN_WINDOW_SIZE.0 as f32, MIN_WINDOW_SIZE.1 as f32),
+        tap: tap::TapTempo::default(),
+        tap_step: None,
+        bpm_rename_at: (0.0, 0.0, 0.0),
     };
     match state.recovery.as_ref().and_then(|r| r.start_session()) {
         Some(file::LastSession::Crashed) => {
@@ -1971,60 +2083,43 @@ fn notice(cx: &mut Context, s: Signals) {
     });
 }
 
-/// Split-pill widths (logical px): label segment and whole pill, per column.
-const PILL_TEMPO_LABEL_W: f32 = 44.0;
-const PILL_TEMPO_W: f32 = 92.0;
-const PILL_STAT_LABEL_W: f32 = 32.0;
-
-/// The top bar: tempo on the left, the transport capsule centred, the
-/// spectrum and CPU / kHz pills on the right.
+/// The top bar (VISUAL-SPEC.md §2.2): view and transport keys on the left,
+/// the display and TAP in the middle, the spectrum and CPU / MEM on the
+/// right, the three groups spaced between.
 fn top_bar(cx: &mut Context, s: Signals) {
-    use theme::tokens::{BOX_H, BOX_W, PILL_H, PILL_W};
+    use theme::tokens::{SPECTRUM_W, WELL_H};
     HStack::new(cx, |cx| {
-        // Left: tempo only (UX.md decision 1). File commands live in the
-        // menus; the grid in the arrangement; chip and filter in Project
-        // Settings (decision 4).
         HStack::new(cx, |cx| {
-            VStack::new(cx, |cx| {
-                StatPill::new(cx, s, PillKind::Bpm, PILL_TEMPO_LABEL_W)
-                    .width(Pixels(PILL_TEMPO_W))
-                    .height(Pixels(PILL_H))
-                    .tooltip(|cx| tip(cx, "Tempo: drag up or down, or use the wheel."));
+            HStack::new(cx, |cx| {
+                TopKeyView::new(cx, s, TopKey::Arrangement).tooltip(|cx| tip(cx, "Arrangement view."));
+                TopKeyView::new(cx, s, TopKey::Mixer).tooltip(|cx| tip(cx, "The Mixer view arrives in Batch 4."));
             })
-            .class("pill-stack");
+            .class("key-group");
+            Element::new(cx).class("bar-divider");
+            HStack::new(cx, |cx| {
+                TopKeyView::new(cx, s, TopKey::Play).tooltip(|cx| tip(cx, &format!("Play ({}). The display shows what's playing.", shortcuts::label(Action::PlayStop))));
+                TopKeyView::new(cx, s, TopKey::Stop).tooltip(|cx| tip(cx, &format!("Stop ({}); press again to go back to the start ({}).", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Rewind))));
+                TopKeyView::new(cx, s, TopKey::Record).tooltip(|cx| tip(cx, "Recording arrives with MIDI input."));
+                TopKeyView::new(cx, s, TopKey::Loop).tooltip(|cx| tip(cx, "Loop the song between the loop brace's ends (the ruler)."));
+            })
+            .class("key-group");
         })
-        .class("bar-side")
-        .class("left")
-        // A narrow window clips the sides at the capsule instead of sliding
-        // them under it.
-        .overflow(Overflow::Hidden);
-
-        TimeCapsule::new(cx, s)
-            .width(Pixels(BOX_W))
-            .height(Pixels(BOX_H))
-            .tooltip(|cx| tip(cx, &format!("Play / stop ({}), continue ({}), back to the start ({}). The loop light switches the song loop. Drag the clock to move the playhead.", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Continue), shortcuts::label(Action::Rewind))));
-
-        // Right
+        .class("bar-group");
+        Element::new(cx).class("bar-spacer");
+        HStack::new(cx, |cx| {
+            DisplayWell::new(cx, s).tooltip(|cx| tip(cx, "Time, position, the selection's start and length, and the tempo. Drag the BPM up or down or use the wheel (Shift: finer); double-click it to type a tempo."));
+            TopKeyView::new(cx, s, TopKey::Tap).tooltip(|cx| tip(cx, &format!("Tap the tempo ({}): the average of the last four taps. Taps more than 2 s apart start over.", shortcuts::label(Action::Tap))));
+        })
+        .class("bar-group");
+        Element::new(cx).class("bar-spacer");
         HStack::new(cx, |cx| {
             SpectrumBox::new(cx, s)
-                .width(Pixels(BOX_W))
-                .height(Pixels(BOX_H))
-                .tooltip(|cx| tip(cx, "The output spectrum and each channel's level."));
-            VStack::new(cx, |cx| {
-                StatPill::new(cx, s, PillKind::Cpu, PILL_STAT_LABEL_W)
-                    .width(Pixels(PILL_W))
-                    .height(Pixels(PILL_H))
-                    .tooltip(|cx| tip(cx, "Audio load: the time the sound engine needs per buffer, as a share of the buffer's length. \"No audio\": no output device is running."));
-                StatPill::new(cx, s, PillKind::Khz, PILL_STAT_LABEL_W)
-                    .width(Pixels(PILL_W))
-                    .height(Pixels(PILL_H))
-                    .tooltip(|cx| tip(cx, "The output sample rate (Settings > Audio)."));
-            })
-            .class("pill-stack");
+                .width(Pixels(SPECTRUM_W))
+                .height(Pixels(WELL_H))
+                .tooltip(|cx| tip(cx, "The mix's spectrum. Right-click for its styles."));
+            CpuMem::new(cx, s).tooltip(|cx| tip(cx, "CPU: the time the sound engine needs per buffer, as a share of the buffer's length (OFF: no output device is running). MEM: this app's private memory."));
         })
-        .class("bar-side")
-        .class("right")
-        .overflow(Overflow::Hidden);
+        .class("bar-group");
     })
     .class("topbar");
 }
@@ -2338,6 +2433,8 @@ impl AppState {
             mute: self.s.mute.get_untracked(),
             solo: self.s.solo.get_untracked(),
             params: self.params,
+            rate: self.s.project_format.get_untracked().0,
+            bits: self.s.project_format.get_untracked().1,
             load_report: Vec::new(),
         }
     }
@@ -2364,6 +2461,7 @@ impl AppState {
         self.loop_start_saved = p.loop_start_ticks as f64;
         self.clip_looping = false;
         self.s.loop_on.set(p.loop_on);
+        self.s.project_format.set((p.rate, p.bits));
         if !p.load_report.is_empty() {
             self.set_status(p.load_report.join(" "));
         }
@@ -2965,6 +3063,7 @@ impl AppState {
             loop_on: self.s.loop_on.get_untracked(),
             mute: self.s.mute.get_untracked(),
             solo: self.s.solo.get_untracked(),
+            format: self.s.project_format.get_untracked(),
         }
     }
 
@@ -3270,6 +3369,7 @@ impl AppState {
             Action::InsertClip => self.insert_clips(),
             Action::LoopSelection => self.run_menu_action(cx, MenuAction::Cmd(Action::LoopSelection)),
             Action::PlayStop => cx.emit(AppEvent::TogglePlay),
+            Action::Tap => cx.emit(AppEvent::Tap),
             Action::Rewind => {
                 let lane = self.s.arrangement.with_untracked(|a| a.insert.1);
                 self.set_insert(0, lane);

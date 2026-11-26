@@ -84,7 +84,7 @@ const KINDS: [(u8, Rgba); 6] = [
 
 /// The colour a preset is shown in: its first channel kind's.
 pub fn preset_color(kinds: u8) -> Rgba {
-    KINDS.iter().find(|(k, _)| kinds & k != 0).map_or(ACCENT, |(_, c)| *c)
+    KINDS.iter().find(|(k, _)| kinds & k != 0).map_or(NEUTRAL_HI, |(_, c)| *c)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -418,7 +418,7 @@ impl View for PresetList {
                     let hovered = self.hover == Some(i);
                     let card = vg::Rect::from_ltrb(row.left + 8.0 * s, row.top + 3.0 * s, row.right - 8.0 * s, row.bottom - 3.0 * s);
                     let rr = gfx::rrect(card, RADIUS_KEY * s);
-                    let mut dash = gfx::stroke(if hovered { ACCENT } else { STROKE }, gfx::hairline(s));
+                    let mut dash = gfx::stroke(if hovered { NEUTRAL_HI } else { STROKE }, gfx::hairline(s));
                     if let Some(e) = vg::PathEffect::dash(&[4.0 * s, 3.0 * s], 0.0) {
                         dash.set_path_effect(e);
                     }
@@ -427,7 +427,7 @@ impl View for PresetList {
                     let t = format!("+  Import audio as DPCM  ·  {:.1} KB free", free as f32 / 1024.0);
                     let tw = gfx::text_width(&fs, &t);
                     let base = gfx::baseline_for_center(&fs, row.center_y());
-                    gfx::draw_text(canvas, &t, (card.center_x() - tw * 0.5).round(), base.round(), &fs, if hovered { ACCENT } else { TEXT_LO });
+                    gfx::draw_text(canvas, &t, (card.center_x() - tw * 0.5).round(), base.round(), &fs, if hovered { NEUTRAL_HI } else { TEXT_LO });
                 }
                 Item::Layout(l) | Item::Preset(l) => {
                     let is_preset = matches!(it, Item::Preset(_));
@@ -436,8 +436,8 @@ impl View for PresetList {
                     let card = vg::Rect::from_ltrb(row.left + 4.0 * s, row.top + 2.0 * s, row.right - 4.0 * s, row.bottom - 2.0 * s);
                     let rr = gfx::rrect(card, RADIUS_KEY * s);
                     if selected {
-                        canvas.draw_rrect(rr, &gfx::vgrad(card, ACCENT.with_alpha(0.14), ACCENT.with_alpha(0.06)));
-                        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(ACCENT.with_alpha(0.35)));
+                        canvas.draw_rrect(rr, &gfx::vgrad(card, NEUTRAL_HI.with_alpha(0.14), NEUTRAL_HI.with_alpha(0.06)));
+                        gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(NEUTRAL_HI.with_alpha(0.35)));
                     } else if hovered {
                         canvas.draw_rrect(rr, &gfx::vgrad(card, Rgba::white(0.06), Rgba::white(0.025)));
                     }
@@ -459,7 +459,7 @@ impl View for PresetList {
                     } else {
                         for k in 0..3 {
                             let g = vg::Rect::from_xywh(gx, gy - 5.0 * s + k as f32 * 4.0 * s, 8.0 * s, 2.0 * s);
-                            canvas.draw_rect(g, &gfx::fill(ACCENT.with_alpha(0.9 - 0.25 * k as f32)));
+                            canvas.draw_rect(g, &gfx::fill(NEUTRAL_HI.with_alpha(0.9 - 0.25 * k as f32)));
                         }
                     }
                     let ink = if selected || current { TEXT_HI } else { TEXT_MID };
@@ -479,7 +479,7 @@ impl View for PresetList {
                         if current {
                             let t = "ON";
                             let tw = gfx::text_width(&fs, t);
-                            gfx::draw_text(canvas, t, (rx - 4.0 * s - tw).round(), base.round(), &fs, ACCENT);
+                            gfx::draw_text(canvas, t, (rx - 4.0 * s - tw).round(), base.round(), &fs, NEUTRAL_HI);
                         }
                     } else {
                         let t = if LAYOUTS[l].vrc6 { "+VRC6" } else { "2A03" };
@@ -601,7 +601,7 @@ impl View for DragGhost {
         gfx::drop_shadow(canvas, &rr, 0.0, 6.0 * s, 16.0 * s, 0.0, Rgba::black(0.55));
         canvas.draw_rrect(rr, &gfx::vgrad(r, Rgba::hex(0x262626), Rgba::hex(0x161616)));
         let edge = match fits {
-            Some(true) => ACCENT,
+            Some(true) => NEUTRAL_HI,
             Some(false) => RECORD,
             None => STROKE,
         };

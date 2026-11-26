@@ -28,7 +28,7 @@ rewritten.
 | Asset | Origin | Licence | Licence file |
 |---|---|---|---|
 | `assets/fonts/Inter-{Regular,Medium,SemiBold,Bold,ExtraBoldItalic}.ttf` | Inter 4.001 (git 9221beed3), "Copyright 2016 The Inter Project Authors" (read from each font's `name` table) | SIL OFL 1.1 | `assets/fonts/Inter-OFL.txt` |
-| `assets/fonts/JetBrainsMono-{Regular,Medium}.ttf` | JetBrains Mono 2.304, "Copyright 2020 The JetBrains Mono Project Authors" | SIL OFL 1.1 | `assets/fonts/JetBrainsMono-OFL.txt` |
+| `assets/fonts/JetBrainsMono-{Regular,Medium,SemiBold}.ttf` | JetBrains Mono 2.304 (SemiBold added in the design pass from the same release zip; the Medium file in that zip is byte-identical to ours, SHA-256 31c92d01…), "Copyright 2020 The JetBrains Mono Project Authors" | SIL OFL 1.1 | `assets/fonts/JetBrainsMono-OFL.txt` |
 
 The fonts are embedded unmodified, under their original names, as OFL 1.1 allows.
 

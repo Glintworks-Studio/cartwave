@@ -108,6 +108,8 @@ pub enum Action {
     PlayStop,
     Continue,
     Rewind,
+    /// TAP tempo (the top bar's TAP key; design pass, ours).
+    Tap,
     ToggleBrowser,
     Follow,
     Escape,
@@ -236,6 +238,7 @@ pub static TABLE: &[Shortcut] = &[
     sc!(PlayStop, "transport.play", "Play / Stop", "Transport", &[k(Code::Space)], &[k(Code::Space)], APP),
     sc!(Continue, "transport.continue", "Continue from the stop point", "Transport", &[shift(Code::Space)], &[shift(Code::Space)], APP),
     sc!(Rewind, "transport.rewind", "Back to the start", "Transport", &[k(Code::Home)], &[k(Code::Home)], APP),
+    sc!(Tap, "transport.tap", "Tap Tempo", "Transport", &[k(Code::KeyT)], &[k(Code::KeyT)], EDITORS),
     sc!(LoopSelection, "arrangement.loop_selection", "Loop Selection", "Arrangement", &[cmd(Code::KeyL)], &[cmd(Code::KeyL)], ARR),
     sc!(OpenClip, "arrangement.open_clip", "Open the clip in the piano roll", "Arrangement", &[k(Code::Enter), k(Code::NumpadEnter)], &[k(Code::Enter), k(Code::NumpadEnter)], ARR),
     sc!(ToggleBrowser, "view.browser", "Browser", "View", &[cmd_alt(Code::KeyB)], &[cmd_alt(Code::KeyB)], APP),

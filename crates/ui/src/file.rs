@@ -5,7 +5,9 @@
 //! Volume control is a channel volume that scales note volumes; loop start
 //! and loop on/off are saved), 4 (track names and colours, clip colours:
 //! Batch 3. A version 1–3 lane `name` was informational and is not read, so
-//! those files open with the default names, exactly as before). Older files are migrated on load so they
+//! those files open with the default names, exactly as before), 5 (the
+//! project's format, sample rate and bit depth: the design pass. Older files
+//! open as 48 kHz / 16-bit, the export default they had). Older files are migrated on load so they
 //! sound exactly as before (`migrate_v2`).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
@@ -27,7 +29,15 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 4;
+pub const VERSION: u32 = 5;
+/// A new project's format (the display's indicators, the export default).
+pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
+pub const DEFAULT_BIT_DEPTH: u16 = 24;
+/// The format version 1–4 files open with (the export default they had).
+pub const OLD_BIT_DEPTH: u16 = 16;
+/// The rates and depths a project can have (as the export offers).
+pub const PROJECT_RATES: [u32; 2] = [44_100, 48_000];
+pub const BIT_DEPTHS: [u16; 2] = [16, 24];
 pub const EXTENSION: &str = "chipdaw";
 
 /// Everything a project file stores.
@@ -47,6 +57,9 @@ pub struct Project {
     pub mute: u8,
     pub solo: u8,
     pub params: Params,
+    /// The project's format (version 5): sample rate and bit depth.
+    pub rate: u32,
+    pub bits: u16,
     /// What loading changed (migration notes); empty for a current file.
     pub load_report: Vec<String>,
 }
@@ -66,6 +79,8 @@ impl Project {
             mute: 0,
             solo: 0,
             params: crate::instruments::default_params(),
+            rate: DEFAULT_PROJECT_RATE,
+            bits: DEFAULT_BIT_DEPTH,
             load_report: Vec::new(),
         }
     }
@@ -98,6 +113,11 @@ struct FileV1 {
     /// Version 2: imported DPCM samples (hex-encoded delta bytes).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     samples: Vec<SampleV2>,
+    /// Version 5: the project's sample rate (Hz) and bit depth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rate: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bits: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -399,6 +419,8 @@ pub fn to_string(p: &Project) -> String {
             .filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
             .map(|(i, s)| SampleV2 { slot: i as u8, name: s.name.clone(), rate: s.rate, data: crate::dpcm::to_hex(&s.bytes) })
             .collect(),
+        rate: Some(p.rate),
+        bits: Some(p.bits),
     };
     compact_notes(&serde_json::to_string_pretty(&f).expect("project serialises"))
 }
@@ -594,6 +616,18 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         mute,
         solo,
         params,
+        // Version 5: the project's format; older files had 48 kHz / 16-bit
+        // as their export default.
+        rate: match f.rate {
+            Some(r) if PROJECT_RATES.contains(&r) => r,
+            Some(r) => return Err(format!("Unsupported project sample rate {r} Hz.")),
+            None => DEFAULT_PROJECT_RATE,
+        },
+        bits: match f.bits {
+            Some(b) if BIT_DEPTHS.contains(&b) => b,
+            Some(b) => return Err(format!("Unsupported project bit depth {b}.")),
+            None => OLD_BIT_DEPTH,
+        },
         load_report: Vec::new(),
     };
     if h.version.unwrap_or(VERSION) < 3 {
@@ -762,6 +796,11 @@ pub struct Settings {
     pub export: Vec<String>,
     /// Interface scale in percent (Settings > Display; 100 = the OS scale).
     pub ui_scale: u32,
+    /// The spectrum's style (its right-click menu): "bars", "leds", "line"
+    /// or "dots".
+    pub spectrum_style: String,
+    /// The browser auditions a preset when it is selected (its Preview key).
+    pub preview_on_select: bool,
 }
 
 /// Open Recent keeps this many projects.
@@ -786,6 +825,8 @@ impl Default for Settings {
             browser_open: true,
             export: Vec::new(),
             ui_scale: 100,
+            spectrum_style: "bars".into(),
+            preview_on_select: true,
         }
     }
 }
@@ -964,12 +1005,14 @@ mod tests {
             mute: 0b0000_0100,
             solo: 0b1000_0000,
             params,
+            rate: 44_100,
+            bits: 16,
             load_report: Vec::new(),
         }
     }
 
     /// The parts of a project that are saved (view, selection: not).
-    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, (u32, u32, bool), u8, u8, Params);
+    type SavedParts = (Vec<Arc<Clip>>, u32, f32, SoundChip, FilterMode, bool, (u32, u32, bool), u8, u8, Params, (u32, u16));
 
     fn saved_parts(p: &Project) -> SavedParts {
         (
@@ -983,6 +1026,7 @@ mod tests {
             p.mute,
             p.solo,
             p.params,
+            (p.rate, p.bits),
         )
     }
 
@@ -1008,7 +1052,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 4,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 5,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -1018,9 +1062,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 4,", "\"version\": 5,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 5,", "\"version\": 6,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 5"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 6"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

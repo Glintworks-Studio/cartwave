@@ -98,15 +98,21 @@ pub const BAND_BOTTOM: Rgba = Rgba::hex(0x0A0A0A);
 /// The arrangement canvas: lit from the top, falling to black.
 pub const CANVAS_TOP: Rgba = Rgba::hex(0x191919);
 pub const CANVAS_BOTTOM: Rgba = Rgba::hex(0x0A0A0A);
-/// Key bodies are lit from below (dark top, lighter bottom).
-pub const KEY_TOP: Rgba = Rgba::hex(0x191919);
+/// Key bodies are lit from below (dark top, lighter bottom). Option D:
+/// `#161616 → #424242` (docs/design/VISUAL-SPEC.md §1).
+pub const KEY_TOP: Rgba = Rgba::hex(0x161616);
 pub const KEY_BOTTOM: Rgba = Rgba::hex(0x424242);
 /// Label segment of a split pill (lighter than the value segment).
 pub const PILL_LABEL_TOP: Rgba = Rgba::hex(0x323232);
 pub const PILL_LABEL_BOTTOM: Rgba = Rgba::hex(0x545454);
 
 // Text
-pub const TEXT_HI: Rgba = Rgba::hex(0xD9D9D9);
+pub const TEXT_HI: Rgba = Rgba::hex(0xE6E6E6);
+/// Values in the display.
+pub const TEXT_VALUE: Rgba = Rgba::hex(0xEDEDED);
+/// Key icons: idle and dim (the unselected view, disabled keys).
+pub const ICON_IDLE: Rgba = Rgba::hex(0xD6D6D6);
+pub const ICON_DIM: Rgba = Rgba::hex(0x8C8C8C);
 /// Track names, key glyphs. >= 4.5:1 on every surface incl. key faces (#2D).
 pub const TEXT_MID: Rgba = Rgba::hex(0x9A9A9A);
 /// Secondary information (labels, hints, read-outs): >= 4.5:1 on every panel
@@ -118,8 +124,19 @@ pub const TEXT_GHOST: Rgba = Rgba::hex(0x3A3A3A);
 pub const READOUT_TOP: Rgba = Rgba::hex(0xDEDEDE);
 pub const READOUT_BOTTOM: Rgba = Rgba::hex(0xA6A6A6);
 
-// Accent: the lime of the loop light.
+// Lime: switched-on states only (VISUAL-SPEC.md §1): lit M/S glyphs, the
+// display's active indicators, the selected view icon, the loop brace while
+// looping. Everything else is neutral.
 pub const ACCENT: Rgba = Rgba::hex(0xC7D74E);
+/// The neutral stand-in for the old accent: playhead, focus, dial arcs,
+/// checked buttons.
+pub const NEUTRAL_HI: Rgba = Rgba::hex(0xE6E6E6);
+/// The display's indicators while inactive.
+pub const INDICATOR_OFF: Rgba = Rgba::hex(0x4A4A4A);
+/// Hairlines between the display's cells.
+pub const CELL_DIVIDER: Rgba = Rgba::hex(0x2A2A2A);
+/// The record glyph (drawn, disabled until MIDI input arrives).
+pub const RECORD_GLYPH: Rgba = Rgba::hex(0xB9534C);
 pub const RECORD: Rgba = Rgba::hex(0xE5484D);
 
 // Lanes: the bright end of each colour strip (the strip darkens to ~65% on
@@ -131,6 +148,37 @@ pub const LANE_NOISE: Rgba = Rgba::hex(0xB3AA94);
 pub const LANE_DPCM: Rgba = Rgba::hex(0xE39A42);
 pub const LANE_VRC6_PULSE: Rgba = Rgba::hex(0xD5609E);
 pub const LANE_VRC6_SAW: Rgba = Rgba::hex(0x3CC4A6);
+
+// The track volume meter-fader: cool-to-hot stops over its full 68 px
+// (px from the left, colour).
+pub const FADER_STOPS: [(f32, Rgba); 5] = [
+    (0.0, Rgba::hex(0x2F6FD6)),
+    (22.0, Rgba::hex(0x2FB7B0)),
+    (44.0, Rgba::hex(0xC7D74E)),
+    (56.0, Rgba::hex(0xF0A23A)),
+    (68.0, Rgba::hex(0xE0483B)),
+];
+
+// Arrangement surfaces (Option D)
+/// Ruler band and the TRACKS cell beside it.
+pub const RULER_BG: Rgba = Rgba::hex(0x0F0F0F);
+/// The one hairline under the ruler, and the header column's right edge.
+pub const LINE_SOFT: Rgba = Rgba::hex(0x1E1E1E);
+/// Ruler bar lines and beat ticks; sixteenth ticks.
+pub const RULER_TICK: Rgba = Rgba::hex(0x3A3A3A);
+pub const RULER_TICK_MINOR: Rgba = Rgba::hex(0x262626);
+/// Lane rows alternate between these.
+pub const ROW_A: Rgba = Rgba::hex(0x171717);
+pub const ROW_B: Rgba = Rgba::hex(0x141414);
+/// Lane grid: bars and beats.
+pub const GRID_BAR: Rgba = Rgba::hex(0x262626);
+pub const GRID_BEAT: Rgba = Rgba::hex(0x1D1D1D);
+/// The big italic channel number in the track header.
+pub const NUMBER_INK: Rgba = Rgba::hex(0x222222);
+/// The profile badge's lock and chip name.
+pub const BADGE_INK: Rgba = Rgba::hex(0xA8A8A8);
+/// Clip header text.
+pub const CLIP_INK: Rgba = Rgba::hex(0x111111);
 
 // Meter gradient stops
 pub const METER_GREEN: Rgba = Rgba::hex(0x9CCB3B);
@@ -153,21 +201,27 @@ pub const SP_4: f32 = 16.0;
 pub const SP_5: f32 = 24.0;
 
 // Shell metrics (logical px)
-pub const TOPBAR_HEIGHT: f32 = 60.0;
-/// Transport capsule and meter box.
-pub const BOX_W: f32 = 204.0;
-pub const BOX_H: f32 = 44.0;
-/// CPU / kHz split pills.
-pub const PILL_W: f32 = 72.0;
-pub const PILL_H: f32 = 20.0;
+pub const TOPBAR_HEIGHT: f32 = 76.0;
+/// The display well and the spectrum well.
+pub const DISPLAY_W: f32 = 560.0;
+pub const WELL_H: f32 = 56.0;
+pub const SPECTRUM_W: f32 = 216.0;
+/// View and transport keys; the TAP key.
+pub const KEY_BIG: f32 = 40.0;
+pub const KEY_TAP: f32 = 56.0;
+/// Corner radius of the 40 / 56 px keys and of the wells.
+pub const RADIUS_KEY_BIG: f32 = 8.0;
 pub const KEY_SIZE: f32 = 24.0;
 pub const LANE_STRIP_W: f32 = 16.0;
 
 // Arrangement metrics (logical px)
-pub const LANE_HEIGHT: f32 = 60.0;
-pub const RULER_HEIGHT: f32 = 40.0;
-pub const TRACK_HEADER_WIDTH: f32 = 356.0;
-pub const CLIP_V_INSET: f32 = 4.0;
+/// A track row: 72 px plus its 1 px bottom hairline (the lane pitch is
+/// `state::LANE_H_NORMAL`, 73).
+pub const LANE_HEIGHT: f32 = 72.0;
+pub const RULER_HEIGHT: f32 = 28.0;
+/// The header column including its right hairline.
+pub const TRACK_HEADER_WIDTH: f32 = 380.0;
+pub const CLIP_V_INSET: f32 = 2.0;
 pub const CLIP_HEADER_HEIGHT: f32 = 16.0;
 pub const CLIP_RESIZE_ZONE: f32 = 8.0;
 

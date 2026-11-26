@@ -19,12 +19,12 @@ debug = true
 # the commit list. Pinned to an exact commit; to hack on a local checkout, swap
 # these for `path = "../vizia/..."` entries.
 [patch.crates-io]
-vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
-vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "5a3b035a713100befb855e4c047b98a81263fc5a" }
+vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }
+vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "60907aad51d65b27e419395f5eb9708cdd0978aa" }

@@ -239,8 +239,8 @@ impl View for Dial {
             (START_DEG, n * SWEEP_DEG)
         };
         if sweep.abs() > 0.5 && !locked {
-            let col = ACCENT.lighten(0.1 + 0.15 * act);
-            let mut glow = gfx::stroke(ACCENT.with_alpha(0.45 + 0.35 * act), (ARC_W + 2.0) * s);
+            let col = NEUTRAL_HI.lighten(0.1 + 0.15 * act);
+            let mut glow = gfx::stroke(NEUTRAL_HI.with_alpha(0.45 + 0.35 * act), (ARC_W + 2.0) * s);
             glow.set_stroke_cap(vg::PaintCap::Round);
             glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 3.5 * s, false));
             canvas.draw_arc(oval, a0, sweep, false, &glow);
@@ -249,6 +249,7 @@ impl View for Dial {
             arc.set_style(vg::PaintStyle::Stroke);
             arc.set_stroke_width(ARC_W * s);
             arc.set_stroke_cap(vg::PaintCap::Round);
+            arc.set_dither(gfx::dither_on());
             arc.set_shader(gfx::linear(
                 (cxp, cyp - arc_r),
                 (cxp, cyp + arc_r),
@@ -267,6 +268,7 @@ impl View for Dial {
         let mut dome = vg::Paint::default();
         dome.set_anti_alias(true);
         let lift = 0.05 * act;
+        dome.set_dither(gfx::dither_on());
         dome.set_shader(gfx::radial(
             (cxp - r * 0.35, cyp - r * 0.45),
             r * 1.7,
@@ -297,6 +299,7 @@ impl View for Dial {
             vg::gradient::Colors::new(&c, None, vg::TileMode::Clamp, None),
             vg::gradient::Interpolation::default(),
         );
+        sheen.set_dither(gfx::dither_on());
         sheen.set_shader(vg::gradient::shaders::sweep_gradient(
             (cxp, cyp),
             (0.0, 360.0),
@@ -309,6 +312,7 @@ impl View for Dial {
         rim.set_anti_alias(true);
         rim.set_style(vg::PaintStyle::Stroke);
         rim.set_stroke_width(1.0 * s);
+        rim.set_dither(gfx::dither_on());
         rim.set_shader(gfx::linear(
             (cxp, cyp - r),
             (cxp, cyp + r),
@@ -319,6 +323,7 @@ impl View for Dial {
         // Specular highlight upper-left.
         let mut spec = vg::Paint::default();
         spec.set_anti_alias(true);
+        spec.set_dither(gfx::dither_on());
         spec.set_shader(gfx::radial(
             (cxp - r * 0.42, cyp - r * 0.5),
             r * 0.6,
@@ -332,7 +337,7 @@ impl View for Dial {
         let (ca, sa) = (ang.cos(), ang.sin());
         let p0 = (cxp + ca * r * 0.38, cyp + sa * r * 0.38);
         let p1 = (cxp + ca * r * 0.80, cyp + sa * r * 0.80);
-        let mut pglow = gfx::stroke(ACCENT.lighten(0.3).with_alpha(0.5 * act), 3.0 * s);
+        let mut pglow = gfx::stroke(NEUTRAL_HI.lighten(0.3).with_alpha(0.5 * act), 3.0 * s);
         pglow.set_stroke_cap(vg::PaintCap::Round);
         pglow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 2.0 * s, false));
         canvas.draw_line(p0, p1, &pglow);
@@ -393,8 +398,8 @@ impl View for Dial {
                 prr,
                 &gfx::vgrad(
                     pill,
-                    ACCENT.lighten(0.08).with_alpha(a),
-                    ACCENT.darken(0.2).with_alpha(a),
+                    NEUTRAL_HI.lighten(0.08).with_alpha(a),
+                    NEUTRAL_HI.darken(0.2).with_alpha(a),
                 ),
             );
             gfx::top_highlight(canvas, &prr, s, Rgba::white(0.3 * a));

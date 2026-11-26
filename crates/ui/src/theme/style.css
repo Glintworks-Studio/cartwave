@@ -11,10 +11,12 @@
     --bg-inset: #0C0C0C;
     --line: #1A1A1A;
     --stroke: #323232;
-    --text-hi: #D9D9D9;
+    --text-hi: #E6E6E6;
     --text-mid: #9A9A9A;
     --text-lo: #808080;
-    --accent: #C7D74E;
+    /* Lime is for switched-on states only (VISUAL-SPEC.md §1); the
+       stylesheet has none. --accent is the neutral light grey. */
+    --accent: #E6E6E6;
 
     background-color: var(--bg-0);
     font-family: "Inter";
@@ -36,42 +38,43 @@ label {
     padding: 0px;
 }
 
-/* Top bar: lit from the top edge (a 1 px #323232 line), falling to black. */
+/* Top bar (Option D, docs/design/VISUAL-SPEC.md §2.2): 76 px, 16 px side
+   padding, three groups spaced between. Lit from a 1 px #323232 top line,
+   falling to black, over a #1A1A1A bottom hairline. */
 .topbar {
-    height: 60px;
+    height: 76px;
     layout-type: row;
     alignment: center;
+    padding-left: 16px;
+    padding-right: 16px;
     background-image: linear-gradient(to bottom, #191919, #0A0A0A);
-    shadow: 0px 1px 0px 0px #323232 inset;
+    shadow: 0px 1px 0px 0px #323232 inset, 0px -1px 0px 0px #1A1A1A inset;
 }
 
-.bar-side {
-    height: 1s;
-    width: 1s;
+.bar-group {
+    width: auto;
+    height: auto;
+    gap: 12px;
+    alignment: center;
+    layout-type: row;
+}
+
+.key-group {
+    width: auto;
+    height: auto;
     gap: 8px;
     layout-type: row;
 }
 
-.bar-side.left {
-    alignment: left;
-    padding-left: 8px;
+.bar-divider {
+    width: 1px;
+    height: 28px;
+    background-color: #323232;
 }
 
-.bar-side.right {
-    alignment: right;
-    padding-right: 8px;
-    gap: 4px;
-}
-
-.pill-stack {
-    width: auto;
-    height: auto;
-    gap: 4px;
-}
-
-.bar-gap {
-    width: 8px;
-    height: 4px;
+.bar-spacer {
+    width: 1s;
+    height: 1px;
 }
 
 /* Floating notice under the transport (status, audio problems, recovery):
@@ -118,23 +121,18 @@ label {
 }
 
 .track-column {
-    width: 356px;
+    width: 379px;
     height: 1s;
     background-color: var(--bg-0);
 }
 
-/* The empty cell beside the ruler: band gradient under a hairline. */
+/* The TRACKS cell beside the ruler is drawn (arrangement::TracksCell). */
 .band-cell {
-    height: 40px;
-    background-image: linear-gradient(to bottom, #121212, #0A0A0A);
-    shadow: 0px 1px 0px 0px #1A1A1A inset;
+    height: 28px;
 }
 
 .track-row {
     layout-type: row;
-    alignment: right;
-    padding-right: 8px;
-    gap: 8px;
 }
 
 .key {
@@ -142,10 +140,11 @@ label {
     height: 24px;
 }
 
+/* The header column's right hairline (one line, no stacked borders). */
 .col-divider {
     width: 1px;
     height: 1s;
-    background-image: linear-gradient(to bottom, #1A1A1A, #161616 50%, #0B0B0B);
+    background-color: #1E1E1E;
 }
 
 /* ───────────── Panels (bottom inspector / piano roll) ─────────────
@@ -256,8 +255,8 @@ label {
 }
 
 .btn.checked {
-    shadow: 0px 1px 0px 0px rgba(199, 215, 78, 0.55) inset,
-            0px 0px 8px 0px rgba(199, 215, 78, 0.18);
+    shadow: 0px 1px 0px 0px rgba(230, 230, 230, 0.35) inset,
+            0px 0px 8px 0px rgba(230, 230, 230, 0.10);
 }
 
 /* ───────────── Inset text fields ─────────────
@@ -279,8 +278,8 @@ label {
 
 .field:active, .field:focus-within {
     shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.90) inset,
-            0px 0px 0px 1px rgba(199, 215, 78, 0.70),
-            0px 0px 12px 0px rgba(199, 215, 78, 0.25),
+            0px 0px 0px 1px rgba(230, 230, 230, 0.55),
+            0px 0px 12px 0px rgba(230, 230, 230, 0.12),
             0px 1px 0px 0px rgba(255, 255, 255, 0.05);
 }
 
@@ -295,7 +294,7 @@ label {
     font-size: 12;
     alignment: left;
     color: var(--text-hi);
-    selection-color: rgba(199, 215, 78, 0.30);
+    selection-color: rgba(255, 255, 255, 0.20);
 }
 
 .field textbox:placeholder-shown {
@@ -305,12 +304,12 @@ label {
 /* Gently pulsing caret: vizia toggles `.caret` on its blink timer; we ease
    between a bright and a faint caret instead of a hard on/off. */
 .field textbox:focus {
-    caret-color: rgba(199, 215, 78, 0.18);
+    caret-color: rgba(230, 230, 230, 0.18);
     transition: caret-color 450ms ease-in-out;
 }
 
 .field textbox:focus.caret {
-    caret-color: #C7D74E;
+    caret-color: #E6E6E6;
     transition: caret-color 450ms ease-in-out;
 }
 

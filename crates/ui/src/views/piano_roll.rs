@@ -1077,7 +1077,7 @@ impl View for PianoRoll {
                     );
                     canvas.draw_rect(
                         vg::Rect::from_ltrb(rect.left, rect.top + px(y0), rect.left + px(KEYS_W), rect.top + px(y1)),
-                        &gfx::fill(ACCENT.with_alpha(0.35)),
+                        &gfx::fill(NEUTRAL_HI.with_alpha(0.35)),
                     );
                 }
             }
@@ -1090,8 +1090,8 @@ impl View for PianoRoll {
                     rect.left + px(press.0.max(cur.0)),
                     rect.top + px(press.1.max(cur.1)),
                 );
-                canvas.draw_rect(r, &gfx::fill(ACCENT.with_alpha(0.12)));
-                canvas.draw_rect(r, &gfx::stroke(ACCENT.with_alpha(0.8), s));
+                canvas.draw_rect(r, &gfx::fill(NEUTRAL_HI.with_alpha(0.12)));
+                canvas.draw_rect(r, &gfx::stroke(NEUTRAL_HI.with_alpha(0.8), s));
             }
 
             // Playhead.

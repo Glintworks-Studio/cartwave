@@ -11,4 +11,5 @@ pub mod overlay;
 pub mod piano_roll;
 pub mod rename;
 pub mod ruler;
+pub mod topbar;
 pub mod visualizer;

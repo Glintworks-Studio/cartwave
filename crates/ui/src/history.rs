@@ -203,6 +203,20 @@ impl History {
         true
     }
 
+    /// Folds `now` into the last step instead of adding one (a TAP tempo
+    /// sequence is one undo step). Only when nothing was undone since: with
+    /// redo steps waiting it commits normally.
+    pub fn amend(&mut self, now: Doc) -> bool {
+        if self.undo.is_empty() || !self.redo.is_empty() {
+            return self.commit(now);
+        }
+        if now.same_as(&self.current) {
+            return false;
+        }
+        self.current = now;
+        true
+    }
+
     /// Commits `now` (an edit not yet committed is its own step), then
     /// returns the document before the last step.
     pub fn undo(&mut self, now: Doc) -> Option<Doc> {

@@ -356,6 +356,8 @@ pub enum MenuAction {
     PresetRename(usize),
     PresetDelete(usize),
     PresetReveal(usize),
+    /// The spectrum's style.
+    SpectrumStyle(crate::views::chrome::SpectrumStyle),
     /// Opens a submenu.
     Sub(SubMenu),
     Separator,
@@ -1665,9 +1667,104 @@ impl PianoState {
 
 /// Lane height in the arrangement: normal, and compact while the piano roll
 /// is open (so the piano roll gets the room; PIANOROLL.md §2).
-pub const LANE_H_NORMAL: f32 = 60.0;
+/// A track row's pitch: 72 px plus its 1 px hairline (Option D).
+pub const LANE_H_NORMAL: f32 = 73.0;
 /// Lane viewport height (below the ruler) while the piano roll is open: the
 /// default (four lanes) and the smallest the split handle allows (one lane).
 /// Lanes keep their full height and scroll vertically.
 pub const PIANO_PANE_DEFAULT: f32 = 4.0 * LANE_H_NORMAL;
 pub const PIANO_PANE_MIN: f32 = LANE_H_NORMAL;
+
+/// A track header's volume fader (design pass §2.4): the lane's channel
+/// volume, the same value as the inspector's Volume dial (undoable, saved).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fader {
+    /// 0..1 of the travel.
+    pub pos: f32,
+    /// Why it can't be used, if it can't (principle 3: the reason on hover).
+    pub reason: Option<&'static str>,
+}
+
+impl Default for Fader {
+    fn default() -> Self {
+        Self { pos: 1.0, reason: None }
+    }
+}
+
+/// The parameter a lane's fader moves, if it has one: Volume (0–15) on the
+/// pulses, noise and VRC6 pulses, the saw's accumulator rate (0–63).
+pub fn fader_param(lane: usize) -> Option<ParamId> {
+    match lane {
+        chip::driver::LANE_TRI | chip::driver::LANE_DMC => None,
+        chip::driver::LANE_SAW => Some(ParamId::Rate),
+        _ => Some(ParamId::Volume),
+    }
+}
+
+/// The lane's fader as the header shows it.
+pub fn fader_of(lane: usize, params: &engine::Params) -> Fader {
+    let Some(pid) = fader_param(lane) else {
+        return Fader {
+            pos: 1.0,
+            reason: Some(if lane == chip::driver::LANE_TRI {
+                "The triangle channel has no volume control on the 2A03."
+            } else {
+                "DPCM samples play at a fixed level on the 2A03."
+            }),
+        };
+    };
+    let (lo, hi, _) = pid.range(lane);
+    let pos = (params.get(lane, pid) - lo) as f32 / (hi - lo).max(1) as f32;
+    // In the decay envelopes the Volume register is the decay speed.
+    let decay = pid == ParamId::Volume && ParamId::for_lane(lane).contains(&ParamId::Envelope) && params.get(lane, ParamId::Envelope) != 0;
+    Fader { pos, reason: decay.then_some("Envelope is set to decay, so Volume sets the decay speed. Set Envelope to constant in the inspector to use the fader.") }
+}
+
+/// The fader's value for a 0..1 position (whole register steps).
+pub fn fader_value(lane: usize, pos: f32) -> Option<(ParamId, i32)> {
+    let pid = fader_param(lane)?;
+    let (lo, hi, _) = pid.range(lane);
+    Some((pid, lo + (pos.clamp(0.0, 1.0) * (hi - lo) as f32).round() as i32))
+}
+
+/// Logical px of meter fill for a post-fader `level` (0..1 of full scale)
+/// on a fader of `width` px with its thumb centre at `pos` of the travel:
+/// the level on the fader's own scale, never past the thumb.
+pub fn meter_fill(level: f32, pos: f32, width: f32) -> f32 {
+    let thumb = (pos.clamp(0.0, 1.0) * width).round();
+    (level.clamp(0.0, 1.0) * width).min(thumb).max(0.0)
+}
+
+#[cfg(test)]
+mod fader_tests {
+    use super::*;
+
+    /// Design pass §4.4: at several fader positions and levels the meter
+    /// never passes the thumb.
+    #[test]
+    fn meter_never_passes_the_thumb() {
+        for pos in [0.0, 0.1, 0.33, 0.5, 0.78, 1.0] {
+            let thumb = (pos * 68.0f32).round();
+            for level in [0.0, 0.2, 0.5, 0.9, 1.0, 1.5] {
+                let f = meter_fill(level, pos, 68.0);
+                assert!(f <= thumb && f >= 0.0, "pos {pos} level {level}: fill {f} > thumb {thumb}");
+            }
+        }
+        assert_eq!(meter_fill(0.5, 1.0, 68.0), 34.0);
+    }
+
+    #[test]
+    fn faders_follow_the_channel_volume() {
+        let mut p = crate::instruments::default_params();
+        let pulse = chip::driver::LANE_P1;
+        p.set(pulse, ParamId::Envelope, 0);
+        p.set(pulse, ParamId::Volume, 15);
+        assert_eq!(fader_of(pulse, &p), Fader { pos: 1.0, reason: None });
+        assert_eq!(fader_value(pulse, 0.5), Some((ParamId::Volume, 8)));
+        p.set(pulse, ParamId::Envelope, 1);
+        assert!(fader_of(pulse, &p).reason.is_some(), "decay: the register is the decay speed");
+        assert!(fader_of(chip::driver::LANE_TRI, &p).reason.is_some());
+        assert!(fader_of(chip::driver::LANE_DMC, &p).reason.is_some());
+        assert_eq!(fader_value(chip::driver::LANE_SAW, 1.0), Some((ParamId::Rate, 63)));
+    }
+}

@@ -64,6 +64,44 @@ pub fn take_spans() -> [Duration; SPANS.len()] {
     ACC.with(|a| std::mem::replace(&mut *a.borrow_mut(), [Duration::ZERO; SPANS.len()]))
 }
 
+/// The process's private memory in bytes (the top bar's MEM read-out), if
+/// available on this platform. Windows: `PrivateUsage` from
+/// `K32GetProcessMemoryInfo` (documented; kernel32 exports the psapi call).
+pub fn process_memory() -> Option<u64> {
+    #[cfg(windows)]
+    {
+        /// PROCESS_MEMORY_COUNTERS_EX.
+        #[repr(C)]
+        #[derive(Default)]
+        struct Counters {
+            cb: u32,
+            page_fault_count: u32,
+            peak_working_set: usize,
+            working_set: usize,
+            quota_peak_paged_pool: usize,
+            quota_paged_pool: usize,
+            quota_peak_non_paged_pool: usize,
+            quota_non_paged_pool: usize,
+            pagefile_usage: usize,
+            peak_pagefile_usage: usize,
+            private_usage: usize,
+        }
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentProcess() -> isize;
+            fn K32GetProcessMemoryInfo(h: isize, c: *mut Counters, cb: u32) -> i32;
+        }
+        let mut c = Counters { cb: std::mem::size_of::<Counters>() as u32, ..Default::default() };
+        // SAFETY: a valid, sized out-struct; the pseudo-handle needs no closing.
+        let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
+        (ok != 0).then_some(c.private_usage as u64)
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// Process CPU time (user + kernel, all threads), if available on this platform.
 pub fn process_cpu_time() -> Option<Duration> {
     #[cfg(windows)]
