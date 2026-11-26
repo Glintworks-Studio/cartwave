@@ -1009,6 +1009,10 @@ pub struct TrackRow {
     /// A bottom-edge resize in progress: (press y in window logical px, height then).
     resize: Option<(f32, f32)>,
     edge_hover: bool,
+    /// A press on the row (window logical y, on the badge): a click or the
+    /// start of a header drag (T4).
+    press: Option<(f32, bool)>,
+    badge_hover: bool,
     /// ⌥+wheel row height in whole steps. A trackpad sends many small deltas
     /// per swipe, and one step per event took a short swipe from 72 to 300 px
     /// (MAC-CATCHUP.md, MC-D14); a mouse notch is still exactly one step.
@@ -1024,6 +1028,10 @@ type LitCache = RefCell<Option<((u32, i32, u32), vg::Image)>>;
 struct RowTextKey {
     selected: bool,
     name: String,
+    /// The badge (Batch 4a §5.3): the lock glyph and the channel ("2A03 P1"),
+    /// or the voice type without a lock ("PULSE"); `warn`: the track breaks
+    /// the profile (a warning mark).
+    badge: (&'static str, bool, bool),
     inst: Option<String>,
     pan: String,
     db: String,
@@ -1064,17 +1072,24 @@ fn render_row_text(lane: usize, k: &RowTextKey, l: &HeaderLayout, row_h: f32, s:
     let base = (y - m.ascent).round() + s.round();
     gfx::draw_text_clipped(canvas, &k.name, x.round(), base, l.name_w() * s, &f, TEXT_HI);
 
-    // The profile badge and the preset.
-    let chip = if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" };
+    // The badge (Batch 4a §5.3) and the preset.
+    let _ = lane;
+    let badge = badge_rect(l, &k.badge, s);
+    let badge = vg::Rect::from_xywh(r.left + badge.left, r.top + badge.top, badge.width(), badge.height());
+    gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(if k.badge.2 { WARN_INK } else { STROKE }));
     let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-    let bw = gfx::text_width(&bf, chip);
-    let (bx, by) = at(name_x, BADGE_Y);
-    let badge = vg::Rect::from_xywh(bx.round(), by.round(), (bw + (2.0 + 3.0 * BADGE_PAD + LOCK_W) * s).round(), BADGE_H * s);
-    gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
-    let lock_o = (badge.left + hl + BADGE_PAD * s, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
-    draw_lock(canvas, lock_o, s, BADGE_INK);
     let bb = (r.top + BADGE_BASELINE * s).round();
-    gfx::draw_text(canvas, chip, (lock_o.0 + (LOCK_W + BADGE_PAD) * s).round(), bb, &bf, BADGE_INK);
+    let mut tx = badge.left + hl + BADGE_PAD * s;
+    if k.badge.2 {
+        draw_warn_mark(canvas, (tx.round(), (badge.top + (BADGE_H - WARN_H) * 0.5 * s).round()), s);
+        tx += (WARN_W + BADGE_PAD) * s;
+    }
+    if k.badge.1 {
+        let lock_o = (tx, (badge.top + (BADGE_H - LOCK_H) * 0.5 * s).round());
+        draw_lock(canvas, lock_o, s, BADGE_INK);
+        tx += (LOCK_W + BADGE_PAD) * s;
+    }
+    gfx::draw_text(canvas, k.badge.0, tx.round(), bb, &bf, BADGE_INK);
     if let Some(text) = &k.inst {
         let fi = gfx::font(Face::Medium, PRESET_PX * s);
         let ix = badge.right + PRESET_GAP * s;
@@ -1091,7 +1106,14 @@ fn render_row_text(lane: usize, k: &RowTextKey, l: &HeaderLayout, row_h: f32, s:
         gfx::draw_text_tracked(canvas, text, (x - w * 0.5).round(), base, &vf, vtr, VALUE_INK);
     };
     value(&k.pan, pan_value_rect(l));
-    value(&k.db, db_value_rect(l, row_h));
+    if k.badge.1 {
+        // Locked (§5.3): a small lock glyph instead of the dB value.
+        let rect = db_value_rect(l, row_h);
+        let (x, y) = at(rect.0 + (rect.2 - LOCK_W) * 0.5, rect.1 + (row::VALUE_LINE - LOCK_H) * 0.5);
+        draw_lock(canvas, (x.round(), y.round()), s, VALUE_INK);
+    } else {
+        value(&k.db, db_value_rect(l, row_h));
+    }
 
     // dB scale marks beside a tall fader (≥ 96 px rows): ticks end 2 px
     // left of the thumb, labels 2 px left of the ticks. Nothing under the thumb.
@@ -1129,6 +1151,8 @@ impl TrackRow {
             text: RefCell::new(None),
             resize: None,
             edge_hover: false,
+            press: None,
+            badge_hover: false,
             #[cfg(target_os = "macos")]
             wheel: Default::default(),
         }
@@ -1161,13 +1185,14 @@ impl TrackRow {
             })
             .bind(s.header, |mut h| h.needs_redraw())
             .bind(s.drag_preset, |mut h| h.needs_redraw())
+            .bind(s.track_drag, |mut h| h.needs_redraw())
             .bind(s.chip, |mut h| h.needs_redraw())
             .bind(s.arrangement, move |mut h| {
                 let now = s.arrangement.with_untracked(|a| {
-                    let l = &a.lanes[lane];
+                    let Some(l) = a.lanes.get(lane) else { return (false, String::new()) };
                     (
                         a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
-                        format!("{}\u{1}{}\u{1}{:?}\u{1}{}\u{1}{}\u{1}{}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), l.name, l.color, l.height, l.pan, l.vol_db),
+                        format!("{}\u{1}{}\u{1}{:?}\u{1}{}\u{1}{}\u{1}{}\u{1}{:?}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), l.name, l.color, l.height, l.pan, l.vol_db, l.lock, l.voice),
                     )
                 });
                 if *seen.borrow() != now {
@@ -1179,7 +1204,12 @@ impl TrackRow {
                 // The full name, profile and preset (both texts truncate in the row).
                 let text = s.arrangement.map(move |a| {
                     let inst = a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default();
-                    format!("{} · {} · {inst}", a.lanes[lane].name, if lane >= chip::driver::LANE_V1 { "VRC6" } else { "2A03" })
+                    let Some(l) = a.lanes.get(lane) else { return String::new() };
+                    let kind = match l.lock {
+                        Some(c) => format!("locked to the {}", crate::tracks::channel_name(c)),
+                        None => format!("studio {}", crate::tracks::kind_name(l.voice)),
+                    };
+                    format!("{} · {kind} · {inst}", l.name)
                 });
                 Tooltip::new(cx, move |cx| {
                     Label::new(cx, text).class("tip-text").class("long");
@@ -1189,7 +1219,15 @@ impl TrackRow {
     }
 
     fn row_h(&self) -> f32 {
-        self.s.arrangement.with_untracked(|a| a.lanes[self.lane].height)
+        self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).map_or(crate::state::ROW_H_MIN, |l| l.height))
+    }
+
+    /// Whether the press point is on the badge (it opens the lock menu).
+    fn on_badge(&self, cx: &EventContext) -> bool {
+        let (x, y) = local_mouse(cx);
+        let l = self.s.header.get_untracked();
+        let b = badge_rect(&l, &badge_of(&self.s, self.lane), 1.0);
+        x >= b.left && x < b.right && y >= b.top && y < b.bottom
     }
 
     fn on_edge(&self, cx: &EventContext) -> bool {
@@ -1220,7 +1258,25 @@ impl View for TrackRow {
                     cx.emit(AppEvent::HoverHelp(String::new()));
                     cx.needs_redraw();
                 }
+                WindowEvent::MouseMove(_, _) if self.press.is_some_and(|p| !p.1) => {
+                    // Dragging the header: the track under the pointer is where it lands.
+                    let y = cx.mouse().cursor_y / cx.scale_factor();
+                    let (y0, _) = self.press.unwrap_or_default();
+                    if self.s.track_drag.get_untracked().is_some() || (y - y0).abs() >= TRACK_DRAG_START {
+                        let b = cx.bounds();
+                        let top = b.y / cx.scale_factor();
+                        let to = self.s.arrangement.with_untracked(|a| a.lane_at_clamped(a.lane_top(self.lane) + (y - top)));
+                        if self.s.track_drag.get_untracked() != Some((self.lane, to)) {
+                            self.s.track_drag.set(Some((self.lane, to)));
+                        }
+                        cx.emit(WindowEvent::SetCursor(CursorIcon::Grabbing));
+                    }
+                }
                 WindowEvent::MouseMove(_, _) => {
+                    if self.badge_hover != self.on_badge(cx) {
+                        self.badge_hover = !self.badge_hover;
+                        cx.emit(WindowEvent::SetCursor(if self.badge_hover { CursorIcon::Hand } else { CursorIcon::Default }));
+                    }
                     if let Some((y0, h0)) = self.resize {
                         let y = cx.mouse().cursor_y / cx.scale_factor();
                         // Alt while dragging: every track takes the height (P2-R20).
@@ -1256,11 +1312,39 @@ impl View for TrackRow {
                     cx.emit(AppEvent::GestureEnd);
                     meta.consume();
                 }
-                // T1: a click selects the track (Shift / Ctrl / Cmd adds).
+                // The badge (§5.2): its lock menu opens on release (a menu
+                // opened on press takes the release on its first row).
+                WindowEvent::MouseDown(MouseButton::Left) if self.on_badge(cx) => {
+                    self.press = Some((cx.mouse().cursor_y / cx.scale_factor(), true));
+                    cx.capture();
+                    meta.consume();
+                }
+                // T1: a click selects the track (Shift / Ctrl / Cmd adds); a
+                // drag moves it (T4, R88).
                 WindowEvent::MouseDown(MouseButton::Left) if !off => {
                     let m = *cx.modifiers();
                     cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                     cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
+                    self.press = Some((cx.mouse().cursor_y / cx.scale_factor(), false));
+                    cx.capture();
+                    meta.consume();
+                }
+                WindowEvent::MouseUp(MouseButton::Left) if self.press.is_some() => {
+                    let (_, badge) = self.press.take().unwrap_or_default();
+                    cx.release();
+                    if let Some((from, to)) = self.s.track_drag.get_untracked() {
+                        self.s.track_drag.set(None);
+                        if from != to {
+                            cx.emit(AppEvent::MoveTrack(from, to));
+                        }
+                    } else if badge && self.on_badge(cx) {
+                        let sc = cx.scale_factor();
+                        let b = cx.bounds();
+                        let l = self.s.header.get_untracked();
+                        let br = badge_rect(&l, &badge_of(&self.s, self.lane), 1.0);
+                        cx.emit(AppEvent::SelectTrack(self.lane, false));
+                        cx.emit(AppEvent::ContextMenu(crate::edit::MenuSite::Badge(self.lane), b.x / sc + br.left, b.y / sc + br.bottom + 2.0));
+                    }
                     meta.consume();
                 }
                 // A double-click on a value types it (§3); elsewhere it renames (T2).
@@ -1319,10 +1403,12 @@ impl View for TrackRow {
             .s
             .arrangement
             .with_untracked(|a| a.first_selected().map(|c| c.lane) == Some(self.lane) || a.track_sel.contains(&self.lane));
-        let (color, name, row_h, pan, vol) = self.s.arrangement.with_untracked(|a| {
-            let l = &a.lanes[self.lane];
-            (l.color, l.name.clone(), l.height, l.pan, l.vol_db)
-        });
+        let Some((color, name, row_h, pan, vol)) = self.s.arrangement.with_untracked(|a| {
+            let l = a.lanes.get(self.lane)?;
+            Some((l.color, l.name.clone(), l.height, l.pan, l.vol_db))
+        }) else {
+            return;
+        };
         let light = self.s.meters.with_untracked(|m| m.light_of(self.lane));
 
         // Row surface (selection lifts it) and the 1 px bottom hairline (the
@@ -1372,9 +1458,11 @@ impl View for TrackRow {
         // content and scale (a row redraws every frame while its strip or
         // meter moves).
         let inst = self.s.arrangement.with_untracked(|a| a.instruments.lane(self.lane).map(|i| if i.is_kit() { format!("{}  (kit)", i.label()) } else { i.label() }));
+        let badge = badge_of(&self.s, self.lane);
         let key = RowTextKey {
             selected,
             name,
+            badge,
             inst,
             pan: crate::state::format_pan(pan),
             db: crate::state::format_db(vol),
@@ -1394,7 +1482,25 @@ impl View for TrackRow {
         }
         // The pan slider, where its (hit-only) view sits: drawn here so a
         // row repaint is one view, not two.
-        draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), pan, s);
+        if badge.1 {
+            // Locked (§5.3): centred and disabled.
+            let bounds = vg::Rect::from_xywh(r.left + (lay.col_a() - 8.0) * s, r.top + (row::PAN_WELL_Y - 8.0) * s, (COL_A_W + 16.0) * s, 20.0 * s);
+            canvas.save_layer_alpha_f(bounds, DISABLED_ALPHA);
+            draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), 0, s);
+            canvas.restore();
+        } else {
+            draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), pan, s);
+        }
+        // A header being dragged (T4): a 2 px line where it would land.
+        if let Some((from, to)) = self.s.track_drag.get_untracked() {
+            if to == self.lane && from != to {
+                let y = if to > from { body.bottom - 2.0 * s } else { body.top };
+                canvas.draw_rect(vg::Rect::from_xywh(r.left, y.round(), r.width(), (2.0 * s).round()), &gfx::fill(NEUTRAL_HI));
+            }
+            if from == self.lane {
+                canvas.draw_rect(body, &gfx::fill(Rgba::white(0.04)));
+            }
+        }
 
         // F-04: a VRC6 lane under the 2A03 profile: dimmed, and it says why.
         let bb = (r.top + BADGE_BASELINE * s).round();
@@ -1463,6 +1569,53 @@ fn draw_lock(canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba) {
     canvas.draw_path(&shackle, &gfx::stroke(ink, 1.2 * s));
 }
 
+/// How far a header press moves before it is a drag (logical px).
+const TRACK_DRAG_START: f32 = 6.0;
+
+/// The badge's box in row coordinates (device px): x = the name column,
+/// y = `BADGE_Y`; its width follows its content.
+fn badge_rect(l: &HeaderLayout, b: &(&'static str, bool, bool), s: f32) -> vg::Rect {
+    let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
+    let mut w = gfx::text_width(&bf, b.0) + (2.0 + 2.0 * BADGE_PAD) * s;
+    if b.1 {
+        w += (LOCK_W + BADGE_PAD) * s;
+    }
+    if b.2 {
+        w += (WARN_W + BADGE_PAD) * s;
+    }
+    vg::Rect::from_xywh((l.name_x() * s).round(), (BADGE_Y * s).round(), w.round(), BADGE_H * s)
+}
+
+/// What a track's badge shows (§5.3): locked: the lock and the channel;
+/// studio: the voice type; with a warning mark when the track breaks the
+/// profile (locked to a channel the profile lacks).
+pub(crate) fn badge_of(s: &Signals, lane: usize) -> (&'static str, bool, bool) {
+    let chip = s.chip.get_untracked();
+    s.arrangement.with_untracked(|a| match a.lanes.get(lane) {
+        Some(l) => match l.lock {
+            Some(c) => (crate::tracks::channel_badge(c), true, !chip.has_channel(c)),
+            None => (crate::tracks::kind_badge(l.voice), false, false),
+        },
+        None => ("", false, false),
+    })
+}
+
+/// The amber warning mark (the status bar's, polish 2 §6.4: not lime).
+const WARN_W: f32 = 9.0;
+const WARN_H: f32 = 8.0;
+const WARN_INK: Rgba = Rgba::hex(0xF0A23A);
+
+fn draw_warn_mark(canvas: &Canvas, o: (f32, f32), s: f32) {
+    let p = gfx::svg_path("M4.5 0.5L8.5 7.5H0.5Z", o, s);
+    canvas.draw_path(&p, &gfx::fill(WARN_INK));
+    canvas.draw_rect(vg::Rect::from_xywh(o.0 + 4.0 * s, o.1 + 2.5 * s, s, 2.5 * s), &gfx::fill(Rgba::hex(0x0A0A0A)));
+    canvas.draw_rect(vg::Rect::from_xywh(o.0 + 4.0 * s, o.1 + 5.8 * s, s, s), &gfx::fill(Rgba::hex(0x0A0A0A)));
+}
+
+/// A locked track's controls are drawn at this opacity (VISUAL-SPEC.md
+/// §4b: the disabled style of drawn controls).
+pub(crate) const DISABLED_ALPHA: f32 = 0.4;
+
 /// The slider well: `#050505` with `inset 0 1px 0 #000` and `0 1px 0 #262626` below.
 fn slider_track(canvas: &Canvas, t: vg::Rect, s: f32) {
     let hl = gfx::hairline(s);
@@ -1495,8 +1648,12 @@ pub struct VolumeFader {
     wheel: crate::input::WheelSteps,
 }
 
+/// The "lane" of the Main track's fader (Batch 4a §7).
+pub const MAIN: usize = usize::MAX;
+
 impl VolumeFader {
     pub const HELP: &'static str = "Volume: drag to change · double-click the value to type it in dB";
+    pub const MAIN_HELP: &'static str = "Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too";
     /// dB per wheel notch.
     const WHEEL_DB: f32 = 1.0;
 
@@ -1512,7 +1669,12 @@ impl VolumeFader {
             // A memo: only a height change re-applies it (a scroll or zoom updates
             // the arrangement every frame; re-applying would relayout and redraw
             // eight faders as eight separate damage rects).
-            .height(Memo::new(move |_| s.arrangement.with(|a| row::db_value_y(a.lanes[lane].height))).map(|h| Pixels(*h)))
+            .height(Memo::new(move |_| s.arrangement.with(|a| row::db_value_y(a.lanes.get(lane).map_or(crate::state::ROW_H_MIN, |l| l.height)))).map(|h| Pixels(*h)))
+            .bind(s.master_db, move |mut h| {
+                if lane == MAIN {
+                    h.needs_redraw();
+                }
+            })
             .bind(s.meters, move |mut h| {
                 let v = Self::state(&s, lane);
                 if !frozen && shown.get() != v {
@@ -1524,7 +1686,13 @@ impl VolumeFader {
 
     /// (fill px ×4, thumb y ×4): what the view shows.
     pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16) {
-        let (db, h) = s.arrangement.with_untracked(|a| (a.lanes[lane].vol_db, a.lanes[lane].height));
+        if lane == MAIN {
+            let db = s.master_db.get_untracked();
+            let len = row::fader_len(crate::state::ROW_H_MIN);
+            let fill = crate::state::meter_fill(s.meters.with_untracked(|m| m.main), db, len);
+            return ((fill * 4.0).round() as u16, (crate::state::fader_y(db, len) * 4.0).round() as u16);
+        }
+        let (db, h) = s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or((0.0, crate::state::ROW_H_MIN), |l| (l.vol_db, l.height)));
         let len = row::fader_len(h);
         let muted = s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| s.mute.with_untracked(|m| m.contains(l.id))));
         let level = if muted { 0.0 } else { s.meters.with_untracked(|m| m.level_of(lane)) };
@@ -1533,18 +1701,30 @@ impl VolumeFader {
     }
 
     fn db(&self) -> f32 {
-        self.s.arrangement.with_untracked(|a| a.lanes[self.lane].vol_db)
+        if self.lane == MAIN {
+            return self.s.master_db.get_untracked();
+        }
+        self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).map_or(0.0, |l| l.vol_db))
+    }
+
+    /// The value change event: a track's volume, or the Main gain.
+    fn set_event(&self, db: f32) -> AppEvent {
+        if self.lane == MAIN {
+            AppEvent::SetMasterDb(db)
+        } else {
+            AppEvent::SetLaneVolume(self.lane, db)
+        }
     }
 
     fn len(&self) -> f32 {
-        self.s.arrangement.with_untracked(|a| row::fader_len(a.lanes[self.lane].height))
+        self.s.arrangement.with_untracked(|a| row::fader_len(a.lanes.get(self.lane).map_or(crate::state::ROW_H_MIN, |l| l.height)))
     }
 
     /// The press point sets the value (the slider gesture the build had).
     fn set_from_y(&self, cx: &mut EventContext) {
         let y = local_mouse(cx).1 - row::FADER_TOP;
         let pos = 1.0 - y / self.len();
-        cx.emit(AppEvent::SetLaneVolume(self.lane, crate::state::pos_to_db(pos)));
+        cx.emit(self.set_event(crate::state::pos_to_db(pos)));
     }
 }
 
@@ -1554,7 +1734,13 @@ impl View for VolumeFader {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        let lock = self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).and_then(|l| l.lock));
         event.map(|we, meta| match we {
+            // Locked (§5.3): pinned at 0 dB, disabled; the help says why.
+            WindowEvent::MouseEnter if lock.is_some() => {
+                cx.emit(AppEvent::HoverHelp(crate::tracks::locked_help(lock.unwrap_or(0))));
+            }
+            WindowEvent::MouseDown(_) | WindowEvent::MouseScroll(..) | WindowEvent::MouseDoubleClick(_) if lock.is_some() => meta.consume(),
             WindowEvent::MouseDown(MouseButton::Left) => {
                 self.drag = Some((local_mouse(cx).1, self.db()));
                 cx.emit(AppEvent::GestureBegin);
@@ -1574,14 +1760,14 @@ impl View for VolumeFader {
                 if steps != 0 {
                     let db = self.db();
                     let base = if db == f32::NEG_INFINITY { crate::state::VOL_DB_FLOOR } else { db };
-                    cx.emit(AppEvent::SetLaneVolume(self.lane, (base + steps as f32 * Self::WHEEL_DB).min(crate::state::VOL_DB_MAX)));
+                    cx.emit(self.set_event((base + steps as f32 * Self::WHEEL_DB).min(crate::state::VOL_DB_MAX)));
                     cx.emit(AppEvent::Commit);
                 }
                 meta.consume();
             }
             WindowEvent::MouseEnter => {
                 self.hover = true;
-                cx.emit(AppEvent::HoverHelp(Self::HELP.into()));
+                cx.emit(AppEvent::HoverHelp(if self.lane == MAIN { Self::MAIN_HELP } else { Self::HELP }.into()));
                 cx.needs_redraw();
             }
             WindowEvent::MouseLeave => {
@@ -1619,7 +1805,15 @@ impl View for VolumeFader {
             row::VTHUMB_H * s,
         );
         let lift = if self.hover || self.drag.is_some() { 0.08 } else { 0.0 };
-        slider_thumb(canvas, th, s, lift);
+        if self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).is_some_and(|l| l.locked())) {
+            // Locked (§5.3): the thumb at 0 dB, disabled.
+            let b = vg::Rect::from_ltrb(th.left - 2.0 * s, th.top - 2.0 * s, th.right + 2.0 * s, th.bottom + 2.0 * s);
+            canvas.save_layer_alpha_f(b, DISABLED_ALPHA);
+            slider_thumb(canvas, th, s, 0.0);
+            canvas.restore();
+        } else {
+            slider_thumb(canvas, th, s, lift);
+        }
     }
 }
 
@@ -1661,7 +1855,12 @@ impl View for PanSlider {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        let lock = self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).and_then(|l| l.lock));
         event.map(|we, meta| match we {
+            WindowEvent::MouseEnter if lock.is_some() => {
+                cx.emit(AppEvent::HoverHelp(format!("Pan: centred while locked to the {} (the console's output is mono)", crate::tracks::channel_name(lock.unwrap_or(0)))));
+            }
+            WindowEvent::MouseDown(_) | WindowEvent::MouseScroll(..) if lock.is_some() => meta.consume(),
             WindowEvent::MouseDown(MouseButton::Left) => {
                 self.drag = true;
                 cx.emit(AppEvent::GestureBegin);
@@ -1679,7 +1878,7 @@ impl View for PanSlider {
             WindowEvent::MouseScroll(_, y) if !cx.modifiers().alt() => {
                 let steps = self.wheel.steps(*y);
                 if steps != 0 {
-                    let pan = self.s.arrangement.with_untracked(|a| a.lanes[self.lane].pan) as i32;
+                    let pan = self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).map_or(0, |l| l.pan)) as i32;
                     cx.emit(AppEvent::SetLanePan(self.lane, (pan + steps).clamp(-50, 50) as i8));
                     cx.emit(AppEvent::Commit);
                 }

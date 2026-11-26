@@ -619,3 +619,8 @@ rename-box {
 .modal-subhead {
     padding-top: 12px;
 }
+
+/* Batch 4a: a channel-budget type over its real channels (the record red, lightened to 4.5:1+). */
+.budget-over {
+    color: #F07075;
+}

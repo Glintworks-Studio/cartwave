@@ -24,6 +24,8 @@ pub enum Cmd {
     NewFromMidi,
     ImportAudio,
     ProjectSettings,
+    /// Insert Track ▸ one type (index into `VoiceKind::ALL`).
+    InsertTrackKind(u8),
     OpenRecent(usize),
     ClearRecent,
     About,
@@ -37,6 +39,7 @@ impl Cmd {
             Cmd::NewFromMidi => "file.new_from_midi".into(),
             Cmd::ImportAudio => "file.import_audio".into(),
             Cmd::ProjectSettings => "file.project_settings".into(),
+            Cmd::InsertTrackKind(k) => format!("create.track.{k}"),
             Cmd::OpenRecent(i) => format!("file.recent.{i}"),
             Cmd::ClearRecent => "file.recent.clear".into(),
             Cmd::About => "help.about".into(),
@@ -47,6 +50,9 @@ impl Cmd {
     pub fn from_id(id: &str) -> Option<Cmd> {
         if let Some(i) = id.strip_prefix("file.recent.").and_then(|n| n.parse().ok()) {
             return Some(Cmd::OpenRecent(i));
+        }
+        if let Some(k) = id.strip_prefix("create.track.").and_then(|n| n.parse::<u8>().ok()).filter(|k| (*k as usize) < chip::voice::VoiceKind::ALL.len()) {
+            return Some(Cmd::InsertTrackKind(k));
         }
         let fixed = [
             Cmd::NewFromMidi,
@@ -66,6 +72,9 @@ impl Cmd {
     pub fn label(self) -> String {
         match self {
             Cmd::Action(Action::InsertClip) => "MIDI Clip".into(),
+            Cmd::Action(Action::DuplicateTrack) => "Duplicate Track".into(),
+            Cmd::Action(Action::DeleteTrack) => "Delete Track".into(),
+            Cmd::InsertTrackKind(k) => crate::tracks::kind_name(chip::voice::VoiceKind::ALL[(k as usize).min(5)]).into(),
             Cmd::Action(Action::ToggleBrowser) => "Browser".into(),
             Cmd::Action(a) => shortcuts::get(a).name.into(),
             Cmd::NewFromMidi => "New from MIDI File…".into(),
@@ -149,7 +158,18 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         edit.push(Separator);
         edit.push(a(Action::Settings));
     }
-    let create = vec![a(Action::InsertClip)];
+    // Batch 4a: tracks (Create ▸ Track in VISION.md's shell; Live's Insert
+    // MIDI Track key, R84). A Track top-level menu would add a menu VISION.md
+    // doesn't list, so the commands live here.
+    let kinds: Vec<Entry> = (0..chip::voice::VoiceKind::ALL.len() as u8).map(|k| Item(Cmd::InsertTrackKind(k))).collect();
+    let create = vec![
+        a(Action::InsertTrack),
+        Sub("Insert Track", kinds),
+        a(Action::DuplicateTrack),
+        a(Action::DeleteTrack),
+        Separator,
+        a(Action::InsertClip),
+    ];
     let view = vec![
         Check(Cmd::Action(Action::ToggleBrowser)),
         Check(Cmd::Action(Action::Follow)),
@@ -251,6 +271,9 @@ pub struct MenuState {
     pub draw: bool,
     /// View ▸ Show Overview (polish 2 §7.3).
     pub overview: bool,
+    /// Batch 4a: a track is selected; how many tracks there are.
+    pub track_selected: bool,
+    pub tracks: usize,
 }
 
 impl MenuState {
@@ -264,6 +287,8 @@ impl MenuState {
             Cmd::Action(Action::Cut | Action::Copy | Action::Duplicate | Action::Delete) => self.selection || (!self.piano && self.time_selection),
             Cmd::Action(Action::Paste) => self.can_paste,
             Cmd::Action(Action::InsertClip | Action::InsertSilence) => !self.piano && self.time_selection,
+            Cmd::Action(Action::DuplicateTrack) => self.track_selected,
+            Cmd::Action(Action::DeleteTrack) => self.track_selected && self.tracks > 1,
             Cmd::Action(Action::CutTime | Action::CopyTime | Action::DuplicateTime | Action::DeleteTime) => !self.piano && self.range,
             Cmd::Action(Action::PasteTime) => !self.piano && self.can_paste_time,
             Cmd::Action(Action::Rename) => self.can_rename,
@@ -610,10 +635,13 @@ mod tests {
     #[test]
     fn no_placeholders() {
         let ids: Vec<String> = commands(&spec(false)).into_iter().map(|c| c.id()).collect();
-        // Batch 4 (the model change) and later: tracks, time signatures,
-        // automation, MIDI clip export.
-        for later in ["track", "time_signature", "automation", "export_midi"] {
+        // Later batches: time signatures, automation, MIDI clip export.
+        for later in ["time_signature", "automation", "export_midi"] {
             assert!(!ids.iter().any(|i| i.contains(later)), "{later} belongs to a later batch");
+        }
+        // Batch 4a: the track commands are there (Create, R84).
+        for b4 in ["create.track", "create.duplicate_track", "create.delete_track", "create.track.0", "create.track.5"] {
+            assert!(ids.iter().any(|i| i == b4), "{b4} is missing from the menus");
         }
         // Batch 3's commands are all there (F-07, F-08, F-11, F-12, F-22, F-23, F-14).
         for b3 in ["edit.split", "edit.consolidate", "edit.rename", "edit.cut_time", "edit.copy_time", "edit.paste_time", "edit.duplicate_time", "edit.delete_time", "edit.insert_silence", "view.zoom_in", "view.zoom_out", "view.zoom_selection", "view.zoom_back", "view.zoom_fit", "view.draw_mode", "help.getting_started"] {

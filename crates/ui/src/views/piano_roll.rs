@@ -187,11 +187,29 @@ impl PianoRoll {
     fn map(&self, cx: &EventContext, lane: usize, p: &PianoState) -> Map {
         let b = cx.bounds();
         let s = cx.scale_factor();
-        Map::new(p, Geo::new(b.w / s, b.h / s, lane), RowKind::for_lane(lane))
+        let chan = self.chan(lane);
+        Map::new(p, Geo::new(b.w / s, b.h / s, chan), RowKind::for_lane(chan))
     }
 
+    /// Track `lane`'s console lane: what its rows and controls are (a studio
+    /// Pulse track has the pulse's piano rows).
+    fn chan(&self, lane: usize) -> usize {
+        self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(lane, |l| l.chan()))
+    }
+
+    /// Whether track `lane` is polyphonic (a studio track).
+    fn poly(&self, lane: usize) -> bool {
+        self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| !l.locked()))
+    }
+
+    /// One edit of clip `cid`'s notes, under its track's overlap rule
+    /// (locked: monophonic; studio: polyphonic).
     fn edit<R>(&self, cid: u32, f: impl FnOnce(&mut Clip) -> R) -> Option<R> {
         let mut out = None;
+        // Every track edits polyphonically; a chord on a locked track is a
+        // profile conflict the app asks about when the edit is committed
+        // (Batch 4a §5.5).
+        let _rule = notes::rule_scope(true);
         self.s.arrangement.update(|a| {
             if let Some(c) = a.clip_mut(cid) {
                 out = Some(f(c));
@@ -569,14 +587,14 @@ impl PianoRoll {
         }
     }
 
-    /// Drop: the dragged notes win (monophonic rule) and the live preview of
-    /// that in the engine ends.
+    /// Drop: the dragged notes win (the track's overlap rule) and the live
+    /// preview of that in the engine ends.
     fn finish_drag(&self, winners: &[u32]) {
         self.s.arrangement.update(|a| {
             if let Some((cid, _)) = a.editing_notes.take() {
                 if let Some(c) = a.clip_mut(cid) {
                     let mut next = c.next_note_id;
-                    notes::resolve_mono(&mut c.notes, winners, &mut next);
+                    notes::resolve(true, &mut c.notes, winners, &mut next);
                     c.next_note_id = next;
                 }
             }
@@ -600,7 +618,7 @@ impl PianoRoll {
         if row != self.hover_row {
             self.hover_row = row;
             cx.needs_redraw();
-            let text = row.map(|r| hover_text(m.kind, r, lane, self.s)).unwrap_or_default();
+            let text = row.map(|r| hover_text(m.kind, r, self.chan(lane), self.s)).unwrap_or_default();
             self.s.piano.update(|p| p.hover = text);
         }
         let zone = if in_rows && x >= m.geo.grid_x0 {
@@ -734,7 +752,9 @@ impl PianoRoll {
     /// Runs a piano-roll edit command (a key, or the Edit menu).
     fn run(&mut self, cx: &mut EventContext, action: Action) -> bool {
         let Some((cid, lane, clip_start, clip_len, p)) = self.open() else { return false };
-        let kind = RowKind::for_lane(lane);
+        let kind = RowKind::for_lane(self.chan(lane));
+        let _rule = notes::rule_scope(true);
+        let _ = self.poly(lane);
         let sel = p.sel.clone();
         match action {
             Action::Delete => {
@@ -1016,7 +1036,8 @@ impl View for PianoRoll {
             let Some(c) = a.clip(cid) else { return };
             let lane = c.lane;
             let color = a.lanes[lane].color;
-            let m = Map::new(&p, Geo::new(b.w / s, b.h / s, lane), RowKind::for_lane(lane));
+            let chan = a.lanes[lane].chan();
+            let m = Map::new(&p, Geo::new(b.w / s, b.h / s, chan), RowKind::for_lane(chan));
             let px = |v: f32| v * s;
 
             let dragged: &[u32] = a.editing_notes.as_ref().filter(|(id, _)| *id == c.id).map_or(&[], |(_, ids)| ids.as_slice());

@@ -100,6 +100,9 @@ pub struct Shared {
     pub audio_tid: AtomicU64,
     /// Stream callbacks that found the engine core missing (during rebuilds).
     pub silent_callbacks: AtomicU64,
+    /// The Main track's output: the sample peak (|x|, f32 bits, max-merged)
+    /// since the UI last took it (Batch 4a §7: PEAK and the master meter).
+    pub out_peak: AtomicU32,
     /// Overload reports from the audio API (CoreAudio's
     /// `kAudioDeviceProcessorOverload`, which cpal reports as `Xrun`).
     pub overloads: AtomicU64,
@@ -173,6 +176,16 @@ impl Shared {
             *o = f32::from_bits(a.swap(0, Ordering::Relaxed));
         }
         r
+    }
+
+    /// Max-merges the output's sample peak.
+    pub fn merge_out_peak(&self, v: f32) {
+        self.out_peak.fetch_max(v.abs().to_bits(), Ordering::Relaxed);
+    }
+
+    /// Takes (and clears) the output's sample peak.
+    pub fn take_out_peak(&self) -> f32 {
+        f32::from_bits(self.out_peak.swap(0, Ordering::Relaxed))
     }
 
     pub fn record_callback(&self, dur_ns: u64, period_ns: u64) {

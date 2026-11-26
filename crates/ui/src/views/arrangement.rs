@@ -1472,8 +1472,49 @@ impl View for TracksCell {
         let base = (r.top + super::ruler::LABEL_BASELINE * s).round();
         let off = self.s.header.get_untracked().row_off();
         gfx::draw_text_tracked(canvas, "TRACKS", (r.left + (CELL_LABEL_X - off) * s).round(), base, &f, 0.08 * 11.0 * s, TEXT_LO);
+        // The channel budget, compact (Batch 4a §5.4), right-aligned 16 px in
+        // like "24 BARS"; a type over budget in the record red (not lime).
+        let chip = self.s.chip.get_untracked();
+        let b = self.s.arrangement.with_untracked(|a| crate::tracks::budget(a, chip));
+        let parts = b.parts(true);
+        if !parts.is_empty() {
+            let f2 = gfx::font(Face::SemiBold, 10.0 * s);
+            let tr = 0.1 * 10.0 * s;
+            let sep = " · ";
+            let total: f32 = parts.iter().map(|p| gfx::tracked_width(&p.0, &f2, tr)).sum::<f32>() + gfx::tracked_width(sep, &f2, tr) * (parts.len() - 1) as f32;
+            let lay = self.s.header.get_untracked();
+            let right = r.left + (lay.row_w() - CELL_LABEL_X - off) * s;
+            let mut x = (right - total).round();
+            for (i, (t, over)) in parts.iter().enumerate() {
+                if i > 0 {
+                    gfx::draw_text_tracked(canvas, sep, x, base, &f2, tr, TEXT_LO);
+                    x += gfx::tracked_width(sep, &f2, tr);
+                }
+                gfx::draw_text_tracked(canvas, t, x, base, &f2, tr, if *over { BUDGET_OVER } else { TEXT_LO });
+                x += gfx::tracked_width(t, &f2, tr);
+            }
+        }
+    }
+
+    fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
+        event.map(|we, _| {
+            if let WindowEvent::MouseMove(..) = we {
+                let chip = self.s.chip.get_untracked();
+                let b = self.s.arrangement.with_untracked(|a| crate::tracks::budget(a, chip));
+                let help = if b.rows.is_empty() {
+                    "Tracks · no hardware profile: every track is a studio track (File > Project Settings…)".to_string()
+                } else {
+                    format!("Channel budget ({}): {}{}", chip.label(), b.text(false), if b.over() { " · over budget" } else { "" })
+                };
+                cx.emit(crate::AppEvent::HoverHelp(help));
+            }
+        });
     }
 }
+
+/// A budget type over its channels (Batch 4a §5.4): the record colour, made
+/// light enough to read as text (≥ 4.5:1 on the band).
+pub const BUDGET_OVER: Rgba = Rgba::hex(0xF07075);
 
 /// The Overview's label cell (polish 2 §7.3): "OVERVIEW" in the TRACKS
 /// style and the song's length ("24 BARS", Inter 600 10, #808080) at the
@@ -1592,14 +1633,27 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
                     })
                     .bind(s.header, |mut h| h.needs_redraw());
             }
-            TracksCell { s }.build(cx, |_| {}).class("band-cell").bind(s.header, |mut h| h.needs_redraw());
+            // The channel budget's compact form (Batch 4a §5.4): redraw when it changes.
+            let budget = Memo::new(move |_| {
+                let chip = s.chip.get();
+                s.arrangement.with(|a| crate::tracks::budget(a, chip))
+            });
+            TracksCell { s }
+                .build(cx, |_| {})
+                .class("band-cell")
+                .bind(s.header, |mut h| h.needs_redraw())
+                .bind(budget, |mut h| h.needs_redraw());
             // The rows scroll with the lanes; the viewport clips them.
             VStack::new(cx, |cx| {
                 VStack::new(cx, |cx| {
-                    let lanes = s.arrangement.with_untracked(|a| a.lanes.len());
-                    for i in 0..lanes {
-                        TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes[i].pitch())).map(|h| Pixels(*h)));
-                    }
+                    // Rebuilt when tracks are added or removed (Batch 4a); a
+                    // move or an edit only redraws the rows.
+                    let count = Memo::new(move |_| s.arrangement.with(|a| a.lanes.len()));
+                    Binding::new(cx, count, move |cx| {
+                        for i in 0..count.get() {
+                            TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes.get(i).map_or(state::ROW_H_MIN + state::ROW_HAIRLINE, |l| l.pitch()))).map(|h| Pixels(*h)));
+                        }
+                    });
                 })
                 .height(Auto)
                 .position_type(PositionType::Absolute)
@@ -1607,6 +1661,9 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
             })
             .height(Stretch(1.0))
             .overflow(Overflow::Hidden);
+            // The Main track (Batch 4a §7): pinned under the rows, never scrolls.
+            super::main_track::MainHeader::new(cx, s);
+            super::main_track::MainShadow::new(cx).position_type(PositionType::Absolute).bottom(Pixels(super::main_track::MAIN_TOTAL_H)).width(Stretch(1.0));
             HeaderEdge { s, drag: None }
                 .build(cx, |_| {})
                 .position_type(PositionType::Absolute)

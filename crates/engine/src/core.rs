@@ -318,6 +318,9 @@ impl Core {
                     *v += 0.01 * (self.pilot_phase * std::f64::consts::TAU).sin() as f32;
                 }
             }
+            // The Main track's peak (after the master gain; the test click and
+            // pilot are in it when a harness turns them on).
+            sh.merge_out_peak(buf.iter().fold(0f32, |m, v| m.max(v.abs())));
             let dst = &mut out[done * channels..(done + n) * channels];
             for (frame, &v) in dst.chunks_exact_mut(channels).zip(buf.iter()) {
                 frame.fill(v * self.gain);

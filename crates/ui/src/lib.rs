@@ -21,6 +21,8 @@ pub mod shortcuts;
 pub mod songs;
 pub mod state;
 pub mod tracks;
+pub mod track_ui;
+pub mod warn;
 pub mod tap;
 pub mod testing;
 pub mod theme;
@@ -71,6 +73,11 @@ pub struct Signals {
     pub master_db: Signal<f32>,
     /// The Main track's sample peak since the last reset (linear, held).
     pub master_peak: Signal<f32>,
+    /// The output device's name ("No output" without one): the Main track's
+    /// OUT badge.
+    pub out_device: Signal<String>,
+    /// A track header being dragged (T4): (from, to) indices.
+    pub track_drag: Signal<Option<(usize, usize)>>,
     pub audio: Signal<AudioStats>,
     /// Shown in the transport bar when the audio device has a problem.
     pub audio_msg: Signal<String>,
@@ -227,6 +234,10 @@ pub struct AppState {
     rack_ctls: Vec<(u32, std::sync::Arc<engine::TrackCtl>)>,
     rack_key: u64,
     sent_master: Option<f32>,
+    /// The main window's handle (Windows): the warning dialog's parent.
+    hwnd: Option<isize>,
+    /// Profile conflicts already in the document (they don't ask again).
+    conflicts_seen: Vec<track_ui::Conflict>,
     song_key: u64,
     song_version: u64,
     filter: FilterMode,
@@ -478,6 +489,12 @@ pub enum AppEvent {
     OpenRename(edit::RenameTarget),
     /// A track header was clicked (T1; `true`: Shift / Ctrl adds).
     SelectTrack(usize, bool),
+    /// A header dragged to another place (T4): from, to.
+    MoveTrack(usize, usize),
+    /// The Main track's fader (dB).
+    SetMasterDb(f32),
+    /// A click on PEAK: reset it.
+    ResetPeak,
     /// The insert marker (A1): tick, track.
     SetInsert(u32, usize),
     CloseGuide,
@@ -560,14 +577,15 @@ impl Model for AppState {
                 // Polish 2 §3: the track volume in dB (a post-chip gain; the
                 // engine hears it from `sync_gains`). Undo groups a drag.
                 let db = if *db == f32::NEG_INFINITY { *db } else { db.clamp(state::VOL_DB_MIN_TYPED, state::VOL_DB_MAX) };
-                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| l.vol_db != db)) {
+                // A locked track's fader is pinned at 0 dB (§5.3).
+                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| !l.locked() && l.vol_db != db)) {
                     self.s.arrangement.update(|a| a.lanes[*lane].vol_db = db);
                     self.sync_gains();
                 }
             }
             AppEvent::SetLanePan(lane, pan) => {
                 let pan = (*pan).clamp(-state::PAN_MAX, state::PAN_MAX);
-                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| l.pan != pan)) {
+                if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| !l.locked() && l.pan != pan)) {
                     self.s.arrangement.update(|a| a.lanes[*lane].pan = pan);
                 }
             }
@@ -764,6 +782,16 @@ impl Model for AppState {
             AppEvent::RenameCancel => self.s.rename.set(None),
             AppEvent::OpenRename(t) => self.open_rename(*t),
             AppEvent::SelectTrack(l, add) => self.select_track(*l, *add),
+            AppEvent::MoveTrack(from, to) => self.move_track(*from, *to),
+            AppEvent::SetMasterDb(db) => {
+                let db = if *db == f32::NEG_INFINITY { *db } else { db.clamp(state::VOL_DB_MIN_TYPED, state::VOL_DB_MAX) };
+                if self.s.master_db.get_untracked() != db {
+                    self.s.master_db.set(db);
+                    self.sync_tracks();
+                    self.update_dirty();
+                }
+            }
+            AppEvent::ResetPeak => self.s.master_peak.set(0.0),
             AppEvent::SetInsert(t, l) => {
                 self.set_insert(*t, *l);
                 self.s.arrangement.update(|a| a.track_sel.clear());
@@ -1177,6 +1205,15 @@ impl AppState {
             });
             self.studio_note_ons = self.rack_ctls.iter().map(|(id, c)| (*id, c.note_ons.load(std::sync::atomic::Ordering::Relaxed))).collect();
             mock::step_meters_engine(&mut m, &levels, &fire, dt);
+            // The Main track (§7): PEAK holds the sample peak since the last
+            // reset; the meter shows the level before the master gain.
+            let peak = sh.take_out_peak();
+            if peak > self.s.master_peak.get_untracked() {
+                self.s.master_peak.set(peak);
+            }
+            let g = state::db_to_gain(self.s.master_db.get_untracked());
+            let pre = if g > 0.0 { (peak / g).min(1.0) } else { 0.0 };
+            m.main = if pre > m.main { pre } else { (m.main - 1.8 * dt * m.main.max(0.2)).max(pre) };
         } else {
             let rng = &mut self.rng;
             self.s.arrangement.with_untracked(|a| {
@@ -1205,18 +1242,24 @@ impl AppState {
         self.s.user_presets.with_untracked(|u| user_presets::view(p, u))
     }
 
+    /// The track a preset goes to: `want` if given (and the preset suits its
+    /// voice type), else the selected track if it suits, else the first that
+    /// does (and isn't silenced by the profile).
     fn lane_for(&self, preset: usize, want: Option<usize>) -> Option<usize> {
         let p = self.preset(preset)?;
-        let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
-        let ok = |l: usize| p.fits(l) && (vrc6 || l < chip::driver::LANE_V1);
-        if let Some(l) = want {
-            return p.fits(l).then_some(l);
-        }
+        let chip = self.s.chip.get_untracked();
         let sel = self.s.lane_sel.get_untracked();
-        if sel < engine::LANES && ok(sel) {
-            return Some(sel);
-        }
-        (0..engine::LANES).find(|&l| ok(l))
+        self.s.arrangement.with_untracked(|a| {
+            let fits = |t: usize| a.lanes.get(t).is_some_and(|l| p.fits(l.chan()));
+            let ok = |t: usize| fits(t) && !state::lane_off(chip, a, t);
+            if let Some(t) = want {
+                return fits(t).then_some(t);
+            }
+            if ok(sel) {
+                return Some(sel);
+            }
+            (0..a.lanes.len()).find(|&t| ok(t))
+        })
     }
 
     fn audition(&mut self, preset: Option<usize>) {
@@ -1236,9 +1279,11 @@ impl AppState {
             // B2: no preview voice yet; say why nothing plays.
             return self.set_status("Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one.".into());
         }
-        let Some(lane) = self.lane_for(p, None) else { return };
+        let Some(track) = self.lane_for(p, None) else { return };
         let Some(pr) = self.preset(p) else { return };
         self.s.arrangement.update(|a| a.audition = Some(pr.inst));
+        // Auditions play on the console channel of the track's type.
+        let lane = self.s.arrangement.with_untracked(|a| a.lanes[track].chan());
         let pitch = match lane {
             chip::driver::LANE_TRI => 48,
             chip::driver::LANE_NOISE => 56,
@@ -1398,38 +1443,96 @@ impl AppState {
         }
     }
 
+    /// A new track's colour (Settings > Editing > Track and Clip Colors):
+    /// automatic (`next_track_color`, distinct from the tracks around index
+    /// `at` and the latest picks), or the default track colour when that's off.
+    fn new_track_color_at(&self, at: usize) -> crate::theme::tokens::Rgba {
+        if !self.settings.auto_track_colours {
+            return file::parse_hex(&self.settings.default_track_colour).unwrap_or(crate::theme::tokens::Rgba::hex(0x7F86E0));
+        }
+        self.s.arrangement.with_untracked(|a| {
+            let all: Vec<crate::theme::tokens::Rgba> = a.lanes.iter().map(|l| l.color).collect();
+            let lo = at.saturating_sub(1);
+            let hi = (at + 1).min(all.len());
+            crate::theme::palette::next_track_color(&all, &all[lo..hi], self.settings.reduced_auto_colours)
+        })
+    }
+
+    fn next_track_color(&self) -> crate::theme::tokens::Rgba {
+        let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
+        self.new_track_color_at(n)
+    }
+
     /// A channel layout is a template (UX.md decision 5): it loads the
     /// lanes' instruments, and asks before it changes the hardware profile.
     fn apply_layout(&mut self, cx: &mut EventContext, i: usize) {
         let Some(l) = chip::presets::LAYOUTS.get(i) else { return };
         let want = if l.vrc6 { SoundChip::WithVrc6 } else { SoundChip::Base2A03 };
         let cur = self.s.chip.get_untracked();
+        let _ = cx;
+        let mut studio = false;
         if cur != want {
-            let silent = if want == SoundChip::Base2A03 { self.vrc6_clip_count() } else { 0 };
-            let extra = if silent > 0 {
-                format!("\n\nWith 2A03 alone, the {silent} clip(s) on the VRC6 lanes are dimmed and silent until you switch back.")
-            } else {
-                String::new()
-            };
+            // §5.5: a layout (an authentic band) for another chip setup asks:
+            // put the project under its profile, or load it on studio tracks.
             let text = format!(
-                "The layout \"{}\" is made for {}. This project uses {}.\n\nSwitch the hardware profile to {}?{extra}",
+                "The layout \"{}\" is made for {}. This project's hardware profile is {}.\n\nFit to hardware switches the profile to {} and locks the tracks to its channels. Or load it on studio tracks: the presets, no locks.",
                 l.name,
                 want.label(),
                 cur.label(),
                 want.label()
             );
-            let switch = format!("Switch to {}", want.label());
-            let keep = format!("Keep {}", cur.label());
-            match self.ask(cx, &text, &switch, Some(&keep)) {
-                Some(true) => self.set_chip(want),
-                Some(false) => {}
-                None => return,
+            let fit = format!("Switch to {}", want.label());
+            let q = warn::Ask { title: "A layout for another chip setup", text: &text, unlock: Some("Load on studio tracks"), fit: Some(&fit) };
+            match self.warn(warn::WarnKind::Expansion, &q) {
+                warn::Choice::Fit => {
+                    if !self.profile_switch_ok(want) {
+                        return;
+                    }
+                    self.set_chip(want);
+                }
+                warn::Choice::Unlock => studio = true,
+                warn::Choice::Cancel => return,
             }
         }
-        for (lane, name) in l.lanes.iter().enumerate() {
-            if let Some(pr) = chip::presets::find(name) {
-                self.load_preset_on(lane, instruments::LaneInstrument::from_preset(pr), pr.params);
+        if studio {
+            // The presets on the tracks of each type, in order, without locks.
+            for (chan, name) in l.lanes.iter().enumerate() {
+                let Some(pr) = chip::presets::find(name) else { continue };
+                let kind = chip::voice::VoiceKind::of_lane(chan);
+                let nth = chip::driver::LANES.min(chan) - tracks::channels_of(kind)[0];
+                let lane = self.s.arrangement.with_untracked(|a| a.lanes.iter().enumerate().filter(|(_, t)| t.voice == kind).map(|(i, _)| i).nth(nth));
+                if let Some(lane) = lane {
+                    self.load_preset_on(lane, instruments::LaneInstrument::from_preset(pr), pr.params);
+                }
             }
+            self.commit();
+            self.set_status(format!("Layout: {} (on studio tracks)", l.name));
+            return;
+        }
+        // A layout is an authentic band (Batch 4a §5.4, VISION.md): each of the
+        // profile's channels gets its preset on the track locked to it; a
+        // channel without one gets a new track, locked to it. Tracks that
+        // locked here go to 0 dB and centre (remembered for unlocking).
+        let chip_now = self.s.chip.get_untracked();
+        for (chan, name) in l.lanes.iter().enumerate() {
+            if !chip_now.has_channel(chan) {
+                continue;
+            }
+            let Some(pr) = chip::presets::find(name) else { continue };
+            let lane = self.s.arrangement.with_untracked(|a| a.channel_owner(chan));
+            let lane = match lane {
+                Some(t) => t,
+                None => {
+                    let color = self.next_track_color();
+                    let mut at = 0;
+                    self.s.arrangement.update(|a| {
+                        at = a.insert_track(a.lanes.len(), chip::voice::VoiceKind::of_lane(chan), color);
+                        a.lock_track(at, chan);
+                    });
+                    at
+                }
+            };
+            self.load_preset_on(lane, instruments::LaneInstrument::from_preset(pr), pr.params);
         }
         self.commit();
         self.set_status(format!("Layout: {}", l.name));
@@ -1444,10 +1547,10 @@ impl AppState {
                 a.selection.retain(|id| !off.contains(id));
             });
         }
-        let on = chip == SoundChip::WithVrc6;
+        let on = chip.vrc6();
         self.send(Command::Vrc6(on));
         if !self.filter_manual {
-            self.filter = FilterMode::default_for(on);
+            self.filter = tracks::default_filter(chip);
             self.send(Command::Filter(self.filter));
             self.s.filter_label.set(self.filter.label());
             self.s.filter_state.set((self.filter, true));
@@ -1731,6 +1834,8 @@ impl AppState {
                 }
                 self.audio_generation = generation;
             }
+            let out = if running { e.device_info().split(" · ").next().unwrap_or("?").to_string() } else { "No output".to_string() };
+            self.s.out_device.set_if_changed(out);
             // Persistent problems stay on the status bar until resolved
             // (polish 2 §6.4): no device, a device that won't open, and
             // dropouts (until 10 s pass without one).
@@ -1756,6 +1861,17 @@ impl AppState {
             }
             if dropouts && running {
                 problems.push(format!("Audio dropouts: {} buffer underruns so far. A larger buffer (Settings > Audio) helps.", self.underruns_seen.0));
+            }
+            // Batch 4a §5.5: a project over its hardware profile's budget
+            // (an old file can arrive that way) is a persistent problem.
+            let chip = self.s.chip.get_untracked();
+            let b = self.s.arrangement.with_untracked(|a| tracks::budget(a, chip));
+            if b.over() {
+                let mut m = format!("Over the {} channel budget: {}.", chip.label(), b.text(false));
+                if b.stray > 0 {
+                    m += &format!(" {} track(s) are locked to channels the profile doesn't have and are silent (their badges show a warning).", b.stray);
+                }
+                problems.push(m);
             }
             self.s.problems.set_if_changed(problems);
             let _ = &self.device_notice;
@@ -1997,6 +2113,8 @@ pub fn build_ui(cx: &mut Context) {
         solo: Signal::new(tracks::TrackSet::default()),
         master_db: Signal::new(0.0),
         master_peak: Signal::new(0.0),
+        track_drag: Signal::new(None),
+        out_device: Signal::new("No output".into()),
         audio: Signal::new(AudioStats::default()),
         audio_msg: Signal::new(String::new()),
         chip: Signal::new(chip),
@@ -2079,6 +2197,8 @@ pub fn build_ui(cx: &mut Context) {
         rack_ctls: Vec::new(),
         rack_key: 0,
         sent_master: None,
+        hwnd: None,
+        conflicts_seen: Vec::new(),
         song_key: 0,
         song_version: 0,
         filter: tests
@@ -2191,6 +2311,9 @@ pub fn build_ui(cx: &mut Context) {
                     }
                     Ruler::new(cx, s).height(Pixels(theme::tokens::RULER_HEIGHT));
                     ArrangementView::new(cx, s);
+                    // The Main track's lane, pinned under the lanes (§7).
+                    views::main_track::MainLane::new(cx, s);
+                    views::main_track::MainShadow::new(cx).position_type(PositionType::Absolute).bottom(Pixels(views::main_track::MAIN_TOTAL_H)).width(Stretch(1.0));
                 })
                 .width(Stretch(1.0))
                 .overflow(Overflow::Hidden);
@@ -2208,7 +2331,7 @@ pub fn build_ui(cx: &mut Context) {
                     // Piano roll open: the arrangement gets the height the split
                     // handle sets (its lanes scroll) and the piano roll the rest.
                     let ov = if s.settings.with(|st| st.show_overview) { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 };
-                    Pixels(theme::tokens::RULER_HEIGHT + ov + s.piano_pane_h.get())
+                    Pixels(theme::tokens::RULER_HEIGHT + ov + s.piano_pane_h.get() + views::main_track::MAIN_TOTAL_H)
                 } else {
                     Stretch(1.0)
                 }
@@ -2489,20 +2612,30 @@ fn device_panel(cx: &mut Context, s: Signals) {
         VStack::new(cx, |cx| {
             let title = Memo::new(move |_| {
                 let lane = s.lane_sel.get();
-                let name = s.arrangement.with(|a| a.lanes.get(lane).map(|l| l.name.to_uppercase()).unwrap_or_default());
-                let hw = state::default_lanes().get(lane).map(|l| l.name.to_uppercase()).unwrap_or_default();
-                if name == hw { format!("CHANNEL  ·  {name}") } else { format!("CHANNEL  ·  {name}  ·  {hw}") }
+                // A locked track names its channel; a studio track its type.
+                s.arrangement.with(|a| {
+                    let Some(l) = a.lanes.get(lane) else { return String::new() };
+                    let name = l.name.to_uppercase();
+                    match l.lock {
+                        Some(c) => {
+                            let hw = state::default_lanes()[c].name.to_uppercase();
+                            if name == hw { format!("CHANNEL  ·  {name}") } else { format!("CHANNEL  ·  {name}  ·  {hw}") }
+                        }
+                        None => format!("TRACK  ·  {name}  ·  {} (STUDIO)", tracks::kind_name(l.voice).to_uppercase()),
+                    }
+                })
             });
             Label::new(cx, title).class("section-title");
             // Only the controls the selected channel's hardware has.
             Binding::new(cx, s.lane_sel, move |cx| {
                 let lane = s.lane_sel.get();
-                let dials = if lane < 8 { lane_dials(lane) } else { Vec::new() };
+                let chan = s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.chan()));
+                let dials = chan.map(lane_dials).unwrap_or_default();
                 HStack::new(cx, |cx| {
-                    if lane == 2 {
+                    if chan == Some(chip::driver::LANE_TRI) {
                         Label::new(cx, "No controls: the triangle has no volume or duty.")
                             .class("section-title");
-                    } else if lane >= 8 {
+                    } else if chan.is_none() {
                         Label::new(cx, "Select a clip to edit its channel.").class("section-title");
                     }
                     for (slot, (_, spec)) in dials.into_iter().enumerate() {
@@ -2701,6 +2834,12 @@ impl AppState {
                     a.instruments.prune(&clips);
                 });
             }
+            // §5.5: a new conflict on a locked track asks first (Cancel
+            // puts the last undo step back).
+            if !self.doc().same_as(self.history.current()) && !self.resolve_conflicts() {
+                self.update_dirty();
+                return;
+            }
             let d = self.doc();
             self.history.commit(d);
             self.update_dirty();
@@ -2740,6 +2879,9 @@ impl AppState {
             self.send(Command::Bpm(d.bpm as f64));
             self.s.transport.update(|t| t.bpm = d.bpm);
         }
+        // Conflicts that came back with an undo don't ask again.
+        let chip = self.s.chip.get_untracked();
+        self.conflicts_seen = self.s.arrangement.with_untracked(|a| track_ui::conflicts(a, chip));
         // Track controls came back with the tracks: show and send them.
         let lane = self.s.lane_sel.get_untracked();
         self.s.dials.set(self.dial_values(lane));
@@ -2837,6 +2979,7 @@ impl AppState {
         self.s.master_db.set(p.master_db);
         self.s.master_peak.set(0.0);
         self.rack_ctls.clear();
+        self.conflicts_seen = self.s.arrangement.with_untracked(|a| track_ui::conflicts(a, p.chip));
         self.send_all_params();
         let lane = self.s.lane_sel.get_untracked().min(self.s.arrangement.with_untracked(|a| a.lanes.len().saturating_sub(1)));
         self.s.lane_sel.set(lane);
@@ -2901,14 +3044,21 @@ impl AppState {
             Ok(s) => s,
             Err(e) => return self.set_status(e),
         };
-        let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
+        let profile = self.s.chip.get_untracked();
+        let vrc6 = profile == SoundChip::WithVrc6;
         let imp = midi::arrange(&song, vrc6);
         let mut p = self.project();
         let mut instruments = p.arrangement.instruments.clone();
         p.arrangement = imp.arrangement;
-        // Keep the band; drop clip-only instruments the old clips used.
-        instruments.prune(&p.arrangement.clips);
-        p.arrangement.instruments = instruments;
+        // Keep the band when it has a track for every lane; drop clip-only
+        // instruments the old clips used.
+        if instruments.lanes.len() == p.arrangement.lanes.len() {
+            instruments.prune(&p.arrangement.clips);
+            p.arrangement.instruments = instruments;
+        }
+        // Batch 4a: the parts land on the eight channel lanes; under the
+        // current profile they are locked tracks, or studio tracks.
+        p.arrangement.fit_to_profile(profile);
         if let Some(bpm) = imp.bpm {
             p.bpm = bpm.clamp(Transport::MIN_BPM, Transport::MAX_BPM);
         }
@@ -3159,7 +3309,7 @@ impl AppState {
             self.s.piano_pane_h.get_untracked()
         } else {
             let inspector = if self.s.inspector.get_untracked() { INSPECTOR_HEIGHT as f32 } else { 0.0 };
-            self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector - chrome_bands(&self.s)
+            self.window_logical.1 - theme::tokens::TOPBAR_HEIGHT - theme::tokens::RULER_HEIGHT - inspector - chrome_bands(&self.s) - views::main_track::MAIN_TOTAL_H
         };
         let max = (content - viewport).max(0.0);
         self.s.lane_scroll_max.set_if_changed(max);
@@ -3304,8 +3454,7 @@ impl AppState {
         let mut new = Vec::new();
         self.s.arrangement.update(|a| {
             let chan = a.clip(id).map_or(0, |c| a.lanes[c.lane].chan());
-            let poly = a.clip(id).is_some_and(|c| !a.lanes[c.lane].locked());
-            let _rule = notes::rule_scope(poly);
+            let _rule = notes::rule_scope(true);
             let Some(c) = a.clip_mut(id) else { return };
             let kind = RowKind::for_lane(chan);
             let rel = playhead - c.start_ticks as f64;
@@ -3550,10 +3699,6 @@ impl AppState {
         }
     }
 
-    /// Clips on the VRC6 lanes (silent under the 2A03 profile).
-    fn vrc6_clip_count(&self) -> usize {
-        self.s.arrangement.with_untracked(|a| a.clips.iter().filter(|c| a.lanes[c.lane].lock.is_some_and(|ch| ch >= chip::driver::LANE_V1)).count())
-    }
 
     /// Project Settings: the hardware profile. Switching VRC6 off while its
     /// lanes have clips asks first (F-04, principle 5).
@@ -3561,14 +3706,10 @@ impl AppState {
         if chip == self.s.chip.get_untracked() {
             return;
         }
-        let n = self.vrc6_clip_count();
-        if chip == SoundChip::Base2A03 && n > 0 {
-            let text = format!(
-                "Switch the hardware profile to 2A03?\n\nThe VRC6 lanes have {n} clip(s). They stay in the project, dimmed and silent, until you switch back to 2A03 + VRC6."
-            );
-            if self.ask(cx, &text, "Switch to 2A03", None) != Some(true) {
-                return;
-            }
+        // §5.5: tracks locked to channels the new profile lacks ask first.
+        let _ = cx;
+        if !self.profile_switch_ok(chip) {
+            return;
         }
         self.set_chip(chip);
         self.commit();
@@ -3762,6 +3903,9 @@ impl AppState {
             Action::OpenClip => return false,
             Action::Settings => self.open_modal(Modal::Settings(SettingsTab::Audio)),
             Action::InsertClip => self.insert_clips(),
+            Action::InsertTrack => self.insert_track(None),
+            Action::DuplicateTrack => self.duplicate_tracks(None),
+            Action::DeleteTrack => self.delete_tracks(None),
             Action::LoopSelection => self.run_menu_action(cx, MenuAction::Cmd(Action::LoopSelection)),
             Action::PlayStop => cx.emit(AppEvent::TogglePlay),
             Action::Tap => cx.emit(AppEvent::Tap),
@@ -3874,6 +4018,7 @@ impl AppState {
             Cmd::NewFromMidi => cx.emit(AppEvent::ImportMidi),
             Cmd::ImportAudio => cx.emit(AppEvent::ImportAudio),
             Cmd::ProjectSettings => self.open_modal(Modal::ProjectSettings),
+            Cmd::InsertTrackKind(k) => self.insert_track(chip::voice::VoiceKind::ALL.get(k as usize).copied()),
             Cmd::OpenRecent(i) => self.open_recent(cx, i),
             Cmd::ClearRecent => {
                 self.settings.recent.clear();
@@ -3952,6 +4097,8 @@ impl AppState {
             can_zoom_back: if piano { true } else { !self.zoom_back.is_empty() },
             draw: self.s.piano.with_untracked(|p| p.draw),
             overview: self.settings.show_overview,
+            track_selected: self.s.arrangement.with_untracked(|a| !a.track_sel.is_empty()),
+            tracks: self.s.arrangement.with_untracked(|a| a.lanes.len()),
             recent: self
                 .settings
                 .recent
@@ -4003,6 +4150,7 @@ impl AppState {
                 RawWindowHandle::Win32(h) => Some(h.hwnd.get()),
                 _ => None,
             });
+            self.hwnd = hwnd;
             if let Some(hwnd) = hwnd {
                 // The bar takes its height from the client area: grow the
                 // window by it so the content keeps its size.

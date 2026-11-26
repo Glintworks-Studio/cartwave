@@ -30,6 +30,8 @@ pub enum MenuSite {
     Spectrum,
     /// Settings ▸ Editing: the default track colour's grid.
     DefaultTrackColour,
+    /// A track's badge: lock it to a channel or unlock it (Batch 4a §5.2).
+    Badge(usize),
     /// The status bar's warning icon: the persistent problems (polish 2 §6.4).
     Problems,
     /// The status bar's message, whole (polish 2 §6.2).
@@ -219,6 +221,10 @@ impl AppState {
     /// Cmd+D: copies of the selected clips, or of the time selection's
     /// contents, placed right after it (A10).
     fn arr_duplicate(&mut self) {
+        // R87 (generic Duplicate): with a track selected (no clip, no time).
+        if self.s.time_sel.with_untracked(|t| t.is_none()) && self.s.arrangement.with_untracked(|a| a.selection.is_empty() && !a.track_sel.is_empty()) {
+            return self.duplicate_tracks(None);
+        }
         if let Some(t) = self.s.time_sel.get_untracked() {
             let open = self.lane_open();
             let len = t.end - t.start;
@@ -239,6 +245,10 @@ impl AppState {
     /// Del: the time selection's contents (clips split at its edges), else
     /// the selected clips (A11, F-22).
     fn arr_delete(&mut self) {
+        // R86: Delete with a track selected (no clip, no time) deletes it.
+        if self.s.time_sel.with_untracked(|t| t.is_none()) && self.s.arrangement.with_untracked(|a| a.selection.is_empty() && !a.track_sel.is_empty()) {
+            return self.delete_tracks(None);
+        }
         if let Some(t) = self.s.time_sel.get_untracked() {
             self.s.arrangement.update(|a| {
                 a.clear_range(t.start, t.end, t.lane0..=t.lane1);
@@ -553,6 +563,11 @@ impl AppState {
                 let x = if l.mirrored() { l.name_x() - RENAME_INSET } else { l.name_x() - (crate::views::header_layout::NAME_X - RENAME_TRACK_X) };
                 RenameSpec { target, x: row.x / s + x, y: row.y / s + RENAME_INSET, w: RENAME_TRACK_W, text: name }
             }
+            // A locked track's fader and pan don't take typed values (§5.3).
+            RenameTarget::Volume(lane) | RenameTarget::Pan(lane) if self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.locked())) => {
+                let help = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).and_then(|l| l.lock)).map(crate::tracks::locked_help).unwrap_or_default();
+                return self.set_status(help);
+            }
             RenameTarget::Volume(lane) | RenameTarget::Pan(lane) => {
                 let Some(row) = crate::views::browser::lane_row(lane) else { return };
                 let s = self.scale;
@@ -712,10 +727,21 @@ impl AppState {
                 MenuItem::new(MenuAction::Cmd(A::LoopSelection), "Set Loop to Selection").key(shortcuts::label(A::LoopSelection)).off_if(self.time_range().is_none(), WHY_NO_RANGE),
                 MenuItem::cmd(A::ZoomToFit).key("Double-click"),
             ],
-            MenuSite::Track(lane) => vec![
-                MenuItem::new(MenuAction::RenameTrack(lane), "Rename").key(shortcuts::label(A::Rename)),
-                MenuItem::new(MenuAction::Sub(SubMenu::TrackColor(lane)), "Colour"),
-            ],
+            MenuSite::Track(lane) => {
+                let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
+                vec![
+                    MenuItem::new(MenuAction::RenameTrack(lane), "Rename").key(shortcuts::label(A::Rename)),
+                    MenuItem::new(MenuAction::Sub(SubMenu::TrackColor(lane)), "Colour"),
+                    MenuItem::sep(),
+                    MenuItem::new(MenuAction::Sub(SubMenu::InsertTrack), "Insert Track"),
+                    MenuItem::new(MenuAction::DuplicateTrack(lane), "Duplicate Track"),
+                    MenuItem::new(MenuAction::DeleteTrack(lane), "Delete Track").off_if(n <= 1, "A project keeps at least one track."),
+                    MenuItem::sep(),
+                    MenuItem::new(MenuAction::Sub(SubMenu::Lock(lane)), "Lock"),
+                    MenuItem::new(MenuAction::Sub(SubMenu::Voices(lane)), "Voices").off_if(self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.locked())), "A locked track plays one note at a time, like the chip."),
+                ]
+            }
+            MenuSite::Badge(lane) => self.lock_menu_items(lane),
             MenuSite::Piano(_) => {
                 let notes = self.s.piano.with_untracked(|p| !p.sel.is_empty());
                 vec![
@@ -805,6 +831,15 @@ impl AppState {
                 let cur = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| state::rgb_hex(l.color)));
                 colour_grid(cur, move |c| MenuAction::TrackColor(lane, c))
             }
+            SubMenu::InsertTrack => chip::voice::VoiceKind::ALL.iter().map(|&k| MenuItem::new(MenuAction::InsertTrack(k), crate::tracks::kind_name(k))).collect(),
+            SubMenu::Lock(lane) => self.lock_menu_items(lane),
+            SubMenu::Voices(lane) => {
+                let cur = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(0, |l| l.voices));
+                [0u16, 1, 2, 3, 4, 6, 8, 12, 16]
+                    .iter()
+                    .map(|&n| MenuItem::new(MenuAction::SetVoices(lane, n), if n == 0 { "Unlimited".to_string() } else { format!("{n}") }).checked(cur == n))
+                    .collect()
+            }
             SubMenu::Grid => {
                 let (snap, o) = self.s.arrangement.with_untracked(|a| (a.snap, a.grid_opts));
                 let mut v: Vec<MenuItem> = state::Snap::ALL.iter().map(|g| MenuItem::new(MenuAction::Grid(*g), g.label()).checked(*g == snap && !o.adaptive)).collect();
@@ -873,6 +908,18 @@ impl AppState {
                 self.save_settings();
             }
             MenuAction::RenameTrack(l) => self.open_rename(RenameTarget::Track(l)),
+            MenuAction::InsertTrack(k) => self.insert_track(Some(k)),
+            MenuAction::DuplicateTrack(l) => self.duplicate_tracks(Some(l)),
+            MenuAction::DeleteTrack(l) => self.delete_tracks(Some(l)),
+            MenuAction::LockTrack(l, c) => self.lock_track_cmd(cx, l, c),
+            MenuAction::SetVoices(l, n) => {
+                self.s.arrangement.update(|a| {
+                    if let Some(t) = a.lanes.get_mut(l) {
+                        t.voices = n;
+                    }
+                });
+                self.commit();
+            }
             MenuAction::PresetRename(i) => self.open_rename(RenameTarget::Preset(i)),
             MenuAction::PresetDelete(i) => {
                 let Some(p) = self.preset(i) else { return };

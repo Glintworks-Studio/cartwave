@@ -40,15 +40,19 @@ pub struct PresetDrag {
 
 thread_local! {
     /// Each track row's bounds as last drawn (physical px): drop targets.
-    static LANE_ROWS: RefCell<[Option<BoundingBox>; 8]> = const { RefCell::new([None; 8]) };
+    /// Each track row's bounds as last drawn (physical px): drop targets
+    /// (any number of tracks: the list grows as rows draw).
+    static LANE_ROWS: RefCell<Vec<Option<BoundingBox>>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Called by the track rows when they draw.
 pub fn register_lane_row(lane: usize, b: BoundingBox) {
     LANE_ROWS.with(|r| {
-        if let Some(slot) = r.borrow_mut().get_mut(lane) {
-            *slot = Some(b);
+        let mut r = r.borrow_mut();
+        if r.len() <= lane {
+            r.resize(lane + 1, None);
         }
+        r[lane] = Some(b);
     });
 }
 
@@ -328,7 +332,7 @@ impl View for PresetList {
                         if let Item::Preset(p) = self.items[i] {
                             let target = lane_at(*x, *y).filter(|_| !Self::inside(cx));
                             let kinds = self.s.user_presets.with_untracked(|u| crate::user_presets::view(p, u).map_or(0, |v| v.kinds));
-                            let fits = target.is_some_and(|l| kinds & lane_kind(l) != 0);
+                            let fits = target.is_some_and(|l| kinds & lane_kind(self.s.arrangement.with_untracked(|a| a.lanes.get(l).map_or(l, |t| t.chan()))) != 0);
                             let clip = target
                                 .filter(|_| fits)
                                 .and_then(|_| self.s.arrangement.with_untracked(|a| super::arrangement::clip_at(a, *x, *y)));
@@ -479,7 +483,7 @@ impl View for PresetList {
                     }
                     let (name, kinds, current) = if is_preset {
                         let Some(p) = self.s.user_presets.with_untracked(|u| crate::user_presets::view(l, u)) else { continue };
-                        let fits_sel = lane < 8 && p.fits(lane);
+                        let fits_sel = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|t| p.fits(t.chan())));
                         let current = fits_sel && lane_names.get(lane).is_some_and(|n| *n == p.name);
                         (p.name, p.kinds, current)
                     } else {

@@ -525,6 +525,14 @@ pub enum MenuAction {
     ClipColor(Option<Rgba>),
     TrackColor(usize, Rgba),
     RenameTrack(usize),
+    /// Insert Track ▸ a type: a new studio track below the selected one.
+    InsertTrack(chip::voice::VoiceKind),
+    DuplicateTrack(usize),
+    DeleteTrack(usize),
+    /// The badge's lock menu: lock track to a channel, or `None`: studio.
+    LockTrack(usize, Option<usize>),
+    /// A studio track's Voices setting (0 = unlimited).
+    SetVoices(usize, u16),
     /// A user preset in the browser (its browser index).
     PresetRename(usize),
     PresetDelete(usize),
@@ -546,6 +554,12 @@ pub enum SubMenu {
     ClipColor,
     TrackColor(usize),
     Grid,
+    /// Insert Track ▸ (the voice types).
+    InsertTrack,
+    /// Lock ▸ (the badge's menu) for a track.
+    Lock(usize),
+    /// Voices ▸ (a studio track's polyphony cap).
+    Voices(usize),
 }
 
 /// One row of a context menu.
@@ -856,7 +870,7 @@ impl Arrangement {
         if let Some((cid, ids)) = a.editing_notes.clone() {
             if let Some(c) = a.clip_mut(cid) {
                 let mut next = c.next_note_id;
-                notes::resolve_mono(&mut c.notes, &ids, &mut next);
+                notes::resolve(true, &mut c.notes, &ids, &mut next);
             }
         }
         std::borrow::Cow::Owned(a.clips)
@@ -1139,7 +1153,7 @@ impl Arrangement {
                 }
             }
             notes.sort_by_key(|n| n.start);
-            notes::resolve_mono(&mut notes, &[], &mut next);
+            notes::resolve(true, &mut notes, &[], &mut next);
             let first = &group[0];
             let mut c = Clip::new(first.id, lane, start, (end - start).max(1), first.name.clone(), notes);
             c.instrument = first.instrument;
@@ -1373,6 +1387,9 @@ pub struct Meters {
     pub peak_hold: Vec<f32>,
     /// 0..1 brightness of the track's light (pulses on note-on).
     pub light: Vec<f32>,
+    /// The Main track's meter: the output level before the master gain
+    /// (the fader's meter applies the gain, like a track's), 0..1.
+    pub main: f32,
 }
 
 impl Meters {

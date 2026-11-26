@@ -393,15 +393,39 @@ fn project_settings(cx: &mut Context, s: Signals) {
     Binding::new(cx, s.chip, move |cx| {
         let chip = s.chip.get();
         row(cx, "Hardware profile", |cx| {
-            choice(cx, "2A03", chip == SoundChip::Base2A03, true, || AppEvent::SetProfile(SoundChip::Base2A03));
-            choice(cx, "2A03 + VRC6", chip == SoundChip::WithVrc6, true, || AppEvent::SetProfile(SoundChip::WithVrc6));
+            for p in SoundChip::ALL {
+                choice(cx, p.label(), chip == p, true, move || AppEvent::SetProfile(p));
+            }
         });
-        note(cx, "The console the song is written for. With 2A03 alone, the three VRC6 lanes are silent and dimmed.");
+        note(cx, "The real console locked tracks follow (Batch 4a): its channels are the budget below. Studio tracks are never limited. One expansion chip per project, as on a cartridge.");
+    });
+    // The channel budget (§5.4), VISION.md's form; a type over budget in red.
+    let budget = Memo::new(move |_| {
+        let chip = s.chip.get();
+        s.arrangement.with(|a| crate::tracks::budget(a, chip))
+    });
+    Binding::new(cx, budget, move |cx| {
+        let b = budget.get();
+        row(cx, "Channel budget", |cx| {
+            if b.rows.is_empty() {
+                Label::new(cx, "None: every track is a studio track.").class("field-label");
+            }
+            for (t, over) in b.parts(false) {
+                Label::new(cx, t).class("field-label").toggle_class("budget-over", over);
+            }
+        });
+        if b.stray > 0 {
+            note(cx, format!("{} track(s) are locked to channels this profile doesn't have: they are silent. Unlock them from their badges, or pick another profile.", b.stray));
+        } else if b.over() {
+            note(cx, "Over budget: more locked tracks than real channels.");
+        } else if !b.rows.is_empty() {
+            note(cx, "All tracks locked and within budget: the song plays on the real hardware.");
+        }
     });
     Binding::new(cx, s.filter_state, move |cx| {
         let (mode, auto) = s.filter_state.get();
         row(cx, "Output filter", |cx| {
-            let follows = format!("Follow the profile ({})", filter_name(FilterMode::default_for(s.chip.get_untracked() == SoundChip::WithVrc6)));
+            let follows = format!("Follow the profile ({})", filter_name(crate::tracks::default_filter(s.chip.get_untracked())));
             choice(cx, follows, auto, true, || AppEvent::SetFilter(FilterPick(None)));
             for m in FilterMode::ALL {
                 choice(cx, filter_name(m), !auto && m == mode, true, move || AppEvent::SetFilter(FilterPick(Some(m))));

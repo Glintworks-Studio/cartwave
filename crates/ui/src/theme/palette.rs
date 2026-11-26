@@ -129,6 +129,25 @@ pub fn strip(c: Rgba, light: f32) -> ([Rgba; 3], Rgba, Rgba) {
     (fill, left, right)
 }
 
+/// The Main track's strip (Batch 4a §7, the `main_strip` recipe): black →
+/// `#1C1C1C` → `#363636` across, a `#4A4A4A` highlight on the outer edge, a
+/// 6% white inner glow. **Black is reserved for Main**: no palette colour,
+/// grid cell or automatic pick is this dark (`black_is_reserved_for_main`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MainStrip {
+    pub fill: [Rgba; 3],
+    pub edge: Rgba,
+    pub glow: f32,
+}
+
+pub fn main_strip() -> MainStrip {
+    MainStrip { fill: [Rgba::hex(0x000000), Rgba::hex(0x1C1C1C), Rgba::hex(0x363636)], edge: Rgba::hex(0x4A4A4A), glow: 0.06 }
+}
+
+/// The darkest a palette colour may be (its brightest channel): far from
+/// Main's black.
+pub const MIN_TRACK_BRIGHTNESS: f32 = 0x40 as f32 / 255.0;
+
 /// A clip's colours for a hover and selection amount (0..1 each).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ClipColours {
@@ -365,5 +384,21 @@ mod tests {
         assert!(delta_e(c, track) > 0.1 && delta_e(c, lanes[2]) > 0.1);
         // Every candidate contrasts with the lane rows.
         assert!(auto_candidates(false).iter().all(|c| delta_e(*c, ROW_A) >= 0.25));
+    }
+
+    /// Batch 4a §7: black is Main's. No palette colour (so no grid cell and
+    /// no automatic pick, reduced or not) is near it.
+    #[test]
+    fn black_is_reserved_for_main() {
+        let dark = |c: Rgba| c.r.max(c.g).max(c.b) < MIN_TRACK_BRIGHTNESS;
+        assert!(!all().any(dark), "a palette colour is too dark");
+        for reduced in [false, true] {
+            assert!(!auto_candidates(reduced).into_iter().any(dark));
+        }
+        let lanes: Vec<Rgba> = all().take(5).collect();
+        for _ in 0..80 {
+            assert!(!dark(next_track_color(&lanes, &lanes[3..], false)));
+        }
+        assert_eq!(main_strip().fill[0], Rgba::hex(0x000000));
     }
 }

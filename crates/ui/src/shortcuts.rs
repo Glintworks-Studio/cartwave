@@ -104,6 +104,13 @@ pub enum Action {
     Rename,
     // Create
     InsertClip,
+    /// Insert Track (R84: Ctrl+Shift+T / Cmd+Shift+T): a studio track of the
+    /// selected track's type below it.
+    InsertTrack,
+    /// Duplicate / Delete the selected tracks (Batch 4a; with a track selected
+    /// and no clip, Ctrl+D and Delete do this too: R86, R87).
+    DuplicateTrack,
+    DeleteTrack,
     // View / transport
     PlayStop,
     Continue,
@@ -239,6 +246,9 @@ pub static TABLE: &[Shortcut] = &[
     sc!(Consolidate, "edit.consolidate", "Consolidate", "Edit", &[cmd(Code::KeyJ)], &[cmd(Code::KeyJ)], EDITORS),
     sc!(Rename, "edit.rename", "Rename", "Edit", &[cmd(Code::KeyR)], &[cmd(Code::KeyR)], EDITORS),
     sc!(InsertClip, "create.midi_clip", "Insert MIDI Clip", "Create", &[cmd_shift(Code::KeyM)], &[cmd_shift(Code::KeyM)], ARR),
+    sc!(InsertTrack, "create.track", "Insert Track", "Create", &[cmd_shift(Code::KeyT)], &[cmd_shift(Code::KeyT)], APP),
+    sc!(DuplicateTrack, "create.duplicate_track", "Duplicate Track (also Ctrl+D with a track selected)", "Create", &[], &[], APP),
+    sc!(DeleteTrack, "create.delete_track", "Delete Track (also Delete with a track selected)", "Create", &[], &[], APP),
     sc!(PlayStop, "transport.play", "Play / Stop", "Transport", &[k(Code::Space)], &[k(Code::Space)], APP),
     sc!(Continue, "transport.continue", "Continue from the stop point", "Transport", &[shift(Code::Space)], &[shift(Code::Space)], APP),
     sc!(Rewind, "transport.rewind", "Back to the start", "Transport", &[k(Code::Home)], &[k(Code::Home)], APP),

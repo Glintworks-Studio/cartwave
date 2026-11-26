@@ -432,6 +432,21 @@ impl Arrangement {
         }
     }
 
+    /// A legacy eight-lane arrangement (a MIDI file made into a song) fitted
+    /// to profile `p`: tracks locked to channels the profile lacks become
+    /// studio tracks if they are empty, or always under None (studio only),
+    /// so nothing is silenced by a profile the user didn't pick for it.
+    pub fn fit_to_profile(&mut self, p: Profile) {
+        for i in 0..self.lanes.len() {
+            if let Some(c) = self.lanes[i].lock {
+                let empty = !self.clips.iter().any(|x| x.lane == i);
+                if !p.has_channel(c) && (empty || p == SoundChip::StudioOnly) {
+                    self.unlock_track(i);
+                }
+            }
+        }
+    }
+
     /// Whether a track's fader or pan would change on locking (§5.2 asks).
     pub fn lock_resets(&self, i: usize) -> bool {
         self.lanes.get(i).is_some_and(|t| t.lock.is_none() && (t.vol_db != 0.0 || t.pan != 0))
