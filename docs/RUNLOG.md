@@ -897,3 +897,8 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   for this branch. Local worktrees left for the next pass: `../before-mac-catchup` (main ef2ea19),
   `../perf-macos-base` (24c9d9c), `../bisect`. The thermal logger ran all session: nominal throughout
   (`docs/mac-catchup/results/thermal.log`).
+- **MC-D24 (merge, gate 6 accepted).** The owner accepted gate 6 (the 60 Hz display's isolated
+  2–3-vblank holds, MC-D21) as is and asked for the §9 merge. `pre-mac-catchup` tags the old `main`
+  (ef2ea19) and is pushed; `main` fast-forwarded to 18b5860 (`--ff-only`) and pushed. `main` is
+  checked out in `../before-mac-catchup` (clean), so the fast-forward ran in that worktree rather
+  than via `git checkout main`. The 60 Hz holds remain open for the display-link work.

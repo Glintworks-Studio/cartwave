@@ -10,7 +10,8 @@ harness and raw results in [`docs/mac-catchup/`](docs/mac-catchup/)*
   XB271HU 59.953 Hz, both backing 1.0; audio: built-in speakers (the main matrix) and a MOTU M2 (USB,
   plugged in during the run); fork pin 60907aad → **2a146e6b** (fork commits 14 and 15).
 - **Gates: 6 of 7 pass. Gate 6 (pacing) fails on the 60 Hz display**: 10 isolated 2–3-vblank holds per
-  120 s, the stopgap's known residue (PERF-macos §11); the fix is a renderer change. **Merge held.**
+  120 s, the stopgap's known residue (PERF-macos §11); the fix is a renderer change. **Merged 2026-11-26** after the owner
+  accepted gate 6 as is (§9).
 - **§4:** every Mac shortcut, menu, dialog, gesture and layout checked with real input (84 harness
   checks pass); colours sRGB-correct on both displays; lime audit 0; mockup match at 2× within 1 px
   except one reference deviation (explained); export byte-identical to Windows (12/12).
@@ -325,11 +326,13 @@ UX.md (Mac column in Apple's order, the macOS menu bar as built), VISUAL-SPEC.md
 - docs (this file, RUNLOG, UX.md, VISUAL-SPEC.md §12) and tools (`docs/mac-catchup/`, `chipbench`,
   `matrix_mac.sh`).
 
-**Merge result: held.** §1.5 allows the fast-forward only if every gate passes, and gate 6 fails on
-the 60 Hz display (a known, pre-existing limitation; the fix is architectural). `main` is untouched
-and no tag was made. To merge once the owner accepts gate 6 as is, or after the display-link work:
-`git tag pre-mac-catchup main && git push origin pre-mac-catchup && git checkout main && git merge
---ff-only mac/catchup && git push origin main`.
+**Merge result: merged (2026-11-26).** §1.5 allows the fast-forward only if every gate passes, and
+gate 6 fails on the 60 Hz display (a known, pre-existing limitation; the fix is architectural), so
+the merge was first held. The owner then accepted gate 6 as is, and `main` was fast-forwarded
+ef2ea19 → 18b5860 (`--ff-only`, no force) and pushed; the old `main` is tagged `pre-mac-catchup`
+(ef2ea19, pushed). The §9 commands were run as written except `git checkout main`: `main` is checked
+out in the `../before-mac-catchup` worktree (clean), so the fast-forward ran there. The 60 Hz holds
+stay open for the display-link work (PERF-macos §11).
 
 ## 10. Screenshots and how to run
 
