@@ -1024,6 +1024,11 @@ impl AppState {
                     );
                 }
             }
+            // `CHIPDAW_PLAYHEAD=<ticks>` (dev): the playhead stays put while
+            // playing (the polish pass's regression screenshots).
+            if let Some(p) = dev::var("CHIPDAW_PLAYHEAD").and_then(|v| v.parse::<f64>().ok()) {
+                tr.playhead_ticks = p;
+            }
             self.s.transport.set(tr);
             self.follow_playhead(tr.playhead_ticks);
         }
@@ -1060,7 +1065,11 @@ impl AppState {
             });
         }
         // Only notify (and so redraw) when something actually moved.
-        meters.set_if_changed(m);
+        // `CHIPDAW_FROZEN_METERS=1` (dev): levels, lights and the spectrum stay
+        // at rest (regression screenshots, performance attribution).
+        if !dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") {
+            meters.set_if_changed(m);
+        }
 
         self.record_frame_stats(ft, tr.playhead_ticks);
 
@@ -1418,7 +1427,8 @@ impl AppState {
         // MEM: the process's private memory, once a second (idle stays idle).
         if self.last_mem.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) {
             self.last_mem = Some(Instant::now());
-            self.s.mem_mb.set_if_changed(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32));
+            let frozen = dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1");
+            self.s.mem_mb.set_if_changed(if frozen { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) });
         }
         // Selected lane follows the first selected clip.
         if let Some(l) = self
@@ -1791,7 +1801,7 @@ pub fn build_ui(cx: &mut Context) {
         rename: Signal::new(None),
         guide: Signal::new(false),
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
-        mem_mb: Signal::new(perf::process_memory().map(|b| (b / (1024 * 1024)) as u32)),
+        mem_mb: Signal::new(if dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
         faders: Signal::new([state::Fader::default(); 8]),
     };
 
