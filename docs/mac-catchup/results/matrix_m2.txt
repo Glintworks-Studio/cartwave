@@ -1,0 +1,84 @@
+== A_64
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 64 frames"
+# callbacks 89765, frames/cb 64..64, cost mean 0.271% p99 0.70% max 2.30% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 1.39 ms
+# process: 677.1 M instr/s, 255.8 mW, P-core share 99.4%, 9.2 % of a core; audio thread 23.35 M instr/s, 10.41 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5851136 frames, 45712 blocks, 1 pilot dropouts, 558 clicks, peak 0.1907, lowest clean block/level 0.539
+== A_128
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 128 frames"
+# callbacks 44876, frames/cb 128..128, cost mean 0.254% p99 0.50% max 1.00% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 2.72 ms
+# process: 675.9 M instr/s, 252.9 mW, P-core share 99.3%, 8.9 % of a core; audio thread 19.36 M instr/s, 8.70 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5851648 frames, 45716 blocks, 1 pilot dropouts, 557 clicks, peak 0.1907, lowest clean block/level 0.631
+== A_256
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 22438, frames/cb 256..256, cost mean 0.252% p99 0.60% max 1.00% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 5.39 ms
+# process: 674.8 M instr/s, 252.5 mW, P-core share 99.3%, 8.9 % of a core; audio thread 17.40 M instr/s, 7.85 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5851136 frames, 45712 blocks, 1 pilot dropouts, 557 clicks, peak 0.1907, lowest clean block/level 0.552
+== A_512
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 512 frames"
+# callbacks 11210, frames/cb 512..512, cost mean 0.903% p99 1.90% max 2.30% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.77 ms
+# process: 673.5 M instr/s, 244.0 mW, P-core share 88.6%, 9.4 % of a core; audio thread 16.56 M instr/s, 0.74 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5845504 frames, 45668 blocks, 1 pilot dropouts, 556 clicks, peak 0.1907, lowest clean block/level 0.640
+== C_64
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 64 frames"
+# callbacks 89944, frames/cb 64..64, cost mean 0.263% p99 0.60% max 1.10% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 1.39 ms
+# process: 1267.0 M instr/s, 445.5 mW, P-core share 99.8%, 20.6 % of a core; audio thread 23.35 M instr/s, 10.30 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5846016 frames, 45672 blocks, 1 pilot dropouts, 559 clicks, peak 0.1907, lowest clean block/level 0.462
+== C_128
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 128 frames"
+# callbacks 44970, frames/cb 128..128, cost mean 0.249% p99 0.50% max 0.90% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 2.72 ms
+# process: 1267.4 M instr/s, 444.8 mW, P-core share 99.7%, 20.5 % of a core; audio thread 19.36 M instr/s, 8.68 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5849088 frames, 45696 blocks, 1 pilot dropouts, 546 clicks, peak 0.1764, lowest clean block/level 0.411
+== C_256
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 22485, frames/cb 256..256, cost mean 0.253% p99 0.60% max 1.20% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 5.40 ms
+# process: 1265.9 M instr/s, 444.3 mW, P-core share 99.7%, 20.4 % of a core; audio thread 17.41 M instr/s, 7.82 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5846528 frames, 45676 blocks, 1 pilot dropouts, 546 clicks, peak 0.1764, lowest clean block/level 0.568
+== C_512
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 512 frames"
+# callbacks 11243, frames/cb 512..512, cost mean 0.898% p99 1.90% max 2.20% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.74 ms
+# process: 1263.5 M instr/s, 437.0 mW, P-core share 94.9%, 21.0 % of a core; audio thread 16.56 M instr/s, 0.75 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5849600 frames, 45700 blocks, 1 pilot dropouts, 559 clicks, peak 0.1907, lowest clean block/level 0.595
+== G_64
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 64 frames"
+# callbacks 89756, frames/cb 64..64, cost mean 0.168% p99 0.50% max 1.30% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 1.38 ms
+# process: 414.5 M instr/s, 160.6 mW, P-core share 99.2%, 6.5 % of a core; audio thread 17.29 M instr/s, 7.38 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5851648 frames, 45716 blocks, 1 pilot dropouts, 75 clicks, peak 0.2730, lowest clean block/level 0.728
+== G_128
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 128 frames"
+# callbacks 44875, frames/cb 128..128, cost mean 0.186% p99 0.40% max 0.60% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 2.72 ms
+# process: 412.3 M instr/s, 158.6 mW, P-core share 99.0%, 6.4 % of a core; audio thread 13.28 M instr/s, 5.76 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5850624 frames, 45708 blocks, 1 pilot dropouts, 75 clicks, peak 0.2730, lowest clean block/level 0.458
+== G_256
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 22419, frames/cb 256..256, cost mean 0.184% p99 0.40% max 0.70% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 5.39 ms
+# process: 410.9 M instr/s, 157.4 mW, P-core share 99.0%, 6.3 % of a core; audio thread 11.31 M instr/s, 4.91 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5846528 frames, 45676 blocks, 1 pilot dropouts, 75 clicks, peak 0.2730, lowest clean block/level 0.571
+== G_512
+# summary: 120 s, device "M2 · 48000 Hz · 2 ch · requested 512 frames"
+# callbacks 11210, frames/cb 512..512, cost mean 0.603% p99 1.00% max 1.40% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.76 ms
+# process: 407.8 M instr/s, 151.7 mW, P-core share 88.1%, 6.6 % of a core; audio thread 10.36 M instr/s, 0.50 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+tapmon summary: device "M2", 48000 Hz, 5846528 frames, 45676 blocks, 1 pilot dropouts, 75 clicks, peak 0.2730, lowest clean block/level 0.951

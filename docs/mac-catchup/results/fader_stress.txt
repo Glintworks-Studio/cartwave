@@ -1,0 +1,7 @@
+260 fader drags over 120 s on Mac mini Speakers
+# summary: 124 s, device "Mac mini Speakers · 48000 Hz · 2 ch · requested 64 frames"
+# callbacks 92933, frames/cb 64..64, cost mean 0.265% p99 0.70% max 1.90% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 1.40 ms
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# process: 844.3 M instr/s, 335.7 mW, P-core share 99.4%, 12.8 % of a core; audio thread 20.51 M instr/s, 9.76 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0

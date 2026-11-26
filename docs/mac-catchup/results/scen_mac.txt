@@ -6,8 +6,8 @@ PASS  … Cancel keeps the edit: *file2 — ChipDAW
 PASS  … Don't Save: a new Untitled project: Untitled — ChipDAW
 PASS  Cmd+O: the open panel: window role=AXWindow subrole=AXDialog title='Open' | window role=AXWindow subrole=AXStandardWindow title='Untitled — ChipDAW' |   text 'Untitled — ChipDAW' | 
 PASS  … Esc closes it: 
-PASS  Cmd+, opens Settings (a panel over the lanes): luma 22.0 -> 9.7
-PASS  Shift+Cmd+R opens Export, Esc closes it: luma 42.3 -> 19.1 -> 42.3
+PASS  Cmd+, opens Settings (a panel over the lanes): luma 21.9 -> 9.7
+PASS  Shift+Cmd+R opens Export, Esc closes it: luma 42.7 -> 19.2 -> 42.7
 PASS  Cmd+C, click bar 7 on lane 2, Cmd+V: pasted at lane 1 start 7.0
 PASS  Cmd+X cuts: 4 clips
 PASS  Cmd+Z restores: 5 clips
@@ -28,9 +28,9 @@ PASS  Shift+Cmd+D duplicates the time: 7 clips; D starts [6, 7]
 PASS  Shift+Cmd+C, Shift+Cmd+V pastes time: lane 4 starts [6, 8]
 PASS  Shift+Cmd+X cuts time: lane 4: []
 PASS  Cmd+L loops the selection: loop True 0..7680
-PASS  Space plays (the display's TIME moves): 45 px differ (> 20) in box x 50…192 y 0…55
+PASS  Space plays (the display's TIME moves): 18 px differ (> 20) in box x 121…192 y 38…55
 PASS  Home rewinds (TIME and POSITION back to 0:00.00, 1.1.1): 0 px differ (> 20)
-PASS  T taps the tempo (4 taps 0.5 s apart: ~120): bpm ['117.83', '116.73', '116.14']
+PASS  T taps the tempo (4 taps 0.5 s apart: ~120): bpm ['116.37', '116.38', '116.13']
 PASS  cmd,alt+b toggles View ▸ Browser (key text '⌥⌘B'): True -> False -> True
 PASS  alt,shift+f toggles View ▸ Follow (key text '⌥⇧F'): True -> False -> True
 PASS  cmd,alt+o toggles View ▸ Show Overview (key text '⌥⌘O'): True -> False -> True
@@ -55,8 +55,30 @@ PASS  ⌥+wheel over track 2 grows it 12 px: heights [None, 84.0, None, None, No
 PASS  ⌥-drag of a row's bottom edge sets every track: heights [144.0, 144.0, 144.0, 144.0, 144.0, 144.0, 144.0, 144.0]
 PASS  S on 1 then 2 = only 2; ⌘-click S on 3 adds: [False, True, True, False]
 PASS  ⌘+wheel zooms the lanes: 41068 px differ (> 8) in box x 530…1439 y 110…695
-PASS  Shift+wheel back the other way returns to bar 1: 457 px differ (> 8) in box x 530…551 y 325…346
-PASS  Wheel and Shift+wheel scroll in time: wheel 145851 px differ (> 8) in box x 241…1435 y 168…695; shift 89921 px differ (> 8) in box x 530…1438 y 110…695
+PASS  Shift+wheel back the other way returns to bar 1: 574 px differ (> 8) in box x 530…1423 y 75…346
+PASS  Wheel and Shift+wheel scroll in time: wheel 145968 px differ (> 8) in box x 241…1435 y 75…695; shift 90038 px differ (> 8) in box x 530…1438 y 75…695
+PASS  Cmd+O, Go to the file, Open: mc_open — ChipDAW
+PASS  Shift+Cmd+S, a name without the extension: saved as .chipdaw: ['mc_saved.chipdaw'], title 'mc_saved — ChipDAW'
+NOTE  Return in Export with one clip selected opens the piano roll behind it (shared code: Windows too): reproduced
+PASS  Shift+Cmd+R, Return, Save: mc_saved.wav (RIFF WAVE) and its loop files: ['mc_saved.chipdaw', 'mc_saved.json', 'mc_saved.wav', 'mc_saved_intro.wav', 'mc_saved_loop.wav']
+PASS  File ▸ Import ▸ Audio as DPCM Sample… (hey.wav): 2 sample(s)
+PASS  File ▸ Open Recent: newest first, with the folder: ['mc_saved.chipdaw — /var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup', 'mc_open.chipdaw — /private/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup', '----']
+PASS  … kept in settings.json: ['/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/mc_saved.chipdaw', '/private/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/mc_open.chipdaw']
+PASS  File ▸ New from MIDI File… (showcase.mid), then Cmd+S names it: title '*Untitled — ChipDAW', ['mc_frommidi.chipdaw'], 8 clips
+PASS  Ruler click places the playhead (a click, no zoom): ('click', 92.0, 0.0)
+PASS  Ruler vertical drag (down) zooms in: ('drag', 189.01, 7905.0)
+PASS  Ruler horizontal drag scrolls: ('drag', 189.01, 7905.0) -> ('drag', 189.01, 11643.0)
+PASS  Ruler double-click fits the song: dev: zoom ZoomToFit range (0, 61440) px_per_bar 47.40 scroll 0
+PASS  Overview sideways drag scrolls: ('drag', 47.4, 15004.0)
+PASS  Overview up/down drag zooms: ('drag', 47.4, 15004.0) -> ('drag', 86.36, 17678.0)
+PASS  Overview click outside the frame jumps there: ('click', 86.36, 40231.0)
+PASS  Overview double-click fits: dev: zoom ZoomToFit range (0, 61440) px_per_bar 47.40 scroll 0
+PASS  Continuous (trackpad-style) scroll moves the lanes in time: 112856 px differ (> 8) in box x 621…1438 y 75…923
+PASS  ⌥ + a 20-event continuous scroll (40 px of swipe) over track 2: height 72 -> 96.0 (2 steps of 12 px)
+PASS  Right-click a track header: its menu: Track(0): Rename|Colour
+PASS  Colour ▸ grid: a click sets the track colour (saved), one ⌘Z restores it: #4FA8E0 -> undo None
+NOTE  Hover a colour, then Esc: the preview stays (saved, no unsaved mark) — shared code: Esc skips restore_colours: saved colour #FDC3A2
+NOTE  Hover cell A, click cell B, ⌘Z: back to A, not the original — shared code: after undo #FDC3A2
 PASS  Cmd+Q with changes: the save sheet: Save Don't Save Cancel
 PASS  … Cancel: still running: 
 PASS  The close button with changes: the same sheet: Save Don't Save Cancel

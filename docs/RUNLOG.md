@@ -890,3 +890,10 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   by an in-app switch built-in ↔ M2 through Settings ▸ Audio while playing, which needs no system
   change (§0 asks before changing the default device). Ground truth as ENGINE-macos.md §3: CoreAudio
   overloads and the late detector (no loopback cable; tapmon kept as "delivered-stream" evidence).
+- **MC-D23 (end of the pass).** Final build: `mac/catchup` with fork 15 (2a146e6b). Tests 207 + 1
+  ignored, clippy clean, 0 warnings; scenario harness 84 pass, 0 fail, 3 notes (shared bugs).
+  Gates: 6 of 7; gate 6 fails on the 60 Hz display (MC-D21), so **`main` is not merged and no tag
+  was made** (§1.5). Every change is macOS-gated, docs, tools or tests: no Windows gate run is needed
+  for this branch. Local worktrees left for the next pass: `../before-mac-catchup` (main ef2ea19),
+  `../perf-macos-base` (24c9d9c), `../bisect`. The thermal logger ran all session: nominal throughout
+  (`docs/mac-catchup/results/thermal.log`).

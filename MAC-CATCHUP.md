@@ -6,7 +6,29 @@ harness and raw results in [`docs/mac-catchup/`](docs/mac-catchup/)*
 
 ## Summary (one screen)
 
-__SUMMARY__
+- **Environment:** Mac mini M1, macOS 26.6.2, rustc 1.100.0; displays GA27T1M 320 Hz (main) and
+  XB271HU 59.953 Hz, both backing 1.0; audio: built-in speakers (the main matrix) and a MOTU M2 (USB,
+  plugged in during the run); fork pin 60907aad → **2a146e6b** (fork commits 14 and 15).
+- **Gates: 6 of 7 pass. Gate 6 (pacing) fails on the 60 Hz display**: 10 isolated 2–3-vblank holds per
+  120 s, the stopgap's known residue (PERF-macos §11); the fix is a renderer change. **Merge held.**
+- **§4:** every Mac shortcut, menu, dialog, gesture and layout checked with real input (84 harness
+  checks pass); colours sRGB-correct on both displays; lime audit 0; mockup match at 2× within 1 px
+  except one reference deviation (explained); export byte-identical to Windows (12/12).
+- **Audio:** **0 dropouts in 32 matrix runs** (built-in: A, B, C, D, G × 64/128/256/512; M2: A, C, G
+  × 4); fader stress at 64 frames: 0 late, 0 overloads, 0 allocations; in-app device switch 67–93 ms.
+- **Performance and heat:** demo 9.3–9.9%, 200 clips 10.7–11.4% (−3 points and −30% instructions per
+  frame against the PERF-macos build); 20-minute loop: thermal state nominal throughout, 253 mW.
+- **Fixed (8 bugs, all macOS-gated):** ⌘-shortcuts in text fields and dialogs (MC-D3), About in the
+  App menu (D5), the Dark menus note (D7), MEM (D10), window tabs (D11), ⌥ + trackpad row height (D14),
+  **the 60 fps cap bypassed during clip drags, 126 → 60 fps (fork commit 14, D16)**, **cursor files
+  re-read on every move, Overview drag 42 → 27% (fork commit 15, D18)**.
+- **Left (each with a proposal, §8):** the 60 Hz holds and full-lane repaint cost (renderer), no
+  `.app` bundle (menu title "app", no Finder open), untested trackpad, and three **shared bugs** found
+  on the Mac (Return/⌫ act behind dialogs, two colour-preview leaks), not fixed to keep shared code
+  untouched.
+- **Shared code changed: none** at runtime on Windows (every change is macOS-gated, docs, tools or
+  tests; the fork commits are gated too). A Windows gate run isn't needed for this branch, but the
+  merge waits for gate 6.
 
 ---
 
@@ -56,12 +78,20 @@ code, both platforms; proposed: write ">" as the clip panel already does).
 
 ## 2. Gates (§8)
 
-__GATES__
+| Gate | Result |
+|---|---|
+| 1. `cargo test` on ARM; golden and migration hashes equal to x86 | **PASS**: 207 pass + 1 ignored doctest (the Windows set; the CPU-counter test is per platform). Golden, v2→v6 migration hashes from the x86 builds pass; the Windows export re-made byte-identical (12/12) |
+| 2. Clippy clean, 0 warnings | **PASS**: `cargo clippy --workspace --all-targets --release` clean; release build 0 warnings |
+| 3. §4 table: nothing "broken" without a reason and a fix | **PASS**: the one "broken" row (Return/⌫ behind dialogs) is shared code, with the proposed fix (§8); gaps are bundle, trackpad, unplug |
+| 4. Lime audit 0, mockup match ≤ 1 logical px, contrast unchanged | **PASS**: lime 0 (10 scenes); mockup: every element of E1-header and E1-overview at 2×, and E1-row-heights at 1×; at 2× the dB scale labels sit 1.5 px from the @2x PNG but 0.5 px from the spec's HTML box, the PNG itself moving them (MC-D13); one new text (the menus note) uses the existing note style (4.62:1) |
+| 5. Audio: 0 dropouts at ≥ 128 frames on the built-in output | **PASS**: 0 in all 20 built-in runs (and at 64, and on the M2) |
+| 6. Pacing: 60 fps cap, 0 stalls, both displays | **FAIL on the 60 Hz display** (10 holds > 1.5 vblanks per 120 s; MC-D21). 320 Hz: 60.0 fps, 0 app frames > 20 ms, ideal 5/5/6 cadence, also while dragging (after fork 14) |
+| 7. No thermal "critical" in the 20-minute loop | **PASS**: nominal throughout |
 
 ## 3. Build, tests and the old Mac results (§3)
 
 - `cargo build --release`, `cargo test --workspace --release`, `cargo clippy --workspace
-  --all-targets --release`, all on ARM: __TESTS__
+  --all-targets --release`, all on ARM: 207 tests pass + 1 ignored doctest (the same set as the Windows Polish 2 run apart from the per-platform CPU test), clippy clean, 0 build warnings.
 - **Byte-identical to x86.** The golden render (`scale_test_renders_to_the_golden_hash`) and every
   migration test (v2→v3, v3→v4, v4→v5, **v5→v6**: 9 + 11 + 11 + 11 files, render and export hashes)
   compare against hashes recorded by the x86 builds and pass here; v6 includes the Polish 2 gained
@@ -98,7 +128,7 @@ PERF-macos.md's method: `chipbench` + an Instruments Metal System Trace
 
 Checked with real (HID-level) key and mouse events (`macdrive.swift`), the menu bar read through
 Accessibility, and each result proven from the saved project, `settings.json`, the dev-mode log or
-a screenshot measurement. The scenario harness (`docs/mac-catchup/tools/scen_mac.py`) has __NCHECKS__
+a screenshot measurement. The scenario harness (`docs/mac-catchup/tools/scen_mac.py`) has 87 (84 pass, 0 fail, 3 notes for shared bugs)
 checks; results in [`results/scen_mac.txt`](docs/mac-catchup/results/scen_mac.txt).
 
 | # | Feature | Result | Evidence |
@@ -138,7 +168,48 @@ checks; results in [`results/scen_mac.txt`](docs/mac-catchup/results/scen_mac.tx
 
 ## 5. Audio (§5)
 
-__AUDIO__
+ENGINE-macos.md's method on today's build (fork 15): `matrix_mac.sh` with the device named per run
+(`CHIPDAW_DEVICE`; the system default never changed), CoreAudio's overload report and the engine's
+late detector as the dropout signal (no loopback cable, ENGINE-macos §3), tapmon on the same device
+as "dropouts visible in the delivered stream". Lengths: MC-D22.
+
+### Built-in output (Mac mini Speakers, 48 kHz): **0 dropouts in all 20 runs**
+
+Every row: tap dropouts 0, late 0, overloads 0, overruns 0, rebuilds 0, allocation violations 0;
+the buffer granted exactly as asked. Full table: [`results/matrix_builtin.md`](docs/mac-catchup/results/matrix_builtin.md).
+
+| Test | 64 | 128 | 256 | 512 | Notes |
+|---|---|---|---|---|---|
+| A. Demo playing, 300 s | 0 · p99 0.7% · gap 1.39 ms | 0 · 0.6% · 2.72 | 0 · 0.6% · 5.39 | 0 · 1.8% · 10.75 | 512 runs on E-cores (P share 0%), as in ENGINE-macos §2.3 |
+| B. 200 clips + continuous scripted edits, 300 s | 0 · 0.4% · 1.38 | 0 · 0.3% · 2.71 | 0 · 0.4% · 5.39 | 0 · 0.9% · 10.75 | 70,619 snapshots each, edit → tick ≤ 16.6 ms, 0 dropped |
+| C. UI stalls (250 ms every 2 s), 120 s | 0 · 0.7% · 1.38 | 0 · 0.6% · 2.72 | 0 · 0.5% · 5.39 | 0 · 1.8% · 10.74 | 60 injected stalls each |
+| D. Window churn (resize, minimise, hide, occlude), 120 s | 0 · 0.5% · 1.38 | 0 · 0.4% · 2.73 | 0 · 0.4% · 5.38 | 0 · 0.9% · 10.73 | |
+| G. A/V marker test, 120 s | 0 · 0.5% · 1.39 | 0 · 0.3% · 2.71 | 0 · 0.3% · 5.39 | 0 · 0.9% · 10.76 | tap offsets −11.7 / −12.6 / −5.2 / −4.0 ms, sd ≤ 1.3 (no validated zero point, ENGINE-macos §4) |
+
+(Cells: dropouts · callback cost p99 % of the period · largest callback gap.) The ENGINE-macos
+stress matrix that was never completed on the final build is now complete on the built-in output.
+
+### MOTU M2 (USB, 48 kHz)
+
+**0 dropouts in all 12 runs** (A demo and C UI stalls and G A/V, 120 s each, at 64 / 128 / 256 /
+512 frames): late 0, overloads 0, rebuilds 0, allocation violations 0; callback p99 ≤ 1.9% of the
+period, largest gaps 1.39 / 2.72 / 5.40 / 10.77 ms. Table: [`results/matrix_m2.md`](docs/mac-catchup/results/matrix_m2.md).
+
+### Device switch while playing, fader stress
+
+- **Device switch while playing** (`device_switch_mac.py`, real clicks on Settings ▸ Audio, the
+  demo playing): built-in → M2 → built-in → M2 → built-in. 4 rebuilds, no crash, 0 overloads, 0
+  allocation violations; gaps **93 / 90 ms** switching to the M2 and **67 / 68 ms** back (Windows,
+  BATCH3.md: 23–29 ms to HDMI, ~396 ms to the MOTU; ENGINE-macos: 74–164 ms on a default change).
+- **The per-track dB fader under stress** (`fader_stress.py`): 260 fader drags across all 8 tracks in
+  120 s while the demo plays at **64 frames** on the built-in output: 92,933 callbacks, **0 late, 0
+  overloads, 0 allocation violations** (NoAllocGuard), callback max 1.9% of the period, largest gap
+  1.40 ms. The same drag, saved, sets the track to −23.7 dB (so the drags reach the gain).
+
+### Not run, and why
+- **Unplug / sleep-wake (ENGINE-macos H, I):** need someone at the machine.
+- **System-default switch (test E):** replaced by the in-app switch (MC-D22).
+- **Physical loopback ground truth:** no cable (ENGINE-macos §3.2); still the best next check.
 
 ## 6. Performance and heat (§6)
 
@@ -244,7 +315,21 @@ UX.md (Mac column in Apple's order, the macOS menu bar as built), VISUAL-SPEC.md
 
 ## 9. Shared code and the merge
 
-__MERGE__
+**Every change is macOS-gated, docs, tools or tests**:
+- `crates/ui/src/lib.rs` (`mac_menu_gate`, `#[cfg(target_os = "macos")]`), `perf.rs` (MEM branch),
+  `views/chrome.rs` (the wheel accumulator and its field, both gated), `views/modal.rs` (`cfg!` macOS
+  note), `menus.rs` (only `spec(mac = true)` and its MacPredefined arms, which Windows never builds;
+  plus a unit test), `crates/app/src/main.rs` (`no_window_tabbing`, gated);
+- `Cargo.toml` / `Cargo.lock`: the pin moves to fork commit 15. Fork commits 14 and 15 are gated to
+  macOS inside vizia_winit; on Windows the fork compiles to the same behaviour as 60907aad;
+- docs (this file, RUNLOG, UX.md, VISUAL-SPEC.md §12) and tools (`docs/mac-catchup/`, `chipbench`,
+  `matrix_mac.sh`).
+
+**Merge result: held.** §1.5 allows the fast-forward only if every gate passes, and gate 6 fails on
+the 60 Hz display (a known, pre-existing limitation; the fix is architectural). `main` is untouched
+and no tag was made. To merge once the owner accepts gate 6 as is, or after the display-link work:
+`git tag pre-mac-catchup main && git push origin pre-mac-catchup && git checkout main && git merge
+--ff-only mac/catchup && git push origin main`.
 
 ## 10. Screenshots and how to run
 
