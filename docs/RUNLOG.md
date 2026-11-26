@@ -848,3 +848,21 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   top bar redraws, and any presented frame keeps the UI pump fast for 250 ms (`adapt_pump`,
   `STAY_FAST`): +25 wakeups/s. Windows has always paid this (MEM was live there). Under the 1-point
   rule; kept.
+- **MC-D18 (cursor reloads in drags: fork commit 15).** The Overview drag cost **42.3%** of a core
+  (47 M instructions/frame) where Windows measured 8.8%. Time Profiler: 16.3% of a core in the
+  winit/AppKit event loop, with `__open` and `__getattrlist` at the top: the Overview sets
+  `CursorIcon::AllScroll` on every mouse move, and winit builds a new NSCursor for every
+  `set_cursor`, reading the WebKit move cursor's PDF and plist from disk each time. **Fork commit 15**
+  (2a146e6b, pin updated), macOS only: the window skips a `SetCursor` that repeats the cursor it
+  already has (winit keeps it and re-applies it through cursor rects). After: Overview drag
+  **27.0%**, Overview zoom 41.7 → **26.1%**; scrollbar, ruler, row-resize, header-width and clip
+  drags unchanged (results/cursor_fix.jsonl). The Overview now costs what the time scrollbar does,
+  as on Windows (POLISH2.md §4.6).
+- **MC-D19 (full-lane repaints cost ~2.8× the demo on the Mac; not fixed).** Time-scrollbar drag,
+  ruler zoom and Overview gestures repaint the whole lane area each frame: 26–28% of a core, 36 M
+  instructions per frame, against 16.8% / 18.5 M for the PERF-macos build's scrollbar drag (older,
+  lighter lanes) and 9.2% on Windows (1.2× its demo). Every draw pays the GL-on-Metal translation on
+  the main thread (PERF-macos.md §7). The fix is in the renderer (Skia's Metal backend, or scrolling a
+  cached lane layer by a blit): an architecture change, so per the stop condition it is proposed,
+  not made. The scrollbar's overlay thumb makes that benchmark bimodal (14.9% when the press lands
+  before the thumb appears and starts a time selection; 27–28% when it scrolls).

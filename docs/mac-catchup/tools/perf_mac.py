@@ -54,15 +54,20 @@ NEW = {
     "ruler_zoom": ("200-drag", ["--grab", "900,122", "--sway", "6,70"], [], True),
     "overview_drag": ("200-drag", ["--grab", "680,92", "--sway", "160,0"], [], True),
     "overview_zoom": ("200-drag", ["--grab", "680,92", "--sway", "4,50"], [], True),
+    # Like-for-like for the Overview drag (POLISH2.md §4.6): the time scrollbar's thumb at the
+    # lanes' bottom (above the status bar; at the window's bottom in the old layout).
+    "scrollbar_drag": ("200-drag", ["--grab", "650,890", "--sway", "160,0"], [], False),
 }
 
 
 def run(build, path, old, name):
     sc, extra, env, new_only = NEW[name]
-    if old and new_only:
-        return None
+    if old and (new_only or name.startswith("piano")):
+        return None   # the old build has neither the Polish 2 gestures nor today's file format
     if old and name == "200drag":
         extra = ["--grab", "300,160", "--sway", "120,64"]
+    if old and name == "scrollbar_drag":
+        extra = ["--grab", "650,894", "--sway", "160,0"]
     if old and name == "piano_drag":
         extra = ["--grab", "88,535", "--sway", "12,48"]
     data = WORK / f"data-perf-{build}"

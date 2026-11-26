@@ -14,17 +14,17 @@ debug = false
 inherits = "release"
 debug = true
 
-# vizia fork: tag 0.4.0 + focused commits (six perf fixes, a frame-rate limit, its display lock and its macOS redraw path, macOS sRGB window, Windows swap pacing, user scale, CSS dithering) (branch `chipdaw-perf` on
+# vizia fork: tag 0.4.0 + focused commits (six perf fixes, a frame-rate limit, its display lock and its macOS redraw path, macOS sRGB window and cursor reuse, Windows swap pacing, user scale, CSS dithering) (branch `chipdaw-perf` on
 # https://github.com/jeffreyfrederick/vizia), kept upstream-ready. See PERF.md for
 # the commit list. Pinned to an exact commit; to hack on a local checkout, swap
 # these for `path = "../vizia/..."` entries.
 [patch.crates-io]
-vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
-vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "9110e9823ecae4d86bad3723519e022b1872d08b" }
+vizia = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_core = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_winit = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_style = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_reactive = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_storage = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_input = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_window = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
+vizia_id = { git = "https://github.com/jeffreyfrederick/vizia", rev = "2a146e6b946d6b0ca3dac83bfc22dbf2ce74fe7f" }
