@@ -31,6 +31,10 @@ if not winctl.exists():
     subprocess.run(["swiftc", "-O", str(REPO / "docs/engine/tools/macos/winctl.swift"), "-o", str(winctl)], check=True, capture_output=True)
 orig = re.search(r"ioModeID (\d+)", subprocess.run([str(dm), "current", DISP], capture_output=True, text=True).stdout).group(1)
 print("display", DISP, "mode before:", orig)
+# A mode change can also move the display in the arrangement (it did here: from above the main
+# display to its left), so its origin is saved and put back too (MC-D20).
+bounds = re.search(r"bounds \(([-0-9.]+), ([-0-9.]+)", subprocess.run([str(dm), "origin", DISP], capture_output=True, text=True).stdout)
+orig_xy = (str(int(float(bounds.group(1)))), str(int(float(bounds.group(2)))))
 env_pil = dict(os.environ, PYTHONPATH=str(REPO / "docs/mac-catchup/tools/pilshim"))
 QUIET = {"CHIPDAW_AUDIO": "0", "CHIPDAW_FROZEN_METERS": "1"}
 results = []
@@ -66,6 +70,8 @@ try:
         a.quit()
 finally:
     print(subprocess.run([str(dm), "set", DISP, orig], capture_output=True, text=True).stdout)
+    time.sleep(2)
+    print(subprocess.run([str(dm), "origin", DISP, *orig_xy], capture_output=True, text=True).stdout)
     now = subprocess.run([str(dm), "current", DISP], capture_output=True, text=True).stdout.strip()
     print("display", DISP, "restored:", now)
 for board, info, gate, bad in results:

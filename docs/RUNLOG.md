@@ -866,3 +866,19 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   cached lane layer by a blit): an architecture change, so per the stop condition it is proposed,
   not made. The scrollbar's overlay thumb makes that benchmark bimodal (14.9% when the press lands
   before the thumb appears and starts a time selection; 27–28% when it scrolls).
+- **MC-D20 (display arrangement restored).** Switching the second display's mode back after the 2×
+  session (MC-D12) restored the mode but **not its place**: macOS had moved it from above the main
+  display (CG origin 0, −1440) to its left (−2560, −720). Found when windows moved to y −1312 were
+  clamped onto the main display. Restored with `CGConfigureDisplayOrigin` (`dispmode origin 1 0
+  -1440`, for the session; read back: NSScreen frame (0, 1440), as at the start). `hidpi_mac.py` now
+  saves and restores the origin too. Runs between the two (the first "60 Hz" perf matrix and pacing
+  run) actually ran on the main display; they were discarded (`perf_60_INVALID_on_320.jsonl`) and
+  repeated. **The owner may want to glance at System Settings ▸ Displays ▸ Arrange.**
+- **MC-D21 (pacing gate on the 60 Hz display: not met, architecture).** Today's build, 60 fps cap,
+  demo, 120 s on the 59.953 Hz display: 7161 frames held one vblank, **10 held longer** (2 × 2,
+  8 × 3 vblanks), the same isolated holds PERF-macos.md §11 left after the stopgap (6–9 per 120 s,
+  cause not found). By the Windows definition (a gap over 1.5 vblanks) they are stalls, so gate 6
+  fails on that display. The 320 Hz display passes on the app side (0 frames > 20 ms in demo and
+  drag; ideal 5/5/6 cadence). The proposed fix is vblank-paced frames from the display link (with
+  Skia's Metal backend: PERF-macos.md §6–7, ENGINE-macos.md §8): a renderer/backend change, which
+  the stop condition rules out here. Merge held on this gate (§1.5 and §8 of the prompt).

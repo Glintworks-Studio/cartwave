@@ -1,0 +1,43 @@
+== d320
+{"scenario": "demo", "secs": 30.07, "cpu_pct": 12.13, "cpu_pct_ps": 12.14, "pcore_share": 0.92, "power_mw": 309.5, "wakeups_per_s": 272, "ginstr_per_s": 0.834, "gcycles_per_s": 0.348}
+app: 1801 frames in 30s = 60.0 fps; interval mean 16.67 p50 16.71 p99 18.17 max 19.92 ms; >20ms: 0
+  ui-thread ms/frame: events 0.147  style 0.133  layout 0.002  make_current 0.001  draw 0.450  flush 0.465  present 0.345  custom 0.223
+external-1: 2005 frames over 29.83s = 67.2/s; max on-screen 31.25 ms; >20ms: 28
+  vblanks per frame at 320 Hz (count): {1: 102, 2: 100, 3: 103, 4: 121, 5: 1058, 6: 492, 7: 22, 9: 4, 10: 2}
+no rows for external-0; displays: {'external-1': 2040}
+== drag320
+{"scenario": "200-drag", "secs": 30.07, "cpu_pct": 22.63, "cpu_pct_ps": 22.62, "pcore_share": 0.94, "power_mw": 614.4, "wakeups_per_s": 292, "ginstr_per_s": 1.618, "gcycles_per_s": 0.658}
+app: 1800 frames in 30s = 60.0 fps; interval mean 16.67 p50 16.69 p99 18.13 max 22.63 ms; >20ms: 1
+  ui-thread ms/frame: events 0.411  style 0.210  layout 0.004  make_current 0.001  draw 0.797  flush 0.841  present 0.383  custom 0.283
+external-1: 2001 frames over 29.88s = 66.9/s; max on-screen 50.00 ms; >20ms: 24
+  vblanks per frame at 320 Hz (count): {1: 124, 2: 67, 3: 87, 4: 131, 5: 1061, 6: 506, 7: 21, 8: 2, 16: 1}
+no rows for external-0; displays: {'external-1': 2035}
+== d60
+{"scenario": "demo", "secs": 120.07, "cpu_pct": 11.96, "cpu_pct_ps": 11.96, "pcore_share": 0.93, "power_mw": 303.8, "wakeups_per_s": 273, "ginstr_per_s": 0.814, "gcycles_per_s": 0.344}
+app: 7201 frames in 120s = 60.0 fps; interval mean 16.67 p50 16.72 p99 18.45 max 22.83 ms; >20ms: 3
+  ui-thread ms/frame: events 0.148  style 0.134  layout 0.002  make_current 0.001  draw 0.470  flush 0.485  present 0.348  custom 0.239
+external-1: 8024 frames over 119.88s = 66.9/s; max on-screen 50.00 ms; >20ms: 113
+  vblanks per frame at 320 Hz (count): {1: 265, 2: 512, 3: 484, 4: 484, 5: 4155, 6: 2010, 7: 104, 8: 2, 14: 1, 15: 1, 16: 5}
+external-0: 0 frames over 0.00s = 0.0/s; max on-screen 0.00 ms; >20ms: 0
+  vblanks per frame at 59.953 Hz (count): {}
+== move
+{"scenario": "demo", "secs": 45.07, "cpu_pct": 14.03, "cpu_pct_ps": 14.02, "pcore_share": 0.93, "power_mw": 360.1, "wakeups_per_s": 268, "ginstr_per_s": 0.972, "gcycles_per_s": 0.406}
+3348101341316500 moved: frame (560.0, 30.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348111909906541 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348122475783458 moved: frame (560.0, 30.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348133047796666 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+app: 2701 frames in 45s = 60.0 fps; interval mean 16.67 p50 16.73 p99 18.32 max 19.72 ms; >20ms: 0
+  ui-thread ms/frame: events 0.152  style 0.138  layout 0.002  make_current 0.001  draw 0.511  flush 0.611  present 0.385  custom 0.241
+external-1: 3132 frames over 44.95s = 69.7/s; max on-screen 56.25 ms; >20ms: 38
+  vblanks per frame at 320 Hz (count): {1: 178, 2: 274, 3: 179, 4: 205, 5: 1530, 6: 727, 7: 32, 8: 4, 16: 1, 18: 1}
+external-0: 34 frames over 13.99s = 2.4/s; max on-screen 8840.15 ms; >20ms: 2
+  vblanks per frame at 59.953 Hz (count): {1: 31, 278: 1, 530: 1}
+delete after reading (they are large):
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentsleQ6gb.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentsoG0RfC.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentsozOXAj.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentszQjNgV.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/d320.trace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/d60.trace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/drag320.trace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/move.trace

@@ -2,6 +2,8 @@
 //   dispmode list <displayID>            every mode incl. HiDPI (points, pixels, Hz, ioModeID)
 //   dispmode current <displayID>
 //   dispmode set <displayID> <ioModeID>  CGConfigureDisplayWithDisplayMode, .forSession
+//   dispmode origin <displayID> [x y]    print, or set (.forSession), the display's global origin
+//                                        (top-left, points); a mode change can move a display
 // The configuration is for this login session only; `set <id> <original ioModeID>` restores it.
 import CoreGraphics
 import Foundation
@@ -23,5 +25,14 @@ case "set":
     let r = CGCompleteDisplayConfiguration(cfg, .forSession)
     print("set \(id) -> \(desc(m)): \(r == .success ? "ok" : "error \(r.rawValue)")")
     if let c = CGDisplayCopyDisplayMode(id) { print("now: \(desc(c))") }
+case "origin":
+    if a.count > 4, let x = Int32(a[3]), let y = Int32(a[4]) {
+        var cfg: CGDisplayConfigRef?
+        CGBeginDisplayConfiguration(&cfg)
+        CGConfigureDisplayOrigin(cfg, id, x, y)
+        let r = CGCompleteDisplayConfiguration(cfg, .forSession)
+        print("origin \(id) -> (\(x), \(y)): \(r == .success ? "ok" : "error \(r.rawValue)")")
+    }
+    print("display \(id) bounds \(CGDisplayBounds(id))")
 default: print("unknown")
 }

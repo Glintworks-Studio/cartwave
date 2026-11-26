@@ -1,0 +1,29 @@
+== d60
+{"scenario": "demo", "secs": 120.07, "cpu_pct": 11.20, "cpu_pct_ps": 11.20, "pcore_share": 0.92, "power_mw": 294.8, "wakeups_per_s": 272, "ginstr_per_s": 0.812, "gcycles_per_s": 0.321}
+app: 7195 frames in 120s = 60.0 fps; interval mean 16.68 p50 16.73 p99 18.64 max 25.14 ms; >20ms: 16
+  ui-thread ms/frame: events 0.118  style 0.121  layout 0.002  make_current 0.001  draw 0.438  flush 0.501  present 0.359  custom 0.220
+external-1: 1083 frames over 119.62s = 9.0/s; max on-screen 262.49 ms; >20ms: 1082
+  vblanks per frame at 320 Hz (count): {7: 1, 10: 2, 11: 1, 12: 1, 13: 2, 14: 17, 15: 7, 16: 7, 17: 6, 18: 6, 19: 8, 20: 3, 21: 5, 22: 5, 23: 6, 24: 6, 25: 10, 26: 6, 27: 1, 28: 6, 29: 4, 30: 17, 31: 208, 32: 296, 33: 18, 34: 5, 35: 4, 36: 4, 37: 4, 38: 4, 39: 4, 40: 2, 41: 38, 42: 272, 43: 43, 44: 8, 45: 1, 46: 2, 47: 1, 48: 2, 49: 3, 50: 1, 51: 2, 52: 1, 61: 1, 62: 1, 63: 7, 68: 1, 71: 1, 72: 1, 73: 4, 74: 9, 75: 2, 77: 1, 78: 1, 81: 1, 83: 1, 84: 1}
+external-0: 7172 frames over 119.91s = 59.8/s; max on-screen 50.04 ms; >20ms: 10
+  vblanks per frame at 59.953 Hz (count): {1: 7161, 2: 2, 3: 8}
+== move
+{"scenario": "demo", "secs": 45.07, "cpu_pct": 13.64, "cpu_pct_ps": 13.64, "pcore_share": 0.93, "power_mw": 355.8, "wakeups_per_s": 268, "ginstr_per_s": 0.971, "gcycles_per_s": 0.395}
+3348101341316500 moved: frame (560.0, 30.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348111909906541 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348122475783458 moved: frame (560.0, 30.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348133047796666 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348458311825416 moved: frame (560.0, -1312.0, 1440.0, 952.0), display 1 2560x1440 @ 60.0 Hz
+3348468878915125 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+3348479449629583 moved: frame (560.0, -1312.0, 1440.0, 952.0), display 1 2560x1440 @ 60.0 Hz
+3348490014617958 moved: frame (560.0, 128.0, 1440.0, 952.0), display 2 2560x1440 @ 320.0 Hz
+app: 2700 frames in 45s = 60.0 fps; interval mean 16.67 p50 16.73 p99 18.50 max 20.52 ms; >20ms: 3
+  ui-thread ms/frame: events 0.152  style 0.139  layout 0.002  make_current 0.002  draw 0.508  flush 0.607  present 0.394  custom 0.238
+external-1: 1807 frames over 44.89s = 40.2/s; max on-screen 231.24 ms; >20ms: 217
+  vblanks per frame at 320 Hz (count): {1: 78, 2: 84, 3: 112, 4: 80, 5: 852, 6: 383, 7: 19, 9: 3, 10: 2, 12: 1, 13: 1, 14: 3, 15: 1, 16: 3, 17: 1, 18: 1, 19: 1, 20: 4, 22: 2, 23: 1, 24: 1, 26: 2, 27: 1, 28: 3, 30: 2, 31: 39, 32: 48, 33: 2, 34: 1, 35: 1, 36: 1, 38: 1, 39: 2, 40: 1, 41: 11, 42: 37, 43: 12, 46: 1, 47: 1, 51: 1, 53: 1, 64: 1, 73: 2, 74: 2}
+external-0: 1237 frames over 31.21s = 39.6/s; max on-screen 10524.82 ms; >20ms: 5
+  vblanks per frame at 59.953 Hz (count): {1: 1231, 2: 3, 3: 1, 631: 1}
+delete after reading (they are large):
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentsg3C5jQ.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T//instrumentsPrfNly.ktrace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/d60.trace
+/var/folders/bv/zvcs7qqn77l_ntvhgjvfq02m0000gn/T/chipdaw-mac-catchup/pacing/move.trace

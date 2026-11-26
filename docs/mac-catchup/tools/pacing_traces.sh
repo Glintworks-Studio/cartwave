@@ -16,14 +16,15 @@ mkdir -p "$OUT"
 D="$W/data-pacing"; rm -rf "$D"; mkdir -p "$D"; echo '{"audio_device":"Mac mini Speakers"}' > "$D/settings.json"
 TOOLS="$REPO/docs/perf/tools/macos"
 free_gb() { df -g / | awk 'NR==2{print $4}'; }
-cleanup() { rm -f "$TMPDIR"/instruments*.ktrace 2>/dev/null; rm -rf "$OUT"/*.trace; }
+# The traces and Instruments' raw ktrace files are listed at the end for deletion (by path).
+cleanup() { :; }
 run() {  # name secs pos scenario [extra chipbench args...]
   local name=$1 secs=$2 pos=$3 sc=$4; shift 4
   [ "$(free_gb)" -lt 20 ] && { echo "$name: less than 20 GB free, skipped"; return; }
   local posarg=(); [ "$pos" != "-" ] && posarg=(--pos "$pos")
   "$B" --app "$APP" --scenario "$sc" --secs "$secs" --content-height 920 --park 1300,800 \
     --framelog "$OUT/$name.fl.csv" --trace "$OUT/$name.trace" --env CHIPDAW_DEV=1 --env CHIPDAW_DATA_DIR="$D" \
-    "${posarg[@]}" "$@" > "$OUT/$name.json" 2>/dev/null
+    ${posarg[@]+"${posarg[@]}"} "$@" > "$OUT/$name.json" 2>/dev/null
   echo "== $name"; cat "$OUT/$name.json"
   python3 "$TOOLS/pacing_mac.py" "$OUT/$name.fl.csv" "$secs" | head -2
   for disp in external-1 external-0; do
@@ -57,3 +58,4 @@ for c in $CASES; do
       cleanup ;;
   esac
 done
+echo "delete after reading (they are large):"; ls -d "$OUT"/*.trace "$TMPDIR"/instruments*.ktrace 2>/dev/null
