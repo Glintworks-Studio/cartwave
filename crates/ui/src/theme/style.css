@@ -276,10 +276,14 @@ label {
     transition: shadow 160ms ease-out;
 }
 
+/* The focus ring is drawn inside the field (Batch 4b K2): outside it, the
+   browser's search field put the ring and its glow against the window edge
+   and the column divider, which clipped them (on macOS visibly). Inside, no
+   container can clip it and nothing moves. */
 .field:active, .field:focus-within {
     shadow: 1px 2px 4px 0px rgba(0, 0, 0, 0.90) inset,
-            0px 0px 0px 1px rgba(230, 230, 230, 0.55),
-            0px 0px 12px 0px rgba(230, 230, 230, 0.12),
+            0px 0px 0px 1px rgba(230, 230, 230, 0.55) inset,
+            0px 0px 8px 0px rgba(230, 230, 230, 0.10) inset,
             0px 1px 0px 0px rgba(255, 255, 255, 0.05);
 }
 

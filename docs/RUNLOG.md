@@ -1309,3 +1309,47 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   black .6 (4a: an 8 px gradient to .28). `mockup_match_main.py` measures board and app with the
   same detectors: 95/95 within 1 px at 100 % and 150 %. The whole Main header (body, strip, text) is
   now one cached image (§3.1).
+- **B4B-D15 (MIDI import: when to ask).** VISION principle 6: under no hardware profile nothing
+  can conflict, so a drop or File ▸ Import ▸ MIDI File… adds studio tracks without a question.
+  Under a profile, every part is checked as a locked track would be (a free channel of its type,
+  one note at a time, the channel's range); if all fit, they arrive **locked** with no question
+  (the user chose authenticity); if any conflicts, the dialog asks: **Import as studio tracks
+  (recommended, the default button)** · **Fit to hardware** · **Fit to hardware, chords as
+  arpeggios** · **Cancel**, with "Don't ask again" (a new Settings ▸ Warnings row, "MIDI parts
+  that don't fit the hardware profile"). The arpeggio option is a fourth button rather than a
+  check box because the task dialog's one check box is "Don't ask again". Fit also fits what the
+  profile's own Fit would (a DPCM row with no sample is removed), so the commit doesn't ask a
+  second question; parts with no free channel stay studio tracks, so nothing is lost.
+- **B4B-D16 (cursor tracking during an OS drag: verified on Windows).** VISION.md's "to verify":
+  winit 0.30 reports a file entering the window (`HoveredFile`) and leaving (`HoveredFileCancelled`)
+  but no position, and during OLE drag and drop the window gets no mouse messages. The fork now
+  forwards those two (`WindowEvent::FileHover` / `FileHoverCancelled`, chipdaw-perf 04596968, pin
+  updated in all nine entries), and the app polls the OS cursor (`GetCursorPos` → client px) every
+  frame while the drag is over the window. Verified with a real OLE drag (`drag_midi.ps1`, the
+  same `DoDragDrop` Explorer uses): the preview followed the cursor across tracks and bars (dev log:
+  "midi drag at … -> Onto(1) bar 3"), and the drop landed where the preview last was. macOS isn't
+  tested in this batch: there the preview shows without a position (after the last track).
+- **B4B-D17 (MIDI import: where the parts go).** Dropped on empty space: new tracks after the last
+  one. Dropped onto a track: the first part's clip goes on that track and the other parts get new
+  tracks right below it (our reading of the reference's multi-part drop: unverified in the
+  manual). Clips start at the drop position snapped down to the bar, each part keeping its own
+  offset from the file's start. File ▸ Import ▸ MIDI File… adds new tracks after the last one, at
+  the insert marker's bar. Voice types: drums (channel 10) → Noise, a part named DPCM/Samples →
+  DPCM, with two or more melodic parts the lowest → Triangle, the rest → Pulse; new tracks take
+  automatic colours. A drop of a `.mid` no longer replaces the song (File ▸ New from MIDI File…
+  still does, as the prompt says), so it no longer asks to save first: the import is one undo step.
+- **B4B-D18 (K1 not reproduced).** The menu-bar flicker was measured with a real sizing-loop drag
+  (bottom-right corner and left edge), Desktop Duplication capture at 120 fps and a positive
+  control: 0 flash frames before and after, with dark menus on and off (docs/batch4b/flicker). With
+  nothing to measure, no code was changed for it; the gate (§9.8) is met as measured, and K1 stays
+  open in UX.md for the owner to say where it shows.
+- **B4B-D19 (K2).** On Windows too the browser's search field sits 2 px from the window edge and
+  1 px from the column divider when focused, so its outer focus ring and 12 px glow were cut at
+  both sides (the clipping the Mac run saw). Fixed in shared code: `.field`'s focus ring and glow
+  are drawn inside the field (inset). The field doesn't move (the regression gate checks the
+  unfocused state); only the focused look changes. Re-check on the next Mac run.
+- **B4B-D20 (Tab and the view keys).** The Live 12 manual (ch. 42.1, R77) has Tab flip between the
+  two main views; our Mixer view takes the place of the reference's other main view, so Tab toggles
+  Arrangement / Mixer (shortcut table `view.mixer`, View ▸ Mixer with a check), and the two view
+  keys show which view is up (lit: a toggle on-state). Inside a text field Tab still moves to the
+  next field (the text context wins). The view isn't saved in the project.
