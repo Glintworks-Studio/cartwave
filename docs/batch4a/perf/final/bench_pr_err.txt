@@ -1,0 +1,10 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 24
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\perf\final\piano_bench.chipdaw (1 clips)
+dev: open piano roll 1
+dev: CHIPDAW_OPEN_CLIP 1 (piano roll open: true)
+dev: spectrum style bars (settings)
+dev: piano roll bounds 8 480 1424 408 scale 1.00
+dev: piano roll bounds 8 480 1424 388 scale 1.00
+dev: piano roll bounds 8 480 1424 408 scale 1.00
+dev: warning A locked track plays one note at a time | "Pulse 1" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can't play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins).
