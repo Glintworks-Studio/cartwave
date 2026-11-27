@@ -2945,6 +2945,18 @@ impl AppState {
     /// the project's largest track number (K3 / G10).
     fn sync_header_layout(&mut self) {
         let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
+        let num = views::header_layout::number_w_for(n);
+        // Only the number column: a header-width drag previews its width in
+        // the signal before Settings has it (it must not be reset here).
+        if self.s.header.with_untracked(|l| l.num_w) != num {
+            self.s.header.update(|l| l.num_w = num);
+        }
+    }
+
+    /// The header layout from Settings (a look change), with the number
+    /// column.
+    fn header_from_settings(&mut self) {
+        let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
         self.s.header.set_if_changed(views::header_layout::HeaderLayout::of(&self.settings).with_tracks(n));
     }
 
@@ -3996,7 +4008,7 @@ impl AppState {
             Set::ShowOverview(b) => st.show_overview = b,
             Set::HeaderWidth(w) => st.header_width = views::header_layout::clamp_width(w),
         }
-        self.sync_header_layout();
+        self.header_from_settings();
         if dev::enabled() {
             let st = &self.settings;
             eprintln!("dev: look headers_right={} strip_by_clips={} browser_right={} overview={} width={}", st.headers_right, st.strip_by_clips, st.browser_right, st.show_overview, st.header_width);

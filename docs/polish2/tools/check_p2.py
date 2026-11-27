@@ -48,7 +48,7 @@ def has(lines, pat):
 if os.path.exists(os.path.join(work, "p201_typed.chipdaw")):
     S = "P2-01"
     t, u, e, inf, away = (load(n) for n in ("p201_typed", "p201_undone", "p201_esc", "p201_inf", "p201_away"))
-    check(S, t and t["version"] in (6, 7), f"saved by this build (format {t and t['version']}: 6 before Batch 4a, 7 since)")
+    check(S, t and t["version"] in (6, 7, 8), f"saved by this build (format {t and t['version']}: 6 before Batch 4a, 7 since, 8 since Batch 4b)")
     check(S, lane(t, 0, "volume_db") == -3.0, f"'-3' + Enter: track 1 at -3 dB ({lane(t, 0, 'volume_db')})")
     check(S, lane(u, 0, "volume_db") is None, f"one Ctrl+Z restores 0 dB ({lane(u, 0, 'volume_db')})")
     check(S, lane(e, 0, "volume_db") is None, f"Esc cancels ({lane(e, 0, 'volume_db')})")

@@ -51,6 +51,18 @@ function TypeKeys($t) {
   Start-Sleep -Milliseconds 200
 }
 function SelectAllType($t) { Ctrl 0x41; TypeKeys $t }
+# Batch 4b §3.12: a double-click on a value lands only once the app's hover is on that value.
+# The mouse settles there (a 1 px approach, then a pause), and the dev hover-help log must name
+# the control (`$Pat`) before the clicks; up to three tries. P2-11's intermittent typed values
+# (B4A-D27) were double-clicks that reached the neighbouring control while the hover lagged.
+function DblOn($x, $y, $d, $Pat) {
+  for ($try = 0; $try -lt 3; $try++) {
+    MoveL ($x + 1) $y; Start-Sleep -Milliseconds 150; MoveL $x $y; Start-Sleep -Milliseconds 300
+    $last = @(StdErr $d | Where-Object { $_ -match '^dev: help' }) | Select-Object -Last 1
+    if ($last -match $Pat) { break }
+  }
+  Down; Up; Start-Sleep -Milliseconds 60; Down; Up; Start-Sleep -Milliseconds 400
+}
 
 # The header's geometry (header_layout.rs), in client px for a layout.
 $RowsTop = 136; $Pitch = 73
@@ -240,8 +252,8 @@ if (Want "P2-11") {
     function Gap { Start-Sleep -Milliseconds 700 }
     $c = KeyM $L 0; ClickL $c[0] $c[1]; Gap
     $c = SKey $L 1; ClickL $c[0] $c[1]; Gap
-    $c = DbVal $L 2; DblL $c[0] $c[1]; SelectAllType "-6"; K 0x0D; Gap
-    $c = PanVal $L 3; DblL $c[0] $c[1]; SelectAllType "10R"; K 0x0D; Gap
+    $c = DbVal $L 2; DblOn $c[0] $c[1] $d "Volume"; SelectAllType "-6"; K 0x0D; Gap
+    $c = PanVal $L 3; DblOn $c[0] $c[1] $d "^dev: help Pan"; SelectAllType "10R"; K 0x0D; Gap
     $c = Well $L 4 20; ClickL $c[0] $c[1]; Gap
     # The name: a double-click opens the rename field over it.
     $nx = if ($L.mir) { $L.hl + 160 } else { $L.hl + 90 }
