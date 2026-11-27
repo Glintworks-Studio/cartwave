@@ -631,4 +631,35 @@ mod tests {
         assert!(m.take_limiter() < 0.9, "the limiter worked");
         assert!(ctl.take_out_peak() > 1.0, "the track went over full scale (clip mark)");
     }
+
+    /// B4B-07: idle voices report no level (a triangle powers up at 15, not
+    /// 0), so a lone triangle's peak bound stays far under full scale and
+    /// its clip mark stays dark.
+    #[test]
+    fn b4b_idle_voices_report_nothing() {
+        let notes = [(0u32, 960u32, 40u8, None), (960, 960, 45, None)];
+        let snap = snap_with(&notes);
+        let (rack, ctl) = rack_with(VoiceKind::Triangle, 8, 0);
+        let mut m = Mixdown::new(48_000.0);
+        m.adopt_rack(rack);
+        m.player.set_bpm(150.0);
+        m.player.play();
+        let mut out = vec![0f32; 256];
+        let mut mx = 0f32;
+        let mut lv = 0f32;
+        for _ in 0..400 {
+            m.render(&snap, &mut out);
+            mx = mx.max(ctl.take_out_peak());
+            lv = lv.max(ctl.take_level());
+        }
+        assert!(mx < 0.3, "a lone triangle's bound: {mx}");
+        assert!(lv > 0.5, "while it plays its meter moves: {lv}");
+        // After the notes end, nothing.
+        for _ in 0..100 {
+            m.render(&snap, &mut out);
+        }
+        let _ = (ctl.take_out_peak(), ctl.take_level());
+        m.render(&snap, &mut out);
+        assert_eq!((ctl.take_out_peak(), ctl.take_level()), (0.0, 0.0), "a halted triangle is silent on the meter");
+    }
 }

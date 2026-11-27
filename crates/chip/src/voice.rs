@@ -185,6 +185,9 @@ impl Voice {
         };
         v.dac = v.output();
         v.dac0 = v.dac;
+        // The peak starts at the power-up level (a triangle's is 15, not 0):
+        // an idle voice has nothing to report.
+        v.peak = v.dac;
         v
     }
 
@@ -257,6 +260,9 @@ impl Voice {
     /// the last `take_peak`, in the mix's units (full scale 1.0): the track's
     /// clip mark adds these up (an upper bound of the track's own peak).
     pub fn peak_out(&self) -> f64 {
+        if self.free() {
+            return 0.0;
+        }
         ((level_of(self.kind, self.peak) - level_of(self.kind, self.dac0)) * self.gain).abs()
     }
 
@@ -494,6 +500,12 @@ impl Voice {
 
     /// Peak DAC level since the last call, 0..1.
     pub fn take_peak(&mut self) -> f32 {
+        // A free voice makes no sound (a halted triangle holds a step: DC,
+        // not a level).
+        if self.free() {
+            self.peak = self.dac;
+            return 0.0;
+        }
         let full = self.kind.full_scale() as f32;
         let v = if self.kind == VoiceKind::Dpcm { self.peak.abs_diff(self.dac0) as f32 / 64.0 } else { self.peak as f32 / full };
         self.peak = self.dac;

@@ -1,6 +1,8 @@
 //! The device panel's INSTRUMENT section: the selected lane's macros drawn as
 //! four step graphs (volume, arpeggio, pitch, duty), editable by dragging
-//! across them, and the vibrato row (depth, rate, delay: drag or wheel).
+//! across them, the vibrato row (depth, rate, delay: drag or wheel) and, on a
+//! studio track, the voices row (Batch 4b §5: Unison, Detune, Drift; a
+//! locked track hides it).
 //! Loop (↺) and release (R) points: drag a marker to move it, Shift-click a
 //! step to set the loop point there, Alt-click for the release point,
 //! double-click a marker to remove it. A kit shows its drum map instead.
@@ -49,6 +51,13 @@ const LABEL_H: f32 = 16.0;
 const VIB_H: f32 = 20.0;
 /// Vibrato fields: (label, max). Depth in cents, period and delay in frames.
 const VIB: [(&str, u8); 3] = [("DEPTH", 100), ("RATE", 30), ("DELAY", 60)];
+/// The voices row (studio tracks): (label, max, min).
+const VOICES: [(&str, u8, u8); 3] = [("UNISON", engine::studio::UNISON_MAX, 1), ("DETUNE", engine::studio::DETUNE_MAX, 0), ("DRIFT", engine::studio::DRIFT_MAX, 0)];
+const VOICE_HELP: [&str; 3] = [
+    "Unison: voices per note (1–4), from the track's pool; each counts against Voices · drag or wheel",
+    "Detune: spreads the unison voices over 0–50 cents · drag or wheel",
+    "Drift: a slow pitch wander per voice, 0–10 cents · drag or wheel",
+];
 /// Drag distance per vibrato step, logical px.
 const VIB_DRAG_PX: f32 = 4.0;
 /// How close (logical px) a press must be to a loop/release marker to grab it.
@@ -60,6 +69,10 @@ pub struct InstrumentView {
     drawing: Option<(usize, usize)>,
     /// Vibrato field being dragged: (field, start y, start value).
     vib_drag: Option<(usize, f32, u8)>,
+    /// Voices field being dragged: (field, start y, start value).
+    voice_drag: Option<(usize, f32, u8)>,
+    /// The voices field under the mouse (its hover help is shown).
+    voice_hover: Option<usize>,
     /// Loop / release marker being dragged: (macro, release?).
     point_drag: Option<(usize, bool)>,
     wheel: crate::input::WheelSteps,
@@ -67,7 +80,7 @@ pub struct InstrumentView {
 
 impl InstrumentView {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, drawing: None, vib_drag: None, point_drag: None, wheel: Default::default() }
+        Self { s, drawing: None, vib_drag: None, voice_drag: None, voice_hover: None, point_drag: None, wheel: Default::default() }
             .build(cx, |_| {})
             .class("instrument-view")
             .cursor(CursorIcon::Crosshair)
@@ -75,10 +88,22 @@ impl InstrumentView {
             .bind(s.lane_sel, |mut h| h.needs_redraw())
     }
 
+    /// Whether the selected track is a studio track (the voices row shows).
+    fn studio(&self) -> bool {
+        let lane = self.s.lane_sel.get_untracked();
+        self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.lock.is_none()))
+    }
+
+    /// The rows under the graphs: the vibrato row, and the voices row on a
+    /// studio track.
+    fn rows(studio: bool) -> f32 {
+        if studio { 2.0 } else { 1.0 }
+    }
+
     /// Graph rects (physical px) in a 2×2 grid, above the vibrato row.
-    fn graphs(b: BoundingBox, s: f32) -> [vg::Rect; 4] {
+    fn graphs(b: BoundingBox, s: f32, studio: bool) -> [vg::Rect; 4] {
         let w = (b.w - GAP * s) / 2.0;
-        let h = (b.h - (VIB_H + GAP) * s - GAP * s) / 2.0;
+        let h = (b.h - Self::rows(studio) * (VIB_H + GAP) * s - GAP * s) / 2.0;
         std::array::from_fn(|i| {
             let (cx, cy) = ((i % 2) as f32, (i / 2) as f32);
             vg::Rect::from_xywh(b.x + cx * (w + GAP * s), b.y + cy * (h + GAP * s) + LABEL_H * s, w, h - LABEL_H * s)
@@ -87,11 +112,37 @@ impl InstrumentView {
 
     /// The vibrato fields' rects (physical px): the row under the graphs,
     /// after its label.
-    fn vib_fields(b: BoundingBox, s: f32) -> [vg::Rect; 3] {
+    fn vib_fields(b: BoundingBox, s: f32, studio: bool) -> [vg::Rect; 3] {
+        let y = b.y + b.h - VIB_H * s - if studio { (VIB_H + GAP) * s } else { 0.0 };
+        let x0 = b.x + 64.0 * s;
+        let w = ((b.w - 64.0 * s) / 3.0).max(0.0);
+        std::array::from_fn(|i| vg::Rect::from_xywh(x0 + i as f32 * w, y, w - 4.0 * s, VIB_H * s))
+    }
+
+    /// The voices fields' rects (physical px): the last row, after its label.
+    fn voice_fields(b: BoundingBox, s: f32) -> [vg::Rect; 3] {
         let y = b.y + b.h - VIB_H * s;
         let x0 = b.x + 64.0 * s;
         let w = ((b.w - 64.0 * s) / 3.0).max(0.0);
         std::array::from_fn(|i| vg::Rect::from_xywh(x0 + i as f32 * w, y, w - 4.0 * s, VIB_H * s))
+    }
+
+    fn voice_at(&self, cx: &EventContext) -> Option<usize> {
+        if !self.studio() {
+            return None;
+        }
+        let p = vg::Point::new(cx.mouse().cursor_x, cx.mouse().cursor_y);
+        Self::voice_fields(cx.bounds(), cx.scale_factor()).iter().position(|r| r.contains(p))
+    }
+
+    fn voice_value(&self, f: usize) -> u8 {
+        let lane = self.s.lane_sel.get_untracked();
+        self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(0, |l| [l.unison.voices, l.unison.detune, l.unison.drift][f]))
+    }
+
+    fn set_voice(cx: &mut EventContext, f: usize, v: i32) {
+        let field = [super::dial::UniField::Voices, super::dial::UniField::Detune, super::dial::UniField::Drift][f];
+        cx.emit(AppEvent::SetUnison(field, v.clamp(VOICES[f].2 as i32, VOICES[f].1 as i32) as u8));
     }
 
     /// The instrument the inspector shows (the selected clip's, else the lane's).
@@ -171,7 +222,7 @@ impl InstrumentView {
         };
         // An unused macro: the first stroke starts a NEW_SEQ_LEN-step one.
         let len = if len == 0 { NEW_SEQ_LEN as u8 } else { len };
-        let r = Self::graphs(cx.bounds(), cx.scale_factor())[m];
+        let r = Self::graphs(cx.bounds(), cx.scale_factor(), self.studio())[m];
         let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
         let step = (((x - r.left) / r.width()) * len as f32).floor().clamp(0.0, len as f32 - 1.0) as usize;
         let (_, lo, hi) = MACROS[m];
@@ -194,11 +245,44 @@ impl View for InstrumentView {
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
         event.map(|we, meta| match we {
+            // The voices row (studio tracks): drag up or down, or the wheel.
+            WindowEvent::MouseDown(MouseButton::Left) if self.voice_at(cx).is_some() => {
+                let f = self.voice_at(cx).unwrap_or(0);
+                self.voice_drag = Some((f, cx.mouse().cursor_y, self.voice_value(f)));
+                cx.capture();
+                cx.emit(AppEvent::GestureBegin);
+                meta.consume();
+            }
+            WindowEvent::MouseScroll(_, sy) if self.voice_at(cx).is_some() => {
+                let f = self.voice_at(cx).unwrap_or(0);
+                let steps = self.wheel.steps(*sy);
+                if steps != 0 {
+                    Self::set_voice(cx, f, self.voice_value(f) as i32 + steps);
+                    cx.emit(AppEvent::Commit);
+                }
+                meta.consume();
+            }
+            WindowEvent::MouseMove(..) if self.voice_drag.is_some() => {
+                if let Some((f, y0, v0)) = self.voice_drag {
+                    let steps = ((y0 - cx.mouse().cursor_y) / (VIB_DRAG_PX * cx.scale_factor())).round() as i32;
+                    Self::set_voice(cx, f, v0 as i32 + steps);
+                }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.voice_drag.is_some() => {
+                self.voice_drag = None;
+                cx.release();
+                cx.emit(AppEvent::GestureEnd);
+                meta.consume();
+            }
+            WindowEvent::MouseMove(..) if self.voice_at(cx) != self.voice_hover => {
+                self.voice_hover = self.voice_at(cx);
+                cx.emit(AppEvent::HoverHelp(self.voice_hover.map_or(String::new(), |f| VOICE_HELP[f].into())));
+            }
             WindowEvent::MouseDown(MouseButton::Left)
-                if self.vibrato().is_some() && Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().any(|r| r.contains(vg::Point::new(cx.mouse().cursor_x, cx.mouse().cursor_y))) =>
+                if self.vibrato().is_some() && Self::vib_fields(cx.bounds(), cx.scale_factor(), self.studio()).iter().any(|r| r.contains(vg::Point::new(cx.mouse().cursor_x, cx.mouse().cursor_y))) =>
             {
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
-                let f = Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().position(|r| r.contains(vg::Point::new(x, y))).unwrap_or(0);
+                let f = Self::vib_fields(cx.bounds(), cx.scale_factor(), self.studio()).iter().position(|r| r.contains(vg::Point::new(x, y))).unwrap_or(0);
                 let v = self.vibrato().map_or(0, |v| Self::vib_get(&v, f));
                 self.vib_drag = Some((f, y, v));
                 cx.capture();
@@ -208,7 +292,7 @@ impl View for InstrumentView {
             WindowEvent::MouseScroll(_, sy) => {
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
                 if let (Some(v), Some(f)) =
-                    (self.vibrato(), Self::vib_fields(cx.bounds(), cx.scale_factor()).iter().position(|r| r.contains(vg::Point::new(x, y))))
+                    (self.vibrato(), Self::vib_fields(cx.bounds(), cx.scale_factor(), self.studio()).iter().position(|r| r.contains(vg::Point::new(x, y))))
                 {
                     let steps = self.wheel.steps(*sy);
                     if steps != 0 {
@@ -222,7 +306,7 @@ impl View for InstrumentView {
             WindowEvent::MouseDown(MouseButton::Left) => {
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
                 let s = cx.scale_factor();
-                let gs = Self::graphs(cx.bounds(), s);
+                let gs = Self::graphs(cx.bounds(), s, self.studio());
                 let inst = self.current().filter(|(_, i)| !i.is_kit()).map(|(_, i)| i.inst);
                 if let (Some(m), Some(inst)) = (gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom), inst) {
                     let q = *Self::seq_of(&inst, m);
@@ -256,7 +340,7 @@ impl View for InstrumentView {
                 // Double-click a marker: remove it.
                 let (x, y) = (cx.mouse().cursor_x, cx.mouse().cursor_y);
                 let s = cx.scale_factor();
-                let gs = Self::graphs(cx.bounds(), s);
+                let gs = Self::graphs(cx.bounds(), s, self.studio());
                 if let (Some(m), Some((_, i))) =
                     (gs.iter().position(|r| x >= r.left && x <= r.right && y >= r.top && y <= r.bottom), self.current().filter(|(_, i)| !i.is_kit()))
                 {
@@ -268,7 +352,7 @@ impl View for InstrumentView {
             }
             WindowEvent::MouseMove(..) => {
                 if let Some((m, release)) = self.point_drag {
-                    let gs = Self::graphs(cx.bounds(), cx.scale_factor());
+                    let gs = Self::graphs(cx.bounds(), cx.scale_factor(), self.studio());
                     if let Some((_, i)) = self.current() {
                         let len = Self::seq_of(&i.inst, m).len;
                         if len > 0 {
@@ -347,7 +431,7 @@ impl View for InstrumentView {
             return;
         }
 
-        for (m, r) in Self::graphs(b, s).into_iter().enumerate() {
+        for (m, r) in Self::graphs(b, s, self.studio()).into_iter().enumerate() {
             let q = Self::seq_of(&inst.inst, m);
             let (_, lo, hi) = MACROS[m];
             let label = macro_label(lane, m);
@@ -409,7 +493,7 @@ impl View for InstrumentView {
 
         // Vibrato row.
         let v = inst.inst.vibrato;
-        let fr = Self::vib_fields(b, s);
+        let fr = Self::vib_fields(b, s, self.studio());
         let base = |r: &vg::Rect| (r.top + VIB_H * s * 0.5 + 3.5 * s).round();
         gfx::draw_text(canvas, "VIBRATO", b.x.round(), base(&fr[0]), &fl, TEXT_LO);
         for (i, r) in fr.iter().enumerate() {
@@ -421,6 +505,23 @@ impl View for InstrumentView {
             let tw = gfx::text_width(&fm, &t);
             let live = v.depth > 0 || i == 0;
             gfx::draw_text(canvas, &t, (r.right - 6.0 * s - tw).round(), base(r), &fm, if live { TEXT_HI } else { TEXT_LO });
+        }
+
+        // The voices row (studio tracks only: a locked track hides it).
+        if self.studio() {
+            let fr = Self::voice_fields(b, s);
+            gfx::draw_text(canvas, "VOICES", b.x.round(), base(&fr[0]), &fl, TEXT_LO);
+            for (i, r) in fr.iter().enumerate() {
+                let rr = gfx::rrect(*r, RADIUS_FIELD * s);
+                canvas.draw_rrect(rr, &gfx::vgrad(*r, Rgba::hex(0x070707), Rgba::hex(0x0E0E0E)));
+                gfx::ring(canvas, &rr, gfx::hairline(s), &gfx::fill(STROKE.with_alpha(0.5)));
+                gfx::draw_text(canvas, VOICES[i].0, (r.left + 6.0 * s).round(), base(r), &fl, TEXT_LO);
+                let v = self.voice_value(i);
+                let t = if i == 0 { format!("{v}") } else { format!("{v}c") };
+                let tw = gfx::text_width(&fm, &t);
+                let live = if i == 0 { v > 1 } else { v > 0 };
+                gfx::draw_text(canvas, &t, (r.right - 6.0 * s - tw).round(), base(r), &fm, if live { TEXT_HI } else { TEXT_LO });
+            }
         }
     }
 }

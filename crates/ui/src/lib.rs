@@ -2593,8 +2593,6 @@ const INSPECTOR_PAD: u32 = 16;
 /// Inspector section widths (logical px). Dials and channels are fixed so
 /// they never squeeze; the CLIP section takes what's left.
 const DIALS_SECTION_W: f32 = MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0;
-/// The studio voices section: three dials.
-const UNISON_SECTION_W: f32 = 3.0 * DIAL_W + 2.0 * DIAL_GAP + 24.0;
 const CLIP_SECTION_MIN_W: u32 = 240;
 /// The INSTRUMENT section's smallest width (its four graphs stay readable).
 const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
@@ -2785,39 +2783,6 @@ fn device_panel(cx: &mut Context, s: Signals) {
         .class("device-section")
         .width(Pixels(DIALS_SECTION_W));
 
-        // Studio voices (Batch 4b §5): Unison, Detune and Drift, on studio
-        // tracks only (a locked track hides them: VISION.md "hidden, not
-        // broken"). On the instrument section until the device panel exists.
-        Binding::new(cx, Memo::new(move |_| {
-            let lane = s.lane_sel.get();
-            s.arrangement.with(|a| a.lanes.get(lane).is_some_and(|l| l.lock.is_none()))
-        }), move |cx| {
-            let lane = s.lane_sel.get_untracked();
-            if !s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.lock.is_none())) {
-                return;
-            }
-            VStack::new(cx, |cx| {
-                Label::new(cx, "STUDIO VOICES").class("section-title");
-                HStack::new(cx, |cx| {
-                    use views::dial::{Dial, UniField};
-                    let spec = |label, max: u8, min: u8, fmt| state::DialSpec { label, min: min as f32, max: max as f32, default: min as f32, steps: (max - min) as u32, fmt };
-                    Dial::new_unison(cx, s, UniField::Voices, spec("Unison", engine::studio::UNISON_MAX, 1, state::Fmt::Voices))
-                        .class("dial")
-                        .help("Unison: voices per note (1–4), from the track's pool; each counts against Voices · drag, wheel, double-click resets");
-                    Dial::new_unison(cx, s, UniField::Detune, spec("Detune", engine::studio::DETUNE_MAX, 0, state::Fmt::Cents))
-                        .class("dial")
-                        .help("Detune: spreads the unison voices over 0–50 cents · drag, wheel, double-click resets");
-                    Dial::new_unison(cx, s, UniField::Drift, spec("Drift", engine::studio::DRIFT_MAX, 0, state::Fmt::Cents))
-                        .class("dial")
-                        .help("Drift: a slow pitch wander per voice, 0–10 cents · drag, wheel, double-click resets");
-                })
-                .gap(Pixels(DIAL_GAP))
-                .height(Auto)
-                .width(Auto);
-            })
-            .class("device-section")
-            .width(Pixels(UNISON_SECTION_W));
-        });
 
         // The clip: its name (renamed in place, UX.md §4) and the clip's
         // instrument commands as visible buttons (I3; disabled ones say why).

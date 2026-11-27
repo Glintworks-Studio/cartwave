@@ -98,40 +98,6 @@ impl Dial {
         })
     }
 
-    /// A studio voice control (Unison, Detune, Drift) of the selected track:
-    /// the same dial, its value on the track (one undo step per drag).
-    pub fn new_unison(cx: &mut Context, s: Signals, field: UniField, spec: DialSpec) -> Handle<'_, Self> {
-        let animating = Rc::new(Cell::new(false));
-        let v = Self::uni_value(&s, field);
-        let n = spec.to_norm(v);
-        let shown = Memo::new(move |_| {
-            let lane = s.lane_sel.get();
-            s.arrangement.with(|a| a.lanes.get(lane).map(|l| field.get(l.unison)))
-        });
-        Self {
-            s,
-            index: 0,
-            uni: Some(field),
-            spec,
-            dragging: false,
-            drag_norm: n,
-            last_y: 0.0,
-            hovered: false,
-            wheel: Default::default(),
-            shown_norm: Cell::new(n),
-            active_t: Cell::new(0.0),
-            last_draw: Cell::new(None),
-            animating: animating.clone(),
-        }
-        .build(cx, |_| {})
-        .bind(shown, |mut h| h.needs_redraw())
-        .bind(s.frame, move |mut h| {
-            if animating.get() {
-                h.needs_redraw();
-            }
-        })
-    }
-
     fn uni_value(s: &Signals, f: UniField) -> f32 {
         let lane = s.lane_sel.get_untracked();
         s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(0.0, |l| f.get(l.unison) as f32))

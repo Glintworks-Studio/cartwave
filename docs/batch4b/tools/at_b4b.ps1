@@ -100,5 +100,97 @@ if (Want "B4B-M4") {
   Remove-Item Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
 }
 
+# The mixer (Tab) at 1440 × 900 with the browser open: strips from x 241 + 24, every 160 px,
+# from y 76 + 60; inside a strip (strip-relative): the cap's centre (67, 166 + the dB taper over
+# 260 px), the knob (76, 73), M (60, 130), S (92, 130), the dB readout (76, 527), the clip mark
+# (110, 150).
+$MixX0 = 241 + 24; $MixY0 = 76 + 60
+function StripX($i) { $MixX0 + 160 * $i }
+function CapY($db) { $MixY0 + 166 + [math]::Round((1 - ($db + 48) / 54) * 260) }
+
+# ─────────── B4B-X1: the mixer's controls are the headers' (values, one undo step each, typed values) ───────────
+if (Want "B4B-X1") {
+  $p = Fx "fx_studio" "x1"; $d = Join-Path $Work "dx1"
+  Launch -Project $p -Data $d; Place
+  K 0x09; Start-Sleep -Milliseconds 600                                   # Tab: the mixer
+  Shot "x1_mixer"
+  DragL ((StripX 0) + 67) (CapY 0) ((StripX 0) + 67) ((CapY 0) + 58)        # fader: down 58 px (about -12 dB)
+  Save; Keep $p "x1_fader"
+  Ctrl 0x5A; Save; Keep $p "x1_undo"                                       # one Ctrl+Z: back to 0 dB
+  DragL ((StripX 0) + 76) ($MixY0 + 73) ((StripX 0) + 76) ($MixY0 + 73 - 60) # knob: up 60 px (pan right)
+  ClickL ((StripX 0) + 60) ($MixY0 + 130)                                   # M on track 1
+  ClickL ((StripX 1) + 92) ($MixY0 + 130)                                   # S on track 2
+  Save; Keep $p "x1_pan_ms"
+  DblL ((StripX 0) + 76) ($MixY0 + 527); Start-Sleep -Milliseconds 300      # the readout: type a value
+  K 0xBD; TypeText "3"; K 0x0D; Start-Sleep -Milliseconds 300            # "-3" (VK_OEM_MINUS, then 3)
+  Save; Keep $p "x1_typed"
+  MoveL ((StripX 0) + 67) ((CapY -3) ); Start-Sleep -Milliseconds 300
+  K 0x09; Start-Sleep -Milliseconds 600                                   # Tab: back to the arrangement
+  $obs.x1_view = DevLines $d "dev: view"
+  $obs.x1_help = DevLines $d "dev: help Volume"
+  Stop-App
+}
+
+# ─────────── B4B-X2: locked strips follow the lock rules (fader parked, no typed value, the reason on hover) ───────────
+if (Want "B4B-X2") {
+  $p = Fx "fx_board" "x2"; $d = Join-Path $Work "dx2"
+  Launch -Project $p -Data $d; Place
+  K 0x09; Start-Sleep -Milliseconds 600
+  MoveL ((StripX 0) + 67) (CapY 0); Start-Sleep -Milliseconds 300
+  DragL ((StripX 0) + 67) (CapY 0) ((StripX 0) + 67) ((CapY 0) + 80)
+  DragL ((StripX 0) + 76) ($MixY0 + 73) ((StripX 0) + 76) ($MixY0 + 13)
+  DblL ((StripX 0) + 76) ($MixY0 + 527); Start-Sleep -Milliseconds 300
+  K 0x1B
+  Save; Keep $p "x2_after"
+  $obs.x2_help = DevLines $d "Locked to the 2A03 Pulse 1"
+  Shot "x2_locked"
+  Stop-App
+}
+
+# ─────────── B4B-U1: Unison and Detune in the inspector (a studio track), saved; hidden on a locked track ───────────
+if (Want "B4B-U1") {
+  $p = Fx "fx_studio" "u1"; $d = Join-Path $Work "du1"
+  Launch -Project $p -Data $d; Place
+  ClickL 700 170; Start-Sleep -Milliseconds 600                            # a clip on track 1: the inspector
+  MoveL 1000 857; Start-Sleep -Milliseconds 200; Wheel 1; Wheel 1; Start-Sleep -Milliseconds 300   # UNISON 1 -> 3
+  MoveL 1130 857; Start-Sleep -Milliseconds 200
+  for ($i = 0; $i -lt 15; $i++) { Wheel 1; Start-Sleep -Milliseconds 30 }                             # DETUNE 0 -> 15
+  Start-Sleep -Milliseconds 300
+  Shot "u1_inspector"
+  Save; Keep $p "u1_after"
+  $obs.u1_help = DevLines $d "dev: help (Unison|Detune)"
+  Stop-App
+  $p = Fx "fx_board" "u1b"; $d = Join-Path $Work "du1b"
+  Launch -Project $p -Data $d; Place
+  ClickL 700 170; Start-Sleep -Milliseconds 600
+  Shot "u1_locked"
+  Stop-App
+}
+
+# ─────────── B4B-C1: the clip mark lights white past 0 dBFS, holds, and a click resets it ───────────
+if (Want "B4B-C1") {
+  $p = Fx "fx_clip" "c1"; $d = Join-Path $Work "dc1"
+  # Launch with audio (lib.ps1's Launch turns it off): the meters need the engine.
+  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 300
+  New-Item -ItemType Directory -Force $d | Out-Null
+  $env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_AUDIO = "1"; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_PROJECT = $p
+  $script:proc = Start-Process $global:Exe -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
+  for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $script:proc.Id).MainWindowHandle -ne 0) { break } }
+  Start-Sleep -Milliseconds 1500
+  $global:AppH = (Get-Process -Id $script:proc.Id).MainWindowHandle
+  [In]::SetForegroundWindow($global:AppH) | Out-Null
+  $global:S = 1.0
+  Place
+  $env:CHIPDAW_AUDIO = "0"
+  K 0x20; Start-Sleep -Milliseconds 2500; K 0x20; Start-Sleep -Milliseconds 1500   # play 2.5 s, stop, wait (the hold)
+  Shot "c1_lit"
+  ClickL 589 138; Start-Sleep -Milliseconds 400                                     # the mark of track 1 (241 + 328 + 18, row top + 2)
+  Shot "c1_reset"
+  K 0x09; Start-Sleep -Milliseconds 600
+  K 0x20; Start-Sleep -Milliseconds 2500; K 0x20; Start-Sleep -Milliseconds 1500
+  Shot "c1_mixer"
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4b\tools\check_b4b.py" $Work

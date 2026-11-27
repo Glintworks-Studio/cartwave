@@ -8,6 +8,7 @@
                       (here 1-9 after 7 empty studio tracks: 16 tracks), locked 2A03/VRC6 channels
                       and studio tracks with the board's pans and faders.
   fx_studio.chipdaw   No profile, two studio tracks with clips (MIDI drops never ask).
+  fx_clip.chipdaw     A studio track at +6 dB with 8-note chords (its clip mark lights) and a quiet one.
   fx_s64u.chipdaw     The 64-studio-track stress project with unison 2 / detune 15 on every
                       track (the audio gate, §9.5).
 
@@ -127,10 +128,23 @@ def studio():
     return project("none", t, [clip(1, 0, 0, 2, "A", notes(8, 60)), clip(2, 1, 0, 2, "B", notes(8, 40))])
 
 
+def clipper():
+    # One studio pulse track at +6 dB playing dense 8-note chords: its output passes 0 dBFS
+    # (the clip mark lights); a second track stays quiet.
+    t = [track(1, "Loud", "pulse", "#4FA8E0", volume_db=6.0), track(2, "Quiet", "triangle", "#7F86E0")]
+    ns = []
+    nid = 1
+    for beat in range(16):
+        for p in CHORDS[beat % 4]:
+            ns.append({"id": nid, "start": beat * PPQ, "len": PPQ, "pitch": p, "volume": 15})
+            nid += 1
+    return project("none", t, [clip(1, 0, 0, 4, "Chords", ns), clip(2, 1, 0, 4, "Bass", notes(8, 40))], loop_end=4 * BAR)
+
+
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
-    for name, p in [("fx_board", board()), ("fx_board12", board12()), ("fx_mixer", mixer()), ("fx_s64u", s64u()), ("fx_studio", studio())]:
+    for name, p in [("fx_board", board()), ("fx_board12", board12()), ("fx_mixer", mixer()), ("fx_s64u", s64u()), ("fx_studio", studio()), ("fx_clip", clipper())]:
         with open(os.path.join(out, name + ".chipdaw"), "w", encoding="utf-8") as f:
             json.dump(p, f, indent=1)
     print("ok")

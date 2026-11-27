@@ -117,6 +117,72 @@ if ran("m4_"):
     if a:
         check(sc, len(a["tracks"]) == len(before["tracks"]) and len(a["clips"]) == len(before["clips"]), "the song is unchanged")
 
+def shot_px(name, x, y):
+    """A client pixel of a window shot (the title bar and menu cropped by client_top)."""
+    from PIL import Image
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "polish2", "tools"))
+    from diff import client_top
+    p = os.path.join(work, name + ".png")
+    if not os.path.exists(p):
+        return None
+    im = Image.open(p).convert("RGB")
+    t = client_top(im, 100)
+    return im.getpixel((x + 1, y + t))
+
+
+def lum(p):
+    return max(p) if p else 0
+
+
+def track(p, i):
+    return p["tracks"][i]
+
+
+if ran("x1_"):
+    sc = "B4B-X1 (mixer = headers)"
+    f, u, pm, ty = load("x1_fader"), load("x1_undo"), load("x1_pan_ms"), load("x1_typed")
+    if f:
+        db = track(f, 0).get("volume_db")
+        check(sc, isinstance(db, (int, float)) and -13.5 <= db <= -10.5, f"the strip's fader set track 1's volume (about -12 dB): {db}")
+    if u:
+        check(sc, track(u, 0).get("volume_db") in (None, 0, 0.0), f"one Ctrl+Z restores 0 dB (one undo step per drag): {track(u, 0).get('volume_db')}")
+    if pm:
+        check(sc, (track(pm, 0).get("pan") or 0) > 20, f"the knob panned track 1 right: {track(pm, 0).get('pan')}")
+        check(sc, track(pm, 0).get("mute") is True and track(pm, 1).get("solo") is True, "M and S on the strips are the tracks' mute and solo")
+    if ty:
+        check(sc, track(ty, 0).get("volume_db") == -3.0, f"a double-click on the readout types the value (-3): {track(ty, 0).get('volume_db')}")
+    check(sc, any("mixer" in l for l in lst("x1_view")) and any("arrangement" in l for l in lst("x1_view")), "Tab shows the mixer and goes back")
+    check(sc, lst("x1_help"), "the fader's hover help is the header's (\"Volume: drag to change …\")")
+
+if ran("x2_"):
+    sc = "B4B-X2 (locked strips)"
+    a = load("x2_after")
+    if a:
+        t = track(a, 0)
+        check(sc, t.get("lock") == "2a03_p1" and t.get("volume_db") in (None, 0, 0.0) and t.get("pan") in (None, 0), f"a locked strip's fader and pan don't move: {t.get('volume_db')}, {t.get('pan')}")
+        ctl = lambda t: (t["id"], t.get("lock"), t.get("volume_db"), t.get("pan"), t.get("mute"), t.get("solo"), t["name"])
+        check(sc, [ctl(t) for t in a["tracks"]] == [ctl(t) for t in before["tracks"]], "no track's controls changed (fader, pan, mute, solo, name)")
+    check(sc, lst("x2_help"), "the reason shows on hover (\"Locked to the 2A03 Pulse 1 …\")")
+
+if ran("u1_"):
+    sc = "B4B-U1 (unison, detune)"
+    a = load("u1_after")
+    if a:
+        t = track(a, 0)
+        check(sc, t.get("unison") == 3, f"Unison 3 saved: {t.get('unison')}")
+        check(sc, t.get("detune") == 15, f"Detune 15 cents saved: {t.get('detune')}")
+        check(sc, "unison" not in track(a, 1), "the other track keeps one voice")
+    check(sc, lst("u1_help"), "the voices row says what it does on hover")
+
+if ran("c1_") or os.path.exists(os.path.join(work, "c1_lit.png")):
+    sc = "B4B-C1 (clip mark)"
+    lit, reset, mixer = shot_px("c1_lit", 589, 138), shot_px("c1_reset", 589, 138), shot_px("c1_mixer", 241 + 24 + 110, 76 + 60 + 150)
+    check(sc, lum(lit) >= 0xE0, f"track 1's mark is lit white after it passed 0 dBFS, and held after stopping: {lit}")
+    check(sc, reset is not None and lum(reset) < 0x40, f"a click on the mark resets it: {reset}")
+    check(sc, lum(mixer) >= 0xE0, f"the mixer strip's mark lights too: {mixer}")
+    quiet = shot_px("c1_lit", 589, 138 + 73)
+    check(sc, quiet is not None and lum(quiet) < 0x40, f"the quiet track's mark stays dark: {quiet}")
+
 fail = 0
 for sc, rs in results.items():
     for ok, msg in rs:
