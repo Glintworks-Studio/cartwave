@@ -1701,7 +1701,11 @@ impl AppState {
             Some(k) => k,
             None => self.s.arrangement.with_untracked(|a| a.content_key()),
         };
-        if key != self.rack_key {
+        // While an edit is in progress (a note or clip drag changes the key
+        // every frame) the pools wait for the result: the commit changes the
+        // key again (B4A-D26).
+        let editing = self.s.arrangement.with_untracked(|a| !a.editing.is_empty() || a.editing_notes.is_some());
+        if key != self.rack_key && !editing {
             self.rack_key = key;
             let shape = self.s.arrangement.with_untracked(|a| a.rack_shape());
             if shape != self.rack_shape {

@@ -1126,3 +1126,18 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   built the document twice (once to see whether anything changed, for the §5.5 conflict check,
   then again to commit). It builds it once; a second time only after an edit whose answer (Fit) may
   change it. Demo after: 7.8 / 7.7 / 6.8 vs the baseline's 7.3 / 7.9 / 8.3.
+- **B4A-D26 (the piano roll's note drag and playing).** The dedicated 5-round A/B (polish 2's
+  precedent for borderline scenarios) put the piano-roll note drag at **+1.8** (all 5 rounds
+  higher). Profiled: every drag frame (1) resolved the edited clip three times (the snapshot,
+  its studio lanes, the rack's shape: each clones the arrangement while an edit is in progress),
+  (2) ran the rack check although pools only matter once the edit lands, and (3) used a polyphonic
+  resolve that was O(pitches × notes). Now: the snapshot shares its resolved clips, `rack_shape`
+  returns at once without studio tracks and the rack waits for the edit's commit, and
+  `resolve_poly` groups pitches with one stable sort (a test pins it to the old result on 300
+  random cases). Playing with the piano roll open was +0.7: the Main lane redrew its fill and ~50
+  grid lines every frame for a moving playhead; they are now one cached image (like the lanes'
+  retained layer). After (5 rounds each): playing 7.3 vs 7.2, dragging 7.0 vs 7.7. The other
+  borderline medians of that A/B (zoom wheel +0.5, scrollbar +0.3, overview drag +0.4, idle +0.4)
+  have means of −0.02, −0.16, +0.48, +0.78 (idle: one 2.9 outlier): run-to-run noise, rechecked
+  in the final run. The 64-track header drag now scrolls back to the top first (two rounds had
+  started on a row's resize edge).

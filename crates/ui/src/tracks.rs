@@ -479,7 +479,12 @@ impl Arrangement {
     /// (the most notes its clips sound at once plus headroom, within its
     /// Voices setting).
     pub fn rack_shape(&self) -> Vec<RackSlot> {
-        let snap = self.studio_lanes(&crate::instruments::bank(&self.instruments, None));
+        // Runs on every content change (each frame of a note drag): nothing
+        // to resolve or build without studio tracks (B4A-D26).
+        if self.lanes.iter().all(|l| l.lock.is_some()) {
+            return Vec::new();
+        }
+        let snap = self.studio_lanes(&self.resolved_clips(), &crate::instruments::bank(&self.instruments, None));
         self.lanes
             .iter()
             .filter(|l| l.lock.is_none())
@@ -491,8 +496,9 @@ impl Arrangement {
     }
 
     /// Studio tracks' notes for the engine, in track order.
-    fn studio_lanes(&self, b: &crate::instruments::Bank) -> Vec<StudioLane> {
-        let clips = self.resolved_clips();
+    /// `clips`: the resolved clips (the caller has them already: resolving
+    /// clones the arrangement while an edit is in progress).
+    fn studio_lanes(&self, clips: &[Arc<Clip>], b: &crate::instruments::Bank) -> Vec<StudioLane> {
         self.lanes
             .iter()
             .enumerate()
@@ -541,7 +547,7 @@ impl Arrangement {
                 lane_inst[c] = b.of(self.instruments.lane_id(i));
             }
         }
-        let studio = self.studio_lanes(&b);
+        let studio = self.studio_lanes(&clips, &b);
         SongSnapshot::build(console, version)
             .with_instruments(b.bank, lane_inst, b.preview)
             .with_dpcm(crate::dpcm::bank(&self.samples))

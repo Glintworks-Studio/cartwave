@@ -1,0 +1,10 @@
+pr-base-1                piano roll 2000 notes: playing   6.2%  dragging     7%  scenario reached
+pr-b4a-1                 piano roll 2000 notes: playing   6.6%  dragging   7.9%  scenario reached
+pr-base-2                piano roll 2000 notes: playing   5.7%  dragging   6.6%  scenario reached
+pr-b4a-2                 piano roll 2000 notes: playing   6.5%  dragging  10.5%  scenario reached
+pr-base-3                piano roll 2000 notes: playing   6.9%  dragging   6.4%  scenario reached
+pr-b4a-3                 piano roll 2000 notes: playing   7.2%  dragging   8.4%  scenario reached
+pr-base-4                piano roll 2000 notes: playing   7.9%  dragging   6.5%  scenario reached
+pr-b4a-4                 piano roll 2000 notes: playing   6.9%  dragging   8.4%  scenario reached
+pr-base-5                piano roll 2000 notes: playing   6.8%  dragging   7.3%  scenario reached
+pr-b4a-5                 piano roll 2000 notes: playing     7%  dragging   9.1%  scenario reached

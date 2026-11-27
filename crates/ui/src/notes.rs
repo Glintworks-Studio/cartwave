@@ -316,14 +316,19 @@ pub fn note_name(pitch: u8) -> String {
 /// but **a pitch never overlaps itself**: `resolve_mono` within each pitch.
 /// The result is sorted by start, then pitch.
 pub fn resolve_poly(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
-    let mut pitches: Vec<u8> = notes.iter().map(|n| n.pitch).collect();
-    pitches.sort_unstable();
-    pitches.dedup();
-    let mut out = Vec::with_capacity(notes.len());
-    for p in pitches {
-        let mut group: Vec<Note> = notes.iter().filter(|n| n.pitch == p).cloned().collect();
+    // Group by pitch with a stable sort: each group keeps the notes' order
+    // (as a filter per pitch would), in O(n log n), not O(pitches × n): this
+    // runs every frame of a note drag (B4A-D26).
+    let mut by_pitch = std::mem::take(notes);
+    by_pitch.sort_by_key(|n| n.pitch);
+    let mut out = Vec::with_capacity(by_pitch.len());
+    let mut rest = by_pitch.as_slice();
+    while let Some(first) = rest.first() {
+        let n = rest.iter().position(|x| x.pitch != first.pitch).unwrap_or(rest.len());
+        let mut group = rest[..n].to_vec();
         resolve_mono(&mut group, winners, next_id);
         out.extend(group);
+        rest = &rest[n..];
     }
     out.sort_by_key(|n| (n.start, n.pitch));
     *notes = out;
@@ -637,6 +642,44 @@ pub fn is_mono(notes: &[Note]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// B4A-D26: the O(n log n) `resolve_poly` gives exactly what the per-pitch
+    /// filter version gave (ids, order, lengths, new ids), on random note sets
+    /// with overlaps, equal starts and winners.
+    #[test]
+    fn resolve_poly_matches_the_per_pitch_version() {
+        fn old(notes: &mut Vec<Note>, winners: &[u32], next_id: &mut u32) {
+            let mut pitches: Vec<u8> = notes.iter().map(|n| n.pitch).collect();
+            pitches.sort_unstable();
+            pitches.dedup();
+            let mut out = Vec::with_capacity(notes.len());
+            for p in pitches {
+                let mut group: Vec<Note> = notes.iter().filter(|n| n.pitch == p).cloned().collect();
+                resolve_mono(&mut group, winners, next_id);
+                out.extend(group);
+            }
+            out.sort_by_key(|n| (n.start, n.pitch));
+            *notes = out;
+        }
+        let mut seed = 0x2545_F491_u32;
+        let mut rnd = |m: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed % m
+        };
+        for case in 0..300 {
+            let n = 1 + rnd(60);
+            let v: Vec<Note> = (0..n).map(|i| Note::new(i + 1, rnd(16) * PPQ / 4, PPQ / 4 + rnd(8) * PPQ / 4, 58 + rnd(6) as u8)).collect();
+            let winners: Vec<u32> = (0..rnd(4)).map(|_| 1 + rnd(n)).collect();
+            let (mut a, mut b) = (v.clone(), v);
+            let (mut na, mut nb) = (n + 1, n + 1);
+            old(&mut a, &winners, &mut na);
+            resolve_poly(&mut b, &winners, &mut nb);
+            assert_eq!(a, b, "case {case}");
+            assert_eq!(na, nb, "case {case}: next id");
+        }
+    }
 
     /// P7, P9 [unit]: shorten / lengthen, chop on the grid, join, neighbours.
     #[test]

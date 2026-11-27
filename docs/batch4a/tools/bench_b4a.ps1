@@ -110,6 +110,10 @@ if ($Main -and -not $Only) {
   # Scrolling the lanes (wheel over the headers) while it plays: down, then up.
   Move-To 400 500
   $global:Res["s64_scroll"] = Measure-Cpu { param($i) $d = if (($i % 40) -lt 20) { -120 } else { 120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }
+  # Back to the top: the scroll step ends anywhere, and the header drag below must start on a
+  # row's name, not on a row's resize edge (two runs measured a row-height drag instead).
+  for ($k = 0; $k -lt 120; $k++) { [In]::mouse_event(0x0800, 0, 0, 120, [UIntPtr]::Zero); Start-Sleep -Milliseconds 5 }
+  Start-Sleep -Milliseconds 300
   # Insert and delete tracks: Ctrl+Shift+T, then Delete (the new track is selected), repeatedly.
   Move-To 420 210; Down; Up; Start-Sleep -Milliseconds 300
   $global:Res["s64_insert_delete"] = Measure-Cpu { param($i) if (($i % 24) -eq 0 -or ($i % 24) -eq 12) { if (-not (App-Front)) { $global:FocusLost++; return } }; if (($i % 24) -eq 0) { KeyDown 0x11; KeyDown 0x10; Key 0x54; KeyUp 0x10; KeyUp 0x11 } elseif (($i % 24) -eq 12) { Key 0x2E } }

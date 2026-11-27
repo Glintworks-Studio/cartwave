@@ -209,6 +209,10 @@ fn local(cx: &EventContext) -> (f32, f32) {
 /// The Main track's lane: `#0D0D0D`, the grid and the playhead only.
 pub struct MainLane {
     s: Signals,
+    /// The fill, divider and grid as one image, re-rendered only when the
+    /// view, size or scale changes: while playing only the playhead moves
+    /// (B4A-D26). Key: (scroll ticks, px per bar, w, h, scale) as bits.
+    layer: RefCell<Option<((u64, u64, i32, i32, u32), vg::Image)>>,
 }
 
 impl MainLane {
@@ -216,7 +220,7 @@ impl MainLane {
         // (scroll, px per bar, playhead column ×4): what the lane shows.
         let last = std::rc::Rc::new(std::cell::Cell::new((f64::NAN, f64::NAN, f64::NAN)));
         let last2 = last.clone();
-        Self { s }
+        Self { s, layer: RefCell::new(None) }
             .build(cx, |_| {})
             .class("main-lane")
             .height(Pixels(MAIN_TOTAL_H))
@@ -258,24 +262,43 @@ impl View for MainLane {
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
         let hl = gfx::hairline(s);
-        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(MAIN_DIVIDER));
         let body = vg::Rect::from_ltrb(r.left, r.top + hl, r.right, r.bottom);
-        canvas.draw_rect(body, &gfx::fill(MAIN_LANE));
         let (view, playhead) = (self.s.arrangement.with_untracked(|a| a.view), self.s.transport.with_untracked(|t| t.playhead_ticks));
-        let x_of = |t: f64| r.left + view.tick_to_x(t) as f32 * s;
-        let ppb = view.px_per_bar() as f32;
-        let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
-        let nbars = (r.width() / s / ppb).ceil() as i64 + 2;
-        for bar in first_bar.max(0)..first_bar + nbars {
-            let bx = x_of((bar as u32 * TICKS_PER_BAR) as f64);
-            if ppb >= 48.0 {
-                for k in 1..4u32 {
-                    let x = (bx + k as f32 * ppb / 4.0 * s).round();
-                    canvas.draw_rect(vg::Rect::from_xywh(x, body.top, hl, body.height()), &gfx::fill(GRID_BEAT));
-                }
+        let (w, h) = (r.width().round() as i32, r.height().round() as i32);
+        let key = (view.scroll_ticks.to_bits(), view.px_per_bar().to_bits(), w, h, s.to_bits());
+        {
+            let mut layer = self.layer.borrow_mut();
+            if layer.as_ref().is_none_or(|(k, _)| *k != key) {
+                *layer = vg::surfaces::raster_n32_premul((w.max(1), h.max(1))).map(|mut surface| {
+                    // The same drawing as before, at the image's origin (r is
+                    // whole pixels, so every line lands where it did).
+                    let c = surface.canvas();
+                    let lr = vg::Rect::from_xywh(0.0, 0.0, w as f32, h as f32);
+                    c.draw_rect(vg::Rect::from_xywh(lr.left, lr.top, lr.width(), hl), &gfx::fill(MAIN_DIVIDER));
+                    let lb = vg::Rect::from_ltrb(lr.left, lr.top + hl, lr.right, lr.bottom);
+                    c.draw_rect(lb, &gfx::fill(MAIN_LANE));
+                    let x_of = |t: f64| lr.left + view.tick_to_x(t) as f32 * s;
+                    let ppb = view.px_per_bar() as f32;
+                    let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
+                    let nbars = (lr.width() / s / ppb).ceil() as i64 + 2;
+                    for bar in first_bar.max(0)..first_bar + nbars {
+                        let bx = x_of((bar as u32 * TICKS_PER_BAR) as f64);
+                        if ppb >= 48.0 {
+                            for k in 1..4u32 {
+                                let x = (bx + k as f32 * ppb / 4.0 * s).round();
+                                c.draw_rect(vg::Rect::from_xywh(x, lb.top, hl, lb.height()), &gfx::fill(GRID_BEAT));
+                            }
+                        }
+                        c.draw_rect(vg::Rect::from_xywh(bx.round(), lb.top, hl, lb.height()), &gfx::fill(GRID_BAR));
+                    }
+                    (key, surface.image_snapshot())
+                });
             }
-            canvas.draw_rect(vg::Rect::from_xywh(bx.round(), body.top, hl, body.height()), &gfx::fill(GRID_BAR));
+            if let Some((_, img)) = layer.as_ref() {
+                canvas.draw_image(img, (r.left, r.top), None);
+            }
         }
+        let x_of = |t: f64| r.left + view.tick_to_x(t) as f32 * s;
         let px = x_of(playhead).round();
         if px >= r.left && px < r.right {
             canvas.draw_rect(vg::Rect::from_xywh(px, body.top, hl, body.height()), &gfx::fill(NEUTRAL_HI.with_alpha(0.85)));
