@@ -787,7 +787,7 @@ fn load_clips(clips: Vec<ClipV1>, arrangement: &Arrangement, version: u32) -> Re
     let mut seen = std::collections::HashSet::new();
     for c in clips {
         if c.lane >= tracks {
-            return Err(format!("Clip {} is on track {}; there are {tracks}.", c.id, c.lane + 1));
+            return Err(format!("Clip {} is on track {}; there are {tracks}.", c.id, c.lane.saturating_add(1)));
         }
         if !seen.insert(c.id) {
             return Err(format!("Two clips have the id {}.", c.id));
