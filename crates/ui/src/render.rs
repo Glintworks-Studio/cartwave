@@ -12,7 +12,7 @@ const CHUNK: usize = 512;
 /// through the engine's `Mixdown` (console, studio tracks, Main gain).
 pub fn render(p: &Project, secs: f64) -> Vec<f32> {
     let heard = crate::tracks::audible(&p.arrangement, &p.mute, &p.solo);
-    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, SAMPLE_RATE, &heard, p.master_db, false);
+    let (mut m, snap) = crate::tracks::offline_mixdown(p, SAMPLE_RATE, &heard, false);
     m.player.set_loop_end(p.loop_end_ticks as f64);
     m.player.play();
     let mut out = vec![0f32; (secs * SAMPLE_RATE as f64) as usize];

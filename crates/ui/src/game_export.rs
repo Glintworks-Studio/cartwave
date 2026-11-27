@@ -151,7 +151,7 @@ pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl
 
 /// `render` with the tracks heard given one by one (a stem per track).
 pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes: usize, ctl: Option<(&Control, f64, f64)>) -> Result<(Vec<f32>, Layout), String> {
-    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, rate, heard, p.master_db, true);
+    let (mut m, snap) = crate::tracks::offline_mixdown(p, rate, heard, true);
     let bpm = p.bpm as f64;
     // Progress within this track's share of the whole export.
     let report = |done: usize, total: usize| -> Result<(), String> {

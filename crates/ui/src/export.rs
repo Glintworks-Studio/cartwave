@@ -25,7 +25,7 @@ pub fn render(p: &Project) -> Vec<f32> {
 /// `render`, cut off after `max_seconds` (song and tail together).
 pub fn render_limited(p: &Project, max_seconds: f64) -> Vec<f32> {
     let heard = crate::tracks::audible(&p.arrangement, &p.mute, &p.solo);
-    let (mut m, snap) = crate::tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, SAMPLE_RATE, &heard, p.master_db, true);
+    let (mut m, snap) = crate::tracks::offline_mixdown(p, SAMPLE_RATE, &heard, true);
     let end = p.loop_end_ticks as f64;
     // Render past the end without wrapping.
     m.player.set_loop_end(1.0e12);

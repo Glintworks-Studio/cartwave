@@ -206,13 +206,17 @@ fn local(cx: &EventContext) -> (f32, f32) {
     ((cx.mouse().cursor_x - b.x) / s, (cx.mouse().cursor_y - b.y) / s)
 }
 
+/// What the Main lane's cached image shows: (scroll ticks, px per bar, w,
+/// h, scale), the floats as bits.
+type LaneKey = (u64, u64, i32, i32, u32);
+
 /// The Main track's lane: `#0D0D0D`, the grid and the playhead only.
 pub struct MainLane {
     s: Signals,
     /// The fill, divider and grid as one image, re-rendered only when the
     /// view, size or scale changes: while playing only the playhead moves
     /// (B4A-D26). Key: (scroll ticks, px per bar, w, h, scale) as bits.
-    layer: RefCell<Option<((u64, u64, i32, i32, u32), vg::Image)>>,
+    layer: RefCell<Option<(LaneKey, vg::Image)>>,
 }
 
 impl MainLane {

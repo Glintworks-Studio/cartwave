@@ -596,8 +596,11 @@ pub fn sync_ctls(ctls: &[(u32, Arc<engine::TrackCtl>)], a: &Arrangement, heard: 
 
 /// The offline mixdown of a project (renders and every export): the
 /// console set up from the locked tracks, a rack for the studio tracks,
-/// `heard` applied (the project's mute and solo: `audible`).
-pub fn offline_mixdown(a: &Arrangement, profile: Profile, filter: engine::FilterMode, bpm: f64, rate: u32, heard: &[bool], master_db: f32, samples: bool) -> (Box<engine::Mixdown>, SongSnapshot) {
+/// `heard` applied (the project's mute and solo: `audible`), the project's
+/// profile, filter, tempo and Main gain. `samples: false` leaves imported
+/// samples out of the ROM (the golden render never loaded them).
+pub fn offline_mixdown(p: &crate::file::Project, rate: u32, heard: &[bool], samples: bool) -> (Box<engine::Mixdown>, SongSnapshot) {
+    let (a, profile, filter, bpm, master_db) = (&p.arrangement, p.chip, p.filter, p.bpm as f64, p.master_db);
     let mut m = Box::new(engine::Mixdown::new(rate as f64));
     m.player.set_bpm(bpm);
     m.player.set_vrc6(profile.vrc6());

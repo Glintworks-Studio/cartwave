@@ -15,7 +15,8 @@ fn stress64_renders_512_voices_faster_than_real_time() {
     assert_eq!(shape.len(), 64);
     assert!(shape.iter().all(|s| s.pool >= 8), "{shape:?}");
     let heard = tracks::audible(&p.arrangement, &p.mute, &p.solo);
-    let (mut m, snap) = tracks::offline_mixdown(&p.arrangement, p.chip, p.filter, p.bpm as f64, 48_000, &heard, 0.0, true);
+    assert_eq!(p.master_db, 0.0, "the stress project plays at Main 0 dB");
+    let (mut m, snap) = tracks::offline_mixdown(&p, 48_000, &heard, true);
     m.player.play();
     let secs = 4.0;
     let mut out = vec![0f32; (secs * 48_000.0) as usize];
