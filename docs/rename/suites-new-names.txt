@@ -1,0 +1,7 @@
+shell exit 0; PASS lines 49; no FAIL lines
+batch3 exit 0; PASS lines 79; no FAIL lines
+design exit 0; PASS lines 23; no FAIL lines
+polish exit 0; PASS lines 14; no FAIL lines
+p2 exit 0; PASS lines 92; no FAIL lines
+b4a exit 0; PASS lines 53; no FAIL lines
+b4b exit 0; PASS lines 43; no FAIL lines

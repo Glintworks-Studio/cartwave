@@ -9,17 +9,17 @@ pixels that differ are text showing the name.
 
 ## 1. Summary
 
-**Merge: {{MERGE}}**
+**Merge: done.** Every gate passed: `pre-rename` tags the old `main` (8e6b4f8), `main` was fast-forwarded to `rename/cartwave` and pushed to `glintworks-studio/cartwave` (§7).****
 
 | # | Gate | Result |
 |---|---|---|
 | 1 | Golden and every migration hash unchanged (audio data) | **PASS**: `cargo test` (golden, v2…v7 migration hashes) unchanged and passing; all **290** `.chipdaw` files in the repo render and export to the **same hashes** in the baseline and this branch ([table](docs/rename/corpus-hashes.tsv)); exports: **every WAV byte-identical** in 101 files, each loop JSON differs only in its `format` field ([report](docs/rename/export-identity.md)) |
 | 2 | `.chipdaw` files from every corpus version open and render identically | **PASS**: v1 (the scale test), v2…v7 corpus, the stress projects and every suite fixture: 290 files, 0 load errors, identical hashes; new test `every_corpus_file_round_trips_through_a_cartwave_file` (every version → `.cartwave` → same text, same sound) |
-| 3 | The settings migration test | {{GATE3}} |
+| 3 | The settings migration test | **PASS**: unit tests (`app_data_folder_moves_and_old_one_is_kept_until_next_launch`, `recovery_takes_a_legacy_file_in_its_folder`) and the real app, end to end, under a redirected `%APPDATA%` (`docs/rename/tools/migrate_e2e.ps1`): launch 1 copies `ChipDAW` → `Cartwave` (settings, presets, a subfolder, `recovery.chipdaw` → `recovery.cartwave`), keeps the old folder and offers the crashed session's recovery; launch 2 removes the old folder and the marker; the settings (autosave 5 min, a recent file) are kept; launch 3 moves nothing ([obs.json](docs/rename/migrate/obs.json), [screenshot](docs/screens/rename/migrated-recovery-offer.png)) |
 | 4 | Visual regression: only text showing the name differs | **PASS** at 100 % and 150 % ([100](docs/rename/regression/report-100.md), [150](docs/rename/regression/report-150.md)); every differing region is listed below (§4) |
-| 5 | All suites with the new names, and one run with the old names | {{GATE5}} |
-| 6 | `cargo test` debug and release; clippy; warnings | {{GATE6}} |
-| 7 | No user-facing "ChipDAW" / "chipdaw" left in the app | {{GATE7}} |
+| 5 | All suites with the new names, and one run with the old names | **PASS**, both runs, on the final build: AT-01…31 (shell 9 tests, Batch 3 17), DP-01…05, PL-01…05, P2-01…11, B4A-01…09, **B4B 43/43**, with `CARTWAVE_*` ([summary](docs/rename/suites-new-names.txt)) and again with every harness script spelled `CHIPDAW_*` ([summary](docs/rename/suites-old-names.txt)); the alias run's app logs show the dev-mode alias notes (65 launches) |
+| 6 | `cargo test` debug and release; clippy; warnings | **PASS**: **268 passed, 0 failed, 2 ignored** in debug and in release (261 before + 7 new) ([debug](docs/rename/test-run-debug.txt), [release](docs/rename/test-run-release.txt)); `cargo clippy --workspace --all-targets` clean; release build of every target 0 warnings |
+| 7 | No user-facing "ChipDAW" / "chipdaw" left in the app | **PASS**: no user-facing old name in the source or the release binary's strings; the allowed exceptions are listed in §4 |
 
 ## 2. What was renamed
 
@@ -101,10 +101,38 @@ run); one `solo_mute` shot lost its second click (the known quick-click flake) a
 re-shot (RN-D14).
 
 ### Suites (gate 5)
-{{SUITES}}
+`docs/rename/tools/run_suites_rn.ps1` runs every scenario suite on the final release build: the
+earlier suites (shell AT-01…19, Batch 3 AT-07…31, design DP-01…05, polish PL-01…05; Overview and
+status bar hidden, as polish 2 runs them), then P2-01…11, B4A-01…09 and B4B (43 checks).
+
+| Run | Result |
+|---|---|
+| New names (`CARTWAVE_*`) | every suite passes: 49 + 79 + 23 + 14 + 92 + 53 PASS lines, B4B 43/43, 0 FAIL |
+| Old names (`CHIPDAW_*`; every harness script under `docs/` spelled with the old names in place, restored from git after) | the same: every suite passes, B4B 43/43, 0 FAIL; each app log has its `dev: CHIPDAW_X is the old name of CARTWAVE_X …` lines |
+
+Harness changes needed by the rename (name text only): the shell suite looked for
+`recovery.chipdaw` and `ABOUT CHIPDAW`; the screenshot helper `shot.ps1` found the window by a
+title containing "ChipDAW" (it now takes either name, so pre-rename builds still work). A first
+old-names attempt rewrote only the suite scripts, not the shared helpers they dot-source (which
+still set `CARTWAVE_*`, and the new name wins): B4B-C1 opened the previous scenario's project.
+The runner now rewrites the whole harness; that run is the one reported (RN-D15).
 
 ### Binary strings (gate 7)
-{{STRINGS}}
+`git grep -i chipdaw crates/` and a scan of `target/release/cartwave.exe` (ASCII and UTF-16
+strings). What remains, all allowed:
+
+| String | Why |
+|---|---|
+| `CHIPDAW_` | the alias prefix (`engine::env`) |
+| `ChipDAW`, `chipdaw` (data folder) | the pre-rename folder the first launch moves |
+| `chipdaw` (extension) | `.chipdaw` opens forever; the Save dialog's second filter, *Cartwave project, old extension*, shows it |
+| `chipdaw` (format) | the file's `format` field (RN-D4) |
+| `migrated-from-chipdaw.txt` | the move's marker, present until the next launch |
+| `…\pixelwide_studio\chipdaw\target\…` | this PC's checkout folder, embedded by the GL binding crates' build scripts in panic messages; a build from a folder with another name doesn't have it |
+| Tests (`file.rs`, `env.rs`, `tests/`) | they open the old files and names on purpose |
+
+The vizia fork's `chipdaw-perf` branch (in `Cargo.toml` comments and the pins' history) and the
+historical reports are the other listed exceptions.
 
 ## 5. GitHub: the CEO's steps
 
@@ -137,4 +165,12 @@ organisation would mean updating the nine pins and is not part of this rename.
 
 ## 7. Merge result
 
-{{MERGE_DETAIL}}
+Every gate passed, so per the prompt (§2.3):
+
+- `rename/cartwave` pushed to `glintworks-studio/cartwave`;
+- `git tag pre-rename main` (8e6b4f8) and the tag pushed;
+- `main` fast-forwarded to `rename/cartwave` and pushed.
+
+No force-push, no history rewrite, no deleted branches, no pull requests or issues. Baseline
+worktree for comparisons: `../before-rename` (8e6b4f8, release built; its `app.exe` copied to
+`cartwave.exe` for the shared helpers).

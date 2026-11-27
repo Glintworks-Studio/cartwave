@@ -1,0 +1,13 @@
+{
+  "l1_new_exists": true,
+  "l1_old_kept": true,
+  "l1_marker": "launched",
+  "l1_recovery_renamed": true,
+  "l1_sub_copied": true,
+  "l1_no_staging": true,
+  "l2_old_removed": true,
+  "l2_marker_removed": true,
+  "l2_settings_kept": true,
+  "l2_stderr_removed_line": true,
+  "l3_nothing_moves_again": true
+}

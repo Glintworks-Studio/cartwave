@@ -12,7 +12,10 @@ Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
 $fake = Join-Path $Out "AppData"
 $old = Join-Path $fake "ChipDAW"; $new = Join-Path $fake "Cartwave"
 New-Item -ItemType Directory -Force (Join-Path $old "sub") | Out-Null
-'{ "autosave_secs": 300, "recent": ["C:/songs/old.chipdaw"], "show_overview": false }' | Set-Content -Encoding ascii (Join-Path $old "settings.json")
+# The recent file must exist: the app drops recent entries whose file is gone (AT-18).
+$song = (Join-Path $Out "old.chipdaw") -replace "\\", "/"
+Copy-Item (Join-Path $Repo "docs\songs\v7\demo_band.chipdaw") $song
+"{ ""autosave_secs"": 300, ""recent"": [""$song""], ""show_overview"": false }" | Set-Content -Encoding ascii (Join-Path $old "settings.json")
 '[]' | Set-Content -Encoding ascii (Join-Path $old "user_presets.json")
 Copy-Item (Join-Path $Repo "docs\songs\v7\demo_band.chipdaw") (Join-Path $old "recovery.chipdaw")
 '1234' | Set-Content -Encoding ascii (Join-Path $old "session.lock")
@@ -40,7 +43,7 @@ Launch 2
 $obs.l2_old_removed = -not (Test-Path $old)
 $obs.l2_marker_removed = -not (Test-Path (Join-Path $new "migrated-from-chipdaw.txt"))
 $st = Get-Content -Raw (Join-Path $new "settings.json") | ConvertFrom-Json
-$obs.l2_settings_kept = ($st.autosave_secs -eq 300) -and ($st.recent -contains "C:/songs/old.chipdaw")
+$obs.l2_settings_kept = ($st.autosave_secs -eq 300) -and ($st.recent -contains $song)
 $obs.l2_stderr_removed_line = [bool](Select-String -Path (Join-Path $Out "launch2.stderr.txt") -Pattern "Removed the old app-data folder" -Quiet)
 Launch 3
 $obs.l3_nothing_moves_again = -not (Test-Path $old)

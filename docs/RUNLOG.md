@@ -1530,3 +1530,25 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   only the title bar's name, the Help menu's About item and the About panel differ, plus a few
   corner pixels outside the window's rounded frame (they differ between states of one build
   too). This build with the old names is pixel-identical to it with the new names.
+- **RN-D15 (gate 5: the suites, both spellings).** `docs/rename/tools/run_suites_rn.ps1` on the
+  final build. Two harness checks named the old name (the shell suite's `recovery.chipdaw` and
+  `ABOUT CHIPDAW`) and `shot.ps1` found the window by a title containing "ChipDAW" (AT-06's
+  menu screenshots failed): fixed (shot.ps1 now takes either title). With `CARTWAVE_*` every
+  suite passes. The first old-names run copied only the suite scripts with `CHIPDAW_*`; the
+  shared helpers they dot-source (`lib.ps1`) still set `CARTWAVE_*`, which win, so B4B-C1 opened
+  the previous scenario's project (2 checks failed). That run didn't test the aliases cleanly
+  and isn't reported: the runner now rewrites every harness script under `docs/` in place
+  (after a commit) and restores them from git. That run: every suite passes (B4B 43/43), and
+  65 app logs carry the alias notes.
+- **RN-D16 (gate 3 on the real app).** `migrate_e2e.ps1` points `APPDATA` at a temp folder
+  holding a pre-rename `ChipDAW` folder and launches the release build three times: copy,
+  keep, recovery offered; then the old folder and marker removed and the settings kept; then
+  nothing. The first try failed one check, by the fixture: its recent file didn't exist, and the
+  app drops recent entries whose file is gone (AT-18's behaviour). With a real file: PASS.
+  The owner's real `%APPDATA%\ChipDAW` was checked untouched afterwards.
+- **RN-D17 (gate 6).** 268 passed, 0 failed, 2 ignored in debug and release (7 new: the env
+  aliases ×2, the identifiers, both extensions, the folder move, the legacy recovery file, the
+  corpus round trip). One clippy note (`map_or(true, …)` on the vsync knob, `is_none_or` now);
+  clippy clean; a forced release rebuild of every target: 0 warnings.
+- **RN-D18 (merge).** Every gate passes. Per the prompt: `rename/cartwave` pushed, `pre-rename`
+  tagged on `main` (8e6b4f8) and pushed, `main` fast-forwarded and pushed.
