@@ -1089,6 +1089,7 @@ impl AppState {
         self.idle_housekeeping();
         self.install_menus(cx);
         self.sync_shell(cx);
+        self.sync_header_layout();
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -2828,6 +2829,13 @@ fn piano_panel(cx: &mut Context, s: Signals) {
 
 impl AppState {
     /// The undoable document as it is now.
+    /// The header layout: the settings plus the number column, which follows
+    /// the project's largest track number (K3 / G10).
+    fn sync_header_layout(&mut self) {
+        let n = self.s.arrangement.with_untracked(|a| a.lanes.len());
+        self.s.header.set_if_changed(views::header_layout::HeaderLayout::of(&self.settings).with_tracks(n));
+    }
+
     fn doc(&self) -> Doc {
         let bpm = self.s.transport.with_untracked(|t| t.bpm);
         self.s.arrangement.with_untracked(|a| Doc::of(a, bpm, a.console_params())).with_song(self.song_state())
@@ -3876,7 +3884,7 @@ impl AppState {
             Set::ShowOverview(b) => st.show_overview = b,
             Set::HeaderWidth(w) => st.header_width = views::header_layout::clamp_width(w),
         }
-        self.s.header.set_if_changed(views::header_layout::HeaderLayout::of(&self.settings));
+        self.sync_header_layout();
         if dev::enabled() {
             let st = &self.settings;
             eprintln!("dev: look headers_right={} strip_by_clips={} browser_right={} overview={} width={}", st.headers_right, st.strip_by_clips, st.browser_right, st.show_overview, st.header_width);

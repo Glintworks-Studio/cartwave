@@ -24,6 +24,23 @@ pub const STRIP_W: f32 = 16.0;
 pub const NUMBER_X: f32 = 28.0;
 pub const NUMBER_W: f32 = 28.0;
 pub const NAME_X: f32 = 68.0;
+/// The gap between the number column and the name (guaranteed, K3).
+pub const NUMBER_GAP: f32 = 12.0;
+/// The number column for two digits (the `fixups` board: 48 px), and what
+/// each further digit adds (VISUAL-SPEC.md §13, K3 / G10).
+pub const NUMBER_W_2: f32 = 48.0;
+pub const NUMBER_W_PER_DIGIT: f32 = 20.0;
+
+/// The number column's width for a project whose largest track number is
+/// `n`: 28 px up to 9 tracks, 48 px for 10–99, 20 px more per digit beyond.
+pub fn number_w_for(n: usize) -> f32 {
+    let digits = n.max(1).to_string().len() as f32;
+    if digits <= 1.0 {
+        NUMBER_W
+    } else {
+        NUMBER_W_2 + (digits - 2.0) * NUMBER_W_PER_DIGIT
+    }
+}
 /// The name column ends 12 px before the control block.
 pub const NAME_END_FROM_RIGHT: f32 = 144.0;
 /// The control block: 120 px, 12 px in from the header's far edge; its
@@ -44,17 +61,26 @@ pub struct HeaderLayout {
     pub right: bool,
     /// The strip by the clips (else at the window's edge).
     pub by_clips: bool,
+    /// The number column's width: it follows the project's largest track
+    /// number (`number_w_for`; K3 / G10). Every row shares it, so rows stay
+    /// aligned, and the name always starts 12 px after it.
+    pub num_w: f32,
 }
 
 impl Default for HeaderLayout {
     fn default() -> Self {
-        Self { w: HEADER_W_MIN, right: false, by_clips: false }
+        Self { w: HEADER_W_MIN, right: false, by_clips: false, num_w: NUMBER_W }
     }
 }
 
 impl HeaderLayout {
     pub fn of(s: &crate::file::Settings) -> Self {
-        Self { w: clamp_width(s.header_width), right: s.headers_right, by_clips: s.strip_by_clips }
+        Self { w: clamp_width(s.header_width), right: s.headers_right, by_clips: s.strip_by_clips, num_w: NUMBER_W }
+    }
+
+    /// The same layout for a project with `tracks` tracks (the number column).
+    pub fn with_tracks(self, tracks: usize) -> Self {
+        Self { num_w: number_w_for(tracks), ..self }
     }
 
     /// The strip sits at the header's right edge (the order table's
@@ -90,16 +116,22 @@ impl HeaderLayout {
     }
 
     pub fn number_x(&self) -> f32 {
-        self.place(NUMBER_X, NUMBER_W)
+        self.place(NUMBER_X, self.num_w)
+    }
+
+    /// The name column's start in the strip-first frame: 12 px after the
+    /// number column (68 with the 28 px column).
+    fn name_x0(&self) -> f32 {
+        NUMBER_X + self.num_w + NUMBER_GAP
     }
 
     /// The name column (text is always left-aligned in it).
     pub fn name_w(&self) -> f32 {
-        self.w - NAME_X - NAME_END_FROM_RIGHT
+        self.w - self.name_x0() - NAME_END_FROM_RIGHT
     }
 
     pub fn name_x(&self) -> f32 {
-        self.place(NAME_X, self.name_w())
+        self.place(self.name_x0(), self.name_w())
     }
 
     /// The control block's left edge.
@@ -183,7 +215,7 @@ mod tests {
     fn order_table_matches_the_board() {
         // Row-relative (a right-side row starts 1 px into the header); the
         // board's header x is row x + row_off.
-        let ll = HeaderLayout { w: 380.0, right: false, by_clips: false };
+        let ll = HeaderLayout { w: 380.0, right: false, by_clips: false, num_w: NUMBER_W };
         assert_eq!((ll.strip_x(), ll.number_x(), ll.name_x(), ll.ctrl_x()), (0.0, 28.0, 68.0, 248.0));
         assert_eq!((ll.col_a(), ll.col_b(), ll.row_w()), (256.0, 328.0, 379.0));
         let lc = HeaderLayout { by_clips: true, ..ll };
@@ -206,5 +238,27 @@ mod tests {
         assert_eq!(r.ctrl_x() + r.row_off(), CTRL_EDGE, "on the right, at the left edge");
         assert_eq!(clamp_width(100.0), 380.0);
         assert_eq!(clamp_width(900.0), 600.0);
+    }
+
+    /// K3 / G10: the number column follows the largest track number, rows
+    /// stay aligned and the name keeps its 12 px gap, in every layout.
+    #[test]
+    fn number_column_follows_the_largest_number() {
+        assert_eq!((number_w_for(0), number_w_for(1), number_w_for(9)), (28.0, 28.0, 28.0));
+        assert_eq!((number_w_for(10), number_w_for(64), number_w_for(99)), (48.0, 48.0, 48.0));
+        assert_eq!((number_w_for(100), number_w_for(999), number_w_for(1000)), (68.0, 68.0, 88.0));
+        for (right, by_clips) in [(false, false), (false, true), (true, false), (true, true)] {
+            for n in [4usize, 12, 120] {
+                let l = HeaderLayout { w: 380.0, right, by_clips, num_w: NUMBER_W }.with_tracks(n);
+                let (num, name) = ((l.number_x(), l.number_x() + l.num_w), (l.name_x(), l.name_x() + l.name_w()));
+                let gap = if l.mirrored() { num.0 - name.1 } else { name.0 - num.1 };
+                assert_eq!(gap, NUMBER_GAP, "{right} {by_clips} {n}");
+                // The control block doesn't move: only the name column gives.
+                assert_eq!(l.ctrl_x(), HeaderLayout { num_w: NUMBER_W, ..l }.ctrl_x());
+            }
+        }
+        // The board (`fixups`): 48 px numbers, the name at 88.
+        let b = HeaderLayout::default().with_tracks(12);
+        assert_eq!((b.number_x(), b.name_x()), (28.0, 88.0));
     }
 }

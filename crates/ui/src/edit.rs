@@ -560,7 +560,7 @@ impl AppState {
                 self.select_track(lane, false);
                 // Over the number and name (its column moves with the layout).
                 let l = self.s.header.get_untracked();
-                let x = if l.mirrored() { l.name_x() - RENAME_INSET } else { l.name_x() - (crate::views::header_layout::NAME_X - RENAME_TRACK_X) };
+                let x = if l.mirrored() { l.name_x() - RENAME_INSET } else { l.number_x() - (crate::views::header_layout::NUMBER_X - RENAME_TRACK_X) };
                 RenameSpec { target, x: row.x / s + x, y: row.y / s + RENAME_INSET, w: RENAME_TRACK_W, text: name }
             }
             // A locked track's fader and pan don't take typed values (§5.3).

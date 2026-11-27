@@ -907,7 +907,7 @@ impl View for SplitHandle {
 // column A keep a 72 px band at the top of a taller row; only the fader
 // stretches (`row::fader_len`).
 
-use super::header_layout::{self as hl_, row, HeaderLayout, COL_A_W, COL_B_W, NUMBER_W, STRIP_W};
+use super::header_layout::{self as hl_, row, HeaderLayout, COL_A_W, COL_B_W, STRIP_W};
 
 /// The channel number: Inter 800 italic 40, centred in its 28 px column on
 /// a 40 px line box from y 16; tracking −.02em.
@@ -1035,7 +1035,7 @@ struct RowTextKey {
     inst: Option<String>,
     pan: String,
     db: String,
-    layout: (i32, bool, bool),
+    layout: (i32, bool, bool, i32),
     w: i32,
     h: i32,
     s: u32,
@@ -1058,7 +1058,7 @@ fn render_row_text(lane: usize, k: &RowTextKey, l: &HeaderLayout, row_h: f32, s:
     let num = format!("{}", lane + 1);
     let ntr = NUMBER_TRACKING * NUMBER_PX * s;
     let nw = gfx::tracked_width(&num, &nf, ntr);
-    let (nx, ny) = at(l.number_x() + NUMBER_W * 0.5, NUMBER_TOP);
+    let (nx, ny) = at(l.number_x() + l.num_w * 0.5, NUMBER_TOP);
     let nb = gfx::css_baseline(&nf, ny, NUMBER_PX * s).round();
     gfx::draw_text_tracked(canvas, &num, (nx - nw * 0.5).round(), nb, &nf, ntr, NUMBER_INK.lighten(if selected { 0.04 } else { 0.0 }));
 
@@ -1478,7 +1478,7 @@ impl View for TrackRow {
             inst,
             pan: crate::state::format_pan(pan),
             db: crate::state::format_db(vol),
-            layout: (lay.w as i32, lay.right, lay.by_clips),
+            layout: (lay.w as i32, lay.right, lay.by_clips, lay.num_w as i32),
             w: r.width().round() as i32,
             h: r.height().round() as i32,
             s: (s * 100.0).round() as u32,
