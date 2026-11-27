@@ -1528,6 +1528,10 @@ pub enum Fmt {
     Sample,
     OnOff,
     SawRate,
+    /// Unison voices ("1 voice", "3 voices").
+    Voices,
+    /// Cents ("0 ct", "15 ct").
+    Cents,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1546,6 +1550,9 @@ impl DialSpec {
         let i = v.round() as i32;
         match self.fmt {
             Fmt::Int => format!("{i}"),
+            Fmt::Voices if i == 1 => "1 voice".into(),
+            Fmt::Voices => format!("{i} voices"),
+            Fmt::Cents => format!("{i} ct"),
             Fmt::PulseDuty => ["12.5%", "25%", "50%", "75%"][i.clamp(0, 3) as usize].into(),
             Fmt::Vrc6Duty if i >= 8 => "digi".into(),
             Fmt::Vrc6Duty => format!("{}/16", i + 1),

@@ -26,9 +26,31 @@ const ARC_R: f32 = 25.0;
 const ARC_W: f32 = 3.5;
 const DIAL_CY: f32 = 50.0;
 
+/// A studio track's voice control on the inspector's instrument section
+/// (Batch 4b §5): Unison, Detune or Drift of the selected track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UniField {
+    Voices,
+    Detune,
+    Drift,
+}
+
+impl UniField {
+    pub fn get(self, u: crate::state::Unison) -> u8 {
+        match self {
+            UniField::Voices => u.voices,
+            UniField::Detune => u.detune,
+            UniField::Drift => u.drift,
+        }
+    }
+}
+
 pub struct Dial {
     s: Signals,
     index: usize,
+    /// `Some`: a studio voice control (its value lives on the track), not a
+    /// chip dial slot.
+    uni: Option<UniField>,
     spec: DialSpec,
     dragging: bool,
     /// Unquantised normalised value while dragging (so stepped dials feel smooth).
@@ -53,6 +75,7 @@ impl Dial {
         Self {
             s,
             index,
+            uni: None,
             spec,
             dragging: false,
             drag_norm: n,
@@ -75,16 +98,68 @@ impl Dial {
         })
     }
 
+    /// A studio voice control (Unison, Detune, Drift) of the selected track:
+    /// the same dial, its value on the track (one undo step per drag).
+    pub fn new_unison(cx: &mut Context, s: Signals, field: UniField, spec: DialSpec) -> Handle<'_, Self> {
+        let animating = Rc::new(Cell::new(false));
+        let v = Self::uni_value(&s, field);
+        let n = spec.to_norm(v);
+        let shown = Memo::new(move |_| {
+            let lane = s.lane_sel.get();
+            s.arrangement.with(|a| a.lanes.get(lane).map(|l| field.get(l.unison)))
+        });
+        Self {
+            s,
+            index: 0,
+            uni: Some(field),
+            spec,
+            dragging: false,
+            drag_norm: n,
+            last_y: 0.0,
+            hovered: false,
+            wheel: Default::default(),
+            shown_norm: Cell::new(n),
+            active_t: Cell::new(0.0),
+            last_draw: Cell::new(None),
+            animating: animating.clone(),
+        }
+        .build(cx, |_| {})
+        .bind(shown, |mut h| h.needs_redraw())
+        .bind(s.frame, move |mut h| {
+            if animating.get() {
+                h.needs_redraw();
+            }
+        })
+    }
+
+    fn uni_value(s: &Signals, f: UniField) -> f32 {
+        let lane = s.lane_sel.get_untracked();
+        s.arrangement.with_untracked(|a| a.lanes.get(lane).map_or(0.0, |l| f.get(l.unison) as f32))
+    }
+
     fn value(&self) -> f32 {
-        self.s.dials.get_untracked()[self.index]
+        match self.uni {
+            Some(f) => Self::uni_value(&self.s, f),
+            None => self.s.dials.get_untracked()[self.index],
+        }
     }
 
     fn state(&self) -> crate::state::DialState {
-        self.s.dial_state.get_untracked()[self.index]
+        match self.uni {
+            Some(_) => crate::state::DialState::default(),
+            None => self.s.dial_state.get_untracked()[self.index],
+        }
+    }
+
+    fn set_value(&self, cx: &mut EventContext, v: f32) {
+        match self.uni {
+            Some(f) => cx.emit(AppEvent::SetUnison(f, v.round().max(0.0) as u8)),
+            None => cx.emit(AppEvent::SetDial(self.index, v)),
+        }
     }
 
     fn set_norm(&self, cx: &mut EventContext, n: f32) {
-        cx.emit(AppEvent::SetDial(self.index, self.spec.from_norm(n)));
+        self.set_value(cx, self.spec.from_norm(n));
     }
 }
 
@@ -131,7 +206,7 @@ impl View for Dial {
                 cx.emit(AppEvent::GestureEnd);
             }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
-                cx.emit(AppEvent::SetDial(self.index, self.spec.default));
+                self.set_value(cx, self.spec.default);
                 meta.consume();
             }
             WindowEvent::MouseScroll(_, sy) => {

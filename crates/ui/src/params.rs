@@ -97,6 +97,14 @@ pub fn registry(o: Owner) -> Vec<Param> {
             }
             v.extend(ParamId::for_lane(lane).iter().map(|&p| chip_param(p, lane)));
             v.extend(macros(kind));
+            // Studio voices (Batch 4b §5, RUNLOG B4B-D8): frame-tick, like
+            // every pitch control; Unison is structural (it re-allocates
+            // voices at the next tick). A locked track has none.
+            if !locked {
+                v.push(Param { id: "voice.unison", name: "Unison", unit: "voices", min: 1.0, max: engine::studio::UNISON_MAX as f32, default: 1.0, stepped: true, rate: Rate::FrameTick });
+                v.push(Param { id: "voice.detune", name: "Detune", unit: "cents (spread)", min: 0.0, max: engine::studio::DETUNE_MAX as f32, default: 0.0, stepped: true, rate: Rate::FrameTick });
+                v.push(Param { id: "voice.drift", name: "Drift", unit: "cents", min: 0.0, max: engine::studio::DRIFT_MAX as f32, default: 0.0, stepped: true, rate: Rate::FrameTick });
+            }
             v
         }
     }
@@ -158,6 +166,20 @@ mod tests {
     fn the_triangle_has_a_gate_not_a_volume() {
         let t = registry(Owner::Track { kind: VoiceKind::Triangle, locked: true });
         assert!(t.iter().any(|p| p.id == "macro.gate") && !t.iter().any(|p| p.id == "macro.volume" || p.id == "chip.volume"));
+    }
+
+    /// B4B: studio tracks have Unison, Detune and Drift (frame-tick);
+    /// locked tracks hide them.
+    #[test]
+    fn studio_voices_are_registered_for_studio_tracks_only() {
+        for kind in VoiceKind::ALL {
+            let studio = registry(Owner::Track { kind, locked: false });
+            for id in ["voice.unison", "voice.detune", "voice.drift"] {
+                let p = studio.iter().find(|p| p.id == id).unwrap_or_else(|| panic!("{kind:?} {id}"));
+                assert_eq!(p.rate, Rate::FrameTick);
+            }
+            assert!(!registry(Owner::Track { kind, locked: true }).iter().any(|p| p.id.starts_with("voice.")));
+        }
     }
 }
 

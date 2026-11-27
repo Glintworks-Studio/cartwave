@@ -28,6 +28,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
 | `macro.duty` | Duty macro | step | 0 … 15 | 0 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### Pulse track, locked
 
@@ -54,6 +57,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
 | `macro.gate` | Gate | on/off | 0 … 1 | 1 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### Triangle track, locked
 
@@ -79,6 +85,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
 | `macro.duty` | Duty macro | step | 0 … 15 | 0 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### Noise track, locked
 
@@ -107,6 +116,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.arpeggio` | Arpeggio | semitones | -12 … 12 | 0 | frame-tick |
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### DPCM track, locked
 
@@ -133,6 +145,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
 | `macro.duty` | Duty macro | step | 0 … 15 | 0 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### VRC6 Pulse track, locked
 
@@ -157,6 +172,9 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 | `macro.arpeggio` | Arpeggio | semitones | -12 … 12 | 0 | frame-tick |
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
+| `voice.unison` | Unison | voices | 1 … 4 | 1 | frame-tick |
+| `voice.detune` | Detune | cents (spread) | 0 … 50 | 0 | frame-tick |
+| `voice.drift` | Drift | cents | 0 … 10 | 0 | frame-tick |
 
 ### Saw track, locked
 
