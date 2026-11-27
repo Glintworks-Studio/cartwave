@@ -1631,3 +1631,16 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   and a same-binary profile (fewer `draw_system` samples on the new path) disagree with the frame
   log about it, so it is reported as measured and not attributed. The gate is judged by the 4b
   method at the end (§6.5).
+- **B4C-D7 (K1, §3).** Reproduction first, in the CEO's condition: `menu_flicker_b4c.ps1 -Play`
+  (audio on, the song playing), 17 captures of a real sizing-loop drag at up to 120 fps: corner,
+  right, bottom and left edges, a fast drag, the 64-track project, dark menus on and off, the top
+  of the client area too, before (`main`) and after: **0 flash frames and 0 misdrawn frames in
+  every one**; the positive control: 12. The detector was widened twice (a misdrawn-bar test;
+  then any new solid light block anywhere in the band) after checking its blind spots; both find
+  the control and nothing else (the left edge's moving-window artifact is explained in the
+  README). Dark menus on/off can't change the bar: muda draws it either way; the setting is the
+  dropdowns'. **No code changed for K1**: it can't be shown fixed without being seen. Gate 6
+  (0 flash frames while playing, dark menus on, every condition) reads 0 as measured; UX.md K1
+  stays open with the request for a slow-motion phone video (Desktop Duplication can't see a
+  glitch after DWM composition, e.g. a swap-chain presentation-mode change). Files:
+  `docs/batch4c/flicker/`.

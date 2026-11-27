@@ -20,6 +20,7 @@ import sys
 from PIL import Image
 
 d = sys.argv[1]
+below = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 frames = sorted(glob.glob(os.path.join(d, "f_*.png")))
 res = []
 for f in frames:
@@ -27,7 +28,7 @@ for f in frames:
     w, h = im.size
     px = im.load()
     # The menu bar: the lowest 18 rows (at 100 %) of the band.
-    rows = range(max(0, h - 18), h - 2)
+    rows = range(max(0, h - below - 18), h - below - 2)
     vals = [px[x, y] for y in rows for x in range(0, w, 2)]
     med = statistics.median(vals)
     light = sum(v > 0x80 for v in vals) / len(vals)
@@ -38,7 +39,7 @@ lefts = []
 for f in frames:
     im = Image.open(f).convert("L")
     w, h = im.size
-    box = im.crop((0, max(0, h - 18), min(360, w), h - 2))
+    box = im.crop((0, max(0, h - below - 18), min(360, w), h - below - 2))
     lefts.append(box.tobytes())
 ref = Counter(lefts).most_common(1)[0][0] if lefts else b""
 for r, lb in zip(res, lefts):

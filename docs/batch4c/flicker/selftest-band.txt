@@ -1,0 +1,1 @@
+band x 48 y 48 w 1384 h 43 (client top 91)

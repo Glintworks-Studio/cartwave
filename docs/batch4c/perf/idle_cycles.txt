@@ -1,0 +1,14 @@
+
+r1 pre4b: 17.09 M cycles/s, cpu 0.08 %, frames during the window ~0 (the log flushes every 30 frames)
+r1 main: 20.28 M cycles/s, cpu 0.39 %, frames during the window ~0 (the log flushes every 30 frames)
+r1 b4c: 17.51 M cycles/s, cpu 1.48 %, frames during the window ~0 (the log flushes every 30 frames)
+r2 b4c: 16.07 M cycles/s, cpu 0 %, frames during the window ~0 (the log flushes every 30 frames)
+r2 main: 16.9 M cycles/s, cpu 1.72 %, frames during the window ~0 (the log flushes every 30 frames)
+r2 pre4b: 15.1 M cycles/s, cpu 0 %, frames during the window ~0 (the log flushes every 30 frames)
+r3 pre4b: 16.51 M cycles/s, cpu 0 %, frames during the window ~0 (the log flushes every 30 frames)
+r3 main: 20.38 M cycles/s, cpu 0.16 %, frames during the window ~0 (the log flushes every 30 frames)
+r3 b4c: 15.68 M cycles/s, cpu 0 %, frames during the window ~0 (the log flushes every 30 frames)
+r4 b4c: 15.59 M cycles/s, cpu 0.55 %, frames during the window ~0 (the log flushes every 30 frames)
+r4 main: 16.19 M cycles/s, cpu 0.7 %, frames during the window ~0 (the log flushes every 30 frames)
+r4 pre4b: 18.14 M cycles/s, cpu 0.31 %, frames during the window ~0 (the log flushes every 30 frames)
+

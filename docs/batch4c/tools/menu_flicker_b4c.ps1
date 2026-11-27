@@ -8,7 +8,7 @@
 # the menu-bar band (ddagrab, every composed frame up to 120 fps; or gdigrab 60), PNG frames, then resizes the window by a real mouse drag
 # on its bottom-right corner (Windows' own sizing loop, as a user does), back and forth for
 # -Seconds. flicker.py counts the frames where the band turns light.
-param([string]$Out, [string]$Exe = ".\target\release\cartwave.exe", [switch]$DarkMenus, [int]$Seconds = 4, [string]$Grabber = "ddagrab", [string]$Edge = "corner", [switch]$SelfTest, [switch]$Play)
+param([string]$Out, [string]$Exe = ".\target\release\cartwave.exe", [switch]$DarkMenus, [int]$Seconds = 4, [string]$Grabber = "ddagrab", [string]$Edge = "corner", [switch]$SelfTest, [switch]$Play, [string]$Project = "", [int]$StepMs = 16, [int]$Below = 0)
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 Get-ChildItem $Out -Filter "f_*.png" -ErrorAction SilentlyContinue | Remove-Item -Force
@@ -34,6 +34,7 @@ public class Fl {
 Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 $env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"
 Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_AUTOPLAY, Env:CARTWAVE_AUDIO -ErrorAction SilentlyContinue
+if ($Project) { $env:CARTWAVE_PROJECT = (Resolve-Path $Project).Path }
 if ($Play) { $env:CARTWAVE_AUTOPLAY = "1"; $env:CARTWAVE_FRAMELOG = (Join-Path $Out "frames.csv") } else { $env:CARTWAVE_AUDIO = "0"; Remove-Item Env:CARTWAVE_FRAMELOG -ErrorAction SilentlyContinue }
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
 Start-Sleep -Milliseconds 2500
@@ -45,7 +46,9 @@ $r = New-Object Fl+R; [Fl]::GetWindowRect($h, [ref]$r) | Out-Null
 $c = New-Object Fl+P; [Fl]::ClientToScreen($h, [ref]$c) | Out-Null
 # The menu bar: the band just above the client area (its height measured from the title bar's
 # bottom: the window's top + the caption); grab from the title bar's middle to the client top.
-$y0 = $r.t + 8; $hgt = $c.y - $y0
+$y0 = $r.t + 8; $hgt = $c.y - $y0 + $Below
+# -Below: also capture this many px of the client area under the bar (its top bar); flicker_b4c.py
+# then looks for the bar Below px higher (blocks_b4c.py scans every row).
 $x0 = $r.l + 8; $w = $r.r - $r.l - 16
 if ($Edge -ne "corner") { $x0 = $r.l + 210; $w = $r.r - $r.l - 220 }
 "band x $x0 y $y0 w $w h $hgt (client top $($c.y))" | Set-Content (Join-Path $Out "band.txt")
@@ -94,12 +97,12 @@ for ($i = 0; $i -lt $steps; $i++) {
   if ($Edge -in @("top", "bottom")) { $dx = 0 }
   [Fl]::SetCursorPos($gx + $sgn * $dx, $gy + $sgn * $dy) | Out-Null
   [Fl]::mouse_event(1, 0, 0, 0, [UIntPtr]::Zero)
-  Start-Sleep -Milliseconds 16
+  Start-Sleep -Milliseconds $StepMs
   if ($i % 30 -eq 0) { $q = New-Object Fl+R; [Fl]::GetWindowRect($h, [ref]$q) | Out-Null; $widths += @($q.r - $q.l) }
 }
 "window widths during the drag: $($widths -join ' ')" | Add-Content (Join-Path $Out "band.txt")
 [Fl]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
 $ff.WaitForExit(20000) | Out-Null
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-foreach ($k in "CARTWAVE_AUTOPLAY", "CARTWAVE_FRAMELOG", "CARTWAVE_AUDIO") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+foreach ($k in "CARTWAVE_AUTOPLAY", "CARTWAVE_FRAMELOG", "CARTWAVE_AUDIO", "CARTWAVE_PROJECT") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 python "$Repo\docs\batch4c\tools\flicker_b4c.py" $Out
