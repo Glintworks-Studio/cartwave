@@ -103,6 +103,9 @@ pub struct Shared {
     /// The Main track's output: the sample peak (|x|, f32 bits, max-merged)
     /// since the UI last took it (Batch 4a §7: PEAK and the master meter).
     pub out_peak: AtomicU32,
+    /// The output's sample peak per channel (left, right), for Main's
+    /// stereo meters (Batch 4b §7).
+    pub out_peak_lr: [AtomicU32; 2],
     /// Overload reports from the audio API (CoreAudio's
     /// `kAudioDeviceProcessorOverload`, which cpal reports as `Xrun`).
     pub overloads: AtomicU64,
@@ -184,6 +187,17 @@ impl Shared {
     }
 
     /// Takes (and clears) the output's sample peak.
+    /// Max-merges the left and right channels' sample peaks.
+    pub fn merge_out_peaks(&self, l: f32, r: f32) {
+        self.out_peak_lr[0].fetch_max(l.abs().to_bits(), Ordering::Relaxed);
+        self.out_peak_lr[1].fetch_max(r.abs().to_bits(), Ordering::Relaxed);
+    }
+
+    /// Takes (and clears) the left and right sample peaks.
+    pub fn take_out_peaks(&self) -> (f32, f32) {
+        (f32::from_bits(self.out_peak_lr[0].swap(0, Ordering::Relaxed)), f32::from_bits(self.out_peak_lr[1].swap(0, Ordering::Relaxed)))
+    }
+
     pub fn take_out_peak(&self) -> f32 {
         f32::from_bits(self.out_peak.swap(0, Ordering::Relaxed))
     }

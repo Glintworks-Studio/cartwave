@@ -553,6 +553,31 @@ impl AppState {
                 let x1 = (left / s + view.tick_to_x(end as f64) as f32).min(right / s);
                 RenameSpec { target, x: x0, y: row.y / s + RENAME_INSET, w: (x1 - x0).clamp(RENAME_MIN_W, RENAME_MAX_W), text: name }
             }
+            // The mixer (Batch 4b §7): the field opens over the strip's value.
+            RenameTarget::Volume(lane) | RenameTarget::Pan(lane) | RenameTarget::Track(lane)
+                if self.s.view_mixer.get_untracked() && (matches!(target, RenameTarget::Track(_)) || !self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| l.locked()))) =>
+            {
+                use crate::views::mixer::{field_rect, Field};
+                let what = match target {
+                    RenameTarget::Volume(_) => Field::Volume,
+                    RenameTarget::Pan(_) => Field::Pan,
+                    _ => Field::Name,
+                };
+                let Some((x, y, w, h)) = field_rect(lane, what, self.scale) else { return };
+                let text = self.s.arrangement.with_untracked(|a| {
+                    let t = &a.lanes[lane];
+                    match what {
+                        Field::Volume => crate::state::format_db(t.vol_db),
+                        Field::Pan => crate::state::format_pan(t.pan),
+                        Field::Name => t.name.clone(),
+                    }
+                });
+                if what == Field::Name {
+                    self.select_track(lane, false);
+                }
+                let fw = if what == Field::Name { w } else { RENAME_VALUE_W.max(w) };
+                RenameSpec { target, x: x + (w - fw) * 0.5, y: y + (h - RENAME_H) * 0.5, w: fw, text }
+            }
             RenameTarget::Track(lane) => {
                 let Some(row) = crate::views::browser::lane_row(lane) else { return };
                 let s = self.scale;

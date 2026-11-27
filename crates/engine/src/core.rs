@@ -343,7 +343,13 @@ impl Core {
             let (buf, right) = (&self.scratch[..n], &self.scratch_r[..n]);
             // The Main track's peak (after the master gain; the test click and
             // pilot are in it when a harness turns them on).
-            sh.merge_out_peak(buf.iter().fold(0f32, |m, v| m.max(v.abs())));
+            let peak_l = buf.iter().fold(0f32, |m, v| m.max(v.abs()));
+            sh.merge_out_peak(peak_l);
+            if stereo {
+                sh.merge_out_peaks(peak_l, right.iter().fold(0f32, |m, v| m.max(v.abs())));
+            } else {
+                sh.merge_out_peaks(peak_l, peak_l);
+            }
             let dst = &mut out[done * channels..(done + n) * channels];
             if stereo && channels >= 2 {
                 sh.merge_out_peak(right.iter().fold(0f32, |m, v| m.max(v.abs())));

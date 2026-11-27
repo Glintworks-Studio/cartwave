@@ -78,6 +78,10 @@ pub struct Signals {
     pub master_peak: Signal<f32>,
     /// A `.mid` dragged over the window: the ghost preview (Batch 4b §6).
     pub midi_drag: Signal<Option<midi_drop::DragView>>,
+    /// The mixer view is shown instead of the arrangement (Tab, the view
+    /// keys; Batch 4b §7), and how far its strips are scrolled (logical px).
+    pub view_mixer: Signal<bool>,
+    pub mixer_scroll: Signal<f32>,
     /// The output device's name ("No output" without one): the Main track's
     /// OUT badge.
     pub out_device: Signal<String>,
@@ -368,7 +372,7 @@ pub enum AppEvent {
     EditBpm(f32, f32, f32),
     /// A track's volume fader: lane, 0..1 of the fader's travel.
     SetLaneVolume(usize, f32),
-    /// A track's pan, −50 … 50 (polish 2 §3: saved, heard with stereo mixing).
+    /// A track's pan, −50 … 50 (polish 2 §3: saved; heard on studio tracks from Batch 4b).
     SetLanePan(usize, i8),
     /// The status bar's hover-help line (empty: none).
     HoverHelp(String),
@@ -456,6 +460,8 @@ pub enum AppEvent {
     ExportCancel,
     ExportClose,
     /// Native open dialog for a WAV file, converted into a DPCM sample.
+    /// Arrangement (false) or Mixer (true), in place (Batch 4b §7).
+    ShowMixer(bool),
     /// File ▸ Import ▸ MIDI File…: the parts as new tracks (Batch 4b §6).
     ImportMidiTracks,
     ImportAudio,
@@ -939,6 +945,16 @@ impl Model for AppState {
                 }
             }
             AppEvent::ImportMidiTracks => self.import_midi_menu(),
+            AppEvent::ShowMixer(on) => {
+                if self.s.view_mixer.get_untracked() != *on {
+                    // A text field over the old view goes away with it.
+                    self.s.rename.set(None);
+                    self.s.view_mixer.set(*on);
+                    if crate::dev::enabled() {
+                        eprintln!("dev: view {}", if *on { "mixer" } else { "arrangement" });
+                    }
+                }
+            }
             AppEvent::ImportAudio => {
                 if let Some(path) = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).pick_file() {
                     self.import_sample(&path);
@@ -1292,6 +1308,18 @@ impl AppState {
             // The Main track (§7): PEAK holds the sample peak since the last
             // reset; the meter shows the level before the master gain.
             let peak = sh.take_out_peak();
+            // Main's stereo meter (the mixer): each channel before the gain,
+            // decaying as a track's meter does; the peak holds fall slowly.
+            {
+                let (pl, pr) = sh.take_out_peaks();
+                let g = state::db_to_gain(self.s.master_db.get_untracked());
+                let pre = |p: f32| if g > 0.0 { (p / g).min(2.0) } else { 0.0 };
+                let step = |cur: f32, v: f32| if v > cur { v } else { (cur - 1.8 * dt * cur.max(0.2)).max(v) };
+                m.main_lr = (step(m.main_lr.0, pre(pl)), step(m.main_lr.1, pre(pr)));
+                let hold = |cur: f32, v: f32| if v > cur { v } else { (cur - 0.5 * dt).max(v) };
+                m.main_peak_lr = (hold(m.main_peak_lr.0, m.main_lr.0), hold(m.main_peak_lr.1, m.main_lr.1));
+            }
+            m.voices = self.rack_ctls.iter().map(|(id, c)| (*id, c.sounding.load(std::sync::atomic::Ordering::Relaxed))).collect();
             if peak > self.s.master_peak.get_untracked() {
                 self.s.master_peak.set(peak);
             }
@@ -2207,6 +2235,8 @@ pub fn build_ui(cx: &mut Context) {
         master_db: Signal::new(0.0),
         master_peak: Signal::new(0.0),
         midi_drag: Signal::new(None),
+        view_mixer: Signal::new(false),
+        mixer_scroll: Signal::new(0.0),
         track_drag: Signal::new(None),
         out_device: Signal::new("No output".into()),
         audio: Signal::new(AudioStats::default()),
@@ -2386,9 +2416,10 @@ pub fn build_ui(cx: &mut Context) {
         top_bar(cx, s);
         // The main area (polish 2 §5): browser, track headers and lanes in
         // the order Settings ▸ Look & Feel picks; rebuilt when it changes.
-        let order = Memo::new(move |_| s.settings.with(|st| (st.headers_right, st.browser_right, st.show_overview)));
+        // The mixer view replaces the headers and lanes in place (Batch 4b §7).
+        let order = Memo::new(move |_| (s.settings.with(|st| (st.headers_right, st.browser_right, st.show_overview)), s.view_mixer.get()));
         Binding::new(cx, order, move |cx| {
-            let (headers_right, browser_right, overview) = order.get();
+            let ((headers_right, browser_right, overview), mixer) = order.get();
             HStack::new(cx, |cx| {
                 let browser_side = |cx: &mut Context| {
                     Element::new(cx)
@@ -2399,9 +2430,13 @@ pub fn build_ui(cx: &mut Context) {
                     browser(cx, s);
                     browser_side(cx);
                 }
-                if !headers_right {
+                if mixer {
+                    views::mixer::build(cx, s);
+                }
+                if !headers_right && !mixer {
                     track_headers(cx, s, overview);
                 }
+                if !mixer {
                 VStack::new(cx, |cx| {
                     if overview {
                         views::overview::Overview::new(cx, s);
@@ -2414,7 +2449,8 @@ pub fn build_ui(cx: &mut Context) {
                 })
                 .width(Stretch(1.0))
                 .overflow(Overflow::Hidden);
-                if headers_right {
+                }
+                if headers_right && !mixer {
                     track_headers(cx, s, overview);
                 }
                 if browser_right {
@@ -2668,8 +2704,8 @@ fn top_bar(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
         HStack::new(cx, |cx| {
             HStack::new(cx, |cx| {
-                TopKeyView::new(cx, s, TopKey::Arrangement).help("Arrangement view");
-                TopKeyView::new(cx, s, TopKey::Mixer).help("Mixer view: arrives in Batch 4");
+                TopKeyView::new(cx, s, TopKey::Arrangement).help(format!("Arrangement view ({} switches views)", shortcuts::label(Action::ToggleMixer)));
+                TopKeyView::new(cx, s, TopKey::Mixer).help(format!("Mixer view: every track's strip, Main at the right ({} switches views)", shortcuts::label(Action::ToggleMixer)));
             })
             .class("key-group");
             Element::new(cx).class("bar-divider");
@@ -4082,6 +4118,7 @@ impl AppState {
                 }
             }
             Action::ToggleBrowser => cx.emit(AppEvent::ToggleBrowser),
+            Action::ToggleMixer => cx.emit(AppEvent::ShowMixer(!self.s.view_mixer.get_untracked())),
             Action::ShowOverview => {
                 let on = !self.settings.show_overview;
                 self.set_setting(cx, Set::ShowOverview(on));
@@ -4264,6 +4301,7 @@ impl AppState {
             can_zoom_back: if piano { true } else { !self.zoom_back.is_empty() },
             draw: self.s.piano.with_untracked(|p| p.draw),
             overview: self.settings.show_overview,
+            mixer: self.s.view_mixer.get_untracked(),
             track_selected: self.s.arrangement.with_untracked(|a| !a.track_sel.is_empty()),
             tracks: self.s.arrangement.with_untracked(|a| a.lanes.len()),
             recent: self

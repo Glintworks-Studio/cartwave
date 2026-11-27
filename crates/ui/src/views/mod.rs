@@ -8,6 +8,7 @@ pub mod gfx;
 pub mod header_layout;
 pub mod instrument;
 pub mod main_track;
+pub mod mixer;
 pub mod modal;
 pub mod overlay;
 pub mod overview;

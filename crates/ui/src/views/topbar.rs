@@ -153,7 +153,7 @@ impl TopKey {
 
     /// Drawn but not usable yet (VISION.md principle 3: the reason shows on hover).
     pub fn disabled(self) -> bool {
-        matches!(self, TopKey::Mixer | TopKey::Record)
+        matches!(self, TopKey::Record)
     }
 
     fn icon(self) -> Option<Icon> {
@@ -206,6 +206,7 @@ impl TopKeyView {
             .width(Pixels(size))
             .height(Pixels(size))
             .cursor(if key.disabled() { CursorIcon::Default } else { CursorIcon::Hand })
+            .bind(s.view_mixer, |mut h| h.needs_redraw())
     }
 }
 
@@ -239,6 +240,8 @@ impl View for TopKeyView {
                         TopKey::Play if !playing => cx.emit(AppEvent::TogglePlay),
                         TopKey::Stop => cx.emit(AppEvent::Stop),
                         TopKey::Loop => cx.emit(AppEvent::ToggleLoop),
+                        TopKey::Arrangement => cx.emit(AppEvent::ShowMixer(false)),
+                        TopKey::Mixer => cx.emit(AppEvent::ShowMixer(true)),
                         _ => {}
                     }
                 }
@@ -276,9 +279,9 @@ impl View for TopKeyView {
                     (r.top + (r.height() - h * s) * 0.5).round() + dy,
                 );
                 let (ink, glow_a) = match self.key {
-                    // The only view so far: always the selected one.
-                    TopKey::Arrangement => (ACCENT, Some(VIEW_GLOW_A)),
-                    TopKey::Mixer => (ICON_DIM, None),
+                    // The view keys: the shown view is lit (a toggle on-state).
+                    TopKey::Arrangement | TopKey::Mixer if (self.key == TopKey::Mixer) == self.s.view_mixer.get_untracked() => (ACCENT, Some(VIEW_GLOW_A)),
+                    TopKey::Arrangement | TopKey::Mixer => (if look.lift > 0.0 { ICON_IDLE.lighten(0.3) } else { ICON_IDLE }, None),
                     TopKey::Record => (RECORD_GLYPH, None),
                     _ => (if look.lift > 0.0 { ICON_IDLE.lighten(0.3) } else { ICON_IDLE }, None),
                 };

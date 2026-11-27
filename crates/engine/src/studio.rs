@@ -205,16 +205,18 @@ impl TrackCtl {
 /// a step, and the bus is the mono build's exactly.
 #[derive(Clone)]
 pub struct Steps {
-    pub c: Blep,
-    pub l: Blep,
-    pub r: Blep,
+    // Boxed: a step buffer is ~33 KB, and three inline overflowed the main
+    // thread's stack where the engine is built.
+    pub c: Box<Blep>,
+    pub l: Box<Blep>,
+    pub r: Box<Blep>,
     /// A side buffer has had a step (stereo output from now on).
     pub side: bool,
 }
 
 impl Steps {
     pub fn new(cpu_hz: f64, sample_rate: f64) -> Self {
-        Self { c: Blep::new(cpu_hz, sample_rate), l: Blep::new(cpu_hz, sample_rate), r: Blep::new(cpu_hz, sample_rate), side: false }
+        Self { c: Box::new(Blep::new(cpu_hz, sample_rate)), l: Box::new(Blep::new(cpu_hz, sample_rate)), r: Box::new(Blep::new(cpu_hz, sample_rate)), side: false }
     }
 }
 
@@ -224,7 +226,7 @@ impl StepOut for Steps {
         if !self.side && (d[1] != 0 || d[2] != 0) {
             // The sides start now: until then they were never read, so they
             // take the centre's timing (they hold nothing yet).
-            let c = &self.c;
+            let c: &Blep = &self.c;
             self.l.sync_timing(c);
             self.r.sync_timing(c);
         }

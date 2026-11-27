@@ -131,6 +131,10 @@ pub enum Action {
     FitSong,
     /// View ▸ Show Overview (Ctrl+Alt+O / Cmd+Option+O, P2-R).
     ShowOverview,
+    /// View ▸ Mixer: Tab switches Arrangement / Mixer in place (Batch 4b §7;
+    /// the reference's Tab between its two main views, R77, Live 12 manual
+    /// ch. 42.1).
+    ToggleMixer,
     DrawMode,
     GridNarrow,
     GridWiden,
@@ -266,6 +270,7 @@ pub static TABLE: &[Shortcut] = &[
     // Polish 2 §7.2: W fits the whole song (the manual's Optimize Arrangement Width).
     sc!(FitSong, "view.fit_song", "Fit the Whole Song", "View", &[k(Code::KeyW)], &[k(Code::KeyW)], ARR),
     sc!(ShowOverview, "view.overview", "Show Overview", "View", &[cmd_alt(Code::KeyO)], &[cmd_alt(Code::KeyO)], APP),
+    sc!(ToggleMixer, "view.mixer", "Mixer", "View", &[k(Code::Tab)], &[k(Code::Tab)], APP),
     sc!(DrawMode, "view.draw_mode", "Draw Mode", "View", &[k(Code::KeyB)], &[k(Code::KeyB)], APP),
     // The grid of the focused editor (R56–R59).
     sc!(GridNarrow, "grid.narrow", "Narrow Grid", "Grid", &[cmd(Code::Digit1)], &[cmd(Code::Digit1)], EDITORS),

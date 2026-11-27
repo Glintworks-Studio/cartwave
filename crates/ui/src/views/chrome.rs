@@ -1936,7 +1936,7 @@ impl View for VolumeFader {
 
 /// The pan slider (column A, polish 2 §3): a 56 × 4 well with a centre
 /// tick, a fill from the centre and an 8 × 12 thumb. Editable and saved;
-/// heard once stereo mixing arrives (Batch 4). The row draws it; this view
+/// heard on studio tracks (Batch 4b). The row draws it; this view
 /// takes the gestures (press and drag, the wheel) and is the well plus half
 /// a thumb on each side.
 pub struct PanSlider {
@@ -1948,7 +1948,7 @@ pub struct PanSlider {
 
 impl PanSlider {
     pub const HELP: &'static str =
-        "Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives";
+        "Pan: drag to change · double-click the value to type it (C, 25L, 30R)";
     pub const PAD: f32 = 4.0;
 
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {

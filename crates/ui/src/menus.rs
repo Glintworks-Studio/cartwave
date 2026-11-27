@@ -176,6 +176,8 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         a(Action::InsertClip),
     ];
     let view = vec![
+        Check(Cmd::Action(Action::ToggleMixer)),
+        Separator,
         Check(Cmd::Action(Action::ToggleBrowser)),
         Check(Cmd::Action(Action::Follow)),
         Check(Cmd::Action(Action::ShowOverview)),
@@ -276,6 +278,8 @@ pub struct MenuState {
     pub draw: bool,
     /// View ▸ Show Overview (polish 2 §7.3).
     pub overview: bool,
+    /// View ▸ Mixer (Batch 4b §7).
+    pub mixer: bool,
     /// Batch 4a: a track is selected; how many tracks there are.
     pub track_selected: bool,
     pub tracks: usize,
@@ -312,6 +316,7 @@ impl MenuState {
             Cmd::Action(Action::ToggleBrowser) => self.browser,
             Cmd::Action(Action::Follow) => self.follow,
             Cmd::Action(Action::ShowOverview) => self.overview,
+            Cmd::Action(Action::ToggleMixer) => self.mixer,
             Cmd::Action(Action::DrawMode) => self.draw,
             _ => false,
         }

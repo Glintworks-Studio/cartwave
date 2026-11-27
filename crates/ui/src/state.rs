@@ -124,7 +124,7 @@ pub struct Lane {
     /// `ROW_H_MIN`..=`ROW_H_MAX` in `ROW_H_STEP`s (polish 2 §4; format v6).
     pub height: f32,
     /// Pan, −`PAN_MAX` (left) … 0 (centre) … +`PAN_MAX` (right). Saved and
-    /// editable; heard once stereo mixing arrives (Batch 4) (format v6).
+    /// editable (format v6); heard on studio tracks (Batch 4b, the pan law).
     pub pan: i8,
     /// The track volume in dB, −inf … +`VOL_DB_MAX`: a gain after the chip
     /// (polish 2 §3; format v6). 0 dB = unity.
@@ -1427,6 +1427,12 @@ pub struct Meters {
     /// until clicked; the mixer's PEAK readout shows it. Keyed by id, so it
     /// follows a track that moves.
     pub held: Vec<(u32, f32)>,
+    /// Main's stereo meter (Batch 4b §7): left and right before the master
+    /// gain, 0..1, and their peak holds.
+    pub main_lr: (f32, f32),
+    pub main_peak_lr: (f32, f32),
+    /// Voices sounding per studio track (id, count): the mixer's VOICES n.
+    pub voices: Vec<(u32, u16)>,
 }
 
 impl Meters {
@@ -1439,6 +1445,11 @@ impl Meters {
 
     pub fn level_of(&self, i: usize) -> f32 {
         self.level.get(i).copied().unwrap_or(0.0)
+    }
+
+    /// Voices sounding on track `id` now.
+    pub fn voices_of(&self, id: u32) -> u16 {
+        self.voices.iter().find(|v| v.0 == id).map_or(0, |v| v.1)
     }
 
     /// Track `id`'s held peak (1.0 = 0 dBFS; 0 when reset or silent).
