@@ -1091,3 +1091,23 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   **0 pilot dropouts in 30 min**, callback p99 9.7% (the same cost: 5.10% mean both times), 0
   allocation violations. The loopback method needs an unclipped signal; that run is the gate's.
   WASAPI shared mode gave 480-frame callbacks for the 256 requested (ENGINE.md: nominal on Windows).
+- **B4A-D22 (the first performance run was invalid; thrown out).** The 64-track bench relaunched
+  the app without bringing it to the front, so its injected Ctrl+Shift+T / Delete went to the
+  terminal behind it: 54 stray PowerShell tabs (closed afterwards; only shells started during the
+  run with no children). That window then held focus, so rounds 2–3 never reached the 200-clip set
+  ("stress set NOT REACHED") and pacing measured an obscured window (34 updates/s). Fix in
+  `bench_b4a.ps1`: `Focus-App` (an Alt tap lifts the foreground lock, then a check) before each
+  scenario; keys are sent only while the app is in front, and every line says "focus held" or
+  "FOCUS LOST: INVALID". The bad run is kept in `docs/batch4a/perf/invalid-run1/`, not used.
+- **B4A-D23 (the performance gate's regression, found and fixed).** The first valid run had this
+  branch 1–1.4 points above the baseline (demo playing: 7.8 → 9.2 % of a core; the gate allows
+  +0.3). Attribution, not guesses: pacing's per-phase UI timings (draw +0.07, flush +0.05,
+  custom +0.04, events +0.03 ms/frame), an experiment build switching off the Main row, its lane
+  and shadow and the track sync one at a time (the Main row explained ~0.03 ms; the rest stayed),
+  then the UI thread sampled for both builds (`docs/batch4a/tools/sample_ui.ps1`, `fold_diff.py`).
+  The cause: a locked row's disabled controls (§5.3) were drawn through an **offscreen layer per
+  row per frame** (pan and fader thumb, 40 % opacity), and every demo track is locked. They are
+  now drawn once per scale into a cached image and blitted at 40 % (`draw_disabled`). Also: the
+  badge width is measured once per text and scale, the content key is hashed once per pump tick,
+  and the Main lane redraws only when its playhead moves a pixel. After: flush and custom equal the
+  baseline; draw +0.03, events +0.03 ms/frame.

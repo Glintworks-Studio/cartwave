@@ -213,19 +213,30 @@ pub struct MainLane {
 
 impl MainLane {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        let last = std::cell::Cell::new((f64::NAN, f64::NAN, f64::NAN));
+        // (scroll, px per bar, playhead column ×4): what the lane shows.
+        let last = std::rc::Rc::new(std::cell::Cell::new((f64::NAN, f64::NAN, f64::NAN)));
+        let last2 = last.clone();
         Self { s }
             .build(cx, |_| {})
             .class("main-lane")
             .height(Pixels(MAIN_TOTAL_H))
             .bind(s.arrangement, move |mut h| {
-                let v = s.arrangement.with_untracked(|a| (a.view.scroll_ticks, a.view.px_per_bar(), 0.0));
+                let v = s.arrangement.with_untracked(|a| (a.view.scroll_ticks, a.view.px_per_bar(), last.get().2));
                 if v.0 != last.get().0 || v.1 != last.get().1 {
                     last.set(v);
                     h.needs_redraw();
                 }
             })
-            .bind(s.transport, |mut h| h.needs_redraw())
+            // The playhead: redraw only when its pixel column moves (not on
+            // every transport update while playing).
+            .bind(s.transport, move |mut h| {
+                let (p, v) = (s.transport.with_untracked(|t| t.playhead_ticks), s.arrangement.with_untracked(|a| a.view));
+                let col = (v.tick_to_x(p) * 4.0).round();
+                if col != last2.get().2 {
+                    last2.set((last2.get().0, last2.get().1, col));
+                    h.needs_redraw();
+                }
+            })
     }
 }
 

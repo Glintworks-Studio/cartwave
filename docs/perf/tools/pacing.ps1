@@ -29,11 +29,20 @@ $env:CHIPDAW_FRAMELOG = $log
 "exe: $Exe"
 $p = Start-Process $Exe -PassThru -RedirectStandardError "$S\pace_err.txt"
 Start-Sleep -Seconds 3
+$p.Refresh(); $global:AppH = $p.MainWindowHandle
 . "$PSScriptRoot\input.ps1"
+# Keys go to the window in front: bring the app forward (an Alt tap lifts the foreground lock)
+# and check (B4A-D22: without it Space/F4 can land in another window and the scenario idles).
+Add-Type -Namespace PaceFg -Name W -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);' -ErrorAction SilentlyContinue
+for ($t = 0; $t -lt 5 -and [PaceFg.W]::GetForegroundWindow() -ne $global:AppH; $t++) {
+  [In]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [In]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+  [PaceFg.W]::SetForegroundWindow($global:AppH) | Out-Null; Start-Sleep -Milliseconds 200
+}
+$focused = [PaceFg.W]::GetForegroundWindow() -eq $global:AppH
 Move-To 1430 890
-Key 0x20
+if ($focused) { Key 0x20 }
 # pr / prdrag: the piano-roll benchmark (PIANOROLL.md §8); pass its project via -Env.
-if ($Scenario -in "stress", "drag") { Key 0x73 }
+if ($focused -and $Scenario -in "stress", "drag") { Key 0x73 }
 Start-Sleep -Seconds 2
 $ff = Start-Process ffmpeg -ArgumentList "-hide_banner -loglevel info -f lavfi -i ddagrab=framerate=240:dup_frames=0:draw_mouse=0 -t $Secs -vf showinfo -f null -" -PassThru -NoNewWindow -RedirectStandardError "$S\pace_showinfo.txt"
 $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew()
@@ -59,7 +68,7 @@ Select-String -Path "$S\pace_showinfo.txt" -Pattern "pts_time:\s*([0-9.]+)" | Fo
 python -I "$PSScriptRoot\pacing_analyze.py" $log "$S\pace_pts.txt" $Secs ("{0:N1}" -f $cpu) "$Label/$Scenario"
 # Proof the scenario ran (F-02): dev mode on (the frame log needs it), F4 for stress/drag.
 $err = Get-Content "$S\pace_err.txt" -Raw -ErrorAction SilentlyContinue
-$ok = ($err -match "dev: mode on") -and (Test-Path $log) -and ((Get-Content $log | Measure-Object -Line).Lines -gt 100)
+$ok = $focused -and ($err -match "dev: mode on") -and (Test-Path $log) -and ((Get-Content $log | Measure-Object -Line).Lines -gt 100)
 if ($Scenario -in "stress", "drag") { $ok = $ok -and ($err -match "dev: F4 stress set on") }
 if ($Scenario -in "pr", "prdrag") { $ok = $ok -and ($err -match "dev: CHIPDAW_OPEN_CLIP \d+ \(piano roll open: true\)") }
 "scenario $Scenario " + $(if ($ok) { "reached" } else { "NOT REACHED (dev-mode lines missing on stderr, or no frame log)" })

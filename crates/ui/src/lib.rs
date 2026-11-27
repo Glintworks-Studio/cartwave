@@ -234,6 +234,10 @@ pub struct AppState {
     rack_shape: Vec<tracks::RackSlot>,
     rack_ctls: Vec<(u32, std::sync::Arc<engine::TrackCtl>)>,
     rack_key: u64,
+    /// The content key computed once for this pump tick (hashing the clips,
+    /// the instruments and the samples isn't free): `sync_tracks` and the
+    /// song snapshot share it. `None` outside a pump tick.
+    pump_key: Option<u64>,
     sent_master: Option<f32>,
     /// The main window's handle (Windows): the warning dialog's parent.
     hwnd: Option<isize>,
@@ -1693,7 +1697,10 @@ impl AppState {
         }
         // The rack: rebuilt only when the clips or the tracks changed (the
         // content key) and the shape then differs.
-        let key = self.s.arrangement.with_untracked(|a| a.content_key());
+        let key = match self.pump_key {
+            Some(k) => k,
+            None => self.s.arrangement.with_untracked(|a| a.content_key()),
+        };
         if key != self.rack_key {
             self.rack_key = key;
             let shape = self.s.arrangement.with_untracked(|a| a.rack_shape());
@@ -1752,7 +1759,9 @@ impl AppState {
         };
         self.s.dial_state.set_if_changed(st);
         self.sync_gains();
+        self.pump_key = Some(self.s.arrangement.with_untracked(|a| a.content_key()));
         self.sync_tracks();
+        let mut key = self.pump_key.take().unwrap_or_default();
         // Test B: scripted edits through the same model operations.
         if self.tests.auto_edit {
             let mut dial = None;
@@ -1777,9 +1786,12 @@ impl AppState {
                 }
             }
         }
+        if self.tests.auto_edit {
+            // The scripted edit may have changed the song since the key.
+            key = self.s.arrangement.with_untracked(|a| a.content_key());
+        }
         let Some(e) = self.engine.as_mut() else { return };
         e.collect_garbage();
-        let key = self.s.arrangement.with_untracked(|a| a.content_key());
         if key != self.song_key {
             self.song_key = key;
             self.song_version += 1;
@@ -2200,6 +2212,7 @@ pub fn build_ui(cx: &mut Context) {
         rack_shape: Vec::new(),
         rack_ctls: Vec::new(),
         rack_key: 0,
+        pump_key: None,
         sent_master: None,
         hwnd: None,
         conflicts_seen: Vec::new(),

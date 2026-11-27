@@ -1495,11 +1495,13 @@ impl View for TrackRow {
         // The pan slider, where its (hit-only) view sits: drawn here so a
         // row repaint is one view, not two.
         if badge.1 {
-            // Locked (§5.3): centred and disabled.
-            let bounds = vg::Rect::from_xywh(r.left + (lay.col_a() - 8.0) * s, r.top + (row::PAN_WELL_Y - 8.0) * s, (COL_A_W + 16.0) * s, 20.0 * s);
-            canvas.save_layer_alpha_f(bounds, DISABLED_ALPHA);
-            draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), 0, s);
-            canvas.restore();
+            // Locked (§5.3): centred and disabled (a cached image at the
+            // disabled opacity, not a layer every frame: B4A-D23).
+            let pad = (8.0 * s).ceil();
+            let size = (((COL_A_W + 16.0) * s).ceil() as i32 + 2, (20.0 * s).ceil() as i32 + 2);
+            draw_disabled(canvas, DisabledPart::Pan, s, size, ((r.left + lay.col_a() * s).round() - pad, (r.top + row::PAN_WELL_Y * s).round() - pad), |c| {
+                draw_pan(c, pad, pad, 0, s);
+            });
         } else {
             draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), pan, s);
         }
@@ -1587,8 +1589,25 @@ const TRACK_DRAG_START: f32 = 6.0;
 /// The badge's box in row coordinates (device px): x = the name column,
 /// y = `BADGE_Y`; its width follows its content.
 fn badge_rect(l: &HeaderLayout, b: &(&'static str, bool, bool), s: f32) -> vg::Rect {
-    let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-    let mut w = gfx::text_width(&bf, b.0) + (2.0 + 2.0 * BADGE_PAD) * s;
+    // The badge texts are a few fixed strings: measure each once per scale
+    // (building a font and measuring on every row draw and mouse move was
+    // this batch's main per-frame cost, B4A-D23).
+    thread_local! {
+        static WIDTHS: std::cell::RefCell<Vec<(&'static str, u32, f32)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    let text_w = WIDTHS.with(|c| {
+        let mut c = c.borrow_mut();
+        let key = s.to_bits();
+        match c.iter().find(|(t, k, _)| *t == b.0 && *k == key) {
+            Some(&(_, _, w)) => w,
+            None => {
+                let w = gfx::text_width(&gfx::font(Face::SemiBold, BADGE_PX * s), b.0);
+                c.push((b.0, key, w));
+                w
+            }
+        }
+    });
+    let mut w = text_w + (2.0 + 2.0 * BADGE_PAD) * s;
     if b.1 {
         w += (LOCK_W + BADGE_PAD) * s;
     }
@@ -1627,6 +1646,40 @@ fn draw_warn_mark(canvas: &Canvas, o: (f32, f32), s: f32) {
 /// A locked track's controls are drawn at this opacity (VISUAL-SPEC.md
 /// §4b: the disabled style of drawn controls).
 pub(crate) const DISABLED_ALPHA: f32 = 0.4;
+
+/// The disabled controls a locked row shows: always the same picture (the
+/// pan centred, the thumb at 0 dB), so each is drawn once per scale.
+#[derive(Clone, Copy, PartialEq)]
+enum DisabledPart {
+    Pan,
+    Thumb,
+}
+
+/// Draws a locked control from a cached image at `DISABLED_ALPHA`, its
+/// top-left at `at` (whole pixels). `draw` paints it into the image at full
+/// opacity. Replaces an offscreen layer per locked row per frame.
+fn draw_disabled(canvas: &Canvas, part: DisabledPart, s: f32, size: (i32, i32), at: (f32, f32), draw: impl FnOnce(&Canvas)) {
+    thread_local! {
+        static CACHE: std::cell::RefCell<Vec<(DisabledPart, u32, vg::Image)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    let img = CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some((_, _, img)) = c.iter().find(|(p, k, _)| *p == part && *k == s.to_bits()) {
+            return Some(img.clone());
+        }
+        let mut surface = vg::surfaces::raster_n32_premul(size)?;
+        surface.canvas().clear(vg::Color::TRANSPARENT);
+        draw(surface.canvas());
+        let img = surface.image_snapshot();
+        c.push((part, s.to_bits(), img.clone()));
+        Some(img)
+    });
+    if let Some(img) = img {
+        let mut p = vg::Paint::default();
+        p.set_alpha_f(DISABLED_ALPHA);
+        canvas.draw_image(&img, at, Some(&p));
+    }
+}
 
 /// The slider well: `#050505` with `inset 0 1px 0 #000` and `0 1px 0 #262626` below.
 fn slider_track(canvas: &Canvas, t: vg::Rect, s: f32) {
@@ -1819,10 +1872,12 @@ impl View for VolumeFader {
         let lift = if self.hover || self.drag.is_some() { 0.08 } else { 0.0 };
         if self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).is_some_and(|l| l.locked())) {
             // Locked (§5.3): the thumb at 0 dB, disabled.
-            let b = vg::Rect::from_ltrb(th.left - 2.0 * s, th.top - 2.0 * s, th.right + 2.0 * s, th.bottom + 2.0 * s);
-            canvas.save_layer_alpha_f(b, DISABLED_ALPHA);
-            slider_thumb(canvas, th, s, 0.0);
-            canvas.restore();
+            let pad = (2.0 * s).ceil();
+            let size = ((th.width() + 2.0 * pad).ceil() as i32 + 1, (th.height() + 2.0 * pad).ceil() as i32 + 1);
+            let (w, h) = (th.width(), th.height());
+            draw_disabled(canvas, DisabledPart::Thumb, s, size, (th.left - pad, th.top - pad), |c| {
+                slider_thumb(c, vg::Rect::from_xywh(pad, pad, w, h), s, 0.0);
+            });
         } else {
             slider_thumb(canvas, th, s, lift);
         }

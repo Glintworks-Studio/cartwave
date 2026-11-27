@@ -26,6 +26,20 @@ Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
 $p = Start-Process ".\target\release\app.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_p2_err.txt"
 Start-Sleep -Seconds 3
 . "$PSScriptRoot\..\..\perf\tools\input.ps1"
+# Input goes to whatever window is in front: never type unless it is the app (a key sent to a
+# terminal opens tabs there). Focus-App brings the app forward (an Alt tap lifts Windows'
+# foreground lock) and says whether it worked; App-Front checks before each key.
+Add-Type -Namespace B4A -Name Fg -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);' -ErrorAction SilentlyContinue
+function App-Front { [B4A.Fg]::GetForegroundWindow() -eq $global:AppH }
+function Focus-App {
+  for ($t = 0; $t -lt 5 -and -not (App-Front); $t++) {
+    [In]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [In]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    [B4A.Fg]::ShowWindow($global:AppH, 5) | Out-Null; [B4A.Fg]::SetForegroundWindow($global:AppH) | Out-Null
+    Start-Sleep -Milliseconds 200
+  }
+  App-Front
+}
+$global:FocusLost = 0
 $global:AppH = $p.MainWindowHandle
 $global:Res = [ordered]@{}
 function Measure-Cpu([scriptblock]$during) {
@@ -42,18 +56,19 @@ function CpuDrag($name, $x, $y, $ax, $ay) {
   Up; Start-Sleep -Milliseconds 300
 }
 $dy = if ($New) { 32 } else { 0 }
+if (-not (Focus-App)) { $global:FocusLost++ }
 Move-To 1300 800
 if (Want "idle") { Cpu "idle" }
-Key 0x20; Start-Sleep -Seconds 2
+if (App-Front) { Key 0x20 } else { $global:FocusLost++ }; Start-Sleep -Seconds 2
 if (Want "demo") { Cpu "demo" }
-Key 0x73; Start-Sleep -Seconds 3
+if (App-Front) { Key 0x73 } else { $global:FocusLost++ }; Start-Sleep -Seconds 3
 if (Want "200") { Cpu "200" }
 if (Want "200drag") { CpuDrag "200drag" 760 (140 + $dy) 120 64 }
 # The baseline's own continuous-redraw gestures (both builds): Ctrl+wheel zoom over the lanes,
 # a notch per frame in and out, and a drag of the time scrollbar (its thumb at the lanes' bottom:
 # the window's client bottom, less the status bar on this branch).
 if (Want "zoom_wheel") {
-Move-To 900 (400 + $dy); KeyDown 0x11
+Move-To 900 (400 + $dy); if (-not (App-Front)) { $global:FocusLost++ }; KeyDown 0x11
 $global:Res["zoom_wheel"] = Measure-Cpu { param($i) $d = if (($i % 8) -lt 4) { 120 } else { -120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }
 KeyUp 0x11; Start-Sleep -Milliseconds 300
 }
@@ -80,8 +95,9 @@ if ($Main -and -not $Only) {
   $env:CHIPDAW_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64.chipdaw"); $env:CHIPDAW_AUTOPLAY = "1"
   $p = Start-Process ".\target\release\app.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_s64_err.txt"
   Start-Sleep -Seconds 4
-  $global:AppH = $p.MainWindowHandle
+  $p.Refresh(); $global:AppH = $p.MainWindowHandle
   Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_AUTOPLAY
+  if (-not (Focus-App)) { $global:FocusLost++ }
   Move-To 1300 500
   Cpu "s64_playing"
   # Scrolling the lanes (wheel over the headers) while it plays: down, then up.
@@ -89,7 +105,7 @@ if ($Main -and -not $Only) {
   $global:Res["s64_scroll"] = Measure-Cpu { param($i) $d = if (($i % 40) -lt 20) { -120 } else { 120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }
   # Insert and delete tracks: Ctrl+Shift+T, then Delete (the new track is selected), repeatedly.
   Move-To 420 210; Down; Up; Start-Sleep -Milliseconds 300
-  $global:Res["s64_insert_delete"] = Measure-Cpu { param($i) if (($i % 24) -eq 0) { KeyDown 0x11; KeyDown 0x10; Key 0x54; KeyUp 0x10; KeyUp 0x11 } elseif (($i % 24) -eq 12) { Key 0x2E } }
+  $global:Res["s64_insert_delete"] = Measure-Cpu { param($i) if (($i % 24) -eq 0 -or ($i % 24) -eq 12) { if (-not (App-Front)) { $global:FocusLost++; return } }; if (($i % 24) -eq 0) { KeyDown 0x11; KeyDown 0x10; Key 0x54; KeyUp 0x10; KeyUp 0x11 } elseif (($i % 24) -eq 12) { Key 0x2E } }
   # A header dragged up and down (reorder) while it plays.
   CpuDrag "s64_header_drag" 420 283 0 140
   Stop-Process -Id $p.Id -Force
@@ -99,5 +115,6 @@ if ($Main -and -not $Only) {
 }
 $proof = if ($err -match "dev: mode on" -and $err -match "dev: F4 stress set on") { "reached" } else { "NOT REACHED" }
 $line = "{0,-16} " -f $Label + (($Res.Keys | ForEach-Object { "{0} {1,5}%" -f $_, $Res[$_] }) -join "  ") + "  stress set $proof" + $(if ($Main) { "  " + ($err -split "`n")[-1] } else { "" })
+$line += $(if ($global:FocusLost) { "  FOCUS LOST x$($global:FocusLost): INVALID" } else { "  focus held" })
 Add-Content "$Work\bench_b4a_log.txt" $line
 $line

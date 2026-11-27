@@ -1,0 +1,193 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: F4 stress set on (200 clips)
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 76
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 80
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 84
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 88
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 92
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 96
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 100
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 104
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 108
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 112
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 116
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 120
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 124
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 128
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 132
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 128
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 124
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 120
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 116
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 112
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 108
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 104
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 100
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 96
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 92
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 88
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 84
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 80
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 76
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 72
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 76
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 80
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 84
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 88
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 92
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 96
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 100
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 104
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 108
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 112
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 116
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 120
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 124
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 128
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 132
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 128
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 124
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 120
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: look headers_right=false strip_by_clips=false browser_right=false overview=true width=472
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: help Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type
+dev: ruler drag px_per_bar 90.07 scroll 7468
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Channel budget (Famicom + VRC6): Pulse 2/2 · Triangle 1/1 · Noise 1/1 · DPCM 1/1 · VRC6 Pulse 2/2 · Saw 1/1
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Channel budget (Famicom + VRC6): Pulse 2/2 · Triangle 1/1 · Noise 1/1 · DPCM 1/1 · VRC6 Pulse 2/2 · Saw 1/1
+dev: help Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type
+dev: help Channel budget (Famicom + VRC6): Pulse 2/2 · Triangle 1/1 · Noise 1/1 · DPCM 1/1 · VRC6 Pulse 2/2 · Saw 1/1
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)
+dev: help Volume: drag to change · double-click the value to type it in dB

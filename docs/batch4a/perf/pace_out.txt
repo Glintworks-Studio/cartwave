@@ -1,0 +1,20 @@
+exe: .\target\release\app.exe
+Traceback (most recent call last):
+  File "C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf\tools\pacing_analyze.py", line 18, in <module>
+    t_end = float(rows[-1]['t_ms'])
+                  ~~~~^^^^
+IndexError: list index out of range
+scenario demo NOT REACHED (dev-mode lines missing on stderr, or no frame log)
+exe: .\target\release\app.exe
+Traceback (most recent call last):
+  File "C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf\tools\pacing_analyze.py", line 18, in <module>
+    t_end = float(rows[-1]['t_ms'])
+                  ~~~~^^^^
+IndexError: list index out of range
+scenario stress NOT REACHED (dev-mode lines missing on stderr, or no frame log)
+exe: .\target\release\app.exe
+[b4a-drag/drag] cpu 6.0%  frames 1129 in 30s
+  submit interval ms: mean 26.56  p50 18.28  p99 67.02  max 100.00  >20ms: 491
+  display updates: 1000 over 30.0s = 33.33/s; stalls (gap>1.5 vblank): 468 (799 vblanks w/o new frame, one per 0.1s); max gap 100.4 ms
+  ui-thread ms/frame: events 0.25  style 0.16  layout 0.01  make_current 0.00  draw 0.45  flush 0.20  present 4.22  custom 0.20
+scenario drag NOT REACHED (dev-mode lines missing on stderr, or no frame log)
