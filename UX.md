@@ -466,7 +466,7 @@ earlier suites run through `docs/polish2/tools/run_old_suites.ps1` (see POLISH2.
 | DP-01 (TB4) | Four taps 500 ms apart → 120 BPM; one Ctrl+Z restores the tempo; the TAP key taps too |
 | DP-02 (TB5) | The spectrum style chosen from its menu is in settings.json and back after a restart |
 | DP-03 (B7) | A click and ↓ each audition a preset; with the Preview key off a click is silent; while playing it says why |
-| DP-04 (TB1, TB2, T8, T9) | The Mixer and Record keys, the pan slider and the triangle's fader show their reasons on hover |
+| DP-04 (TB1, TB2, T8, T9) | The Mixer and Record keys, the pan slider and the triangle's fader show their reasons on hover. *Since 4b: the Mixer key's help says what it shows, the pan's how to edit it (B4B-D31)* |
 | DP-05 (§3) | Project Settings' Bit depth is saved (format v5) and shown in the display |
 | [unit] (design pass) | `tap::tests` (120 BPM, last four intervals, restart), `state::fader_tests` (the meter never passes the thumb; fader rules), `topbar::tests`, `tests/migration.rs` (v4 → v5 hashes) |
 

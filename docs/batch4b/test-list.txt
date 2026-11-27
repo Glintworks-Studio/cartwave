@@ -202,6 +202,7 @@ views::arrangement::selection_tests::shift_click_selects_the_range: test
 views::header_layout::tests::number_column_follows_the_largest_number: test
 views::header_layout::tests::order_table_matches_the_board: test
 views::header_layout::tests::width_goes_to_the_name: test
+views::main_track::peak_tests::a_tiny_peak_reads_minus_inf: test
 views::mixer::tests::meter_zones_and_taper_match_the_board: test
 views::overview::tests::nav_drag_keeps_the_grabbed_tick: test
 views::overview::tests::rows_shrink_then_merge: test

@@ -29,6 +29,12 @@ function Run-App([string]$name, [hashtable]$envs, [int]$secs) {
 foreach ($r in $Runs) {
   switch ($r) {
     "S64U" { Run-App "S64U_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Work "fx_s64u.chipdaw") } $Secs }
+    # The third source for a pilot count that disagrees with the engine (B4B-D33): the same
+    # project at Main -40 dB (4a's S64M method), so the mix can't mask or clip the pilot.
+    "S64UM" {
+      python -c "import json,sys; p=json.load(open(sys.argv[1],encoding='utf-8')); p['master_db']=-40.0; json.dump(p,open(sys.argv[2],'w',encoding='utf-8'))" (Join-Path $Work "fx_s64u.chipdaw") (Join-Path $Work "fx_s64u_main-40.chipdaw")
+      Run-App "S64UM_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Work "fx_s64u_main-40.chipdaw") } $Secs
+    }
     "DEMO" { Run-App "DEMO_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1" } 120 }
   }
 }

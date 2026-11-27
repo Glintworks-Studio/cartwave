@@ -113,7 +113,9 @@ const INSET: f32 = 1.0;
 const INK_HI: Rgba = Rgba::hex(0xE6E6E6);
 const INK_VAL: Rgba = Rgba::hex(0xC8C8C8);
 const INK_MID: Rgba = Rgba::hex(0x9A9A9A);
-const INK_LO: Rgba = Rgba::hex(0x808080);
+// #8A8A8A, not the board's #808080: 4.83 : 1 on the panel's lightest top (#1E1E1E; #808080
+// gave 4.22), gate 7 (B4B-D32).
+const INK_LO: Rgba = Rgba::hex(0x8A8A8A);
 const NUM_INK: Rgba = Rgba::hex(0x3A3A3A);
 const RECESS: Rgba = Rgba::hex(0x0E0E0E);
 /// Over budget (the record red, as the TRACKS cell).
@@ -360,7 +362,7 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
             c.draw_rect(rect(cx_, y, segw, SEG_H), &gfx::fill(rgba(z).with_alpha(UNLIT_A)));
         }
     }
-    // The engraved scale: ticks and labels (Inter 600 9/10, #808080).
+    // The engraved scale: ticks and labels (Inter 600 9/10, INK_LO).
     let sf = gfx::font(Face::SemiBold, 9.0 * s);
     for (db, label) in SCALE {
         let y = METER_TOP + crate::state::fader_y(db, METER_LEN);

@@ -106,9 +106,10 @@ if (Want "DP-04") {
   foreach ($pt in @(@(84, 38), @(245, 38), @(284, 164), @(348, (104 + 2 * 73 + 20)))) { MoveL ($pt[0] - 3) $pt[1]; Start-Sleep -Milliseconds 150; MoveL $pt[0] $pt[1]; Start-Sleep -Milliseconds 500 }
   Shot "dp04_after"
   $help = @(DevLines $d "^dev: help")
-  $obs.dp04_mixer = @($help | Where-Object { $_ -match "Batch 4" })
+  # Batch 4b: the Mixer key works (its help says what it shows) and pan is heard (B4B-D31).
+  $obs.dp04_mixer = @($help | Where-Object { $_ -match "Mixer view" })
   $obs.dp04_record = @($help | Where-Object { $_ -match "MIDI input" })
-  $obs.dp04_pan = @($help | Where-Object { $_ -match "stereo" })
+  $obs.dp04_pan = @($help | Where-Object { $_ -match "^dev: help Pan" })
   $obs.dp04_tri = @($help | Where-Object { $_ -match "^dev: help Volume" })
   Stop-App
 }

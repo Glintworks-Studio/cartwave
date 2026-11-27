@@ -101,7 +101,7 @@ App: `mixer100.png` at 100 % (the area under the top bar). Board: `mixer@1x.png`
 | cap | (204, 56, 79) | (204, 55, 80) | 1.0 | yes |
 | ticks (outside the caps) | (167, 311, 369, 427) | (167, 311, 369, 427) | 0-1 | yes |
 | peak | (75, 138, 441, 460) | (75, 138, 441, 460) | 0.0 | yes |
-| voices | (75.5, 476) | (76.0, 475) | 1.0 | yes |
+| voices | (75.5, 476) | (75.5, 475) | 1.0 | yes |
 | readout | (13, 138, 513, 538) | (13, 138, 513, 538) | 0.0 | yes |
 
 ## strip 13
@@ -121,7 +121,7 @@ App: `mixer100.png` at 100 % (the area under the top bar). Board: `mixer@1x.png`
 | cap | (216, 56, 79) | (216, 55, 80) | 1.0 | yes |
 | ticks (outside the caps) | (167, 311, 369, 427) | (167, 311, 369, 427) | 0-1 | yes |
 | peak | (75, 138, 441, 460) | (75, 138, 441, 460) | 0.0 | yes |
-| voices | (75.0, 476) | (76.0, 475) | 1.0 | yes |
+| voices | (75.0, 476) | (75.5, 475) | 1.0 | yes |
 | readout | (13, 138, 513, 538) | (13, 138, 513, 538) | 0.0 | yes |
 
 ## strip 14
@@ -141,7 +141,7 @@ App: `mixer100.png` at 100 % (the area under the top bar). Board: `mixer@1x.png`
 | cap | (223, 56, 79) | (223, 55, 80) | 1.0 | yes |
 | ticks (outside the caps) | (167, 196, 311, 369, 427) | (167, 196, 311, 369, 427) | 0-1 | yes |
 | peak | (75, 138, 441, 460) | (75, 138, 441, 460) | 0.0 | yes |
-| voices | (75.0, 476) | (76.0, 475) | 1.0 | yes |
+| voices | (75.0, 476) | (75.5, 475) | 1.0 | yes |
 | readout | (13, 138, 513, 538) | (13, 138, 513, 538) | 0.0 | yes |
 
 ## strip 15
@@ -161,7 +161,7 @@ App: `mixer100.png` at 100 % (the area under the top bar). Board: `mixer@1x.png`
 | cap | (182, 56, 79) | (182, 55, 80) | 1.0 | yes |
 | ticks (outside the caps) | (254, 311, 369, 427) | (254, 311, 369, 427) | 0-1 | yes |
 | peak | (75, 138, 441, 460) | (75, 138, 441, 460) | 0.0 | yes |
-| voices | (75.0, 476) | (76.0, 475) | 1.0 | yes |
+| voices | (75.0, 476) | (75.5, 475) | 1.0 | yes |
 | readout | (13, 138, 513, 538) | (13, 138, 513, 538) | 0.0 | yes |
 
 ## strip 16
@@ -181,7 +181,7 @@ App: `mixer100.png` at 100 % (the area under the top bar). Board: `mixer@1x.png`
 | cap | (233, 56, 79) | (233, 55, 80) | 1.0 | yes |
 | ticks (outside the caps) | (167, 196, 311, 369, 427) | (167, 196, 311, 369, 427) | 0-1 | yes |
 | peak | (75, 138, 441, 460) | (75, 138, 441, 460) | 0.0 | yes |
-| voices | (75.0, 476) | (76.0, 475) | 1.0 | yes |
+| voices | (75.0, 476) | (75.5, 475) | 1.0 | yes |
 | readout | (13, 138, 513, 538) | (13, 138, 513, 538) | 0.0 | yes |
 
 ## Main

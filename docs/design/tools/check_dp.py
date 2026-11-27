@@ -78,7 +78,7 @@ if "dp03_on" in obs:
 # DP-04: disabled reasons
 if "dp04_mixer" in obs:
     S = "DP-04"
-    for k, what in (("dp04_mixer", "Mixer key"), ("dp04_record", "Record key"), ("dp04_pan", "pan slider (editable; heard with stereo mixing)"), ("dp04_tri", "triangle's fader (works since polish 2)")):
+    for k, what in (("dp04_mixer", "Mixer key (enabled since 4b: what it shows)"), ("dp04_record", "Record key"), ("dp04_pan", "pan slider (heard since 4b: how to edit it)"), ("dp04_tri", "triangle's fader (works since polish 2)")):
         check(S, len(as_list(o(k))) > 0, f"the {what} says why on the status bar: {o(k)}")
 
 # DP-05: bit depth

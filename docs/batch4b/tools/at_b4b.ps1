@@ -208,5 +208,19 @@ if (Want "B4B-T1") {
   Stop-App
 }
 
+# ─────────── Screenshot only (run with -Only B4B-SHOT-DIALOG): the import question, unanswered ───────────
+if ($Only -contains "B4B-SHOT-DIALOG") {
+  $p = Fx "fx_board" "sd"; $d = Join-Path $Work "dsd"
+  Launch -Project $p -Data $d; Place
+  DragMid ("{0},{1};{2},{3};{4},{5}" -f (BarX 6), (RowY 1 + 30), (BarX 3 + 10), (RowY 1 + 30), (BarX 3 + 20), (RowY 1 + 30))
+  Start-Sleep -Milliseconds 1200
+  # The app window's rectangle (the dialog sits over it): a screen grab cropped to it.
+  Add-Type -Namespace SD -Name W -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int s); public struct RECT { public int L, T, R, B; }' -ErrorAction SilentlyContinue
+  $r = New-Object SD.W+RECT; [SD.W]::DwmGetWindowAttribute($global:AppH, 9, [ref]$r, 16) | Out-Null
+  python -c "from PIL import ImageGrab; ImageGrab.grab(bbox=($($r.L), $($r.T), $($r.R), $($r.B)), all_screens=True).save(r'$(Join-Path $Work 'sd_dialog.png')')"
+  K 0x1B; Start-Sleep -Milliseconds 500                                     # Cancel
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4b\tools\check_b4b.py" $Work

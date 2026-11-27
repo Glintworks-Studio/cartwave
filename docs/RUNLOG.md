@@ -1404,3 +1404,28 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   main is not merged (as in 4a). Attribution so far: offline, the 512-voice render costs 4.6 % of
   real time vs 4.3 % (the stereo bus: three step buffers, the limiter), about 0.3 points of a core;
   the rest of the 64-track excess is UI-side and not yet located.
+- **B4B-D31 (DP-04's expectations).** The design pass's DP-04 checked the hover text of two
+  disabled-or-silent controls: the Mixer key ("Batch 4") and the pan ("heard with stereo
+  mixing"). 4b enables the one and makes the other heard, so their help now says what they do;
+  the check expects that text (`at_dp.ps1`, `check_dp.py`). 4/4 pass.
+- **B4B-D32 (contrast of the mixer's text, gate 7).** WCAG ratios from the colour constants
+  against the darkest and lightest panel colours behind each text: names `#E6E6E6` ≥ 13.4,
+  readouts `#C8C8C8` ≥ 10.9, the pan value and locks `#9A9A9A` ≥ 5.9, the over-0 readout
+  `#E0483B` 4.74. The labels (PEAK, the scale, VOICES, the badges, the budget bar) were the
+  board's `#808080`: 4.22 on the panel's lightest top `#1E1E1E`, so they are `#8A8A8A` (≥ 4.83).
+  A locked strip dims its fader and knob only, never its labels. The two-digit number slot
+  (`#3A3A3A`) follows the headers' embossed numbers (`NUMBER_INK #222222` since the design
+  pass): decoration, the name beside it carries the identity.
+- **B4B-D33 (the audio gate at full Main volume).** 30 min of fx_s64u (64 studio tracks, unison 2
+  at detune 15: up to 1,024 voices) at Main 0 dB, 256 frames: the engine's detectors read 0
+  starved, 0 late, 0 overruns, 0 allocation violations, callback p99 16.4 % (max 21.3 %) of the
+  period, max callback gap 10.32 ms (the 480-frame period). The loopback pilot counted **11,118
+  dropout blocks of 674,996**, a steady ~6 per second from the second second on, independent of
+  the music's position. The two sources disagree, so a third: the same project at Main −40 dB
+  (4a's S64M method) for 120 s gives **0 pilot dropouts** with the same callback cost (p99
+  16.5 %) and timing. So at full volume the dense mix masks the 23 kHz pilot (1,024 band-limited
+  voices leave energy in the pilot's band); the stream doesn't drop. The pilot can't judge
+  dropouts at full volume on this project; the gate's letter ("0 dropouts at full Main volume")
+  is reported as not met by that measurement, with this evidence. A 30-minute run at −40 dB on
+  the final build follows (`audio_b4b.ps1 -Runs S64UM`).
+- **B4B-D34 (merge decision).** Two gates are not met by their letter: performance (D30) and the audio gate's full-volume pilot count (D33). Per the prompt, no `pre-batch4b` tag and no merge; `main` stays at d4f1afd. Everything is on `batch4b/mixer` for the owner.
