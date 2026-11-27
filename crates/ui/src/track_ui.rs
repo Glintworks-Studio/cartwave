@@ -219,7 +219,7 @@ pub struct Conflict {
     pub note: u32,
 }
 
-fn kind_code(k: WarnKind) -> u8 {
+pub(crate) fn kind_code(k: WarnKind) -> u8 {
     WarnKind::ALL.iter().position(|x| *x == k).unwrap_or(0) as u8
 }
 
@@ -298,7 +298,7 @@ impl AppState {
     /// "Don't ask again" remembers this one.
     pub(crate) fn warn(&mut self, kind: WarnKind, q: &crate::warn::Ask) -> Choice {
         if let Some(c) = crate::warn::remembered(&self.settings.silenced, kind) {
-            if (c == Choice::Unlock && q.unlock.is_some()) || (c == Choice::Fit && q.fit.is_some()) {
+            if (c == Choice::Unlock && q.unlock.is_some()) || (c == Choice::Fit && q.fit.is_some()) || (c == Choice::FitArp && q.fit_arp.is_some()) {
                 return c;
             }
         }
@@ -355,13 +355,13 @@ impl AppState {
                     Some("Fit to hardware"),
                 ),
             };
-            let q = crate::warn::Ask { title, text: &text, unlock, fit };
+            let q = crate::warn::Ask { title, text: &text, unlock, fit, fit_arp: None, default: None };
             match self.warn(kind, &q) {
                 Choice::Unlock => {
                     self.s.arrangement.update(|a| tracks.iter().for_each(|&t| a.unlock_track(t)));
                 }
                 Choice::Fit => self.fit_conflicts(kind, &these),
-                Choice::Cancel => {
+                Choice::FitArp | Choice::Cancel => {
                     let back = self.history.current().clone();
                     self.apply_doc(&back);
                     self.conflicts_seen = self.s.arrangement.with_untracked(|a| conflicts(a, chip));
@@ -374,7 +374,7 @@ impl AppState {
     }
 
     /// Fit to hardware for `these` (all of one kind).
-    fn fit_conflicts(&mut self, kind: WarnKind, these: &[Conflict]) {
+    pub(crate) fn fit_conflicts(&mut self, kind: WarnKind, these: &[Conflict]) {
         let mut clips: Vec<u32> = these.iter().map(|c| c.clip).collect();
         clips.dedup();
         self.s.arrangement.update(|a| {
@@ -409,7 +409,7 @@ impl AppState {
         }
         let name = self.s.arrangement.with_untracked(|a| a.lanes[lane].name.clone());
         let text = format!("\"{name}\" has chords or overlapping notes in {} clip(s). A locked track plays one note at a time.\n\nFit to hardware cuts each note where the next one starts (the last note wins), then locks the track.", chords.len());
-        let q = crate::warn::Ask { title: "Lock a track with chords?", text: &text, unlock: None, fit: Some("Fit and lock") };
+        let q = crate::warn::Ask { title: "Lock a track with chords?", text: &text, unlock: None, fit: Some("Fit and lock"), fit_arp: None, default: None };
         match self.warn(WarnKind::Chord, &q) {
             Choice::Fit => {
                 self.s.arrangement.update(|a| {
@@ -440,14 +440,14 @@ impl AppState {
         let list = stranded.iter().map(|x| x.1.clone()).collect::<Vec<_>>().join("\n");
         let text = format!("{} doesn't have the channels these locked tracks use:\n\n{list}\n\nUnlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back.", to.label());
         let title = format!("Switch the hardware profile to {}?", to.label());
-        let q = crate::warn::Ask { title: &title, text: &text, unlock: Some("Unlock tracks"), fit: Some("Switch anyway") };
+        let q = crate::warn::Ask { title: &title, text: &text, unlock: Some("Unlock tracks"), fit: Some("Switch anyway"), fit_arp: None, default: None };
         match self.warn(WarnKind::Profile, &q) {
             Choice::Unlock => {
                 self.s.arrangement.update(|a| stranded.iter().for_each(|(i, _)| a.unlock_track(*i)));
                 true
             }
             Choice::Fit => true,
-            Choice::Cancel => false,
+            Choice::FitArp | Choice::Cancel => false,
         }
     }
 }

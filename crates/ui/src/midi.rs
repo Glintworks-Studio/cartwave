@@ -20,9 +20,9 @@ use crate::notes::{Note, NoteFx};
 use crate::state::{Arrangement, Clip, MAX_SONG_BARS, MAX_SONG_TICKS, PPQ, TICKS_PER_BAR};
 
 /// A note in song ticks: (start, end, pitch, velocity).
-type Span = (u32, u32, u8, u8);
+pub type Span = (u32, u32, u8, u8);
 /// (track index, MIDI channel, notes).
-type Part = (usize, u8, Vec<Span>);
+pub type Part = (usize, u8, Vec<Span>);
 
 /// A note in file order (absolute ticks at the file's resolution).
 #[derive(Clone, Copy, Debug)]
@@ -41,6 +41,13 @@ pub struct MidiSong {
     pub track_names: Vec<String>,
     /// Tempo events in the file. Only the first is used (one song tempo).
     pub tempo_events: usize,
+}
+
+impl MidiSong {
+    /// The file's parts: (track index, MIDI channel, notes at 960 PPQ).
+    pub fn parts(&self) -> &[Part] {
+        &self.parts
+    }
 }
 
 pub struct Imported {
@@ -202,7 +209,7 @@ pub fn parse(bytes: &[u8]) -> Result<MidiSong, String> {
 }
 
 /// GM drum key -> noise kit row pitch (see the Standard Kit zones).
-fn drum_pitch(key: u8) -> u8 {
+pub fn drum_pitch(key: u8) -> u8 {
     match key {
         35 | 36 => 40,                       // kick
         37..=40 => 56,                       // snare, clap

@@ -22,6 +22,8 @@ use crate::shortcuts::{self, Action};
 pub enum Cmd {
     Action(Action),
     NewFromMidi,
+    /// File ▸ Import ▸ MIDI File… (as tracks, Batch 4b §6).
+    ImportMidi,
     ImportAudio,
     ProjectSettings,
     /// Insert Track ▸ one type (index into `VoiceKind::ALL`).
@@ -37,6 +39,7 @@ impl Cmd {
         match self {
             Cmd::Action(a) => shortcuts::get(a).id.to_string(),
             Cmd::NewFromMidi => "file.new_from_midi".into(),
+            Cmd::ImportMidi => "file.import_midi".into(),
             Cmd::ImportAudio => "file.import_audio".into(),
             Cmd::ProjectSettings => "file.project_settings".into(),
             Cmd::InsertTrackKind(k) => format!("create.track.{k}"),
@@ -56,6 +59,7 @@ impl Cmd {
         }
         let fixed = [
             Cmd::NewFromMidi,
+            Cmd::ImportMidi,
             Cmd::ImportAudio,
             Cmd::ProjectSettings,
             Cmd::ClearRecent,
@@ -78,6 +82,7 @@ impl Cmd {
             Cmd::Action(Action::ToggleBrowser) => "Browser".into(),
             Cmd::Action(a) => shortcuts::get(a).name.into(),
             Cmd::NewFromMidi => "New from MIDI File…".into(),
+            Cmd::ImportMidi => "MIDI File…".into(),
             Cmd::ImportAudio => "Audio as DPCM Sample…".into(),
             Cmd::ProjectSettings => "Project Settings…".into(),
             Cmd::OpenRecent(i) => format!("Recent {i}"),
@@ -121,7 +126,7 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
     let a = |x: Action| Item(Cmd::Action(x));
     let mut file = vec![a(Action::New), a(Action::Open), Recent, Separator, a(Action::Save), a(Action::SaveAs), Separator];
     file.push(Item(Cmd::NewFromMidi));
-    file.push(Sub("Import", vec![Item(Cmd::ImportAudio)]));
+    file.push(Sub("Import", vec![Item(Cmd::ImportMidi), Item(Cmd::ImportAudio)]));
     file.push(a(Action::ExportAudio));
     file.push(Separator);
     file.push(Item(Cmd::ProjectSettings));

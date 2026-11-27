@@ -15,6 +15,9 @@
 pub enum Choice {
     Unlock,
     Fit,
+    /// MIDI import (Batch 4b §6): Fit to hardware with chords as fast
+    /// arpeggios.
+    FitArp,
     Cancel,
 }
 
@@ -23,6 +26,7 @@ impl Choice {
         match self {
             Choice::Unlock => "unlock",
             Choice::Fit => "fit",
+            Choice::FitArp => "fitarp",
             Choice::Cancel => "cancel",
         }
     }
@@ -42,6 +46,9 @@ pub enum WarnKind {
     Dpcm,
     /// A profile that lacks a channel in use.
     Profile,
+    /// A dropped or imported MIDI file whose parts break the profile
+    /// (Batch 4b §6: the "Unlock" answer is "Import as studio tracks").
+    MidiImport,
 }
 
 impl WarnKind {
@@ -52,6 +59,7 @@ impl WarnKind {
             WarnKind::Expansion => "expansion-chip",
             WarnKind::Dpcm => "dpcm-sample",
             WarnKind::Profile => "profile-channels",
+            WarnKind::MidiImport => "midi-import",
         }
     }
 
@@ -63,10 +71,11 @@ impl WarnKind {
             WarnKind::Expansion => "A layout for another expansion chip",
             WarnKind::Dpcm => "DPCM notes with no sample on a locked track",
             WarnKind::Profile => "A hardware profile without a channel in use",
+            WarnKind::MidiImport => "MIDI parts that don't fit the hardware profile",
         }
     }
 
-    pub const ALL: [WarnKind; 5] = [WarnKind::Chord, WarnKind::Range, WarnKind::Expansion, WarnKind::Dpcm, WarnKind::Profile];
+    pub const ALL: [WarnKind; 6] = [WarnKind::Chord, WarnKind::Range, WarnKind::Expansion, WarnKind::Dpcm, WarnKind::Profile, WarnKind::MidiImport];
 }
 
 /// A silenced warning's stored form: `"{id}={choice}"` (the answer to give
@@ -81,6 +90,7 @@ pub fn remembered(silenced: &[String], kind: WarnKind) -> Option<Choice> {
     silenced.iter().find_map(|s| match s.strip_prefix(&want)? {
         "unlock" => Some(Choice::Unlock),
         "fit" => Some(Choice::Fit),
+        "fitarp" => Some(Choice::FitArp),
         _ => None,
     })
 }
@@ -90,8 +100,10 @@ pub fn describe(entry: &str) -> String {
     let (id, c) = entry.split_once('=').unwrap_or((entry, ""));
     let label = WarnKind::ALL.iter().find(|k| k.id() == id).map_or(id, |k| k.label());
     match c {
+        "unlock" if id == WarnKind::MidiImport.id() => format!("{label}: always Import as studio tracks"),
         "unlock" => format!("{label}: always Unlock track"),
         "fit" => format!("{label}: always Fit to hardware"),
+        "fitarp" => format!("{label}: always Fit to hardware, chords as arpeggios"),
         _ => label.to_string(),
     }
 }
@@ -104,6 +116,11 @@ pub struct Ask<'a> {
     pub unlock: Option<&'a str>,
     /// The Fit answer's label (None: no fit applies).
     pub fit: Option<&'a str>,
+    /// A second Fit answer (MIDI import: chords as arpeggios).
+    pub fit_arp: Option<&'a str>,
+    /// The answer Enter gives (the recommended one); None: Fit when offered,
+    /// else Cancel (never the answer that changes a track's kind).
+    pub default: Option<Choice>,
 }
 
 /// Shows the question; returns the answer and whether "Don't ask again" was
@@ -118,6 +135,7 @@ pub fn show(q: &Ask, hwnd: Option<isize>) -> (Choice, bool) {
         let c = match a.split(',').next().unwrap_or("") {
             "unlock" if q.unlock.is_some() => Choice::Unlock,
             "fit" if q.fit.is_some() => Choice::Fit,
+            "fitarp" if q.fit_arp.is_some() => Choice::FitArp,
             _ => Choice::Cancel,
         };
         return (c, a.contains("dont"));
@@ -136,6 +154,7 @@ mod platform {
 
     const ID_UNLOCK: i32 = 101;
     const ID_FIT: i32 = 102;
+    const ID_FIT_ARP: i32 = 103;
     const ID_CANCEL: i32 = 2; // IDCANCEL: Esc and the close box answer Cancel.
 
     pub fn show(q: &Ask, hwnd: Option<isize>) -> (Choice, bool) {
@@ -143,7 +162,7 @@ mod platform {
         let main = wide(q.title);
         let content = wide(q.text);
         let verify = wide("Don't ask again");
-        let labels: Vec<(i32, Vec<u16>)> = [q.unlock.map(|l| (ID_UNLOCK, wide(l))), q.fit.map(|l| (ID_FIT, wide(l))), Some((ID_CANCEL, wide("Cancel")))].into_iter().flatten().collect();
+        let labels: Vec<(i32, Vec<u16>)> = [q.unlock.map(|l| (ID_UNLOCK, wide(l))), q.fit.map(|l| (ID_FIT, wide(l))), q.fit_arp.map(|l| (ID_FIT_ARP, wide(l))), Some((ID_CANCEL, wide("Cancel")))].into_iter().flatten().collect();
         let buttons: Vec<TASKDIALOG_BUTTON> = labels.iter().map(|(id, t)| TASKDIALOG_BUTTON { nButtonID: *id, pszButtonText: t.as_ptr() }).collect();
         let mut cfg = TASKDIALOGCONFIG { cbSize: std::mem::size_of::<TASKDIALOGCONFIG>() as u32, ..Default::default() };
         cfg.hwndParent = hwnd.map_or(std::ptr::null_mut(), |h| h as _);
@@ -156,7 +175,14 @@ mod platform {
         cfg.pButtons = buttons.as_ptr();
         // The default (Enter) is Fit when offered, else Cancel: never the
         // answer that changes the track's kind.
-        cfg.nDefaultButton = if q.fit.is_some() { ID_FIT } else { ID_CANCEL };
+        cfg.nDefaultButton = match q.default {
+            Some(Choice::Unlock) => ID_UNLOCK,
+            Some(Choice::Fit) => ID_FIT,
+            Some(Choice::FitArp) => ID_FIT_ARP,
+            Some(Choice::Cancel) => ID_CANCEL,
+            None if q.fit.is_some() => ID_FIT,
+            None => ID_CANCEL,
+        };
         cfg.pszVerificationText = verify.as_ptr();
         let (mut button, mut checked) = (0i32, 0);
         // SAFETY: every pointer in `cfg` points into the locals above, which
@@ -168,6 +194,7 @@ mod platform {
         let c = match button {
             ID_UNLOCK => Choice::Unlock,
             ID_FIT => Choice::Fit,
+            ID_FIT_ARP => Choice::FitArp,
             _ => Choice::Cancel,
         };
         // "Don't ask again" with Cancel remembers nothing.

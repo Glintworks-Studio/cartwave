@@ -7,6 +7,7 @@
   fx_mixer.chipdaw    The `mixer` board's song: Famicom + VRC6, 9 tracks numbered 8-16 on the board
                       (here 1-9 after 7 empty studio tracks: 16 tracks), locked 2A03/VRC6 channels
                       and studio tracks with the board's pans and faders.
+  fx_studio.chipdaw   No profile, two studio tracks with clips (MIDI drops never ask).
   fx_s64u.chipdaw     The 64-studio-track stress project with unison 2 / detune 15 on every
                       track (the audio gate, §9.5).
 
@@ -120,10 +121,16 @@ def s64u():
     return project("none", tracks, clips, loop_end=16 * BAR)
 
 
+def studio():
+    # No hardware profile: two studio tracks with clips (a MIDI drop never conflicts).
+    t = [track(1, "Lead", "pulse", "#4FA8E0"), track(2, "Bass", "triangle", "#7F86E0")]
+    return project("none", t, [clip(1, 0, 0, 2, "A", notes(8, 60)), clip(2, 1, 0, 2, "B", notes(8, 40))])
+
+
 def main():
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)
-    for name, p in [("fx_board", board()), ("fx_board12", board12()), ("fx_mixer", mixer()), ("fx_s64u", s64u())]:
+    for name, p in [("fx_board", board()), ("fx_board12", board12()), ("fx_mixer", mixer()), ("fx_s64u", s64u()), ("fx_studio", studio())]:
         with open(os.path.join(out, name + ".chipdaw"), "w", encoding="utf-8") as f:
             json.dump(p, f, indent=1)
     print("ok")

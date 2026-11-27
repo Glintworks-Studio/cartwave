@@ -218,6 +218,7 @@ impl Arrangement {
         .bind(s.lane_scroll_max, |mut h| h.needs_redraw())
         .bind(s.time_sel, |mut h| h.needs_redraw())
         .bind(s.drag_preset, |mut h| h.needs_redraw())
+        .bind(s.midi_drag, |mut h| h.needs_redraw())
         .bind(s.chip, |mut h| h.needs_redraw())
         .bind(s.guide, |mut h| h.needs_redraw())
         // Per-frame redraws only while easing is in flight.
@@ -1367,8 +1368,56 @@ impl View for Arrangement {
             }
         }
 
+        // A .mid dragged over the window (Batch 4b §6): one ghost per part
+        // where the drop would put it, with its name and note count, and a
+        // warning on a part the profile can't play.
+        if let Some(d) = self.s.midi_drag.get_untracked() {
+            let lanes_top = (rect.top - self.s.lane_scroll.get_untracked() * s).round();
+            self.s.arrangement.with_untracked(|a| draw_midi_ghosts(canvas, a, &d, rect, lanes_top, s));
+        }
+
         // (No shade under the ruler: Option D has one hairline, no stacked edges.)
         canvas.restore();
+    }
+}
+
+/// The MIDI drop preview's text: Inter 600 11 in the clip header's place.
+const GHOST_NAME_PX: f32 = 11.0;
+const GHOST_INK: Rgba = Rgba::hex(0xE6E6E6);
+
+fn draw_midi_ghosts(canvas: &Canvas, a: &crate::state::Arrangement, d: &crate::midi_drop::DragView, rect: vg::Rect, lanes_top: f32, s: f32) {
+    use crate::midi_tracks::Target;
+    let (target, at) = crate::midi_drop::target_at(a, d.pos);
+    let row = crate::state::ROW_H_MIN + crate::state::ROW_HAIRLINE;
+    // The ghost rows (logical y from the first row's top, height).
+    let rows: Vec<(f32, f32)> = (0..d.ghosts.len())
+        .map(|k| match target {
+            Target::Onto(i) if k == 0 => (a.lane_top(i), a.lanes[i].pitch()),
+            Target::Onto(i) => (a.lane_top(i) + a.lanes[i].pitch() + (k - 1) as f32 * row, row),
+            Target::End => (a.lanes_height() + k as f32 * row, row),
+        })
+        .collect();
+    let f = gfx::font(Face::SemiBold, GHOST_NAME_PX * s);
+    let x_of = |t: f64| rect.left + a.view.tick_to_x(t) as f32 * s;
+    for (g, (y, h)) in d.ghosts.iter().zip(rows) {
+        let x0 = x_of((at + g.first) as f64).round();
+        let x1 = x_of((at + g.first + g.len) as f64).round();
+        let r = vg::Rect::from_ltrb(x0, (lanes_top + (y + 2.0) * s).round(), x1.max(x0 + 24.0 * s), (lanes_top + (y + h - 2.0 - crate::state::ROW_HAIRLINE) * s).round());
+        if r.bottom < rect.top || r.top > rect.bottom {
+            continue;
+        }
+        // Neutral (not lime): a dashed outline over a faint wash.
+        super::clip::draw_ghost(canvas, r, GHOST_INK, s);
+        let label = format!("{}  ·  {} notes", g.name, g.count);
+        let base = gfx::css_baseline(&f, r.top, crate::theme::tokens::CLIP_HEADER_HEIGHT * s).round();
+        let tx = (r.left + 8.0 * s).round();
+        gfx::draw_text_clipped(canvas, &label, tx, base, r.width() - 16.0 * s, &f, GHOST_INK);
+        if !g.warn.is_empty() {
+            // The amber warning (the status bar's, not lime): while dragging.
+            let wtext = format!("Doesn't fit the profile: {}", g.warn);
+            let wb = (base + 16.0 * s).round();
+            gfx::draw_text_clipped(canvas, &wtext, tx, wb, r.width() - 16.0 * s, &f, super::chrome::WARN_INK);
+        }
     }
 }
 

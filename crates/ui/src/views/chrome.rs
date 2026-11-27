@@ -1639,7 +1639,7 @@ pub(crate) fn badge_of(s: &Signals, lane: usize) -> (&'static str, bool, bool) {
 /// The amber warning mark (the status bar's, polish 2 §6.4: not lime).
 const WARN_W: f32 = 9.0;
 const WARN_H: f32 = 8.0;
-const WARN_INK: Rgba = Rgba::hex(0xF0A23A);
+pub(crate) const WARN_INK: Rgba = Rgba::hex(0xF0A23A);
 
 fn draw_warn_mark(canvas: &Canvas, o: (f32, f32), s: f32) {
     let p = gfx::svg_path("M4.5 0.5L8.5 7.5H0.5Z", o, s);

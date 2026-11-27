@@ -10,6 +10,8 @@ pub mod game_export;
 pub mod history;
 pub mod menus;
 pub mod midi;
+pub mod midi_tracks;
+pub mod midi_drop;
 pub mod instruments;
 pub mod user_presets;
 pub mod input;
@@ -74,6 +76,8 @@ pub struct Signals {
     pub master_db: Signal<f32>,
     /// The Main track's sample peak since the last reset (linear, held).
     pub master_peak: Signal<f32>,
+    /// A `.mid` dragged over the window: the ghost preview (Batch 4b §6).
+    pub midi_drag: Signal<Option<midi_drop::DragView>>,
     /// The output device's name ("No output" without one): the Main track's
     /// OUT badge.
     pub out_device: Signal<String>,
@@ -233,6 +237,10 @@ pub struct AppState {
     sent_mute: Option<u8>,
     rack_shape: Vec<tracks::RackSlot>,
     rack_ctls: Vec<(u32, std::sync::Arc<engine::TrackCtl>)>,
+    /// The parsed parts of the `.mid` being dragged or imported.
+    midi_plan: Option<(std::path::PathBuf, Vec<midi_tracks::PlannedPart>)>,
+    /// The last drop target logged (dev).
+    last_drag_log: Option<(midi_tracks::Target, u32)>,
     rack_key: u64,
     /// The content key computed once for this pump tick (hashing the clips,
     /// the instruments and the samples isn't free): `sync_tracks` and the
@@ -448,6 +456,8 @@ pub enum AppEvent {
     ExportCancel,
     ExportClose,
     /// Native open dialog for a WAV file, converted into a DPCM sample.
+    /// File ▸ Import ▸ MIDI File…: the parts as new tracks (Batch 4b §6).
+    ImportMidiTracks,
     ImportAudio,
     RemoveSample(usize),
     /// Hear a user DPCM sample (`None` releases it).
@@ -928,6 +938,7 @@ impl Model for AppState {
                     self.import_midi(&path);
                 }
             }
+            AppEvent::ImportMidiTracks => self.import_midi_menu(),
             AppEvent::ImportAudio => {
                 if let Some(path) = rfd::FileDialog::new().add_filter("WAV audio", &["wav"]).pick_file() {
                     self.import_sample(&path);
@@ -1036,13 +1047,30 @@ impl Model for AppState {
                 self.last_activity = Instant::now();
                 self.set_pump(cx, true);
             }
+            // MIDI import as tracks (Batch 4b §6): the preview while a .mid is
+            // dragged over the window, tracks added on the drop.
+            if let WindowEvent::FileHover(path) = we {
+                let path = path.clone();
+                self.midi_hover(&path);
+                self.set_pump(cx, true);
+            }
+            if let WindowEvent::FileHoverCancelled = we {
+                self.midi_hover_end();
+            }
+            if let WindowEvent::Drop(DropData::File(path)) = we {
+                if midi_drop::is_midi(path) {
+                    let path = path.clone();
+                    self.midi_drop(&path);
+                    return;
+                }
+            }
             if let WindowEvent::Drop(DropData::File(path)) = we {
                 let path = path.clone();
                 // A project or MIDI file replaces the song: ask first.
                 let replaces = path
                     .extension()
                     .and_then(|e| e.to_str())
-                    .is_some_and(|e| ["mid", "midi", file::EXTENSION].contains(&e.to_ascii_lowercase().as_str()));
+                    .is_some_and(|e| [file::EXTENSION].contains(&e.to_ascii_lowercase().as_str()));
                 if replaces && self.ask_save(cx, "opening the dropped file") == Proceed::Stop {
                     return;
                 }
@@ -1117,6 +1145,7 @@ impl AppState {
         self.install_menus(cx);
         self.sync_shell(cx);
         self.sync_header_layout();
+        self.midi_drag_tick();
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -1507,8 +1536,8 @@ impl AppState {
         }
         self.s.arrangement.with_untracked(|a| {
             let all: Vec<crate::theme::tokens::Rgba> = a.lanes.iter().map(|l| l.color).collect();
-            let lo = at.saturating_sub(1);
             let hi = (at + 1).min(all.len());
+            let lo = at.saturating_sub(1).min(hi);
             crate::theme::palette::next_track_color(&all, &all[lo..hi], self.settings.reduced_auto_colours)
         })
     }
@@ -1537,7 +1566,7 @@ impl AppState {
                 want.label()
             );
             let fit = format!("Switch to {}", want.label());
-            let q = warn::Ask { title: "A layout for another chip setup", text: &text, unlock: Some("Load on studio tracks"), fit: Some(&fit) };
+            let q = warn::Ask { title: "A layout for another chip setup", text: &text, unlock: Some("Load on studio tracks"), fit: Some(&fit), fit_arp: None, default: None };
             match self.warn(warn::WarnKind::Expansion, &q) {
                 warn::Choice::Fit => {
                     if !self.profile_switch_ok(want) {
@@ -1546,7 +1575,7 @@ impl AppState {
                     self.set_chip(want);
                 }
                 warn::Choice::Unlock => studio = true,
-                warn::Choice::Cancel => return,
+                warn::Choice::FitArp | warn::Choice::Cancel => return,
             }
         }
         if studio {
@@ -2177,6 +2206,7 @@ pub fn build_ui(cx: &mut Context) {
         solo: Signal::new(tracks::TrackSet::default()),
         master_db: Signal::new(0.0),
         master_peak: Signal::new(0.0),
+        midi_drag: Signal::new(None),
         track_drag: Signal::new(None),
         out_device: Signal::new("No output".into()),
         audio: Signal::new(AudioStats::default()),
@@ -2259,6 +2289,8 @@ pub fn build_ui(cx: &mut Context) {
         sent_mute: None,
         rack_shape: Vec::new(),
         rack_ctls: Vec::new(),
+        midi_plan: None,
+        last_drag_log: None,
         rack_key: 0,
         pump_key: None,
         sent_master: None,
@@ -4150,6 +4182,7 @@ impl AppState {
             }
             Cmd::NewFromMidi => cx.emit(AppEvent::ImportMidi),
             Cmd::ImportAudio => cx.emit(AppEvent::ImportAudio),
+            Cmd::ImportMidi => cx.emit(AppEvent::ImportMidiTracks),
             Cmd::ProjectSettings => self.open_modal(Modal::ProjectSettings),
             Cmd::InsertTrackKind(k) => self.insert_track(chip::voice::VoiceKind::ALL.get(k as usize).copied()),
             Cmd::OpenRecent(i) => self.open_recent(cx, i),
@@ -4197,6 +4230,7 @@ impl AppState {
             c,
             Cmd::Action(Action::New | Action::Open | Action::Save | Action::SaveAs | Action::ExportAudio | Action::Quit | Action::Settings)
                 | Cmd::NewFromMidi
+                | Cmd::ImportMidi
                 | Cmd::ImportAudio
                 | Cmd::ProjectSettings
                 | Cmd::OpenRecent(_)
