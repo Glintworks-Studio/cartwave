@@ -1,0 +1,12 @@
+== none
+| events_us | 252.9 |  |
+| draw_us | 956.1 |  |
+== oldset
+| events_us | 258.7 |  |
+| draw_us | 948.9 |  |
+== oldclip
+| events_us | 245.5 |  |
+| draw_us | 939.9 |  |
+== oldset+oldclip
+| events_us | 253.4 |  |
+| draw_us | 916.0 |  |

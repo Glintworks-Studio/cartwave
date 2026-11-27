@@ -1552,3 +1552,82 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   clippy clean; a forced release rebuild of every target: 0 warnings.
 - **RN-D18 (merge).** Every gate passes. Per the prompt: `rename/cartwave` pushed, `pre-rename`
   tagged on `main` (8e6b4f8) and pushed, `main` fast-forwarded and pushed.
+
+## Batch 4c (BATCH4C_PROMPT.md, branch `batch4c/profile-ab`, Windows PC), 2026-11-27
+
+- **B4C-D1 (setup).** Branch `batch4c/profile-ab` from `main` 5533b5a (= `origin/main`); the
+  baseline is `main` exported to `../before-batch4c` and built there (release). `pre-batch4b` is
+  d4f1afd, built in `../before-batch4b` (a pre-rename build: `app.exe`, `CHIPDAW_*` names).
+  Machine: Windows 11 Pro 26200. The default (and only) output is now the monitor's HDMI endpoint
+  (NVIDIA, 480-frame periods, 48 kHz float); the MOTU that ENGINE.md §8 measured on is not
+  connected (`set_default_audio.ps1 -List` shows one endpoint).
+- **B4C-D2 (the new audio-gate method: the reference match).** Pre-approved by §0.2. Probe first
+  (`crates/engine/examples/tapprobe.rs`, `docs/batch4c/audio/tapprobe.txt`): WASAPI shared-mode
+  loopback returns the samples we hand the device **bit for bit** (187,200 of 187,200 frames,
+  gain 1.000000). So the gate compares the capture with the engine's own copy of its output
+  instead of listening for a tone: `Shared::tap` (an `OutputTap`, set once by the harness:
+  atomic stores into a preallocated ring, no allocation, no locks; `core::tests::
+  the_output_tap_copies_the_first_channel` runs it under the allocation checker) holds the first
+  output channel as written; a checker thread (`testkit::Matcher`) locks onto it in the capture
+  with 1,024 equal samples and then compares every 128-frame block exactly (tolerance 1e-5). A
+  dropout is silence the device inserted: the offset between capture and copy jumps forward by the
+  gap's length, which the matcher reports in frames (a sample counter, in effect). A −60 dBFS
+  xorshift marker (`Command::TestMarker`) keeps the alignment unique through silence and held
+  notes; silence never locks. The music can't mask it: it is subtracted exactly. Test hooks:
+  `CARTWAVE_MATCH=1` (app), `--match` (headless). Unit tests: clean stream, gaps of 480/1056/4800
+  frames reported at their exact length, a periodic signal with a one-period gap, capture-side
+  gaps, foreign sound, silence, tap losses.
+- **B4C-D3 (validation by injected stalls).** Headless, 23 stall lengths 5…50 ms, 3 passes each,
+  music muted (the pilot can't be masked there, so it is the ground truth) and with music
+  (`docs/batch4c/audio/validate_muted.txt`, `validate_music.txt`). **The match, the pilot and the
+  starved detector agree on every one of 138 stalls**: 0 false positives, 0 misses. On this
+  endpoint stalls ≤ 19 ms never drop out and ≥ 21 ms always do (20 ms: 5 of 6, the same ones in
+  all three detectors). ENGINE.md's "≥ 22 ms" is the MOTU's threshold (a 1,126-frame buffer);
+  this device's buffer is smaller, so its threshold is lower. The gate's letter (catch every
+  ≥ 22 ms stall, none of the shorter ones *that don't drop out*) is met; the shorter ones that do
+  drop out here (20, 21 ms) are caught, as they should be. The measured gaps are multiples of the
+  device period (8, 18, 28, 38 ms), as expected of a sample-exact count. **In the app, in 4b's
+  failing condition** (`fx_s64u`, 1,024 voices, Main at 0 dB, stalls 10/19/30/40 ms every 3 s,
+  `validate_app_s64u_full.csv`): the match finds exactly the 12 stalls of 30/40 ms and none of the
+  12 at 10/19 ms; the starved detector agrees (12); the pilot reports 460 "dropouts" (masked, as
+  4b found). New hook for this: `CARTWAVE_INJECT_STALLS=ms,…` + `CARTWAVE_INJECT_EVERY` (dev mode).
+- **B4C-D4 (locating the 4b excess, §2.2).** Tools: `docs/batch4c/tools/threads_b4c.ps1` (per-thread
+  TSC cycles from the audio log: UI cycles per presented frame, audio cycles per callback; the
+  frame log's phases), `perthread_b4c.ps1` (CPU per thread by start module), `sample_b4c.ps1` (4a's
+  sampler for any build and project), `phases_b4c.py`; evidence in `docs/batch4c/perf/`. Scenario:
+  `stress64.chipdaw` playing at 1440 × 920. Findings, in order:
+  1. **Process CPU is a noisy judge here** (Windows thread times are tick-sampled): the audio
+     thread, which runs 100 short bursts a second, read 4.69 / 6.41 / 3.36 % in three runs of one
+     build. The cycle counters are precise (sd ≈ 30–70 k cycles per frame) and were used to locate.
+  2. **The split** (pre-4b → main): UI **+224 k cycles/frame** (+3.3 %, ≈ 0.3 points), audio
+     **+107…130 k cycles/callback** (≈ 0.2–0.3 points: the stereo bus, accepted), the GL driver's
+     thread ≈ +0.4 (tick-sampled).
+  3. **Where in the UI frame:** the frame log puts all of it in the **events phase: +40 µs per
+     frame** (232 → 272 µs); style, layout, draw, flush and every custom draw span are equal.
+     With `FROZEN_METERS=1` the UI difference falls from +224 k to +46 k cycles: ≈ 80 % is the
+     meter path.
+  4. **What, by experiment switches** (one build, features off by `CARTWAVE_B4C_OFF`, two to three
+     rounds each; `attribution-switches.patch`, `switches_1/2.txt`), events µs per frame:
+     the per-tick commit's document copy **−40** (pre-existing, but it grew with 4b's lanes); the
+     held peaks (an extra pass searching the rack per track, then a search per held id) **−22**;
+     the clip mark looked up by id in two bindings per track per frame **−18**; reading
+     `CARTWAVE_FROZEN_METERS` from the environment every frame (two lookups since the rename's
+     aliases) **−10**; `sync_ctls` storing every studio track's controls every tick **−10**;
+     Main's L/R meters and VOICES ≈ 0. All off: 212 µs, 20 µs under pre-4b.
+- **B4C-D5 (the fixes, §2.3, the code's own patterns).** (1) The commit compares the live
+  document in place (`Doc::matches`, tested against `same_as` on a copy) and builds a `Doc` only
+  when something changed. (2) The meter tick is one pass over the tracks (a cursor through the
+  rack, which is in track order; search only as a fallback), held peaks kept sorted by id (binary
+  search), the next state built in a buffer kept between ticks (`Meters::clone_from` reuses the
+  vectors), and each track's clip mark computed **once per tick** (`Meters::clip`, read by index
+  in the bindings; a reset clears it at once). (3) `dev::frozen_meters()` / `fixed_playhead()`
+  read once. (4) `sync_ctls` sends a control only when its inputs changed or it is a new control.
+  Unit tests: `matches_agrees_with_comparing_a_copy`, `held_peaks_and_clip_marks`,
+  `sync_ctls_sends_only_changes`. The commit's share of UI samples fell from ≈ 0.2 % to 0.07 %.
+- **B4C-D6 (the fixes measured, before/after).** 6 interleaved rounds × 30 s, cycle counters
+  (`phases_main_b4c.md`, `threads.tsv` tag `long-`): **UI −68 k cycles/frame vs main** (paired
+  SE 16 k; events −32.5 µs, draw +18 µs); vs pre-4b the UI is still ≈ +117 k. The draw phase's
+  +18 µs isn't in any custom span or row redraw count; same-binary switches (`switches_3.txt`)
+  and a same-binary profile (fewer `draw_system` samples on the new path) disagree with the frame
+  log about it, so it is reported as measured and not attributed. The gate is judged by the 4b
+  method at the end (§6.5).

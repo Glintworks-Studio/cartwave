@@ -1,0 +1,15 @@
+== none
+| events_us | 283.9 |  |
+| draw_us | 938.4 |  |
+== commit
+| events_us | 243.4 |  |
+| draw_us | 973.7 |  |
+== syncctls
+| events_us | 273.6 |  |
+| draw_us | 930.9 |  |
+== clip+held+frozenvar
+| events_us | 257.4 |  |
+| draw_us | 931.7 |  |
+== clip+held+frozenvar+commit+syncctls
+| events_us | 212.2 |  |
+| draw_us | 926.8 |  |

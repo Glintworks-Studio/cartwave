@@ -1,0 +1,102 @@
+diff --git a/crates/ui/src/dev.rs b/crates/ui/src/dev.rs
+index 683634c..27652a1 100644
+--- a/crates/ui/src/dev.rs
++++ b/crates/ui/src/dev.rs
+@@ -24,6 +24,15 @@ pub fn var(name: &str) -> Option<String> {
+     }
+ }
+ 
++/// TEMPORARY (Batch 4c §2 attribution, removed after): features switched off
++/// by `CARTWAVE_B4C_OFF=clip,held,mainlr,voices,frozenvar`, parsed once.
++pub fn exp_off(name: &str) -> bool {
++    static OFF: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
++    OFF.get_or_init(|| var("CARTWAVE_B4C_OFF").map(|v| v.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default())
++        .iter()
++        .any(|s| s == name)
++}
++
+ /// Like [`var`], for paths.
+ pub fn var_os(name: &str) -> Option<std::ffi::OsString> {
+     if enabled() {
+diff --git a/crates/ui/src/lib.rs b/crates/ui/src/lib.rs
+index 9115a25..6223381 100644
+--- a/crates/ui/src/lib.rs
++++ b/crates/ui/src/lib.rs
+@@ -1279,7 +1279,7 @@ impl AppState {
+             // Each track's output peak (1.0 = 0 dBFS) for the clip mark and
+             // PEAK: a locked track's channel at its DAC peak through its own
+             // curve (the console's level), a studio track's peak bound.
+-            let outs: Vec<(u32, f32)> = self.s.arrangement.with_untracked(|a| {
++            let outs: Vec<(u32, f32)> = if dev::exp_off("held") { Vec::new() } else { self.s.arrangement.with_untracked(|a| {
+                 a.lanes
+                     .iter()
+                     .map(|l| match l.lock {
+@@ -1291,7 +1291,7 @@ impl AppState {
+                         None => (l.id, self.rack_ctls.iter().find(|(id, _)| *id == l.id).map_or(0.0, |(_, c)| c.take_out_peak())),
+                     })
+                     .collect()
+-            });
++            }) };
+             for (id, v) in outs {
+                 m.hold(id, v);
+             }
+@@ -1318,7 +1318,7 @@ impl AppState {
+             let peak = sh.take_out_peak();
+             // Main's stereo meter (the mixer): each channel before the gain,
+             // decaying as a track's meter does; the peak holds fall slowly.
+-            {
++            if !dev::exp_off("mainlr") {
+                 let (pl, pr) = sh.take_out_peaks();
+                 let g = state::db_to_gain(self.s.master_db.get_untracked());
+                 let pre = |p: f32| if g > 0.0 { (p / g).min(2.0) } else { 0.0 };
+@@ -1327,7 +1327,7 @@ impl AppState {
+                 let hold = |cur: f32, v: f32| if v > cur { v } else { (cur - 0.5 * dt).max(v) };
+                 m.main_peak_lr = (hold(m.main_peak_lr.0, m.main_lr.0), hold(m.main_peak_lr.1, m.main_lr.1));
+             }
+-            m.voices = self.rack_ctls.iter().map(|(id, c)| (*id, c.sounding.load(std::sync::atomic::Ordering::Relaxed))).collect();
++            if !dev::exp_off("voices") { m.voices = self.rack_ctls.iter().map(|(id, c)| (*id, c.sounding.load(std::sync::atomic::Ordering::Relaxed))).collect(); }
+             if peak > self.s.master_peak.get_untracked() {
+                 self.s.master_peak.set(peak);
+             }
+@@ -1343,7 +1343,7 @@ impl AppState {
+         // Only notify (and so redraw) when something actually moved.
+         // `CARTWAVE_FROZEN_METERS=1` (dev): levels, lights and the spectrum stay
+         // at rest (regression screenshots, performance attribution).
+-        if !dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") {
++        if dev::exp_off("frozenvar") || !dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") {
+             meters.set_if_changed(m);
+         }
+ 
+@@ -1826,7 +1826,7 @@ impl AppState {
+                 self.send(Command::Rack(rack));
+             }
+         }
+-        self.s.arrangement.with_untracked(|a| tracks::sync_ctls(&self.rack_ctls, a, &heard));
++        if !dev::exp_off("syncctls") { self.s.arrangement.with_untracked(|a| tracks::sync_ctls(&self.rack_ctls, a, &heard)); }
+         let g = state::db_to_gain(self.s.master_db.get_untracked());
+         if self.sent_master != Some(g) {
+             self.sent_master = Some(g);
+@@ -3002,6 +3002,9 @@ impl AppState {
+     /// Records an undo step if the document changed (dropped while a gesture
+     /// is still in progress).
+     fn commit(&mut self) {
++        if dev::exp_off("commit") {
++            return;
++        }
+         // A colour preview isn't an edit: the per-tick commit must not record
+         // it (MC-D15).
+         let busy = self.gesture_depth > 0
+diff --git a/crates/ui/src/views/chrome.rs b/crates/ui/src/views/chrome.rs
+index 55b0a38..5aef62a 100644
+--- a/crates/ui/src/views/chrome.rs
++++ b/crates/ui/src/views/chrome.rs
+@@ -1764,6 +1764,9 @@ impl VolumeFader {
+     /// Whether the clip mark is lit (G8): the track's held peak, or Main's
+     /// PEAK, over 0 dBFS.
+     pub(crate) fn clipped(s: &Signals, lane: usize) -> bool {
++        if crate::dev::exp_off("clip") {
++            return false;
++        }
+         if lane == MAIN {
+             return s.master_peak.get_untracked() > 1.0;
+         }

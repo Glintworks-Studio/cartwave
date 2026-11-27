@@ -1,0 +1,21 @@
+== none
+| events_us | 284.3 |  |
+| draw_us | 944.9 |  |
+== clip
+| events_us | 266.0 |  |
+| draw_us | 923.3 |  |
+== held
+| events_us | 262.4 |  |
+| draw_us | 924.8 |  |
+== mainlr
+| events_us | 289.4 |  |
+| draw_us | 933.6 |  |
+== voices
+| events_us | 284.1 |  |
+| draw_us | 927.2 |  |
+== frozenvar
+| events_us | 274.7 |  |
+| draw_us | 927.6 |  |
+== clip+held+mainlr+voices+frozenvar
+| events_us | 257.6 |  |
+| draw_us | 932.4 |  |

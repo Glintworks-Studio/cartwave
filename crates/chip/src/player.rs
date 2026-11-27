@@ -230,6 +230,12 @@ impl Player {
         }
     }
 
+    /// The register writes of the last frame tick, in order (read-only: the
+    /// authenticity A/B pass logs them, Batch 4c §4).
+    pub fn tick_writes(&self) -> &[(u16, u8)] {
+        self.writes.as_slice()
+    }
+
     /// CPU cycle of the next frame tick (for tests and latency accounting).
     pub fn next_tick_cycle(&self) -> u64 {
         self.next_tick_x2 / 2

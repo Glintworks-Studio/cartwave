@@ -212,7 +212,7 @@ impl View for Dial {
         // While dragging show the value immediately; otherwise ease (e.g. double-click reset).
         // `CARTWAVE_FROZEN_METERS=1` (dev, the regression screenshots): no
         // easing, so the pointer lands on its value whatever the frame timing.
-        let n = if self.dragging || crate::dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") {
+        let n = if self.dragging || crate::dev::frozen_meters() {
             target
         } else {
             gfx::approach(self.shown_norm.get(), target, dt, 0.06)

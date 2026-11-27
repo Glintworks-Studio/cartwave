@@ -99,6 +99,30 @@ impl Doc {
     /// The clips' order is drawing order (a click raises a clip), not content:
     /// a raised clip is the same document, so it's neither an undo step nor
     /// an unsaved change.
+    /// `Doc::of(a, bpm, params).with_song(song).same_as(self)`, compared in
+    /// place: the commit asks this every tick, and building the copy (every
+    /// lane, the instruments, the samples) cost more than the rest of the
+    /// tick (Batch 4c §2).
+    pub fn matches(&self, a: &Arrangement, bpm: f32, params: Params, song: SongState) -> bool {
+        let same = |x: &Arc<Clip>, y: &Arc<Clip>| Arc::ptr_eq(x, y) || x == y;
+        self.next_id == a.next_id
+            && self.bpm == bpm
+            && self.params == params
+            && self.instruments == a.instruments
+            && self.samples == a.samples
+            && self.lanes == a.lanes
+            && self.song == song
+            && self.clips.len() == a.clips.len()
+            && (self.clips.iter().zip(&a.clips).all(|(x, y)| same(x, y)) || {
+                let by_id = |v: &[Arc<Clip>]| {
+                    let mut r: Vec<Arc<Clip>> = v.to_vec();
+                    r.sort_by_key(|c| c.id);
+                    r
+                };
+                by_id(&self.clips).iter().zip(by_id(&a.clips).iter()).all(|(x, y)| same(x, y))
+            })
+    }
+
     pub fn same_as(&self, o: &Doc) -> bool {
         let same = |a: &Arc<Clip>, b: &Arc<Clip>| Arc::ptr_eq(a, b) || a == b;
         self.next_id == o.next_id
@@ -250,6 +274,42 @@ impl History {
 mod tests {
     use super::*;
     use crate::mock::{self, Rng};
+
+    /// Batch 4c §2: the per-tick commit compares the live arrangement in
+    /// place (`matches`); it must agree with building the copy and comparing
+    /// (`same_as`) for every kind of change.
+    #[test]
+    fn matches_agrees_with_comparing_a_copy() {
+        let p = crate::instruments::default_params();
+        let song = SongState::default();
+        let a = mock::demo_arrangement();
+        let d = Doc::of(&a, 150.0, p).with_song(song);
+        let check = |b: &Arrangement, bpm: f32, s: SongState, want: bool| {
+            let copy = Doc::of(b, bpm, p).with_song(s).same_as(&d);
+            assert_eq!(d.matches(b, bpm, p, s), copy);
+            assert_eq!(copy, want);
+        };
+        check(&a, 150.0, song, true);
+        check(&a, 151.0, song, false);
+        check(&a, 150.0, SongState { loop_on: false, ..song }, false);
+        let mut b = a.clone();
+        let first = b.clips[0].id;
+        b.raise(&[first]);
+        check(&b, 150.0, song, true);
+        let mut b = a.clone();
+        let id = b.clips[1].id;
+        b.clip_mut(id).unwrap().start_ticks += 1;
+        check(&b, 150.0, song, false);
+        let mut b = a.clone();
+        b.lanes[2].name.push('x');
+        check(&b, 150.0, song, false);
+        let mut b = a.clone();
+        b.lanes[0].pan = 10;
+        check(&b, 150.0, song, false);
+        let mut b = a.clone();
+        b.next_id += 1;
+        check(&b, 150.0, song, false);
+    }
 
     /// Raising a clip (a click) reorders the list but changes no content.
     #[test]

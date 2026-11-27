@@ -1733,7 +1733,7 @@ impl VolumeFader {
         let shown = Cell::new((u16::MAX, 0u16));
         // `CARTWAVE_FROZEN_METERS=1` (dev): the meters don't follow the level
         // (the performance attribution in DESIGNPASS.md §6).
-        let frozen = crate::dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1");
+        let frozen = crate::dev::frozen_meters();
         Self { s, lane, drag: None, hover: false, wheel: Default::default() }
             .build(cx, |_| {})
             .class("fader")
@@ -1767,7 +1767,9 @@ impl VolumeFader {
         if lane == MAIN {
             return s.master_peak.get_untracked() > 1.0;
         }
-        s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.id)).is_some_and(|id| s.meters.with_untracked(|m| m.clipped(id)))
+        // Computed once per tick for every track (`Meters::clip`), not looked
+        // up by id here: this runs in two bindings per track per frame.
+        s.meters.with_untracked(|m| m.clip_at(lane))
     }
 
     /// (fill px ×4, thumb y ×4 with the clip mark in the top bit): what the

@@ -1411,7 +1411,7 @@ impl Transport {
 }
 
 /// Per-channel mock meter levels, written by the 60fps tick.
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Meters {
     /// Per track (by index), resized as tracks come and go (`fit`).
     pub level: Vec<f32>,
@@ -1433,6 +1433,32 @@ pub struct Meters {
     pub main_peak_lr: (f32, f32),
     /// Voices sounding per studio track (id, count): the mixer's VOICES n.
     pub voices: Vec<(u32, u16)>,
+    /// Per track (by index): its clip mark is lit (`clipped`), computed once
+    /// per tick by `mark_clips` so the views don't search `held` per frame.
+    pub clip: Vec<bool>,
+}
+
+/// `clone_from` reuses the vectors (the meter tick builds its next state in
+/// a kept buffer every frame; the derived one would allocate them anew).
+impl Clone for Meters {
+    fn clone(&self) -> Self {
+        let mut m = Self::default();
+        m.clone_from(self);
+        m
+    }
+
+    fn clone_from(&mut self, o: &Self) {
+        self.level.clone_from(&o.level);
+        self.peak.clone_from(&o.peak);
+        self.peak_hold.clone_from(&o.peak_hold);
+        self.light.clone_from(&o.light);
+        self.main = o.main;
+        self.held.clone_from(&o.held);
+        self.main_lr = o.main_lr;
+        self.main_peak_lr = o.main_peak_lr;
+        self.voices.clone_from(&o.voices);
+        self.clip.clone_from(&o.clip);
+    }
 }
 
 impl Meters {
@@ -1454,7 +1480,35 @@ impl Meters {
 
     /// Track `id`'s held peak (1.0 = 0 dBFS; 0 when reset or silent).
     pub fn held_of(&self, id: u32) -> f32 {
-        self.held.iter().find(|h| h.0 == id).map_or(0.0, |h| h.1)
+        // `held` is kept sorted by id.
+        self.held.binary_search_by_key(&id, |h| h.0).map_or(0.0, |i| self.held[i].1)
+    }
+
+    /// Track `i`'s clip mark (as of the last `mark_clips`).
+    pub fn clip_at(&self, i: usize) -> bool {
+        self.clip.get(i).copied().unwrap_or(false)
+    }
+
+    /// Recomputes every track's clip mark, tracks in order by id.
+    pub fn mark_clips(&mut self, ids: impl Iterator<Item = u32>) {
+        let mut n = 0;
+        for id in ids {
+            let lit = self.clipped(id);
+            if n < self.clip.len() {
+                self.clip[n] = lit;
+            } else {
+                self.clip.push(lit);
+            }
+            n += 1;
+        }
+        self.clip.truncate(n);
+    }
+
+    /// Track `i`'s clip mark off now (its held peak was just reset).
+    pub fn unmark_clip(&mut self, i: usize) {
+        if let Some(c) = self.clip.get_mut(i) {
+            *c = false;
+        }
     }
 
     /// Whether track `id`'s clip mark is lit: it went over 0 dBFS since its
@@ -1465,10 +1519,11 @@ impl Meters {
 
     /// Raises track `id`'s held peak to `v` (it only goes up until a reset).
     pub fn hold(&mut self, id: u32, v: f32) {
-        match self.held.iter_mut().find(|h| h.0 == id) {
-            Some(h) => h.1 = h.1.max(v),
-            None if v > 0.0 => self.held.push((id, v)),
-            None => {}
+        debug_assert!(self.held.windows(2).all(|w| w[0].0 < w[1].0), "held stays sorted by id");
+        match self.held.binary_search_by_key(&id, |h| h.0) {
+            Ok(i) => self.held[i].1 = self.held[i].1.max(v),
+            Err(i) if v > 0.0 => self.held.insert(i, (id, v)),
+            Err(_) => {}
         }
     }
 
@@ -1809,6 +1864,34 @@ impl FrameCap {
             Self::Fps60 => "60",
             Self::Fps120 => "120",
         }
+    }
+}
+
+#[cfg(test)]
+mod meters_tests {
+    use super::*;
+
+    /// Batch 4c §2: held peaks stay keyed by id (in id order, for the binary
+    /// search) whatever order tracks report in; the clip marks are per track
+    /// index and a reset turns one off at once.
+    #[test]
+    fn held_peaks_and_clip_marks() {
+        let mut m = Meters::default();
+        for (id, v) in [(9, 0.5), (3, 1.2), (7, 0.0), (5, 0.9), (3, 0.4), (9, 1.5)] {
+            m.hold(id, v);
+        }
+        assert_eq!(m.held, vec![(3, 1.2), (5, 0.9), (9, 1.5)], "sorted, maxima kept, silence not stored");
+        m.mark_clips([5, 3, 9, 7].into_iter());
+        assert_eq!(m.clip, vec![false, true, true, false]);
+        assert_eq!((m.clip_at(1), m.clip_at(9)), (true, false));
+        m.reset_held(3);
+        m.unmark_clip(1);
+        assert_eq!((m.held_of(3), m.clip_at(1)), (0.0, false));
+        m.mark_clips([9].into_iter());
+        assert_eq!(m.clip, vec![true], "fewer tracks: the marks follow");
+        let mut c = Meters::default();
+        c.clone_from(&m);
+        assert_eq!(c, m);
     }
 }
 

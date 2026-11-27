@@ -266,6 +266,12 @@ pub struct AppState {
     /// track id.
     note_ons: [u32; 8],
     studio_note_ons: Vec<(u32, u32)>,
+    /// Buffers the meter tick reuses (Batch 4c §2: no allocation per frame).
+    meters_next: state::Meters,
+    tick_levels: Vec<f32>,
+    tick_fire: Vec<bool>,
+    /// What `tracks::sync_ctls` last sent, per rack control.
+    ctls_sent: Vec<Option<tracks::CtlSent>>,
     /// When each lane's last note-on becomes audible (lights wait for it).
     light_due: [Option<Instant>; 8],
     last_audio_stats: Option<Instant>,
@@ -838,7 +844,10 @@ impl Model for AppState {
             AppEvent::ResetPeak => self.s.master_peak.set(0.0),
             AppEvent::ResetTrackPeak(lane) => {
                 if let Some(id) = self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).map(|l| l.id)) {
-                    self.s.meters.update(|m| m.reset_held(id));
+                    self.s.meters.update(|m| {
+                        m.reset_held(id);
+                        m.unmark_clip(*lane);
+                    });
                 }
             }
             AppEvent::SetInsert(t, l) => {
@@ -1243,7 +1252,7 @@ impl AppState {
             }
             // `CARTWAVE_PLAYHEAD=<ticks>` (dev): the playhead stays put while
             // playing (the polish pass's regression screenshots).
-            if let Some(p) = dev::var("CARTWAVE_PLAYHEAD").and_then(|v| v.parse::<f64>().ok()) {
+            if let Some(p) = dev::fixed_playhead() {
                 tr.playhead_ticks = p;
             }
             self.s.transport.set(tr);
@@ -1254,7 +1263,10 @@ impl AppState {
         self.tests.ui_frames = ft.frame_count;
 
         let meters = self.s.meters;
-        let mut m = meters.get_untracked();
+        // The next meter state is built in a buffer kept between ticks
+        // (`clone_from` reuses its vectors): no allocation per frame.
+        let mut m = std::mem::take(&mut self.meters_next);
+        meters.with_untracked(|cur| m.clone_from(cur));
         if let Some(e) = self.engine.as_ref() {
             let sh = e.shared();
             let chan_levels = sh.take_levels();
@@ -1279,40 +1291,55 @@ impl AppState {
             // Each track's output peak (1.0 = 0 dBFS) for the clip mark and
             // PEAK: a locked track's channel at its DAC peak through its own
             // curve (the console's level), a studio track's peak bound.
-            let outs: Vec<(u32, f32)> = self.s.arrangement.with_untracked(|a| {
-                a.lanes
-                    .iter()
-                    .map(|l| match l.lock {
+            // One pass over the tracks (Batch 4c §2: this was two passes, each
+            // searching the rack per track, plus a search per held peak).
+            // The rack's controls are in track order, so a cursor finds each
+            // studio track's in step; the search is only the fallback.
+            // `studio_note_ons` is indexed like `rack_ctls`.
+            let (levels, fire) = (&mut self.tick_levels, &mut self.tick_fire);
+            levels.clear();
+            fire.clear();
+            let (ctls, seen_ons) = (&self.rack_ctls, &self.studio_note_ons);
+            self.s.arrangement.with_untracked(|a| {
+                let mut cursor = 0;
+                for l in &a.lanes {
+                    match l.lock {
                         Some(c) => {
                             let kind = chip::voice::VoiceKind::of_lane(c);
                             let dac = (chan_levels[c].clamp(0.0, 1.0) * kind.full_scale() as f32).round() as u8;
-                            (l.id, chip::voice::level_of(kind, dac).abs() as f32)
+                            m.hold(l.id, chip::voice::level_of(kind, dac).abs() as f32);
+                            levels.push(chan_levels[c]);
+                            fire.push(fire_chan[c]);
                         }
-                        None => (l.id, self.rack_ctls.iter().find(|(id, _)| *id == l.id).map_or(0.0, |(_, c)| c.take_out_peak())),
-                    })
-                    .collect()
-            });
-            for (id, v) in outs {
-                m.hold(id, v);
-            }
-            let (levels, fire): (Vec<f32>, Vec<bool>) = self.s.arrangement.with_untracked(|a| {
-                a.lanes
-                    .iter()
-                    .map(|l| match l.lock {
-                        Some(c) => (chan_levels[c], fire_chan[c]),
-                        None => match self.rack_ctls.iter().find(|(id, _)| *id == l.id) {
-                            Some((id, c)) => {
-                                let n = c.note_ons.load(std::sync::atomic::Ordering::Relaxed);
-                                let seen = self.studio_note_ons.iter().find(|x| x.0 == *id).map(|x| x.1);
-                                (c.take_level(), seen.is_some_and(|s| s != n))
+                        None => {
+                            let k = if ctls.get(cursor).is_some_and(|(id, _)| *id == l.id) {
+                                Some(cursor)
+                            } else {
+                                ctls.iter().position(|(id, _)| *id == l.id)
+                            };
+                            match k {
+                                Some(k) => {
+                                    cursor = k + 1;
+                                    let c = &ctls[k].1;
+                                    m.hold(l.id, c.take_out_peak());
+                                    let n = c.note_ons.load(std::sync::atomic::Ordering::Relaxed);
+                                    let seen = seen_ons.get(k).filter(|x| x.0 == l.id).map(|x| x.1);
+                                    levels.push(c.take_level());
+                                    fire.push(seen.is_some_and(|s| s != n));
+                                }
+                                None => {
+                                    levels.push(0.0);
+                                    fire.push(false);
+                                }
                             }
-                            None => (0.0, false),
-                        },
-                    })
-                    .unzip()
+                        }
+                    }
+                }
             });
-            self.studio_note_ons = self.rack_ctls.iter().map(|(id, c)| (*id, c.note_ons.load(std::sync::atomic::Ordering::Relaxed))).collect();
-            mock::step_meters_engine(&mut m, &levels, &fire, dt);
+            self.studio_note_ons.clear();
+            self.studio_note_ons
+                .extend(self.rack_ctls.iter().map(|(id, c)| (*id, c.note_ons.load(std::sync::atomic::Ordering::Relaxed))));
+            mock::step_meters_engine(&mut m, &self.tick_levels, &self.tick_fire, dt);
             // The Main track (§7): PEAK holds the sample peak since the last
             // reset; the meter shows the level before the master gain.
             let peak = sh.take_out_peak();
@@ -1327,7 +1354,9 @@ impl AppState {
                 let hold = |cur: f32, v: f32| if v > cur { v } else { (cur - 0.5 * dt).max(v) };
                 m.main_peak_lr = (hold(m.main_peak_lr.0, m.main_lr.0), hold(m.main_peak_lr.1, m.main_lr.1));
             }
-            m.voices = self.rack_ctls.iter().map(|(id, c)| (*id, c.sounding.load(std::sync::atomic::Ordering::Relaxed))).collect();
+            m.voices.clear();
+            m.voices
+                .extend(self.rack_ctls.iter().map(|(id, c)| (*id, c.sounding.load(std::sync::atomic::Ordering::Relaxed))));
             if peak > self.s.master_peak.get_untracked() {
                 self.s.master_peak.set(peak);
             }
@@ -1340,12 +1369,16 @@ impl AppState {
                 mock::step_meters(&mut m, a, tr.playhead_ticks, tr.playing, dt, rng);
             });
         }
+        // Each track's clip mark, once per tick (the bindings read it by index).
+        self.s.arrangement.with_untracked(|a| m.mark_clips(a.lanes.iter().map(|l| l.id)));
         // Only notify (and so redraw) when something actually moved.
         // `CARTWAVE_FROZEN_METERS=1` (dev): levels, lights and the spectrum stay
         // at rest (regression screenshots, performance attribution).
-        if !dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") {
-            meters.set_if_changed(m);
+        if !dev::frozen_meters() && meters.with_untracked(|cur| *cur != m) {
+            // The old state comes back as next tick's buffer.
+            meters.update(|cur| std::mem::swap(cur, &mut m));
         }
+        self.meters_next = m;
 
         self.record_frame_stats(ft, tr.playhead_ticks);
 
@@ -1826,7 +1859,7 @@ impl AppState {
                 self.send(Command::Rack(rack));
             }
         }
-        self.s.arrangement.with_untracked(|a| tracks::sync_ctls(&self.rack_ctls, a, &heard));
+        self.s.arrangement.with_untracked(|a| tracks::sync_ctls(&self.rack_ctls, a, &heard, &mut self.ctls_sent));
         let g = state::db_to_gain(self.s.master_db.get_untracked());
         if self.sent_master != Some(g) {
             self.sent_master = Some(g);
@@ -1845,7 +1878,7 @@ impl AppState {
         // MEM: the process's private memory, once a second (idle stays idle).
         if self.last_mem.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) {
             self.last_mem = Some(Instant::now());
-            let frozen = dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1");
+            let frozen = dev::frozen_meters();
             self.s.mem_mb.set_if_changed(if frozen { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) });
         }
         // Selected lane follows the first selected clip.
@@ -2290,7 +2323,7 @@ pub fn build_ui(cx: &mut Context) {
         hover_help: Signal::new(String::new()),
         problems: Signal::new(Vec::new()),
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
-        mem_mb: Signal::new(if dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
+        mem_mb: Signal::new(if dev::frozen_meters() { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
     };
 
     // Dev hook: a persistent problem shown from the start (also kept while
@@ -2342,6 +2375,10 @@ pub fn build_ui(cx: &mut Context) {
         filter_manual: tests.filter.is_some(),
         note_ons: [0; 8],
         studio_note_ons: Vec::new(),
+        meters_next: state::Meters::default(),
+        tick_levels: Vec::new(),
+        tick_fire: Vec::new(),
+        ctls_sent: Vec::new(),
         light_due: [None; 8],
         last_audio_stats: None,
         audio_generation: 0,
@@ -3019,6 +3056,14 @@ impl AppState {
             // puts the last undo step back).
             // One document per tick (this runs every frame): a second one
             // only after an edit, whose conflict answer (Fit) may change it.
+            // Nothing changed since the last step (the usual case: this runs
+            // every tick): compared in place, without copying the document
+            // (Batch 4c §2: the copy was the tick's largest cost).
+            let (bpm, song) = (self.s.transport.with_untracked(|t| t.bpm), self.song_state());
+            if self.s.arrangement.with_untracked(|a| self.history.current().matches(a, bpm, a.console_params(), song)) {
+                self.update_dirty();
+                return;
+            }
             let mut d = self.doc();
             if !d.same_as(self.history.current()) {
                 if !self.resolve_conflicts() {

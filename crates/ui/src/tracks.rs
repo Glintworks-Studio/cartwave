@@ -600,19 +600,48 @@ pub fn build_rack(shape: &[RackSlot], ctls: &mut Vec<(u32, Arc<engine::TrackCtl>
 
 /// Writes the live controls (gain, heard, Voices, channel controls) of every
 /// studio track into its `TrackCtl`.
-pub fn sync_ctls(ctls: &[(u32, Arc<engine::TrackCtl>)], a: &Arrangement, heard: &[bool]) {
-    for (id, c) in ctls {
+pub fn sync_ctls(ctls: &[(u32, Arc<engine::TrackCtl>)], a: &Arrangement, heard: &[bool], sent: &mut Vec<Option<CtlSent>>) {
+    sent.resize(ctls.len(), None);
+    for (k, (id, c)) in ctls.iter().enumerate() {
         let Some(i) = a.track_index(*id) else { continue };
         let l = &a.lanes[i];
+        // This runs every tick: a control whose inputs haven't changed since
+        // it was last sent is skipped (Batch 4c §2). A new rack's controls
+        // are new `Arc`s, so they are always sent.
+        let now = CtlSent {
+            ctl: Arc::as_ptr(c) as usize,
+            vol_db: l.vol_db,
+            pan: l.pan,
+            unison: (l.unison.voices, l.unison.detune, l.unison.drift),
+            audible: heard.get(i).copied().unwrap_or(true),
+            voices: l.voices,
+            params: l.params,
+        };
+        if sent[k].as_ref() == Some(&now) {
+            continue;
+        }
         c.set_gain(db_to_gain(l.vol_db));
         c.set_pan(l.pan);
         c.set_unison(l.unison.voices, l.unison.detune, l.unison.drift);
-        c.set_audible(heard.get(i).copied().unwrap_or(true));
+        c.set_audible(now.audible);
         c.set_cap(l.voices);
         for (k, &v) in l.params.iter().enumerate() {
             c.set_param(chip::driver::ParamId::ALL[k], v);
         }
+        sent[k] = Some(now);
     }
+}
+
+/// What [`sync_ctls`] last sent to one studio track's controls.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CtlSent {
+    ctl: usize,
+    vol_db: f32,
+    pan: i8,
+    unison: (u8, u8, u8),
+    audible: bool,
+    voices: u16,
+    params: crate::state::TrackParams,
 }
 
 /// The offline mixdown of a project (renders and every export): the
@@ -658,6 +687,34 @@ mod tests {
         let c = Rgba::hex(0x7F86E0);
         a.insert_track(8, VoiceKind::Pulse, c);
         a
+    }
+
+    /// Batch 4c §2: `sync_ctls` runs every tick and sends a control only
+    /// when its track's inputs changed (or the control is new).
+    #[test]
+    fn sync_ctls_sends_only_changes() {
+        let mut a = studio_project();
+        let id = a.lanes[8].id;
+        let shape = a.rack_shape();
+        let heard = vec![true; a.lanes.len()];
+        let mut ctls = Vec::new();
+        let _rack = build_rack(&shape, &mut ctls, &a, &heard);
+        let c = ctls.iter().find(|(i, _)| *i == id).unwrap().1.clone();
+        let mut sent = Vec::new();
+        sync_ctls(&ctls, &a, &heard, &mut sent);
+        assert!(sent.iter().all(|s| s.is_some()), "everything is sent once");
+        let before = sent.clone();
+        sync_ctls(&ctls, &a, &heard, &mut sent);
+        assert_eq!(sent, before, "nothing changed: nothing sent");
+        a.lanes[8].pan = -30;
+        sync_ctls(&ctls, &a, &heard, &mut sent);
+        assert_ne!(sent, before, "a pan change is sent");
+        assert_eq!(c.pan(), -30);
+        // A new control for the same track (a rebuilt rack) is always sent.
+        let mut fresh = vec![(id, Arc::new(engine::TrackCtl::new(1.0, true, 0, a.lanes[8].params)))];
+        std::mem::swap(&mut ctls, &mut fresh);
+        sync_ctls(&ctls, &a, &heard, &mut sent);
+        assert_eq!(ctls[0].1.pan(), -30);
     }
 
     #[test]
