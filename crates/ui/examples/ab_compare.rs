@@ -152,14 +152,90 @@ fn align(ours: &[f64], r: &[f64], max_lag: usize) -> (i64, f64) {
         ci[k] = ar[k] * bi[k] - ai[k] * br[k];
     }
     fft(&mut cr, &mut ci, true);
+    // Coarse first, on the 1 ms RMS envelopes (a periodic tone correlates
+    // equally well a period or a frame away; the envelope's structure doesn't),
+    // then the sample lag within 2 ms of it.
+    // The envelope of the first difference: DC-free (a reference without a
+    // high-pass keeps DC, which would dominate) and weighted to the edges.
+    let env = |x: &[f64]| -> Vec<f64> {
+        let d: Vec<f64> = x.windows(2).map(|w| w[1] - w[0]).collect();
+        let e: Vec<f64> = d.chunks(48).map(rms).collect();
+        let m = e.iter().sum::<f64>() / e.len().max(1) as f64;
+        e.iter().map(|v| v - m).collect()
+    };
+    let (eo, er) = (env(ours), env(r));
+    let hops = (max_lag / 48) as i64;
+    let mut coarse = (0i64, f64::MIN);
+    for l in -hops..=hops {
+        let mut c = 0.0;
+        for (i, v) in eo.iter().enumerate() {
+            let j = i as i64 + l;
+            if j >= 0 && (j as usize) < er.len() {
+                c += v * er[j as usize];
+            }
+        }
+        if c > coarse.1 {
+            coarse = (l, c);
+        }
+    }
+    let (lo, hi) = (coarse.0 * 48 - 96, coarse.0 * 48 + 96);
     let mut best = (0i64, 0.0f64);
-    for lag in -(max_lag as i64)..=max_lag as i64 {
+    for lag in lo.max(-(max_lag as i64))..=hi.min(max_lag as i64) {
         let v = cr[lag.rem_euclid(n as i64) as usize];
         if v.abs() > best.1.abs() {
             best = (lag, v);
         }
     }
     (best.0, best.1.signum())
+}
+
+/// RMS with the mean removed: the level the ear compares (a reference
+/// without a high-pass keeps a pulse's DC, which isn't heard).
+fn ac_rms(x: &[f64]) -> f64 {
+    let m = x.iter().sum::<f64>() / x.len().max(1) as f64;
+    (x.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / x.len().max(1) as f64).sqrt()
+}
+
+/// The waveform error of `r` against `o` (dB re `o`): the best lag within
+/// ±2 ms of `lag` (this stretch's own alignment: the NSF player's writes land
+/// a few hundred cycles from ours, so each note's phase differs slightly),
+/// then the least-squares gain; means removed.
+fn local_error(o: &[f64], a0: usize, r: &[f64], lag: i64, sign: f64) -> f64 {
+    let m = o.iter().sum::<f64>() / o.len().max(1) as f64;
+    let at = |k: usize, l: i64| -> f64 {
+        let j = (a0 + k) as i64 + l;
+        if j >= 0 && (j as usize) < r.len() { sign * r[j as usize] } else { 0.0 }
+    };
+    let mut best = (lag, 0.0f64);
+    for l in lag - 96..=lag + 96 {
+        let c: f64 = (0..o.len()).step_by(2).map(|k| (o[k] - m) * at(k, l)).sum();
+        if c.abs() > best.1.abs() {
+            best = (l, c);
+        }
+    }
+    // This stretch's own polarity (noise has none to speak of globally).
+    let ps = best.1.signum();
+    let rr: Vec<f64> = (0..o.len()).map(|k| ps * at(k, best.0)).collect();
+    let rm = rr.iter().sum::<f64>() / rr.len().max(1) as f64;
+    let (sxy, syy) = o.iter().zip(&rr).fold((0.0, 0.0), |(a, b), (x, y)| (a + (x - m) * (y - rm), b + (y - rm) * (y - rm)));
+    let g = sxy / syy.max(1e-30);
+    let e: f64 = o.iter().zip(&rr).map(|(x, y)| ((x - m) - g * (y - rm)).powi(2)).sum();
+    let p: f64 = o.iter().map(|x| (x - m) * (x - m)).sum();
+    10.0 * (e / p.max(1e-30)).max(1e-12).log10()
+}
+
+/// One-pole high-pass at 20 Hz (the same on every signal).
+fn hp(x: &[f64]) -> Vec<f64> {
+    let rc = 1.0 / (2.0 * PI * 20.0);
+    let a = rc / (rc + 1.0 / SR);
+    let (mut y, mut px) = (0.0, x.first().copied().unwrap_or(0.0));
+    x.iter()
+        .map(|&v| {
+            y = a * (y + v - px);
+            px = v;
+            y
+        })
+        .collect()
 }
 
 fn rms(x: &[f64]) -> f64 {
@@ -219,7 +295,8 @@ fn pitch(x: &[f64]) -> f64 {
 }
 
 fn centroid(x: &[f64]) -> f64 {
-    let p = psd(x);
+    let m = x.iter().sum::<f64>() / x.len().max(1) as f64;
+    let p = psd(&x.iter().map(|v| v - m).collect::<Vec<_>>());
     let bin = SR / 8192.0;
     let (num, den) = p.iter().enumerate().fold((0.0, 0.0), |(n, d), (i, v)| (n + i as f64 * bin * v, d + v));
     num / den.max(1e-30)
@@ -281,69 +358,161 @@ fn main() {
             }
         }
     }
-    let ours = read_wav(&files[0]);
-    let refs: Vec<Vec<f64>> = files[1..].iter().map(|f| read_wav(f)).collect();
+    let raw_ours = read_wav(&files[0]);
+    let raw_refs: Vec<Vec<f64>> = files[1..].iter().map(|f| read_wav(f)).collect();
+    // Levels, timing and noise are measured after the same 20 Hz high-pass on
+    // all three (a reference without its high-pass keeps DC, which would
+    // otherwise dominate them); the bands, the DC and the DMC steps use the
+    // raw signals (they are the filter response being compared).
+    let ours = hp(&raw_ours);
+    let refs: Vec<Vec<f64>> = raw_refs.iter().map(|r| hp(r)).collect();
     let mut rows: Vec<(String, String, Vec<String>)> = Vec::new();
     let mut row = |seg: &str, metric: &str, vals: Vec<String>| rows.push((seg.to_string(), metric.to_string(), vals));
-    // Align, sign and gain per reference.
+    // Align, sign and gain per reference: (lag, sign, gain, aligned, aligned raw).
     let mut fit = Vec::new();
-    for r in &refs {
-        let (lag, sign) = align(&ours, r, 48_000);
-        let idx = |k: usize| -> Option<f64> {
+    for (r, raw) in refs.iter().zip(&raw_refs) {
+        // ±3 s: gme skips a track's leading silence, so its lag depends on
+        // the content; NSFPlay's is a constant ≈ 120 ms.
+        let (lag, sign) = align(&ours, r, 144_000);
+        let at = |x: &[f64], k: usize| -> Option<f64> {
             let j = k as i64 + lag;
-            (j >= 0 && (j as usize) < r.len()).then(|| sign * r[j as usize])
+            (j >= 0 && (j as usize) < x.len()).then(|| sign * x[j as usize])
         };
-        let (mut sxy, mut syy) = (0.0, 0.0);
+        // The level match: AC RMS over the overlap (a global least-squares
+        // gain is biased low by the small phase differences per note).
+        let (mut oo, mut rr) = (Vec::new(), Vec::new());
         for k in 0..ours.len() {
-            if let Some(y) = idx(k) {
-                sxy += ours[k] * y;
-                syy += y * y;
+            if let Some(y) = at(r, k) {
+                oo.push(ours[k]);
+                rr.push(y);
             }
         }
-        let g = sxy / syy.max(1e-30);
-        let aligned: Vec<f64> = (0..ours.len()).map(|k| idx(k).unwrap_or(0.0) * g).collect();
-        fit.push((lag, sign, g, aligned));
+        let g = ac_rms(&oo) / ac_rms(&rr).max(1e-30);
+        let aligned: Vec<f64> = (0..ours.len()).map(|k| at(r, k).unwrap_or(0.0) * g).collect();
+        let aligned_raw: Vec<f64> = (0..ours.len()).map(|k| at(raw, k).unwrap_or(0.0) * g).collect();
+        fit.push((lag, sign, g, aligned, aligned_raw));
     }
     let f3 = |v: f64| format!("{v:.3}");
     let f1 = |v: f64| format!("{v:.1}");
+    let f2 = |v: f64| format!("{v:.2}");
     row("all", "lag_ms", fit.iter().map(|f| f3(f.0 as f64 / 48.0)).collect());
+    // How much of our render each reference covers (a player that stops on
+    // silence covers less; everything below is measured on what it rendered).
+    row("all", "coverage_%", fit.iter().zip(&refs).map(|(f, r)| f1(100.0 * ((r.len() as i64 - f.0).clamp(0, ours.len() as i64) as f64 / ours.len() as f64))).collect());
     row("all", "polarity", fit.iter().map(|f| if f.1 > 0.0 { "same".into() } else { "inverted".into() }).collect());
     row("all", "level_db (ref vs ours, before matching)", fit.iter().map(|f| f1(-db(f.2))).collect());
-    let e_ours: f64 = ours.iter().map(|v| v * v).sum();
-    row("all", "waveform_error_db (after alignment and gain)", fit.iter().map(|f| f1(10.0 * (ours.iter().zip(&f.3).map(|(o, r)| (o - r).powi(2)).sum::<f64>() / e_ours.max(1e-30)).log10())).collect());
-    let dc_o = ours.iter().sum::<f64>() / ours.len() as f64;
-    row("all", "dc (ours, as fraction of full scale)", vec![format!("{dc_o:.5}")]);
-    row("all", "dc (ref, matched)", fit.iter().map(|f| format!("{:.5}", f.3.iter().sum::<f64>() / f.3.len() as f64)).collect());
-    let po = psd(&ours);
+    // The waveform error per stretch (each segment of a pattern, or each
+    // second of a song), each with its own fine alignment; the median.
+    let stretches: Vec<(usize, usize)> = if segs.is_empty() {
+        (0..ours.len() / 48_000).map(|i| (i * 48_000, (i + 1) * 48_000)).collect()
+    } else {
+        segs.iter()
+            .filter(|s| s.kind != "gap")
+            .map(|s| (((s.at as f64 + 3.0) * FRAME_S * SR) as usize, (((s.at + s.n) as f64 - 2.0) * FRAME_S * SR) as usize))
+            .filter(|(a, b)| b > a && *b <= ours.len())
+            .collect()
+    };
+    let errs: Vec<Vec<f64>> = fit
+        .iter()
+        .zip(&refs)
+        .map(|(f, r)| {
+            let mut e: Vec<f64> = stretches
+                .iter()
+                .filter(|(a, b)| ac_rms(&ours[*a..*b]) > 1e-4 && ((*b as i64 + f.0) as usize) <= r.len())
+                .map(|(a, b)| local_error(&ours[*a..*b], *a, r, f.0, f.1))
+                .collect();
+            e.sort_by(|a, b| a.total_cmp(b));
+            e
+        })
+        .collect();
+    row("all", "waveform_error_db median (per stretch, aligned, gain-matched)", errs.iter().map(|e| e.get(e.len() / 2).map_or("-".into(), |v| f1(*v))).collect());
+    row("all", "waveform_error_db 90th percentile", errs.iter().map(|e| e.get(e.len() * 9 / 10).map_or("-".into(), |v| f1(*v))).collect());
+    let dc_o = raw_ours.iter().sum::<f64>() / raw_ours.len() as f64;
+    row("all", "dc_raw (ours, fraction of full scale)", vec![format!("{dc_o:.5}")]);
+    row("all", "dc_raw (ref, level-matched)", fit.iter().map(|f| format!("{:.5}", f.4.iter().sum::<f64>() / f.4.len() as f64)).collect());
+    let po = psd(&raw_ours);
     for &c in &BANDS {
         let bo = band_power(&po, c);
-        row("all", &format!("band_{c}Hz_db"), fit.iter().map(|f| f1(10.0 * (band_power(&psd(&f.3), c) / bo.max(1e-30)).log10())).collect());
+        row("all", &format!("band_{c}Hz_db (raw)"), fit.iter().map(|f| f1(10.0 * (band_power(&psd(&f.4), c) / bo.max(1e-30)).log10())).collect());
     }
-    // Per segment.
+    // Per segment. Levels are relative to the file's first measured segment
+    // (its anchor), so a file-wide gain doesn't enter them.
+    let span = |s: &Seg| {
+        (
+            ((s.at as f64 + 3.0) * FRAME_S * SR) as usize,
+            (((s.at + s.n) as f64 - 2.0) * FRAME_S * SR) as usize,
+            (s.at as f64 * FRAME_S * SR) as usize,
+            ((s.at + s.n) as f64 * FRAME_S * SR) as usize,
+        )
+    };
+    let leveled = |k: &str| matches!(k, "tone" | "level" | "dmc" | "noise");
+    let anchor = segs.iter().find(|s| leveled(&s.kind) && { let (a0, a1, _, _) = span(s); a1 > a0 && a1 <= ours.len() && ac_rms(&ours[a0..a1]) > 1e-3 });
+    let anchor_db = anchor.map(|s| {
+        let (a0, a1, _, _) = span(s);
+        (db(ac_rms(&ours[a0..a1])), fit.iter().map(|f| db(ac_rms(&f.3[a0..a1]))).collect::<Vec<f64>>())
+    });
+    let first_step = segs.iter().find(|s| s.kind == "step").map(|s| span(s).2);
+    let step_h = |x: &[f64], k: usize| -> f64 {
+        let after: f64 = x[k + 10..k + 72].iter().sum::<f64>() / 62.0;
+        let before: f64 = x[k - 72..k - 10].iter().sum::<f64>() / 62.0;
+        after - before
+    };
     for s in &segs {
-        let a0 = ((s.at as f64 + 3.0) * FRAME_S * SR) as usize;
-        let a1 = (((s.at + s.n) as f64 - 2.0) * FRAME_S * SR) as usize;
-        let full0 = (s.at as f64 * FRAME_S * SR) as usize;
-        let full1 = ((s.at + s.n) as f64 * FRAME_S * SR) as usize;
+        let (a0, a1, full0, full1) = span(s);
         if a1 <= a0 || a1 > ours.len() {
             continue;
         }
         let o = &ours[a0..a1];
         let rs: Vec<&[f64]> = fit.iter().map(|f| &f.3[a0..a1]).collect();
+        // A reference that stopped before this segment has zeros here: its
+        // values would be meaningless, so the row says so and they are skipped.
+        let covered: Vec<bool> = fit.iter().zip(&refs).map(|(f, r)| (full1 as i64 + f.0) <= r.len() as i64).collect();
         let lab = s.label.as_str();
-        match s.kind.as_str() {
-            "tone" | "sweep" => {
-                let po_ = pitch(o);
-                row(lab, &format!("pitch_hz ours {po_:.2}; ref cents"), rs.iter().map(|r| f1(1200.0 * (pitch(r) / po_).log2())).collect());
-                row(lab, "level_db", rs.iter().map(|r| f1(db(rms(r)) - db(rms(o)))).collect());
-                if s.kind == "sweep" {
-                    // The pitch at the end of the sweep (its last 10 frames).
-                    let e0 = a1.saturating_sub((10.0 * FRAME_S * SR) as usize);
-                    let pe = pitch(&ours[e0..a1]);
-                    row(lab, &format!("end_pitch_hz ours {pe:.1}; ref cents"), fit.iter().map(|f| f1(1200.0 * (pitch(&f.3[e0..a1]) / pe).log2())).collect());
-                }
+        if covered.iter().any(|c| !c) {
+            row(lab, "not covered by", covered.iter().map(|c| if *c { "".into() } else { "stopped".into() }).collect());
+        }
+        let cv = |j: usize, v: String| if covered[j] { v } else { "-".into() };
+        if s.kind != "gap" && ac_rms(o) > 1e-4 {
+            row(lab, "waveform_error_db", fit.iter().zip(&refs).enumerate().map(|(j, (f, r))| cv(j, f1(local_error(o, a0, r, f.0, f.1)))).collect());
+        }
+        if leveled(&s.kind) && ac_rms(o) > 1e-4 {
+            if let (Some(a), Some((ao, ar))) = (anchor, &anchor_db) {
+                row(
+                    lab,
+                    &format!("level_rel_db (vs \"{}\"; ours {:+.1} dB)", a.label, db(ac_rms(o)) - ao),
+                    rs.iter().enumerate().map(|(j, r)| cv(j, f1((db(ac_rms(r)) - ar[j]) - (db(ac_rms(o)) - ao)))).collect(),
+                );
             }
-            "level" | "dmc" => row(lab, "level_db", rs.iter().map(|r| f1(db(rms(r)) - db(rms(o)))).collect()),
+        }
+        match s.kind.as_str() {
+            "tone" => {
+                let po_ = pitch(o);
+                row(lab, &format!("pitch_hz ours {po_:.2}; ref cents"), rs.iter().enumerate().map(|(j, r)| cv(j, f2(1200.0 * (pitch(r) / po_).log2()))).collect());
+            }
+            "sweep" => {
+                // The pitch along the sweep: 8-frame windows every 10 frames,
+                // while ours still sounds (a sweep can mute the channel).
+                let mut track_o = Vec::new();
+                let mut track_r: Vec<Vec<String>> = vec![Vec::new(); fit.len()];
+                let mut k = 2;
+                while k + 8 <= s.n {
+                    let w0 = ((s.at + k) as f64 * FRAME_S * SR) as usize;
+                    let w1 = ((s.at + k + 8) as f64 * FRAME_S * SR) as usize;
+                    if w1 <= ours.len() && ac_rms(&ours[w0..w1]) > 1e-3 {
+                        let pw = pitch(&ours[w0..w1]);
+                        track_o.push(format!("{pw:.0}"));
+                        for (j, f) in fit.iter().enumerate() {
+                            let rw = &f.3[w0..w1];
+                            track_r[j].push(if ac_rms(rw) > 1e-3 { format!("{:+.0}", 1200.0 * (pitch(rw) / pw).log2()) } else { "silent".into() });
+                        }
+                    }
+                    k += 10;
+                }
+                row(lab, &format!("pitch track ours Hz [{}]; ref cents", track_o.join(" ")), track_r.iter().enumerate().map(|(j, t)| cv(j, format!("[{}]", t.join(" ")))).collect());
+                // How long ours and each reference sound in the segment (frames).
+                let sounding = |x: &[f64]| x.chunks((FRAME_S * SR) as usize).filter(|c| ac_rms(c) > 1e-3).count();
+                row(lab, &format!("sounding_frames ours {}", sounding(&ours[full0..full1])), fit.iter().enumerate().map(|(j, f)| cv(j, sounding(&f.3[full0..full1]).to_string())).collect());
+            }
             "decay" | "length" => {
                 let oe = envelope(&ours[full0..full1.min(ours.len())]);
                 for d in [6.0, 12.0, 24.0] {
@@ -352,12 +521,13 @@ fn main() {
                         lab,
                         &format!("fall_{d}db_frames ours {}; ref diff", to.map_or("-".into(), |t| format!("{:.2}", t / FRAME_S))),
                         fit.iter()
-                            .map(|f| {
+                            .enumerate()
+                            .map(|(j, f)| {
                                 let re = envelope(&f.3[full0..full1.min(f.3.len())]);
-                                match (fall_time(&re, d), to) {
+                                cv(j, match (fall_time(&re, d), to) {
                                     (Some(r), Some(o)) => format!("{:+.2}", (r - o) / FRAME_S),
                                     _ => "-".into(),
-                                }
+                                })
                             })
                             .collect(),
                     );
@@ -365,22 +535,34 @@ fn main() {
             }
             "noise" => {
                 let co = centroid(o);
-                row(lab, &format!("centroid_hz ours {co:.0}; ref ratio %"), rs.iter().map(|r| f1(100.0 * (centroid(r) / co - 1.0))).collect());
-                row(lab, "level_db", rs.iter().map(|r| f1(db(rms(r)) - db(rms(o)))).collect());
-                if lab.contains("mode 1") {
-                    let po_ = pitch(o);
-                    row(lab, &format!("short_mode_pitch_hz ours {po_:.2}; ref cents"), rs.iter().map(|r| f1(1200.0 * (pitch(r) / po_).log2())).collect());
+                row(lab, &format!("centroid_hz ours {co:.0}; ref ratio %"), rs.iter().enumerate().map(|(j, r)| cv(j, f1(100.0 * (centroid(r) / co - 1.0)))).collect());
+                // The LFSR's loop: a render that repeats every 93 (short mode)
+                // or 32767 (long) steps of the noise timer correlates with
+                // itself at that lag (NTSC timer periods, the wiki's table).
+                const NOISE_PERIOD: [f64; 16] = [4.0, 8.0, 16.0, 32.0, 64.0, 96.0, 128.0, 160.0, 202.0, 254.0, 380.0, 508.0, 762.0, 1016.0, 2034.0, 4068.0];
+                if let Some(pi) = lab.split("period ").nth(1).and_then(|v| v.trim().parse::<usize>().ok()) {
+                    let loops: &[f64] = if lab.contains("mode 1") { &[93.0, 31.0] } else { &[32767.0] };
+                    for &steps in loops {
+                        let lag = steps * NOISE_PERIOD[pi] / CPU_HZ * SR;
+                        if lag + 10.0 < o.len() as f64 / 2.0 {
+                            let corr = |x: &[f64]| -> f64 {
+                                let m = x.iter().sum::<f64>() / x.len() as f64;
+                                let e: f64 = x.iter().map(|v| (v - m) * (v - m)).sum();
+                                let l0 = lag.round() as usize;
+                                (l0.saturating_sub(2)..=l0 + 2).map(|l| (0..x.len() - l).map(|i| (x[i] - m) * (x[i + l] - m)).sum::<f64>() / e.max(1e-30)).fold(f64::MIN, f64::max)
+                            };
+                            row(lab, &format!("loop_corr at {steps} steps ({:.1} ms) ours {:.2}", lag / 48.0, corr(o)), rs.iter().enumerate().map(|(j, r)| cv(j, f2(corr(r)))).collect());
+                        }
+                    }
                 }
             }
             "step" => {
-                // The jump across the write: 0.2-1.5 ms after minus before.
-                let h = |x: &[f64], k: usize| {
-                    let after: f64 = x[k + 10..k + 72].iter().sum::<f64>() / 62.0;
-                    let before: f64 = x[k - 72..k - 10].iter().sum::<f64>() / 62.0;
-                    after - before
-                };
-                let ho = h(&ours, full0);
-                row(lab, &format!("step ours {ho:.5}; ref ratio dB"), fit.iter().map(|f| f1(db((h(&f.3, full0) / ho).abs()))).collect());
+                // The jump across the write, relative to the first step's
+                // (raw: the DMC's level is a DC offset).
+                if let Some(k0) = first_step {
+                    let ho = step_h(&raw_ours, full0) / step_h(&raw_ours, k0);
+                    row(lab, &format!("step_rel ours {ho:.3}; ref ratio dB"), fit.iter().enumerate().map(|(j, f)| cv(j, f1(db((step_h(&f.4, full0) / step_h(&f.4, k0) / ho).abs())))).collect());
+                }
             }
             _ => {}
         }
@@ -398,14 +580,14 @@ fn main() {
     if let Some(dir) = pack {
         std::fs::create_dir_all(&dir).unwrap();
         // One scale for all three so they stay level-matched, peak at -1 dBFS.
-        let peak = std::iter::once(&ours).chain(fit.iter().map(|f| &f.3)).flat_map(|x| x.iter()).fold(0f64, |m, v| m.max(v.abs()));
+        let peak = std::iter::once(&raw_ours).chain(fit.iter().map(|f| &f.4)).flat_map(|x| x.iter()).fold(0f64, |m, v| m.max(v.abs()));
         let k = 0.891 / peak.max(1e-9);
         let sc = |x: &[f64]| x.iter().map(|v| v * k).collect::<Vec<_>>();
-        write_wav16(&Path::new(&dir).join(format!("{name}_A_cartwave.wav")), &sc(&ours));
+        write_wav16(&Path::new(&dir).join(format!("{name}_A_cartwave.wav")), &sc(&raw_ours));
         for (j, f) in fit.iter().enumerate() {
             let tag = Path::new(&files[1 + j]).file_stem().unwrap().to_string_lossy().to_string();
             let who = if tag.contains("nsfplay") { "nsfplay" } else if tag.contains("gme") { "gme" } else { "ref" };
-            write_wav16(&Path::new(&dir).join(format!("{name}_{}_{who}.wav", ["B", "C", "D"][j])), &sc(&f.3));
+            write_wav16(&Path::new(&dir).join(format!("{name}_{}_{who}.wav", ["B", "C", "D"][j])), &sc(&f.4));
         }
     }
 }

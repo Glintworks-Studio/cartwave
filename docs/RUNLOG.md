@@ -1644,3 +1644,33 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   stays open with the request for a slow-motion phone video (Desktop Duplication can't see a
   glitch after DWM composition, e.g. a swap-chain presentation-mode change). Files:
   `docs/batch4c/flicker/`.
+- **B4C-D8 (reference tools, §0.1 / §4.2).** Two, outside the repo: **NSFPlay 2.6** (downloaded
+  release zip, `C:\tools\reference\nsfplay26`; its documented command line renders WAV; a
+  well-regarded APU core) and **Game_Music_Emu** through the already-installed ffmpeg 8.1's libgme
+  (Blargg's cores; an independent second implementation, so the two references can be set
+  against each other). Mesen and others were not used (no headless WAV render without more
+  installs). VGM was not used: the VRC6 isn't in it; an NSF covers both chips.
+- **B4C-D9 (the container and the logs).** `crates/ui/examples/ab.rs`: register writes per frame
+  tick from our driver (`Player::tick_writes`, a read-only accessor added to `chip`: no change to
+  what is rendered); the logs are proven complete by a bit-identical replay of both songs; an NSF
+  we author (6502 player, 4 KiB banked stream at $9000, our DPCM ROM at $C000); ten test patterns;
+  per-channel splits of the songs. Our side replays with the NSF player's init writes so both
+  start from the same state.
+- **B4C-D10 (measurement fixes, found by checking the numbers).** (1) A periodic test tone
+  correlates equally at many lags: align on envelopes first. (2) NSFPlay with its high-pass off
+  keeps the 2A03's DC, which dominated the envelopes, the noise centroids and a file-wide gain:
+  align on the first difference; measure levels, timing and noise after the same 20 Hz high-pass
+  on all three; per-segment levels relative to an anchor segment. (3) gme skips leading silence
+  (lags up to −2 s) and stops on long rests (not configurable through ffmpeg): ±3 s search and a
+  coverage row; NSFPlay's `AUTO_STOP=0`. (4) The strongest harmonic of short-mode noise isn't its
+  fundamental: test the LFSR loop by autocorrelation at 93 / 31 / 32767 steps. (5) Waveform error
+  per segment with its own fine alignment (an NSF player's writes land a few hundred cycles from
+  ours, so each note's phase differs slightly). Noise and the songs' waveform error is ≈ 0 dB by
+  construction (differently seeded LFSRs) and is reported as such.
+- **B4C-D11 (findings and the pack).** docs/ab/AB.md: NSFPlay matches ours to 0.00 cents and
+  0.1 dB in most measurements; the top differences are the tnd group ≈ 1 dB lower against the
+  pulses in NSFPlay, the sweep edges (references disagree; ours follows the wiki), the players'
+  high-frequency roll-off, gme's polarity (noise, VRC6) and gme's mixer. No engine change
+  proposed now except a measured tnd calibration once a hardware recording exists. The pack:
+  every pattern in full, the songs as 12 s excerpts (41 MB; the full songs would have added
+  17 MB more); listed in ASSETS.md.

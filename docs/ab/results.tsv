@@ -1,0 +1,1025 @@
+name	segment	metric	nsfplay	gme
+pulse1	all	lag_ms	119.792	-4.417
+pulse1	all	coverage_%	100.0	98.0
+pulse1	all	polarity	same	same
+pulse1	all	level_db (ref vs ours, before matching)	-0.1	6.3
+pulse1	all	waveform_error_db median (per stretch, aligned, gain-matched)	-23.6	-13.6
+pulse1	all	waveform_error_db 90th percentile	-20.4	-6.7
+pulse1	all	dc_raw (ours, fraction of full scale)	-0.00000
+pulse1	all	dc_raw (ref, level-matched)	0.22993	-0.00001
+pulse1	all	band_31.5Hz_db (raw)	0.2	-6.8
+pulse1	all	band_63Hz_db (raw)	0.2	-2.4
+pulse1	all	band_125Hz_db (raw)	0.1	-0.6
+pulse1	all	band_250Hz_db (raw)	0.1	0.0
+pulse1	all	band_500Hz_db (raw)	0.1	0.1
+pulse1	all	band_1000Hz_db (raw)	0.0	0.2
+pulse1	all	band_2000Hz_db (raw)	-0.0	0.2
+pulse1	all	band_4000Hz_db (raw)	-0.2	0.0
+pulse1	all	band_8000Hz_db (raw)	-1.1	-0.4
+pulse1	all	band_16000Hz_db (raw)	-3.9	-3.1
+pulse1	p1 duty 0 A4	waveform_error_db	-15.2	-4.6
+pulse1	p1 duty 0 A4	level_rel_db (vs "p1 duty 0 A4"; ours +0.0 dB)	0.0	0.0
+pulse1	p1 duty 0 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse1	p1 duty 1 A4	waveform_error_db	-18.4	-6.7
+pulse1	p1 duty 1 A4	level_rel_db (vs "p1 duty 0 A4"; ours +2.3 dB)	0.1	0.0
+pulse1	p1 duty 1 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse1	p1 duty 2 A4	waveform_error_db	-23.1	-7.9
+pulse1	p1 duty 2 A4	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	0.0
+pulse1	p1 duty 2 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse1	p1 duty 3 A4	waveform_error_db	-21.5	-6.7
+pulse1	p1 duty 3 A4	level_rel_db (vs "p1 duty 0 A4"; ours +2.4 dB)	0.1	0.0
+pulse1	p1 duty 3 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 45	waveform_error_db	-26.1	-7.8
+pulse1	p1 duty 2 midi 45	level_rel_db (vs "p1 duty 0 A4"; ours +3.5 dB)	0.1	-0.8
+pulse1	p1 duty 2 midi 45	pitch_hz ours 109.99; ref cents	-0.00	-0.38
+pulse1	p1 duty 2 midi 52	waveform_error_db	-24.9	-10.1
+pulse1	p1 duty 2 midi 52	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	-0.3
+pulse1	p1 duty 2 midi 52	pitch_hz ours 164.74; ref cents	-0.00	-0.38
+pulse1	p1 duty 2 midi 57	waveform_error_db	-23.0	-11.2
+pulse1	p1 duty 2 midi 57	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	-0.1
+pulse1	p1 duty 2 midi 57	pitch_hz ours 220.20; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 64	waveform_error_db	-25.3	-11.8
+pulse1	p1 duty 2 midi 64	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	-0.0
+pulse1	p1 duty 2 midi 64	pitch_hz ours 329.97; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 69	waveform_error_db	-26.0	-11.3
+pulse1	p1 duty 2 midi 69	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	0.0
+pulse1	p1 duty 2 midi 69	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 76	waveform_error_db	-24.6	-10.0
+pulse1	p1 duty 2 midi 76	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	0.0
+pulse1	p1 duty 2 midi 76	pitch_hz ours 658.00; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 81	waveform_error_db	-22.1	-8.9
+pulse1	p1 duty 2 midi 81	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.0	0.0
+pulse1	p1 duty 2 midi 81	pitch_hz ours 880.79; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 88	waveform_error_db	-21.8	-7.2
+pulse1	p1 duty 2 midi 88	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	-0.0	-0.0
+pulse1	p1 duty 2 midi 88	pitch_hz ours 1316.01; ref cents	0.00	-0.38
+pulse1	p1 duty 2 midi 93	waveform_error_db	-20.4	-6.1
+pulse1	p1 duty 2 midi 93	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	-0.1	-0.1
+pulse1	p1 duty 2 midi 93	pitch_hz ours 1747.82; ref cents	0.00	-0.38
+pulse1	p1 vol 15	waveform_error_db	-25.8	-13.6
+pulse1	p1 vol 15	level_rel_db (vs "p1 duty 0 A4"; ours +3.6 dB)	0.1	0.0
+pulse1	p1 vol 14	waveform_error_db	-25.2	-13.7
+pulse1	p1 vol 14	level_rel_db (vs "p1 duty 0 A4"; ours +3.1 dB)	0.1	-0.1
+pulse1	p1 vol 13	waveform_error_db	-23.1	-13.6
+pulse1	p1 vol 13	level_rel_db (vs "p1 duty 0 A4"; ours +2.5 dB)	0.1	-0.2
+pulse1	p1 vol 12	waveform_error_db	-25.1	-13.7
+pulse1	p1 vol 12	level_rel_db (vs "p1 duty 0 A4"; ours +1.9 dB)	0.1	-0.2
+pulse1	p1 vol 11	waveform_error_db	-23.2	-13.7
+pulse1	p1 vol 11	level_rel_db (vs "p1 duty 0 A4"; ours +1.3 dB)	0.1	-0.3
+pulse1	p1 vol 10	waveform_error_db	-25.1	-13.6
+pulse1	p1 vol 10	level_rel_db (vs "p1 duty 0 A4"; ours +0.5 dB)	0.1	-0.4
+pulse1	p1 vol 9	waveform_error_db	-23.3	-13.6
+pulse1	p1 vol 9	level_rel_db (vs "p1 duty 0 A4"; ours -0.3 dB)	0.1	-0.5
+pulse1	p1 vol 8	waveform_error_db	-25.0	-13.6
+pulse1	p1 vol 8	level_rel_db (vs "p1 duty 0 A4"; ours -1.2 dB)	0.1	-0.6
+pulse1	p1 vol 7	waveform_error_db	-23.4	-13.6
+pulse1	p1 vol 7	level_rel_db (vs "p1 duty 0 A4"; ours -2.3 dB)	0.1	-0.7
+pulse1	p1 vol 6	waveform_error_db	-24.9	-13.6
+pulse1	p1 vol 6	level_rel_db (vs "p1 duty 0 A4"; ours -3.5 dB)	0.1	-0.8
+pulse1	p1 vol 5	waveform_error_db	-24.9	-13.6
+pulse1	p1 vol 5	level_rel_db (vs "p1 duty 0 A4"; ours -5.0 dB)	0.1	-0.9
+pulse1	p1 vol 4	waveform_error_db	-23.6	-13.6
+pulse1	p1 vol 4	level_rel_db (vs "p1 duty 0 A4"; ours -6.8 dB)	0.1	-1.0
+pulse1	p1 vol 3	waveform_error_db	-24.7	-13.6
+pulse1	p1 vol 3	level_rel_db (vs "p1 duty 0 A4"; ours -9.2 dB)	0.1	-1.1
+pulse1	p1 vol 2	waveform_error_db	-23.6	-13.6
+pulse1	p1 vol 2	level_rel_db (vs "p1 duty 0 A4"; ours -12.6 dB)	0.1	-1.2
+pulse1	p1 vol 1	waveform_error_db	-24.4	-13.6
+pulse1	p1 vol 1	level_rel_db (vs "p1 duty 0 A4"; ours -18.6 dB)	0.0	-1.3
+pulse2	all	lag_ms	119.958	-1.958
+pulse2	all	coverage_%	100.0	96.1
+pulse2	all	polarity	same	same
+pulse2	all	level_db (ref vs ours, before matching)	-0.1	6.4
+pulse2	all	waveform_error_db median (per stretch, aligned, gain-matched)	-18.4	-6.7
+pulse2	all	waveform_error_db 90th percentile	-15.2	-4.6
+pulse2	all	dc_raw (ours, fraction of full scale)	-0.00000
+pulse2	all	dc_raw (ref, level-matched)	0.11160	-0.00001
+pulse2	all	band_31.5Hz_db (raw)	0.2	-7.0
+pulse2	all	band_63Hz_db (raw)	0.1	-2.8
+pulse2	all	band_125Hz_db (raw)	0.1	-0.9
+pulse2	all	band_250Hz_db (raw)	0.1	-0.3
+pulse2	all	band_500Hz_db (raw)	0.1	0.1
+pulse2	all	band_1000Hz_db (raw)	0.1	0.1
+pulse2	all	band_2000Hz_db (raw)	-0.0	0.1
+pulse2	all	band_4000Hz_db (raw)	-0.2	-0.0
+pulse2	all	band_8000Hz_db (raw)	-1.0	-0.5
+pulse2	all	band_16000Hz_db (raw)	-3.9	-3.2
+pulse2	p2 duty 0 A4	waveform_error_db	-15.2	-4.6
+pulse2	p2 duty 0 A4	level_rel_db (vs "p2 duty 0 A4"; ours +0.0 dB)	0.0	0.0
+pulse2	p2 duty 0 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse2	p2 duty 1 A4	waveform_error_db	-18.4	-6.7
+pulse2	p2 duty 1 A4	level_rel_db (vs "p2 duty 0 A4"; ours +2.3 dB)	0.1	0.0
+pulse2	p2 duty 1 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse2	p2 duty 2 A4	waveform_error_db	-23.1	-7.9
+pulse2	p2 duty 2 A4	level_rel_db (vs "p2 duty 0 A4"; ours +3.6 dB)	0.1	0.0
+pulse2	p2 duty 2 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+pulse2	p2 duty 3 A4	waveform_error_db	-21.5	-6.7
+pulse2	p2 duty 3 A4	level_rel_db (vs "p2 duty 0 A4"; ours +2.4 dB)	0.1	0.0
+pulse2	p2 duty 3 A4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+envelope	all	lag_ms	122.083	-1.396
+envelope	all	coverage_%	100.0	92.6
+envelope	all	polarity	same	same
+envelope	all	level_db (ref vs ours, before matching)	-0.0	6.1
+envelope	all	waveform_error_db median (per stretch, aligned, gain-matched)	-13.1	-5.0
+envelope	all	waveform_error_db 90th percentile	-0.4	-0.4
+envelope	all	dc_raw (ours, fraction of full scale)	-0.00000
+envelope	all	dc_raw (ref, level-matched)	0.15133	-0.00001
+envelope	all	band_31.5Hz_db (raw)	0.2	-6.4
+envelope	all	band_63Hz_db (raw)	0.0	-2.6
+envelope	all	band_125Hz_db (raw)	-0.1	-0.5
+envelope	all	band_250Hz_db (raw)	-0.2	0.1
+envelope	all	band_500Hz_db (raw)	0.0	0.1
+envelope	all	band_1000Hz_db (raw)	0.0	0.2
+envelope	all	band_2000Hz_db (raw)	-0.0	0.2
+envelope	all	band_4000Hz_db (raw)	-0.2	0.1
+envelope	all	band_8000Hz_db (raw)	-1.1	-0.4
+envelope	all	band_16000Hz_db (raw)	-4.0	-3.3
+envelope	p1 decay period 0	waveform_error_db	-8.9	-4.7
+envelope	p1 decay period 0	fall_6db_frames ours 0.24; ref diff	+0.00	+1.38
+envelope	p1 decay period 0	fall_12db_frames ours 2.34; ref diff	-0.12	+0.48
+envelope	p1 decay period 0	fall_24db_frames ours 3.31; ref diff	-0.12	+0.36
+envelope	p1 decay period 3	waveform_error_db	-13.3	-5.2
+envelope	p1 decay period 3	fall_6db_frames ours 6.19; ref diff	+0.96	-0.18
+envelope	p1 decay period 3	fall_12db_frames ours 11.24; ref diff	-0.12	-0.18
+envelope	p1 decay period 3	fall_24db_frames ours 14.24; ref diff	+0.00	-0.18
+envelope	p1 decay period 7	waveform_error_db	-16.6	-5.7
+envelope	p1 decay period 7	fall_6db_frames ours 10.16; ref diff	+1.86	+3.79
+envelope	p1 decay period 7	fall_12db_frames ours 22.12; ref diff	-0.12	-0.12
+envelope	p1 decay period 7	fall_24db_frames ours 28.13; ref diff	-0.12	-0.12
+envelope	p1 decay period 15	waveform_error_db	-19.2	-5.0
+envelope	p1 decay period 15	fall_6db_frames ours 16.29; ref diff	-16.05	+7.93
+envelope	p1 decay period 15	fall_12db_frames ours 40.27; ref diff	-3.79	+3.97
+envelope	p1 decay period 15	fall_24db_frames ours 56.37; ref diff	-0.12	-0.12
+envelope	p1 looped decay period 2	waveform_error_db	-13.1	-5.0
+envelope	p1 looped decay period 2	level_rel_db (vs "p1 looped decay period 2"; ours +0.0 dB)	0.0	0.0
+envelope	p1 looped decay period 2	pitch_hz ours 440.39; ref cents	0.00	-0.38
+envelope	p1 length index 1	waveform_error_db	-25.8	-7.9
+envelope	p1 length index 1	fall_6db_frames ours -; ref diff	-	-
+envelope	p1 length index 1	fall_12db_frames ours -; ref diff	-	-
+envelope	p1 length index 1	fall_24db_frames ours -; ref diff	-	-
+envelope	p1 length index 3	waveform_error_db	-3.9	-4.0
+envelope	p1 length index 3	fall_6db_frames ours 1.08; ref diff	+0.00	-0.24
+envelope	p1 length index 3	fall_12db_frames ours 1.32; ref diff	+0.12	-0.42
+envelope	p1 length index 3	fall_24db_frames ours 1.56; ref diff	+0.54	-0.60
+envelope	p1 length index 5	waveform_error_db	-0.4	-0.4
+envelope	p1 length index 5	fall_6db_frames ours 0.24; ref diff	+0.00	+1.74
+envelope	p1 length index 5	fall_12db_frames ours 2.34; ref diff	+0.06	-0.30
+envelope	p1 length index 5	fall_24db_frames ours 2.76; ref diff	+0.30	-0.66
+envelope	p1 length index 9	waveform_error_db	-7.6	-6.7
+envelope	p1 length index 9	fall_6db_frames ours 0.24; ref diff	+3.43	+3.31
+envelope	p1 length index 9	fall_12db_frames ours 3.91; ref diff	+0.06	-0.30
+envelope	p1 length index 9	fall_24db_frames ours 4.27; ref diff	+0.36	-0.54
+sweep	all	lag_ms	119.375	-3.583
+sweep	all	coverage_%	100.0	87.9
+sweep	all	polarity	same	same
+sweep	all	level_db (ref vs ours, before matching)	0.4	6.1
+sweep	all	waveform_error_db median (per stretch, aligned, gain-matched)	-2.1	-4.5
+sweep	all	waveform_error_db 90th percentile	-0.0	-1.0
+sweep	all	dc_raw (ours, fraction of full scale)	0.00000
+sweep	all	dc_raw (ref, level-matched)	0.24015	-0.00000
+sweep	all	band_31.5Hz_db (raw)	-0.0	-6.4
+sweep	all	band_63Hz_db (raw)	4.2	-1.5
+sweep	all	band_125Hz_db (raw)	-0.2	-0.5
+sweep	all	band_250Hz_db (raw)	-0.2	0.2
+sweep	all	band_500Hz_db (raw)	-0.2	0.4
+sweep	all	band_1000Hz_db (raw)	0.3	0.4
+sweep	all	band_2000Hz_db (raw)	-0.4	0.3
+sweep	all	band_4000Hz_db (raw)	-0.6	0.2
+sweep	all	band_8000Hz_db (raw)	-1.6	-0.3
+sweep	all	band_16000Hz_db (raw)	-4.2	-3.3
+sweep	p1 sweep down shift 2 period 2	waveform_error_db	-1.0	-1.0
+sweep	p1 sweep down shift 2 period 2	pitch track ours Hz [702 5593 2828]; ref cents	[+0 +0 silent]	[+0 -0 silent]
+sweep	p1 sweep down shift 2 period 2	sounding_frames ours 21	22	22
+sweep	p1 sweep up shift 2 period 4	waveform_error_db	-0.0	-2.3
+sweep	p1 sweep up shift 2 period 4	pitch track ours Hz [455 188 85]; ref cents	[+384 +385 +216]	[-0 +2 -6]
+sweep	p1 sweep up shift 2 period 4	sounding_frames ours 29	35	29
+sweep	p1 sweep up shift 1 period 7	waveform_error_db	-2.1	-10.9
+sweep	p1 sweep up shift 1 period 7	pitch track ours Hz [394 175 -148]; ref cents	[+0 +1 NaN]	[-0 -0 silent]
+sweep	p1 sweep up shift 1 period 7	sounding_frames ours 22	26	22
+sweep	p2 sweep down shift 2 period 2	waveform_error_db	-8.6	-6.0
+sweep	p2 sweep down shift 2 period 2	pitch track ours Hz [688 4661 158]; ref cents	[-0 +0 +1003]	[-0 -0 NaN]
+sweep	p2 sweep down shift 2 period 2	sounding_frames ours 24	25	24
+sweep	p2 sweep up shift 2 period 4	waveform_error_db	-2.3	-4.5
+sweep	p2 sweep up shift 2 period 4	pitch track ours Hz [455 188 84]; ref cents	[+0 -1 -40]	[-0 +2 +17]
+sweep	p2 sweep up shift 2 period 4	sounding_frames ours 29	32	30
+sweep	p2 sweep up shift 1 period 7	not covered by		stopped
+sweep	p2 sweep up shift 1 period 7	waveform_error_db	-2.5	-
+sweep	p2 sweep up shift 1 period 7	pitch track ours Hz [394 175 -150]; ref cents	[+0 +1 NaN]	-
+sweep	p2 sweep up shift 1 period 7	sounding_frames ours 22	26	-
+sweep	silence	not covered by		stopped
+triangle	all	lag_ms	115.938	-3.812
+triangle	all	coverage_%	100.0	95.7
+triangle	all	polarity	same	same
+triangle	all	level_db (ref vs ours, before matching)	-0.4	2.4
+triangle	all	waveform_error_db median (per stretch, aligned, gain-matched)	-26.7	-15.7
+triangle	all	waveform_error_db 90th percentile	-10.4	-11.7
+triangle	all	dc_raw (ours, fraction of full scale)	-0.00006
+triangle	all	dc_raw (ref, level-matched)	0.12919	-0.00002
+triangle	all	band_31.5Hz_db (raw)	0.1	-4.0
+triangle	all	band_63Hz_db (raw)	0.0	-1.5
+triangle	all	band_125Hz_db (raw)	-0.0	0.0
+triangle	all	band_250Hz_db (raw)	-0.0	0.6
+triangle	all	band_500Hz_db (raw)	-0.0	0.8
+triangle	all	band_1000Hz_db (raw)	-0.0	0.8
+triangle	all	band_2000Hz_db (raw)	-0.1	0.4
+triangle	all	band_4000Hz_db (raw)	-0.3	0.5
+triangle	all	band_8000Hz_db (raw)	-1.4	-0.5
+triangle	all	band_16000Hz_db (raw)	-3.9	-6.3
+triangle	tri midi 28	waveform_error_db	-1.4	-5.2
+triangle	tri midi 28	level_rel_db (vs "tri midi 28"; ours +0.0 dB)	0.0	0.0
+triangle	tri midi 28	pitch_hz ours 41.22; ref cents	-0.00	-0.38
+triangle	tri midi 36	waveform_error_db	-10.4	-11.7
+triangle	tri midi 36	level_rel_db (vs "tri midi 28"; ours +0.6 dB)	-0.1	2.1
+triangle	tri midi 36	pitch_hz ours 65.42; ref cents	0.00	-0.38
+triangle	tri midi 40	waveform_error_db	-24.3	-13.6
+triangle	tri midi 40	level_rel_db (vs "tri midi 28"; ours +0.8 dB)	-0.1	2.9
+triangle	tri midi 40	pitch_hz ours 82.37; ref cents	0.00	-0.38
+triangle	tri midi 45	waveform_error_db	-26.6	-15.5
+triangle	tri midi 45	level_rel_db (vs "tri midi 28"; ours +0.9 dB)	-0.1	3.6
+triangle	tri midi 45	pitch_hz ours 110.10; ref cents	0.00	-0.38
+triangle	tri midi 48	waveform_error_db	-27.7	-16.1
+triangle	tri midi 48	level_rel_db (vs "tri midi 28"; ours +0.9 dB)	-0.1	3.9
+triangle	tri midi 48	pitch_hz ours 130.68; ref cents	0.00	-0.38
+triangle	tri midi 52	waveform_error_db	-30.2	-16.6
+triangle	tri midi 52	level_rel_db (vs "tri midi 28"; ours +0.9 dB)	-0.1	4.2
+triangle	tri midi 52	pitch_hz ours 164.99; ref cents	0.00	-0.38
+triangle	tri midi 57	waveform_error_db	-32.0	-18.4
+triangle	tri midi 57	level_rel_db (vs "tri midi 28"; ours +1.0 dB)	-0.1	4.4
+triangle	tri midi 57	pitch_hz ours 220.20; ref cents	0.00	-0.38
+triangle	tri midi 64	waveform_error_db	-30.0	-18.7
+triangle	tri midi 64	level_rel_db (vs "tri midi 28"; ours +1.0 dB)	-0.1	4.5
+triangle	tri midi 64	pitch_hz ours 329.00; ref cents	0.00	-0.38
+triangle	tri midi 69	waveform_error_db	-31.3	-18.8
+triangle	tri midi 69	level_rel_db (vs "tri midi 28"; ours +1.0 dB)	-0.1	4.6
+triangle	tri midi 69	pitch_hz ours 440.40; ref cents	0.00	-0.38
+triangle	tri midi 76	waveform_error_db	-33.0	-17.3
+triangle	tri midi 76	level_rel_db (vs "tri midi 28"; ours +1.0 dB)	-0.1	4.6
+triangle	tri midi 76	pitch_hz ours 658.00; ref cents	0.00	-0.38
+triangle	tri midi 81	waveform_error_db	-26.7	-15.7
+triangle	tri midi 81	level_rel_db (vs "tri midi 28"; ours +1.0 dB)	-0.1	4.7
+triangle	tri midi 81	pitch_hz ours 873.91; ref cents	0.00	-0.38
+triangle	tri linear counter 40	waveform_error_db	-10.5	-14.2
+triangle	tri linear counter 40	fall_6db_frames ours 2.10; ref diff	-1.56	-1.50
+triangle	tri linear counter 40	fall_12db_frames ours 10.58; ref diff	-10.04	-0.30
+triangle	tri linear counter 40	fall_24db_frames ours 10.88; ref diff	-0.48	-0.54
+noise_long	all	lag_ms	122.208	-2.729
+noise_long	all	coverage_%	100.0	100.0
+noise_long	all	polarity	same	inverted
+noise_long	all	level_db (ref vs ours, before matching)	0.0	3.4
+noise_long	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.0	-0.0
+noise_long	all	waveform_error_db 90th percentile	-0.0	-0.0
+noise_long	all	dc_raw (ours, fraction of full scale)	0.00002
+noise_long	all	dc_raw (ref, level-matched)	0.21050	0.00001
+noise_long	all	band_31.5Hz_db (raw)	1.6	-5.0
+noise_long	all	band_63Hz_db (raw)	1.4	-0.8
+noise_long	all	band_125Hz_db (raw)	-0.0	-0.6
+noise_long	all	band_250Hz_db (raw)	0.8	0.7
+noise_long	all	band_500Hz_db (raw)	0.4	0.8
+noise_long	all	band_1000Hz_db (raw)	0.5	0.8
+noise_long	all	band_2000Hz_db (raw)	0.5	0.8
+noise_long	all	band_4000Hz_db (raw)	0.3	0.7
+noise_long	all	band_8000Hz_db (raw)	-0.7	-0.2
+noise_long	all	band_16000Hz_db (raw)	-3.5	-5.7
+noise_long	noise mode 0 period 0	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 0	level_rel_db (vs "noise mode 0 period 0"; ours +0.0 dB)	0.0	0.0
+noise_long	noise mode 0 period 0	centroid_hz ours 11630; ref ratio %	-17.4	-39.1
+noise_long	noise mode 0 period 0	loop_corr at 32767 steps (73.2 ms) ours 0.81	0.80	0.82
+noise_long	noise mode 0 period 1	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 1	level_rel_db (vs "noise mode 0 period 0"; ours +3.0 dB)	0.0	-0.0
+noise_long	noise mode 0 period 1	centroid_hz ours 11555; ref ratio %	-17.6	-38.7
+noise_long	noise mode 0 period 1	loop_corr at 32767 steps (146.5 ms) ours 0.59	0.60	0.63
+noise_long	noise mode 0 period 2	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 2	level_rel_db (vs "noise mode 0 period 0"; ours +5.8 dB)	-0.0	0.1
+noise_long	noise mode 0 period 2	centroid_hz ours 11436; ref ratio %	-18.8	-39.1
+noise_long	noise mode 0 period 3	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 3	level_rel_db (vs "noise mode 0 period 0"; ours +8.3 dB)	0.1	0.4
+noise_long	noise mode 0 period 3	centroid_hz ours 10826; ref ratio %	-20.4	-37.6
+noise_long	noise mode 0 period 4	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 4	level_rel_db (vs "noise mode 0 period 0"; ours +9.3 dB)	0.7	1.5
+noise_long	noise mode 0 period 4	centroid_hz ours 8137; ref ratio %	-23.8	-29.8
+noise_long	noise mode 0 period 5	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 5	level_rel_db (vs "noise mode 0 period 0"; ours +9.1 dB)	1.4	2.4
+noise_long	noise mode 0 period 5	centroid_hz ours 5434; ref ratio %	-10.3	-14.6
+noise_long	noise mode 0 period 6	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 6	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	1.6	2.6
+noise_long	noise mode 0 period 6	centroid_hz ours 4731; ref ratio %	-17.5	-19.9
+noise_long	noise mode 0 period 7	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 7	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	1.7	2.7
+noise_long	noise mode 0 period 7	centroid_hz ours 3894; ref ratio %	-14.4	-17.1
+noise_long	noise mode 0 period 8	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 8	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	1.7	2.8
+noise_long	noise mode 0 period 8	centroid_hz ours 3295; ref ratio %	-16.1	-18.9
+noise_long	noise mode 0 period 9	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 9	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	1.8	2.8
+noise_long	noise mode 0 period 9	centroid_hz ours 2854; ref ratio %	-16.3	-20.5
+noise_long	noise mode 0 period 10	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 10	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	1.9	2.8
+noise_long	noise mode 0 period 10	centroid_hz ours 2125; ref ratio %	-15.0	-18.6
+noise_long	noise mode 0 period 11	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 11	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	2.0	2.9
+noise_long	noise mode 0 period 11	centroid_hz ours 1684; ref ratio %	-16.7	-14.3
+noise_long	noise mode 0 period 12	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 12	level_rel_db (vs "noise mode 0 period 0"; ours +9.1 dB)	2.1	2.9
+noise_long	noise mode 0 period 12	centroid_hz ours 1203; ref ratio %	-15.3	-12.3
+noise_long	noise mode 0 period 13	waveform_error_db	-0.0	-0.0
+noise_long	noise mode 0 period 13	level_rel_db (vs "noise mode 0 period 0"; ours +9.2 dB)	2.1	2.8
+noise_long	noise mode 0 period 13	centroid_hz ours 995; ref ratio %	-15.4	-12.0
+noise_long	noise mode 0 period 14	waveform_error_db	-0.4	-0.0
+noise_long	noise mode 0 period 14	level_rel_db (vs "noise mode 0 period 0"; ours +9.1 dB)	2.1	2.3
+noise_long	noise mode 0 period 14	centroid_hz ours 561; ref ratio %	-10.1	-3.1
+noise_long	noise mode 0 period 15	waveform_error_db	-0.1	-0.0
+noise_long	noise mode 0 period 15	level_rel_db (vs "noise mode 0 period 0"; ours +8.7 dB)	2.0	1.3
+noise_long	noise mode 0 period 15	centroid_hz ours 349; ref ratio %	-18.1	1.4
+noise_long	noise decay period 4	waveform_error_db	-0.0	-0.0
+noise_long	noise decay period 4	fall_6db_frames ours 8.83; ref diff	+1.14	-1.14
+noise_long	noise decay period 4	fall_12db_frames ours 14.06; ref diff	+0.90	-0.24
+noise_long	noise decay period 4	fall_24db_frames ours 18.69; ref diff	+0.24	-1.02
+noise_short	all	lag_ms	121.438	-6.542
+noise_short	all	coverage_%	100.0	100.0
+noise_short	all	polarity	same	inverted
+noise_short	all	level_db (ref vs ours, before matching)	0.7	0.9
+noise_short	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.5	-0.2
+noise_short	all	waveform_error_db 90th percentile	-0.4	-0.0
+noise_short	all	dc_raw (ours, fraction of full scale)	0.00002
+noise_short	all	dc_raw (ref, level-matched)	0.13906	0.00001
+noise_short	all	band_31.5Hz_db (raw)	-0.3	-7.6
+noise_short	all	band_63Hz_db (raw)	0.7	-3.9
+noise_short	all	band_125Hz_db (raw)	0.5	0.2
+noise_short	all	band_250Hz_db (raw)	0.7	0.3
+noise_short	all	band_500Hz_db (raw)	0.8	0.3
+noise_short	all	band_1000Hz_db (raw)	0.4	0.7
+noise_short	all	band_2000Hz_db (raw)	0.5	0.7
+noise_short	all	band_4000Hz_db (raw)	0.2	0.9
+noise_short	all	band_8000Hz_db (raw)	-0.5	0.8
+noise_short	all	band_16000Hz_db (raw)	-3.4	-6.3
+noise_short	noise mode 1 period 0	waveform_error_db	-1.7	-0.7
+noise_short	noise mode 1 period 0	level_rel_db (vs "noise mode 1 period 0"; ours +0.0 dB)	0.0	0.0
+noise_short	noise mode 1 period 0	centroid_hz ours 10370; ref ratio %	2.9	-18.0
+noise_short	noise mode 1 period 0	loop_corr at 93 steps (0.2 ms) ours 1.00	1.00	0.99
+noise_short	noise mode 1 period 0	loop_corr at 31 steps (0.1 ms) ours 0.18	0.16	0.40
+noise_short	noise mode 1 period 1	waveform_error_db	-1.1	-0.3
+noise_short	noise mode 1 period 1	level_rel_db (vs "noise mode 1 period 0"; ours +4.6 dB)	-1.7	-1.2
+noise_short	noise mode 1 period 1	centroid_hz ours 12864; ref ratio %	-22.3	-39.9
+noise_short	noise mode 1 period 1	loop_corr at 93 steps (0.4 ms) ours 1.00	0.99	0.99
+noise_short	noise mode 1 period 1	loop_corr at 31 steps (0.1 ms) ours 0.19	0.14	-0.10
+noise_short	noise mode 1 period 2	waveform_error_db	-1.5	-0.1
+noise_short	noise mode 1 period 2	level_rel_db (vs "noise mode 1 period 0"; ours +8.2 dB)	-1.9	-1.6
+noise_short	noise mode 1 period 2	centroid_hz ours 12732; ref ratio %	-20.1	-42.6
+noise_short	noise mode 1 period 2	loop_corr at 93 steps (0.8 ms) ours 0.98	0.99	0.99
+noise_short	noise mode 1 period 2	loop_corr at 31 steps (0.3 ms) ours 0.29	0.16	-0.05
+noise_short	noise mode 1 period 3	waveform_error_db	-1.2	-0.1
+noise_short	noise mode 1 period 3	level_rel_db (vs "noise mode 1 period 0"; ours +10.6 dB)	-1.5	-0.7
+noise_short	noise mode 1 period 3	centroid_hz ours 11237; ref ratio %	-19.5	-30.2
+noise_short	noise mode 1 period 3	loop_corr at 93 steps (1.7 ms) ours 0.95	0.96	0.97
+noise_short	noise mode 1 period 3	loop_corr at 31 steps (0.6 ms) ours 0.01	0.28	0.04
+noise_short	noise mode 1 period 4	waveform_error_db	-0.7	-0.2
+noise_short	noise mode 1 period 4	level_rel_db (vs "noise mode 1 period 0"; ours +11.7 dB)	-0.8	1.9
+noise_short	noise mode 1 period 4	centroid_hz ours 8365; ref ratio %	-21.1	-14.8
+noise_short	noise mode 1 period 4	loop_corr at 93 steps (3.3 ms) ours 0.88	0.92	0.93
+noise_short	noise mode 1 period 4	loop_corr at 31 steps (1.1 ms) ours -0.02	0.11	0.27
+noise_short	noise mode 1 period 5	waveform_error_db	-0.6	-0.4
+noise_short	noise mode 1 period 5	level_rel_db (vs "noise mode 1 period 0"; ours +11.5 dB)	-0.1	3.0
+noise_short	noise mode 1 period 5	centroid_hz ours 5580; ref ratio %	-11.2	-0.8
+noise_short	noise mode 1 period 5	loop_corr at 93 steps (5.0 ms) ours 0.92	0.93	0.91
+noise_short	noise mode 1 period 5	loop_corr at 31 steps (1.7 ms) ours -0.03	-0.04	0.28
+noise_short	noise mode 1 period 6	waveform_error_db	-0.5	-0.5
+noise_short	noise mode 1 period 6	level_rel_db (vs "noise mode 1 period 0"; ours +11.5 dB)	0.1	3.2
+noise_short	noise mode 1 period 6	centroid_hz ours 4774; ref ratio %	-15.4	-7.1
+noise_short	noise mode 1 period 6	loop_corr at 93 steps (6.7 ms) ours 0.96	0.97	0.96
+noise_short	noise mode 1 period 6	loop_corr at 31 steps (2.2 ms) ours -0.03	-0.04	0.28
+noise_short	noise mode 1 period 7	waveform_error_db	-0.5	-0.5
+noise_short	noise mode 1 period 7	level_rel_db (vs "noise mode 1 period 0"; ours +11.6 dB)	0.2	3.3
+noise_short	noise mode 1 period 7	centroid_hz ours 4158; ref ratio %	-17.6	-9.7
+noise_short	noise mode 1 period 7	loop_corr at 93 steps (8.3 ms) ours 0.98	0.98	0.98
+noise_short	noise mode 1 period 7	loop_corr at 31 steps (2.8 ms) ours -0.03	-0.04	0.10
+noise_short	noise mode 1 period 8	waveform_error_db	-0.5	-0.6
+noise_short	noise mode 1 period 8	level_rel_db (vs "noise mode 1 period 0"; ours +11.6 dB)	0.3	3.5
+noise_short	noise mode 1 period 8	centroid_hz ours 3376; ref ratio %	-14.4	-5.9
+noise_short	noise mode 1 period 8	loop_corr at 93 steps (10.5 ms) ours 0.97	0.97	0.97
+noise_short	noise mode 1 period 8	loop_corr at 31 steps (3.5 ms) ours -0.03	-0.04	0.01
+noise_short	noise mode 1 period 9	waveform_error_db	-0.5	-0.7
+noise_short	noise mode 1 period 9	level_rel_db (vs "noise mode 1 period 0"; ours +11.6 dB)	0.4	3.5
+noise_short	noise mode 1 period 9	centroid_hz ours 2904; ref ratio %	-16.1	-7.2
+noise_short	noise mode 1 period 9	loop_corr at 93 steps (13.2 ms) ours 0.93	0.94	0.96
+noise_short	noise mode 1 period 9	loop_corr at 31 steps (4.4 ms) ours -0.03	-0.03	-0.01
+noise_short	noise mode 1 period 10	waveform_error_db	-0.5	-0.0
+noise_short	noise mode 1 period 10	level_rel_db (vs "noise mode 1 period 0"; ours +11.6 dB)	0.5	3.6
+noise_short	noise mode 1 period 10	centroid_hz ours 2131; ref ratio %	-15.3	-5.5
+noise_short	noise mode 1 period 10	loop_corr at 93 steps (19.7 ms) ours 0.95	0.95	0.95
+noise_short	noise mode 1 period 10	loop_corr at 31 steps (6.6 ms) ours -0.03	-0.03	-0.09
+noise_short	noise mode 1 period 11	waveform_error_db	-0.5	-0.0
+noise_short	noise mode 1 period 11	level_rel_db (vs "noise mode 1 period 0"; ours +11.6 dB)	0.5	3.7
+noise_short	noise mode 1 period 11	centroid_hz ours 1709; ref ratio %	-15.0	-4.6
+noise_short	noise mode 1 period 11	loop_corr at 93 steps (26.4 ms) ours 0.94	0.94	0.93
+noise_short	noise mode 1 period 11	loop_corr at 31 steps (8.8 ms) ours -0.03	-0.04	-0.10
+noise_short	noise mode 1 period 12	waveform_error_db	-0.4	-0.0
+noise_short	noise mode 1 period 12	level_rel_db (vs "noise mode 1 period 0"; ours +11.5 dB)	0.6	3.7
+noise_short	noise mode 1 period 12	centroid_hz ours 1248; ref ratio %	-14.7	-2.8
+noise_short	noise mode 1 period 12	loop_corr at 93 steps (39.6 ms) ours 0.90	0.90	0.90
+noise_short	noise mode 1 period 12	loop_corr at 31 steps (13.2 ms) ours -0.03	-0.03	-0.16
+noise_short	noise mode 1 period 13	waveform_error_db	-0.5	-0.0
+noise_short	noise mode 1 period 13	level_rel_db (vs "noise mode 1 period 0"; ours +11.5 dB)	0.6	3.7
+noise_short	noise mode 1 period 13	centroid_hz ours 997; ref ratio %	-14.4	-1.4
+noise_short	noise mode 1 period 13	loop_corr at 93 steps (52.8 ms) ours 0.87	0.87	0.87
+noise_short	noise mode 1 period 13	loop_corr at 31 steps (17.6 ms) ours -0.02	-0.03	-0.17
+noise_short	noise mode 1 period 14	waveform_error_db	-0.4	-0.0
+noise_short	noise mode 1 period 14	level_rel_db (vs "noise mode 1 period 0"; ours +11.4 dB)	0.7	3.6
+noise_short	noise mode 1 period 14	centroid_hz ours 584; ref ratio %	-15.3	3.2
+noise_short	noise mode 1 period 14	loop_corr at 93 steps (105.7 ms) ours 0.75	0.75	0.75
+noise_short	noise mode 1 period 14	loop_corr at 31 steps (35.2 ms) ours -0.01	-0.04	-0.18
+noise_short	noise mode 1 period 15	waveform_error_db	-0.0	-0.0
+noise_short	noise mode 1 period 15	level_rel_db (vs "noise mode 1 period 0"; ours +11.1 dB)	0.6	3.1
+noise_short	noise mode 1 period 15	centroid_hz ours 345; ref ratio %	-12.7	10.1
+noise_short	noise mode 1 period 15	loop_corr at 31 steps (70.5 ms) ours -0.05	-0.06	-0.17
+noise_short	noise decay period 4	waveform_error_db	-0.7	-0.2
+noise_short	noise decay period 4	fall_6db_frames ours 7.57; ref diff	+1.26	-7.27
+noise_short	noise decay period 4	fall_12db_frames ours 13.82; ref diff	+0.48	-8.23
+noise_short	noise decay period 4	fall_24db_frames ours 17.67; ref diff	+1.20	-1.08
+dpcm	all	lag_ms	119.938	-345.688
+dpcm	all	coverage_%	100.0	100.0
+dpcm	all	polarity	same	same
+dpcm	all	level_db (ref vs ours, before matching)	-0.1	5.4
+dpcm	all	waveform_error_db median (per stretch, aligned, gain-matched)	-15.1	-5.5
+dpcm	all	waveform_error_db 90th percentile	-4.4	-4.4
+dpcm	all	dc_raw (ours, fraction of full scale)	0.00061
+dpcm	all	dc_raw (ref, level-matched)	0.46434	0.00004
+dpcm	all	band_31.5Hz_db (raw)	-0.1	-2.7
+dpcm	all	band_63Hz_db (raw)	-0.1	0.5
+dpcm	all	band_125Hz_db (raw)	-0.2	2.5
+dpcm	all	band_250Hz_db (raw)	-0.3	3.0
+dpcm	all	band_500Hz_db (raw)	-0.3	3.3
+dpcm	all	band_1000Hz_db (raw)	-0.2	3.4
+dpcm	all	band_2000Hz_db (raw)	-0.3	3.5
+dpcm	all	band_4000Hz_db (raw)	-0.5	3.3
+dpcm	all	band_8000Hz_db (raw)	-1.4	2.4
+dpcm	all	band_16000Hz_db (raw)	-4.4	-3.0
+dpcm	dmc $4011 = 16	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 16	step_rel ours 1.000; ref ratio dB	0.0	0.0
+dpcm	dmc $4011 = 32	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 32	step_rel ours 0.898; ref ratio dB	-0.0	-0.8
+dpcm	dmc $4011 = 64	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 64	step_rel ours 1.518; ref ratio dB	0.1	0.6
+dpcm	dmc $4011 = 96	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 96	step_rel ours 1.257; ref ratio dB	-0.0	0.3
+dpcm	dmc $4011 = 127	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 127	step_rel ours 1.029; ref ratio dB	-0.1	0.5
+dpcm	dmc $4011 = 96	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 96	step_rel ours -1.017; ref ratio dB	0.0	0.1
+dpcm	dmc $4011 = 64	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 64	step_rel ours -1.256; ref ratio dB	0.0	-0.5
+dpcm	dmc $4011 = 32	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 32	step_rel ours -1.532; ref ratio dB	-0.0	-0.5
+dpcm	dmc $4011 = 0	waveform_error_db	-4.4	-4.4
+dpcm	dmc $4011 = 0	step_rel ours -1.875; ref ratio dB	0.1	-1.4
+dpcm	dmc sample 0 rate 15	waveform_error_db	-13.7	-11.2
+dpcm	dmc sample 0 rate 15	level_rel_db (vs "dmc sample 0 rate 15"; ours +0.0 dB)	0.0	0.0
+dpcm	dmc sample 0 rate 12	waveform_error_db	-17.1	-9.2
+dpcm	dmc sample 0 rate 12	level_rel_db (vs "dmc sample 0 rate 15"; ours +4.8 dB)	0.3	-2.0
+dpcm	dmc sample 0 rate 8	waveform_error_db	-16.3	-5.7
+dpcm	dmc sample 0 rate 8	level_rel_db (vs "dmc sample 0 rate 15"; ours +7.6 dB)	0.4	-4.5
+dpcm	dmc sample 1 rate 15	waveform_error_db	-15.1	-10.0
+dpcm	dmc sample 1 rate 15	level_rel_db (vs "dmc sample 0 rate 15"; ours -11.5 dB)	0.1	2.6
+dpcm	dmc sample 1 rate 12	waveform_error_db	-22.7	-6.9
+dpcm	dmc sample 1 rate 12	level_rel_db (vs "dmc sample 0 rate 15"; ours -5.1 dB)	0.3	2.0
+dpcm	dmc sample 1 rate 8	waveform_error_db	-20.8	-4.4
+dpcm	dmc sample 1 rate 8	level_rel_db (vs "dmc sample 0 rate 15"; ours -1.3 dB)	0.3	0.9
+dpcm	dmc sample 2 rate 15	waveform_error_db	-21.0	-17.4
+dpcm	dmc sample 2 rate 15	level_rel_db (vs "dmc sample 0 rate 15"; ours +4.0 dB)	0.3	1.7
+dpcm	dmc sample 2 rate 12	waveform_error_db	-20.2	-15.9
+dpcm	dmc sample 2 rate 12	level_rel_db (vs "dmc sample 0 rate 15"; ours +8.5 dB)	0.3	-0.4
+dpcm	dmc sample 2 rate 8	waveform_error_db	-20.3	-13.9
+dpcm	dmc sample 2 rate 8	level_rel_db (vs "dmc sample 0 rate 15"; ours +10.7 dB)	0.4	-3.4
+dpcm	dmc sample 3 rate 15	waveform_error_db	-16.0	-5.5
+dpcm	dmc sample 3 rate 15	level_rel_db (vs "dmc sample 0 rate 15"; ours -4.4 dB)	0.1	2.2
+dpcm	dmc sample 3 rate 12	waveform_error_db	-20.8	-5.9
+dpcm	dmc sample 3 rate 12	level_rel_db (vs "dmc sample 0 rate 15"; ours -1.6 dB)	0.3	2.1
+dpcm	dmc sample 3 rate 8	waveform_error_db	-18.9	-5.6
+dpcm	dmc sample 3 rate 8	level_rel_db (vs "dmc sample 0 rate 15"; ours -0.4 dB)	0.1	1.4
+mixer	all	lag_ms	117.562	-0.354
+mixer	all	coverage_%	100.0	100.0
+mixer	all	polarity	same	inverted
+mixer	all	level_db (ref vs ours, before matching)	-0.4	6.1
+mixer	all	waveform_error_db median (per stretch, aligned, gain-matched)	-21.9	-13.5
+mixer	all	waveform_error_db 90th percentile	-1.2	-1.2
+mixer	all	dc_raw (ours, fraction of full scale)	0.00151
+mixer	all	dc_raw (ref, level-matched)	0.28766	-0.00011
+mixer	all	band_31.5Hz_db (raw)	0.6	-7.2
+mixer	all	band_63Hz_db (raw)	0.3	-3.5
+mixer	all	band_125Hz_db (raw)	-0.1	-0.8
+mixer	all	band_250Hz_db (raw)	0.3	0.5
+mixer	all	band_500Hz_db (raw)	0.4	0.6
+mixer	all	band_1000Hz_db (raw)	0.2	0.5
+mixer	all	band_2000Hz_db (raw)	0.3	0.7
+mixer	all	band_4000Hz_db (raw)	-0.2	0.5
+mixer	all	band_8000Hz_db (raw)	-1.3	-0.5
+mixer	all	band_16000Hz_db (raw)	-4.1	-5.0
+mixer	mix p1 15 alone	waveform_error_db	-25.6	-13.7
+mixer	mix p1 15 alone	level_rel_db (vs "mix p1 15 alone"; ours +0.0 dB)	0.0	0.0
+mixer	mix p2 15 alone	waveform_error_db	-27.1	-13.5
+mixer	mix p2 15 alone	level_rel_db (vs "mix p1 15 alone"; ours -0.0 dB)	0.0	-0.0
+mixer	mix p1 15 + p2 15	waveform_error_db	-6.0	-1.6
+mixer	mix p1 15 + p2 15	level_rel_db (vs "mix p1 15 alone"; ours +1.8 dB)	-0.0	1.2
+mixer	mix p1 15 alone	waveform_error_db	-23.4	-13.7
+mixer	mix p1 15 alone	level_rel_db (vs "mix p1 15 alone"; ours +0.0 dB)	-0.0	0.0
+mixer	mix p2 8 alone	waveform_error_db	-25.8	-13.6
+mixer	mix p2 8 alone	level_rel_db (vs "mix p1 15 alone"; ours -4.8 dB)	0.0	-0.7
+mixer	mix p1 15 + p2 8	waveform_error_db	-11.4	-3.0
+mixer	mix p1 15 + p2 8	level_rel_db (vs "mix p1 15 alone"; ours +0.4 dB)	-0.0	0.7
+mixer	mix p1 8 alone	waveform_error_db	-24.2	-13.7
+mixer	mix p1 8 alone	level_rel_db (vs "mix p1 15 alone"; ours -4.8 dB)	-0.0	-0.7
+mixer	mix p2 8 alone	waveform_error_db	-27.2	-13.6
+mixer	mix p2 8 alone	level_rel_db (vs "mix p1 15 alone"; ours -4.8 dB)	0.0	-0.7
+mixer	mix p1 8 + p2 8	waveform_error_db	-12.2	-0.7
+mixer	mix p1 8 + p2 8	level_rel_db (vs "mix p1 15 alone"; ours -2.5 dB)	-0.0	0.1
+mixer	mix p1 4 alone	waveform_error_db	-21.9	-13.6
+mixer	mix p1 4 alone	level_rel_db (vs "mix p1 15 alone"; ours -10.4 dB)	-0.0	-1.1
+mixer	mix p2 4 alone	waveform_error_db	-26.3	-13.5
+mixer	mix p2 4 alone	level_rel_db (vs "mix p1 15 alone"; ours -10.4 dB)	0.0	-1.1
+mixer	mix p1 4 + p2 4	waveform_error_db	-9.7	-1.1
+mixer	mix p1 4 + p2 4	level_rel_db (vs "mix p1 15 alone"; ours -7.8 dB)	-0.0	-0.7
+mixer	mix p1 15 alone	waveform_error_db	-23.1	-13.7
+mixer	mix p1 15 alone	level_rel_db (vs "mix p1 15 alone"; ours -0.0 dB)	0.0	0.0
+mixer	mix p2 2 alone	waveform_error_db	-20.4	-12.9
+mixer	mix p2 2 alone	level_rel_db (vs "mix p1 15 alone"; ours -16.2 dB)	-0.0	-1.3
+mixer	mix p1 15 + p2 2	waveform_error_db	-19.0	-10.7
+mixer	mix p1 15 + p2 2	level_rel_db (vs "mix p1 15 alone"; ours -0.1 dB)	-0.0	0.2
+mixer	mix tri alone	waveform_error_db	-24.4	-15.6
+mixer	mix tri alone	level_rel_db (vs "mix p1 15 alone"; ours -0.0 dB)	-0.4	-4.3
+mixer	mix p1 15 alone (2)	waveform_error_db	-25.2	-13.6
+mixer	mix p1 15 alone (2)	level_rel_db (vs "mix p1 15 alone"; ours -0.0 dB)	0.0	0.0
+mixer	mix p1 15 + tri	waveform_error_db	-7.6	-8.9
+mixer	mix p1 15 + tri	level_rel_db (vs "mix p1 15 alone"; ours +3.0 dB)	-0.3	-1.7
+mixer	mix tri + noise under dmc 0	waveform_error_db	-1.2	-1.2
+mixer	mix tri + noise under dmc 0	level_rel_db (vs "mix p1 15 alone"; ours +2.7 dB)	-1.2	-4.4
+mixer	mix tri + noise under dmc 64	waveform_error_db	-1.2	-1.2
+mixer	mix tri + noise under dmc 64	level_rel_db (vs "mix p1 15 alone"; ours -1.2 dB)	-1.0	-0.4
+mixer	mix tri + noise under dmc 127	waveform_error_db	-1.2	-1.2
+mixer	mix tri + noise under dmc 127	level_rel_db (vs "mix p1 15 alone"; ours -4.3 dB)	-1.2	2.6
+vrc6	all	lag_ms	128.958	-8.875
+vrc6	all	coverage_%	100.0	100.0
+vrc6	all	polarity	same	inverted
+vrc6	all	level_db (ref vs ours, before matching)	0.0	2.1
+vrc6	all	waveform_error_db median (per stretch, aligned, gain-matched)	-22.8	-9.8
+vrc6	all	waveform_error_db 90th percentile	-12.6	-4.4
+vrc6	all	dc_raw (ours, fraction of full scale)	-0.00000
+vrc6	all	dc_raw (ref, level-matched)	0.14294	-0.00002
+vrc6	all	band_31.5Hz_db (raw)	-0.3	-7.3
+vrc6	all	band_63Hz_db (raw)	0.1	-3.0
+vrc6	all	band_125Hz_db (raw)	-0.1	-0.8
+vrc6	all	band_250Hz_db (raw)	-0.1	0.0
+vrc6	all	band_500Hz_db (raw)	0.1	-0.1
+vrc6	all	band_1000Hz_db (raw)	0.2	1.0
+vrc6	all	band_2000Hz_db (raw)	-0.2	0.3
+vrc6	all	band_4000Hz_db (raw)	-0.8	0.4
+vrc6	all	band_8000Hz_db (raw)	-1.2	-0.2
+vrc6	all	band_16000Hz_db (raw)	-4.1	-3.5
+vrc6	v1 duty 0	waveform_error_db	-12.8	-3.6
+vrc6	v1 duty 0	level_rel_db (vs "v1 duty 0"; ours +0.0 dB)	0.0	0.0
+vrc6	v1 duty 0	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 1	waveform_error_db	-15.5	-6.0
+vrc6	v1 duty 1	level_rel_db (vs "v1 duty 0"; ours +2.7 dB)	0.1	0.1
+vrc6	v1 duty 1	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 2	waveform_error_db	-16.9	-7.3
+vrc6	v1 duty 2	level_rel_db (vs "v1 duty 0"; ours +4.2 dB)	0.2	0.1
+vrc6	v1 duty 2	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 3	waveform_error_db	-17.8	-8.1
+vrc6	v1 duty 3	level_rel_db (vs "v1 duty 0"; ours +5.1 dB)	0.2	0.1
+vrc6	v1 duty 3	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 4	waveform_error_db	-18.3	-8.6
+vrc6	v1 duty 4	level_rel_db (vs "v1 duty 0"; ours +5.7 dB)	0.2	0.1
+vrc6	v1 duty 4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 5	waveform_error_db	-18.6	-9.0
+vrc6	v1 duty 5	level_rel_db (vs "v1 duty 0"; ours +6.0 dB)	0.2	0.1
+vrc6	v1 duty 5	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 6	waveform_error_db	-18.8	-9.2
+vrc6	v1 duty 6	level_rel_db (vs "v1 duty 0"; ours +6.2 dB)	0.2	0.1
+vrc6	v1 duty 6	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 duty 7	waveform_error_db	-25.9	-9.2
+vrc6	v1 duty 7	level_rel_db (vs "v1 duty 0"; ours +6.3 dB)	0.2	0.1
+vrc6	v1 duty 7	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v1 digitized vol 15	waveform_error_db	-4.4	-4.4
+vrc6	v1 digitized vol 15	level_rel_db (vs "v1 duty 0"; ours -30.2 dB)	-46.2	-35.5
+vrc6	v2 duty 0	waveform_error_db	-12.6	-3.5
+vrc6	v2 duty 0	level_rel_db (vs "v1 duty 0"; ours -0.0 dB)	0.0	0.0
+vrc6	v2 duty 0	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 1	waveform_error_db	-15.4	-6.0
+vrc6	v2 duty 1	level_rel_db (vs "v1 duty 0"; ours +2.7 dB)	0.1	0.1
+vrc6	v2 duty 1	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 2	waveform_error_db	-16.8	-7.3
+vrc6	v2 duty 2	level_rel_db (vs "v1 duty 0"; ours +4.2 dB)	0.2	0.1
+vrc6	v2 duty 2	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 3	waveform_error_db	-17.7	-8.1
+vrc6	v2 duty 3	level_rel_db (vs "v1 duty 0"; ours +5.1 dB)	0.2	0.1
+vrc6	v2 duty 3	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 4	waveform_error_db	-18.1	-8.7
+vrc6	v2 duty 4	level_rel_db (vs "v1 duty 0"; ours +5.7 dB)	0.2	0.1
+vrc6	v2 duty 4	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 5	waveform_error_db	-18.4	-8.9
+vrc6	v2 duty 5	level_rel_db (vs "v1 duty 0"; ours +6.0 dB)	0.2	0.1
+vrc6	v2 duty 5	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 6	waveform_error_db	-18.6	-9.2
+vrc6	v2 duty 6	level_rel_db (vs "v1 duty 0"; ours +6.2 dB)	0.2	0.1
+vrc6	v2 duty 6	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 duty 7	waveform_error_db	-26.0	-9.2
+vrc6	v2 duty 7	level_rel_db (vs "v1 duty 0"; ours +6.3 dB)	0.2	0.1
+vrc6	v2 duty 7	pitch_hz ours 440.40; ref cents	0.00	-0.38
+vrc6	v2 digitized vol 15	waveform_error_db	-4.4	-4.4
+vrc6	v2 digitized vol 15	level_rel_db (vs "v1 duty 0"; ours -30.2 dB)	-46.3	-34.0
+vrc6	v1 vol 15	waveform_error_db	-23.5	-15.2
+vrc6	v1 vol 15	level_rel_db (vs "v1 duty 0"; ours +6.3 dB)	0.2	0.1
+vrc6	v1 vol 14	waveform_error_db	-23.8	-15.5
+vrc6	v1 vol 14	level_rel_db (vs "v1 duty 0"; ours +5.7 dB)	0.2	0.1
+vrc6	v1 vol 13	waveform_error_db	-23.8	-15.6
+vrc6	v1 vol 13	level_rel_db (vs "v1 duty 0"; ours +5.1 dB)	0.2	0.1
+vrc6	v1 vol 12	waveform_error_db	-23.8	-15.4
+vrc6	v1 vol 12	level_rel_db (vs "v1 duty 0"; ours +4.4 dB)	0.2	0.1
+vrc6	v1 vol 11	waveform_error_db	-23.9	-15.4
+vrc6	v1 vol 11	level_rel_db (vs "v1 duty 0"; ours +3.6 dB)	0.2	0.1
+vrc6	v1 vol 10	waveform_error_db	-23.9	-15.6
+vrc6	v1 vol 10	level_rel_db (vs "v1 duty 0"; ours +2.8 dB)	0.2	0.1
+vrc6	v1 vol 9	waveform_error_db	-24.0	-15.5
+vrc6	v1 vol 9	level_rel_db (vs "v1 duty 0"; ours +1.9 dB)	0.2	0.1
+vrc6	v1 vol 8	waveform_error_db	-24.0	-15.2
+vrc6	v1 vol 8	level_rel_db (vs "v1 duty 0"; ours +0.9 dB)	0.2	0.1
+vrc6	v1 vol 7	waveform_error_db	-24.0	-15.5
+vrc6	v1 vol 7	level_rel_db (vs "v1 duty 0"; ours -0.3 dB)	0.2	0.1
+vrc6	v1 vol 6	waveform_error_db	-24.1	-15.6
+vrc6	v1 vol 6	level_rel_db (vs "v1 duty 0"; ours -1.6 dB)	0.2	0.1
+vrc6	v1 vol 5	waveform_error_db	-24.1	-15.5
+vrc6	v1 vol 5	level_rel_db (vs "v1 duty 0"; ours -3.2 dB)	0.2	0.1
+vrc6	v1 vol 4	waveform_error_db	-24.1	-15.3
+vrc6	v1 vol 4	level_rel_db (vs "v1 duty 0"; ours -5.2 dB)	0.2	0.1
+vrc6	v1 vol 3	waveform_error_db	-24.1	-15.5
+vrc6	v1 vol 3	level_rel_db (vs "v1 duty 0"; ours -7.7 dB)	0.2	0.1
+vrc6	v1 vol 2	waveform_error_db	-24.1	-15.5
+vrc6	v1 vol 2	level_rel_db (vs "v1 duty 0"; ours -11.2 dB)	0.2	0.1
+vrc6	v1 vol 1	waveform_error_db	-24.0	-15.3
+vrc6	v1 vol 1	level_rel_db (vs "v1 duty 0"; ours -17.2 dB)	0.3	0.1
+vrc6	saw rate 8 A3	waveform_error_db	-22.4	-9.8
+vrc6	saw rate 8 A3	level_rel_db (vs "v1 duty 0"; ours -5.2 dB)	0.2	-0.3
+vrc6	saw rate 8 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 16 A3	waveform_error_db	-22.6	-9.8
+vrc6	saw rate 16 A3	level_rel_db (vs "v1 duty 0"; ours +0.9 dB)	0.2	-0.3
+vrc6	saw rate 16 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 24 A3	waveform_error_db	-22.7	-9.8
+vrc6	saw rate 24 A3	level_rel_db (vs "v1 duty 0"; ours +4.4 dB)	0.2	-0.3
+vrc6	saw rate 24 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 32 A3	waveform_error_db	-22.8	-9.8
+vrc6	saw rate 32 A3	level_rel_db (vs "v1 duty 0"; ours +6.9 dB)	0.2	-0.3
+vrc6	saw rate 32 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 42 A3	waveform_error_db	-23.0	-9.8
+vrc6	saw rate 42 A3	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.3	-0.3
+vrc6	saw rate 42 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 50 A3	waveform_error_db	-23.9	-10.3
+vrc6	saw rate 50 A3	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.3	-0.3
+vrc6	saw rate 50 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 63 A3	waveform_error_db	-22.8	-9.4
+vrc6	saw rate 63 A3	level_rel_db (vs "v1 duty 0"; ours +8.6 dB)	0.2	-0.3
+vrc6	saw rate 63 A3	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 42 midi 33	waveform_error_db	-0.6	-1.2
+vrc6	saw rate 42 midi 33	level_rel_db (vs "v1 duty 0"; ours +8.8 dB)	0.3	-2.1
+vrc6	saw rate 42 midi 33	pitch_hz ours 55.01; ref cents	-0.00	-0.38
+vrc6	saw rate 42 midi 45	waveform_error_db	-25.3	-7.0
+vrc6	saw rate 42 midi 45	level_rel_db (vs "v1 duty 0"; ours +9.1 dB)	0.2	-0.8
+vrc6	saw rate 42 midi 45	pitch_hz ours 110.02; ref cents	-0.00	-0.38
+vrc6	saw rate 42 midi 57	waveform_error_db	-23.1	-11.1
+vrc6	saw rate 42 midi 57	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.2	-0.3
+vrc6	saw rate 42 midi 57	pitch_hz ours 220.04; ref cents	0.00	-0.38
+vrc6	saw rate 42 midi 69	waveform_error_db	-24.3	-10.6
+vrc6	saw rate 42 midi 69	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.2	-0.2
+vrc6	saw rate 42 midi 69	pitch_hz ours 439.32; ref cents	-0.00	-0.38
+vrc6	saw rate 42 midi 81	waveform_error_db	-22.4	-8.0
+vrc6	saw rate 42 midi 81	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.1	-0.2
+vrc6	saw rate 42 midi 81	pitch_hz ours 881.66; ref cents	0.00	-0.38
+vrc6	rel 2A03 p1 duty 2 vol 15 alone	waveform_error_db	-25.3	-11.2
+vrc6	rel 2A03 p1 duty 2 vol 15 alone	level_rel_db (vs "v1 duty 0"; ours +6.3 dB)	0.2	1.5
+vrc6	rel VRC6 v1 duty 7 vol 15 alone	waveform_error_db	-21.9	-11.3
+vrc6	rel VRC6 v1 duty 7 vol 15 alone	level_rel_db (vs "v1 duty 0"; ours +6.3 dB)	0.2	0.1
+vrc6	rel VRC6 saw rate 42 alone	waveform_error_db	-19.7	-11.2
+vrc6	rel VRC6 saw rate 42 alone	level_rel_db (vs "v1 duty 0"; ours +9.2 dB)	0.2	-0.3
+vrc6	rel 2A03 p1 + VRC6 v1	waveform_error_db	-9.2	-4.7
+vrc6	rel 2A03 p1 + VRC6 v1	level_rel_db (vs "v1 duty 0"; ours +11.0 dB)	0.9	-1.7
+demo-p1	all	lag_ms	119.562	14.708
+demo-p1	all	coverage_%	100.0	90.6
+demo-p1	all	polarity	same	inverted
+demo-p1	all	level_db (ref vs ours, before matching)	-0.1	3.4
+demo-p1	all	waveform_error_db median (per stretch, aligned, gain-matched)	-7.7	-2.1
+demo-p1	all	waveform_error_db 90th percentile	-5.7	-0.6
+demo-p1	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-p1	all	dc_raw (ref, level-matched)	0.40211	-0.00002
+demo-p1	all	band_31.5Hz_db (raw)	0.4	-6.0
+demo-p1	all	band_63Hz_db (raw)	0.2	-2.0
+demo-p1	all	band_125Hz_db (raw)	0.1	-0.3
+demo-p1	all	band_250Hz_db (raw)	0.1	-0.1
+demo-p1	all	band_500Hz_db (raw)	0.0	0.1
+demo-p1	all	band_1000Hz_db (raw)	0.0	0.2
+demo-p1	all	band_2000Hz_db (raw)	-0.0	0.2
+demo-p1	all	band_4000Hz_db (raw)	-0.2	0.0
+demo-p1	all	band_8000Hz_db (raw)	-1.1	-0.5
+demo-p1	all	band_16000Hz_db (raw)	-4.0	-3.2
+demo-p2	all	lag_ms	119.542	-1987.729
+demo-p2	all	coverage_%	100.0	83.9
+demo-p2	all	polarity	same	inverted
+demo-p2	all	level_db (ref vs ours, before matching)	-0.1	3.3
+demo-p2	all	waveform_error_db median (per stretch, aligned, gain-matched)	-6.4	-1.7
+demo-p2	all	waveform_error_db 90th percentile	-3.7	-0.4
+demo-p2	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-p2	all	dc_raw (ref, level-matched)	0.35441	-0.00002
+demo-p2	all	band_31.5Hz_db (raw)	0.7	-6.1
+demo-p2	all	band_63Hz_db (raw)	0.4	-2.2
+demo-p2	all	band_125Hz_db (raw)	0.0	-0.4
+demo-p2	all	band_250Hz_db (raw)	0.1	-0.1
+demo-p2	all	band_500Hz_db (raw)	0.1	0.1
+demo-p2	all	band_1000Hz_db (raw)	0.0	0.2
+demo-p2	all	band_2000Hz_db (raw)	-0.0	0.2
+demo-p2	all	band_4000Hz_db (raw)	-0.2	0.0
+demo-p2	all	band_8000Hz_db (raw)	-1.1	-0.5
+demo-p2	all	band_16000Hz_db (raw)	-4.0	-3.2
+demo-tri	all	lag_ms	116.604	13.542
+demo-tri	all	coverage_%	100.0	90.4
+demo-tri	all	polarity	same	same
+demo-tri	all	level_db (ref vs ours, before matching)	-0.4	2.3
+demo-tri	all	waveform_error_db median (per stretch, aligned, gain-matched)	-9.7	-4.2
+demo-tri	all	waveform_error_db 90th percentile	-7.1	-0.6
+demo-tri	all	dc_raw (ours, fraction of full scale)	0.00016
+demo-tri	all	dc_raw (ref, level-matched)	0.42913	0.00002
+demo-tri	all	band_31.5Hz_db (raw)	-0.6	-5.1
+demo-tri	all	band_63Hz_db (raw)	0.0	-0.5
+demo-tri	all	band_125Hz_db (raw)	-0.0	0.4
+demo-tri	all	band_250Hz_db (raw)	-0.0	0.8
+demo-tri	all	band_500Hz_db (raw)	-0.0	1.3
+demo-tri	all	band_1000Hz_db (raw)	-0.1	1.7
+demo-tri	all	band_2000Hz_db (raw)	-0.1	1.6
+demo-tri	all	band_4000Hz_db (raw)	-0.3	1.3
+demo-tri	all	band_8000Hz_db (raw)	-1.2	0.4
+demo-tri	all	band_16000Hz_db (raw)	-4.1	-5.0
+demo-noise	all	lag_ms	119.438	-1986.958
+demo-noise	all	coverage_%	100.0	90.2
+demo-noise	all	polarity	same	same
+demo-noise	all	level_db (ref vs ours, before matching)	1.2	3.7
+demo-noise	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.1	-0.0
+demo-noise	all	waveform_error_db 90th percentile	-0.0	-0.0
+demo-noise	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-noise	all	dc_raw (ref, level-matched)	0.32553	0.00002
+demo-noise	all	band_31.5Hz_db (raw)	0.3	-5.3
+demo-noise	all	band_63Hz_db (raw)	0.3	-1.7
+demo-noise	all	band_125Hz_db (raw)	0.5	0.3
+demo-noise	all	band_250Hz_db (raw)	0.5	0.6
+demo-noise	all	band_500Hz_db (raw)	0.2	1.1
+demo-noise	all	band_1000Hz_db (raw)	0.1	0.9
+demo-noise	all	band_2000Hz_db (raw)	0.1	0.9
+demo-noise	all	band_4000Hz_db (raw)	-0.1	0.7
+demo-noise	all	band_8000Hz_db (raw)	-1.1	-0.3
+demo-noise	all	band_16000Hz_db (raw)	-3.2	-4.4
+demo-dmc	all	lag_ms	119.688	-1987.917
+demo-dmc	all	coverage_%	100.0	13.5
+demo-dmc	all	polarity	same	same
+demo-dmc	all	level_db (ref vs ours, before matching)	1.6	4.8
+demo-dmc	all	waveform_error_db median (per stretch, aligned, gain-matched)	-16.0	-9.3
+demo-dmc	all	waveform_error_db 90th percentile	-10.2	-9.3
+demo-dmc	all	dc_raw (ours, fraction of full scale)	0.00015
+demo-dmc	all	dc_raw (ref, level-matched)	0.26239	0.00001
+demo-dmc	all	band_31.5Hz_db (raw)	0.4	-9.6
+demo-dmc	all	band_63Hz_db (raw)	-0.0	-13.0
+demo-dmc	all	band_125Hz_db (raw)	-0.1	-4.1
+demo-dmc	all	band_250Hz_db (raw)	-0.1	-16.3
+demo-dmc	all	band_500Hz_db (raw)	-0.1	-16.2
+demo-dmc	all	band_1000Hz_db (raw)	-0.1	-15.4
+demo-dmc	all	band_2000Hz_db (raw)	-0.1	-14.7
+demo-dmc	all	band_4000Hz_db (raw)	-0.4	-14.5
+demo-dmc	all	band_8000Hz_db (raw)	-1.3	-12.2
+demo-dmc	all	band_16000Hz_db (raw)	-4.6	-13.4
+demo-v1	all	lag_ms	118.396	-1987.667
+demo-v1	all	coverage_%	100.0	13.0
+demo-v1	all	polarity	same	same
+demo-v1	all	level_db (ref vs ours, before matching)	-0.1	-2.5
+demo-v1	all	waveform_error_db median (per stretch, aligned, gain-matched)	-8.9	-2.7
+demo-v1	all	waveform_error_db 90th percentile	-3.8	-2.7
+demo-v1	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-v1	all	dc_raw (ref, level-matched)	0.37592	0.00001
+demo-v1	all	band_31.5Hz_db (raw)	0.5	-14.4
+demo-v1	all	band_63Hz_db (raw)	0.3	-11.3
+demo-v1	all	band_125Hz_db (raw)	0.0	-31.3
+demo-v1	all	band_250Hz_db (raw)	0.0	-42.4
+demo-v1	all	band_500Hz_db (raw)	0.0	-52.0
+demo-v1	all	band_1000Hz_db (raw)	0.0	-55.3
+demo-v1	all	band_2000Hz_db (raw)	-0.0	-58.4
+demo-v1	all	band_4000Hz_db (raw)	-0.3	-47.3
+demo-v1	all	band_8000Hz_db (raw)	-1.1	-51.0
+demo-v1	all	band_16000Hz_db (raw)	-4.0	-53.7
+demo-v2	all	lag_ms	120.542	-1987.667
+demo-v2	all	coverage_%	100.0	13.0
+demo-v2	all	polarity	inverted	same
+demo-v2	all	level_db (ref vs ours, before matching)	-0.0	-2.5
+demo-v2	all	waveform_error_db median (per stretch, aligned, gain-matched)	-6.4	-2.7
+demo-v2	all	waveform_error_db 90th percentile	-1.6	-2.7
+demo-v2	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-v2	all	dc_raw (ref, level-matched)	-0.44185	0.00001
+demo-v2	all	band_31.5Hz_db (raw)	0.2	-17.2
+demo-v2	all	band_63Hz_db (raw)	0.1	-12.3
+demo-v2	all	band_125Hz_db (raw)	0.1	-12.6
+demo-v2	all	band_250Hz_db (raw)	0.0	-41.7
+demo-v2	all	band_500Hz_db (raw)	0.0	-53.3
+demo-v2	all	band_1000Hz_db (raw)	0.0	-53.5
+demo-v2	all	band_2000Hz_db (raw)	-0.0	-57.9
+demo-v2	all	band_4000Hz_db (raw)	-0.3	-46.8
+demo-v2	all	band_8000Hz_db (raw)	-1.2	-50.6
+demo-v2	all	band_16000Hz_db (raw)	-4.0	-53.3
+demo-saw	all	lag_ms	120.500	20.896
+demo-saw	all	coverage_%	100.0	84.5
+demo-saw	all	polarity	same	inverted
+demo-saw	all	level_db (ref vs ours, before matching)	-0.0	0.8
+demo-saw	all	waveform_error_db median (per stretch, aligned, gain-matched)	-5.1	-0.4
+demo-saw	all	waveform_error_db 90th percentile	-3.5	-0.1
+demo-saw	all	dc_raw (ours, fraction of full scale)	0.00023
+demo-saw	all	dc_raw (ref, level-matched)	0.33952	-0.00002
+demo-saw	all	band_31.5Hz_db (raw)	0.1	-8.7
+demo-saw	all	band_63Hz_db (raw)	-0.0	-1.0
+demo-saw	all	band_125Hz_db (raw)	-0.1	0.8
+demo-saw	all	band_250Hz_db (raw)	-0.0	1.4
+demo-saw	all	band_500Hz_db (raw)	-0.0	1.5
+demo-saw	all	band_1000Hz_db (raw)	-0.1	1.6
+demo-saw	all	band_2000Hz_db (raw)	-0.1	1.5
+demo-saw	all	band_4000Hz_db (raw)	-0.3	1.4
+demo-saw	all	band_8000Hz_db (raw)	-1.2	0.5
+demo-saw	all	band_16000Hz_db (raw)	-4.1	-4.8
+showcase-p1	all	lag_ms	119.604	-1724.375
+showcase-p1	all	coverage_%	100.0	93.6
+showcase-p1	all	polarity	same	inverted
+showcase-p1	all	level_db (ref vs ours, before matching)	-0.1	3.3
+showcase-p1	all	waveform_error_db median (per stretch, aligned, gain-matched)	-8.6	-2.4
+showcase-p1	all	waveform_error_db 90th percentile	-6.3	-0.5
+showcase-p1	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-p1	all	dc_raw (ref, level-matched)	0.45708	-0.00005
+showcase-p1	all	band_31.5Hz_db (raw)	0.5	-5.4
+showcase-p1	all	band_63Hz_db (raw)	0.4	-1.3
+showcase-p1	all	band_125Hz_db (raw)	0.4	0.3
+showcase-p1	all	band_250Hz_db (raw)	0.7	1.5
+showcase-p1	all	band_500Hz_db (raw)	0.1	0.1
+showcase-p1	all	band_1000Hz_db (raw)	0.1	0.1
+showcase-p1	all	band_2000Hz_db (raw)	0.0	0.1
+showcase-p1	all	band_4000Hz_db (raw)	-0.2	-0.0
+showcase-p1	all	band_8000Hz_db (raw)	-1.1	-0.5
+showcase-p1	all	band_16000Hz_db (raw)	-3.9	-3.3
+showcase-p2	all	lag_ms	119.708	15.250
+showcase-p2	all	coverage_%	100.0	93.6
+showcase-p2	all	polarity	same	same
+showcase-p2	all	level_db (ref vs ours, before matching)	-0.1	3.1
+showcase-p2	all	waveform_error_db median (per stretch, aligned, gain-matched)	-4.1	-0.6
+showcase-p2	all	waveform_error_db 90th percentile	-3.1	-0.3
+showcase-p2	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-p2	all	dc_raw (ref, level-matched)	0.37817	0.00004
+showcase-p2	all	band_31.5Hz_db (raw)	1.0	-5.9
+showcase-p2	all	band_63Hz_db (raw)	1.0	-1.5
+showcase-p2	all	band_125Hz_db (raw)	0.5	0.1
+showcase-p2	all	band_250Hz_db (raw)	0.1	0.0
+showcase-p2	all	band_500Hz_db (raw)	0.1	0.1
+showcase-p2	all	band_1000Hz_db (raw)	0.1	0.1
+showcase-p2	all	band_2000Hz_db (raw)	0.0	0.1
+showcase-p2	all	band_4000Hz_db (raw)	-0.2	-0.0
+showcase-p2	all	band_8000Hz_db (raw)	-1.0	-0.5
+showcase-p2	all	band_16000Hz_db (raw)	-3.9	-3.2
+showcase-tri	all	lag_ms	120.438	21.000
+showcase-tri	all	coverage_%	100.0	93.4
+showcase-tri	all	polarity	same	inverted
+showcase-tri	all	level_db (ref vs ours, before matching)	-0.4	1.7
+showcase-tri	all	waveform_error_db median (per stretch, aligned, gain-matched)	-7.6	-7.2
+showcase-tri	all	waveform_error_db 90th percentile	-2.8	-2.7
+showcase-tri	all	dc_raw (ours, fraction of full scale)	0.00035
+showcase-tri	all	dc_raw (ref, level-matched)	0.44937	-0.00005
+showcase-tri	all	band_31.5Hz_db (raw)	-0.1	-2.4
+showcase-tri	all	band_63Hz_db (raw)	0.0	-0.3
+showcase-tri	all	band_125Hz_db (raw)	-0.0	1.2
+showcase-tri	all	band_250Hz_db (raw)	-0.0	2.0
+showcase-tri	all	band_500Hz_db (raw)	-0.0	2.2
+showcase-tri	all	band_1000Hz_db (raw)	-0.1	2.3
+showcase-tri	all	band_2000Hz_db (raw)	-0.1	2.5
+showcase-tri	all	band_4000Hz_db (raw)	-0.3	2.3
+showcase-tri	all	band_8000Hz_db (raw)	-1.2	1.4
+showcase-tri	all	band_16000Hz_db (raw)	-4.3	-4.3
+showcase-noise	all	lag_ms	119.812	-2.354
+showcase-noise	all	coverage_%	100.0	93.0
+showcase-noise	all	polarity	same	same
+showcase-noise	all	level_db (ref vs ours, before matching)	-0.0	3.6
+showcase-noise	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.2	-0.1
+showcase-noise	all	waveform_error_db 90th percentile	-0.1	-0.0
+showcase-noise	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-noise	all	dc_raw (ref, level-matched)	0.49318	0.00005
+showcase-noise	all	band_31.5Hz_db (raw)	0.0	-5.0
+showcase-noise	all	band_63Hz_db (raw)	0.2	-0.9
+showcase-noise	all	band_125Hz_db (raw)	-0.5	0.1
+showcase-noise	all	band_250Hz_db (raw)	-0.6	1.0
+showcase-noise	all	band_500Hz_db (raw)	-0.4	1.3
+showcase-noise	all	band_1000Hz_db (raw)	-0.3	1.1
+showcase-noise	all	band_2000Hz_db (raw)	-0.1	1.2
+showcase-noise	all	band_4000Hz_db (raw)	-0.7	0.8
+showcase-noise	all	band_8000Hz_db (raw)	-1.3	0.1
+showcase-noise	all	band_16000Hz_db (raw)	-4.6	-6.2
+showcase-dmc	all	lag_ms	119.792	-1709.688
+showcase-dmc	all	coverage_%	100.0	93.5
+showcase-dmc	all	polarity	same	same
+showcase-dmc	all	level_db (ref vs ours, before matching)	0.4	5.2
+showcase-dmc	all	waveform_error_db median (per stretch, aligned, gain-matched)	-23.3	-10.9
+showcase-dmc	all	waveform_error_db 90th percentile	-12.8	-4.1
+showcase-dmc	all	dc_raw (ours, fraction of full scale)	0.00027
+showcase-dmc	all	dc_raw (ref, level-matched)	0.40258	0.00002
+showcase-dmc	all	band_31.5Hz_db (raw)	0.1	-6.4
+showcase-dmc	all	band_63Hz_db (raw)	-0.1	-1.1
+showcase-dmc	all	band_125Hz_db (raw)	-0.1	0.3
+showcase-dmc	all	band_250Hz_db (raw)	-0.1	0.8
+showcase-dmc	all	band_500Hz_db (raw)	-0.1	1.0
+showcase-dmc	all	band_1000Hz_db (raw)	-0.1	1.0
+showcase-dmc	all	band_2000Hz_db (raw)	-0.1	1.2
+showcase-dmc	all	band_4000Hz_db (raw)	-0.4	0.8
+showcase-dmc	all	band_8000Hz_db (raw)	-1.4	-0.2
+showcase-dmc	all	band_16000Hz_db (raw)	-4.9	-6.4
+showcase-v1	all	lag_ms	119.708	-1726.917
+showcase-v1	all	coverage_%	100.0	93.7
+showcase-v1	all	polarity	same	inverted
+showcase-v1	all	level_db (ref vs ours, before matching)	-0.1	2.6
+showcase-v1	all	waveform_error_db median (per stretch, aligned, gain-matched)	-6.6	-1.4
+showcase-v1	all	waveform_error_db 90th percentile	-3.0	-0.5
+showcase-v1	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-v1	all	dc_raw (ref, level-matched)	0.37655	-0.00005
+showcase-v1	all	band_31.5Hz_db (raw)	1.5	-5.0
+showcase-v1	all	band_63Hz_db (raw)	1.2	-1.2
+showcase-v1	all	band_125Hz_db (raw)	1.4	2.2
+showcase-v1	all	band_250Hz_db (raw)	0.1	0.0
+showcase-v1	all	band_500Hz_db (raw)	0.1	0.1
+showcase-v1	all	band_1000Hz_db (raw)	0.1	0.1
+showcase-v1	all	band_2000Hz_db (raw)	0.0	0.1
+showcase-v1	all	band_4000Hz_db (raw)	-0.2	-0.1
+showcase-v1	all	band_8000Hz_db (raw)	-1.1	-0.6
+showcase-v1	all	band_16000Hz_db (raw)	-3.9	-3.3
+showcase-v2	all	lag_ms	120.271	-1727.354
+showcase-v2	all	coverage_%	100.0	93.6
+showcase-v2	all	polarity	inverted	inverted
+showcase-v2	all	level_db (ref vs ours, before matching)	-0.1	2.6
+showcase-v2	all	waveform_error_db median (per stretch, aligned, gain-matched)	-11.1	-7.6
+showcase-v2	all	waveform_error_db 90th percentile	-7.1	-0.4
+showcase-v2	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-v2	all	dc_raw (ref, level-matched)	-0.36410	-0.00005
+showcase-v2	all	band_31.5Hz_db (raw)	1.6	-4.6
+showcase-v2	all	band_63Hz_db (raw)	1.1	-1.5
+showcase-v2	all	band_125Hz_db (raw)	1.1	1.6
+showcase-v2	all	band_250Hz_db (raw)	0.7	1.8
+showcase-v2	all	band_500Hz_db (raw)	0.1	0.1
+showcase-v2	all	band_1000Hz_db (raw)	0.0	0.1
+showcase-v2	all	band_2000Hz_db (raw)	-0.0	0.1
+showcase-v2	all	band_4000Hz_db (raw)	-0.3	-0.1
+showcase-v2	all	band_8000Hz_db (raw)	-1.1	-0.5
+showcase-v2	all	band_16000Hz_db (raw)	-4.0	-3.3
+showcase-saw	all	lag_ms	120.208	25.271
+showcase-saw	all	coverage_%	100.0	92.9
+showcase-saw	all	polarity	same	inverted
+showcase-saw	all	level_db (ref vs ours, before matching)	0.0	1.6
+showcase-saw	all	waveform_error_db median (per stretch, aligned, gain-matched)	-7.2	-1.3
+showcase-saw	all	waveform_error_db 90th percentile	-5.4	-0.2
+showcase-saw	all	dc_raw (ours, fraction of full scale)	0.00045
+showcase-saw	all	dc_raw (ref, level-matched)	0.44151	-0.00005
+showcase-saw	all	band_31.5Hz_db (raw)	0.1	-6.9
+showcase-saw	all	band_63Hz_db (raw)	-0.0	-1.6
+showcase-saw	all	band_125Hz_db (raw)	-0.0	-0.0
+showcase-saw	all	band_250Hz_db (raw)	-0.0	0.5
+showcase-saw	all	band_500Hz_db (raw)	-0.1	0.8
+showcase-saw	all	band_1000Hz_db (raw)	-0.1	0.8
+showcase-saw	all	band_2000Hz_db (raw)	-0.1	0.8
+showcase-saw	all	band_4000Hz_db (raw)	-0.3	0.7
+showcase-saw	all	band_8000Hz_db (raw)	-1.2	-0.2
+showcase-saw	all	band_16000Hz_db (raw)	-4.1	-5.5
+demo	all	lag_ms	119.708	22.000
+demo	all	coverage_%	100.0	90.5
+demo	all	polarity	same	inverted
+demo	all	level_db (ref vs ours, before matching)	-0.1	2.3
+demo	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.7	-0.5
+demo	all	waveform_error_db 90th percentile	-0.3	-0.2
+demo	all	dc_raw (ours, fraction of full scale)	0.00006
+demo	all	dc_raw (ref, level-matched)	0.32896	-0.00000
+demo	all	band_31.5Hz_db (raw)	0.6	-7.3
+demo	all	band_63Hz_db (raw)	0.0	-1.4
+demo	all	band_125Hz_db (raw)	-0.1	0.0
+demo	all	band_250Hz_db (raw)	0.1	0.6
+demo	all	band_500Hz_db (raw)	0.0	1.0
+demo	all	band_1000Hz_db (raw)	0.1	1.1
+demo	all	band_2000Hz_db (raw)	-0.1	0.9
+demo	all	band_4000Hz_db (raw)	-0.4	0.8
+demo	all	band_8000Hz_db (raw)	-1.3	0.1
+demo	all	band_16000Hz_db (raw)	-3.9	-3.2
+showcase	all	lag_ms	121.375	22.167
+showcase	all	coverage_%	100.0	93.7
+showcase	all	polarity	same	same
+showcase	all	level_db (ref vs ours, before matching)	-0.2	2.7
+showcase	all	waveform_error_db median (per stretch, aligned, gain-matched)	-0.7	-0.7
+showcase	all	waveform_error_db 90th percentile	-0.4	-0.4
+showcase	all	dc_raw (ours, fraction of full scale)	0.00012
+showcase	all	dc_raw (ref, level-matched)	0.39457	0.00001
+showcase	all	band_31.5Hz_db (raw)	0.2	-3.3
+showcase	all	band_63Hz_db (raw)	-0.2	-1.3
+showcase	all	band_125Hz_db (raw)	0.1	0.1
+showcase	all	band_250Hz_db (raw)	-0.1	-0.2
+showcase	all	band_500Hz_db (raw)	0.1	0.6
+showcase	all	band_1000Hz_db (raw)	0.1	0.7
+showcase	all	band_2000Hz_db (raw)	0.1	0.6
+showcase	all	band_4000Hz_db (raw)	-0.2	0.4
+showcase	all	band_8000Hz_db (raw)	-1.0	-0.1
+showcase	all	band_16000Hz_db (raw)	-4.0	-3.3
