@@ -1353,3 +1353,38 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   Arrangement / Mixer (shortcut table `view.mixer`, View ▸ Mixer with a check), and the two view
   keys show which view is up (lit: a toggle on-state). Inside a text field Tab still moves to the
   next field (the text context wins). The view isn't saved in the project.
+- **B4B-D21 (the mixer boards' coordinates).** The board HTML positions a strip's parts
+  absolutely inside a 1 px border, so they are measured from the **padding box** (1 px in), and
+  right- or bottom-anchored parts from the padding width (150 px for a 152 px strip). The mixer
+  draws from that (`mixer::INSET = 1`); 4a's Main row already did. Without it every part sat 1 px
+  off.
+- **B4B-D22 (the strips' number slot).** Two-digit slots (VISION.md "the mixer") with **tabular
+  digits** (Inter's `tnum`), so 8 and 18 line up. The board's webfont draws proportional digits:
+  its "8" sits 3 px further left than ours (the one residual in `mixer-match/report-100.md`, with
+  the name's first glyph "T", 2 px: the same font difference). Logged, not chased: matching it would
+  mean the board's font.
+- **B4B-D23 (where Unison / Detune / Drift live).** First built as a third dial row in the STUDIO
+  section; at the 1296 px minimum window it overflowed the inspector. They are now the
+  INSTRUMENT section's **VOICES row** (UNISON / DETUNE / DRIFT value fields: drag, wheel,
+  double-click to type; hover help), shown on studio tracks only. The Presets + Browser + device
+  panel batch gives them their final home.
+- **B4B-D24 (idle voices and the clip mark).** A free voice's power-up DAC step read as a peak
+  above 0 dBFS on a quiet triangle track, so its clip mark lit. A voice's peak now starts at its
+  power-up value and a free voice reports none (`b4b_idle_voices_report_nothing`).
+- **B4B-D25 (the mixer match at 150 %).** The board is 1x; a 150 % shot is sampled at each logical
+  pixel's centre (a filtering downscale smears 1 px parts). Keys are found by their dark body (their
+  1 px sheen is a hairline that falls between sampled rows). Residuals at 150 %: the two font
+  differences of D22 and, on 4 of 9 strips, the knob's lit box 2 px wider at the left: the brushed
+  cap's anti-aliased edge crossing the probe's threshold (the zoomed pair is identical in shape).
+- **B4B-D26 (the perf method, §3.13).** `perf_b4b.ps1`: 10 rounds, the baseline and this branch
+  interleaved, the order alternating each round; both builds run batch 4a's bench with the Main
+  geometry (the baseline has the Main row too), the piano-roll bench, and the new mixer bench
+  (this branch only: 64 studio tracks playing, the arrangement first for a like-for-like line, then
+  the mixer, then the strips scrolled sideways). `perf_summary_b4b.py` judges each scenario on the
+  **difference of the means** and reports the **noise floor** (the standard error of the
+  round-by-round differences); a scenario passes at Δ ≤ +0.3 or inside 2 × its noise floor.
+- **B4B-D27 (the fixups match).** `fixups_shot.ps1` + `mockup_match_fixups.py` against
+  `fixups@1x`: the number column's "9" within 1 px, the name start exact, the overhang within 1
+  level of 255 on every row of its 48 px, the selection outline 1 px outside the clip (row 1 in
+  both). The glow's lift isn't like for like (on the board it falls on the ruler, in the app on the
+  row above); its parameters are the board's (white 22 %, a 10 px CSS blur).

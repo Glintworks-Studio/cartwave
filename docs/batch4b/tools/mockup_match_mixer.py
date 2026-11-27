@@ -114,7 +114,12 @@ def measure(I, x0, main):
         m["number"] = num and (num[2] - x0,)
         knob = I.box(x0 + 60, y0 + 57, x0 + 92, y0 + 89, lambda p: lum(p) >= 0x46)
         m["knob"] = knob and (knob[0] - x0, knob[1] - y0, knob[2] - x0, knob[3] - y0)
-        sheen = [I.run(y0 + 120, x0 + kx - 2, x0 + kx + 26, lambda p: lum(p) >= 0x45) for kx in (48, 80)]
+        # The keys' bodies (24 px, a darker body and a #101010 border on the lighter panel): the
+        # dark run across each key's middle row. (Their 1 px top sheen is a hairline: at 150 % it
+        # falls between the logical rows a 1x comparison samples.)
+        def sheen_at(kx):
+            return I.run(y0 + 130, x0 + kx - 4, x0 + kx + 28, lambda p: lum(p) <= 0x1A)
+        sheen = [sheen_at(kx) for kx in (48, 80)]
         m["keys"] = tuple((s[0] - x0, s[1] - x0) if s else None for s in sheen)
         # The clip mark's well: #1A1A1A with a 1 px black inner top shadow, on the panel (~#1C);
         # found by its darker top row (the inset shadow) and its columns.
