@@ -221,6 +221,13 @@ impl Steps {
 impl StepOut for Steps {
     fn step(&mut self, cycle: u64, d: [i32; 3]) {
         self.c.add(cycle, d[0]);
+        if !self.side && (d[1] != 0 || d[2] != 0) {
+            // The sides start now: until then they were never read, so they
+            // take the centre's timing (they hold nothing yet).
+            let c = &self.c;
+            self.l.sync_timing(c);
+            self.r.sync_timing(c);
+        }
         if d[1] != 0 {
             self.l.add(cycle, d[1]);
             self.side = true;

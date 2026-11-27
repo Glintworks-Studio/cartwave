@@ -468,4 +468,167 @@ mod tests {
         let n = |s, e| Note::new(s, e, 60);
         assert_eq!(max_polyphony(&[n(0, 10), n(5, 20), n(10, 30), n(25, 40)]), 2);
     }
+
+
+    // ───────────── Batch 4b: stereo, unison, gain staging ─────────────
+
+    fn play_stereo(m: &mut Mixdown, snap: &SongSnapshot, secs: f64) -> (Vec<f32>, Vec<f32>, bool) {
+        m.player.set_bpm(150.0);
+        m.player.play();
+        let n = (secs * 48_000.0) as usize;
+        let (mut l, mut r) = (vec![0f32; n], vec![0f32; n]);
+        let mut stereo = false;
+        for (a, b) in l.chunks_mut(256).zip(r.chunks_mut(256)) {
+            stereo |= m.render_stereo(snap, a, b);
+        }
+        (l, r, stereo)
+    }
+
+    fn db(x: f64) -> f64 {
+        20.0 * x.max(1e-12).log10()
+    }
+
+    /// B4B-01: the pan law. Equal power (l² + r² = 2), centre exactly unity
+    /// in each channel, −3 dB against a hard pan's side, hard pans silent on
+    /// the other side.
+    #[test]
+    fn b4b_pan_law_is_equal_power_minus_3_db_at_centre() {
+        use crate::studio::pan_gains;
+        assert_eq!(pan_gains(0), (1.0, 1.0));
+        for p in -50..=50i8 {
+            let (l, r) = pan_gains(p);
+            assert!((l * l + r * r - 2.0).abs() < 1e-12, "{p}: {l} {r}");
+        }
+        let (l, r) = pan_gains(-50);
+        assert!((l - 2f64.sqrt()).abs() < 1e-12 && r.abs() < 1e-12);
+        let (l, r) = pan_gains(50);
+        assert!(l.abs() < 1e-12 && (r - 2f64.sqrt()).abs() < 1e-12);
+        // Centre vs a hard pan's side: −3.01 dB.
+        assert!((db(1.0) - db(2f64.sqrt()) + 3.0103).abs() < 1e-3);
+        assert!(pan_gains(-20).0 > pan_gains(-20).1);
+    }
+
+    /// B4B-02: the mono path. A centred studio track renders the same in
+    /// both channels, bit for bit the mono render, and never starts the
+    /// sides.
+    #[test]
+    fn b4b_centred_studio_tracks_take_the_mono_path() {
+        let notes = chord(&[48, 55, 64], 0, 3840);
+        let snap = snap_with(&notes);
+        let (rack, _) = rack_with(VoiceKind::Pulse, 8, 0);
+        let mut a = Mixdown::new(48_000.0);
+        a.adopt_rack(rack);
+        let mono = play(&mut a, &snap, 0.5);
+        let (rack, _) = rack_with(VoiceKind::Pulse, 8, 0);
+        let mut b = Mixdown::new(48_000.0);
+        b.adopt_rack(rack);
+        let (l, r, stereo) = play_stereo(&mut b, &snap, 0.5);
+        assert!(!stereo && !b.stereo());
+        assert!(mono.iter().zip(&l).all(|(x, y)| x.to_bits() == y.to_bits()));
+        assert!(l.iter().zip(&r).all(|(x, y)| x.to_bits() == y.to_bits()));
+    }
+
+    /// B4B-03: a panned studio track: the channels follow the pan law (RMS
+    /// ratio = the gains' ratio); hard left leaves the right silent; the
+    /// louder side is +3 dB over the centred render.
+    #[test]
+    fn b4b_a_panned_track_follows_the_law() {
+        let notes = [(0u32, 19_200u32, 69u8, None)];
+        let snap = snap_with(&notes);
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 8, 0);
+        ctl.set_pan(-25);
+        let mut m = Mixdown::new(48_000.0);
+        m.adopt_rack(rack);
+        let (l, r, stereo) = play_stereo(&mut m, &snap, 0.6);
+        assert!(stereo);
+        let (gl, gr) = crate::studio::pan_gains(-25);
+        let ratio = db(rms(&l[4800..]) / rms(&r[4800..]));
+        assert!((ratio - db(gl / gr)).abs() < 0.05, "{ratio} vs {}", db(gl / gr));
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 8, 0);
+        ctl.set_pan(-50);
+        let mut h = Mixdown::new(48_000.0);
+        h.adopt_rack(rack);
+        let (l, r, _) = play_stereo(&mut h, &snap, 0.6);
+        assert!(rms(&r[4800..]) < 1e-6 && rms(&l[4800..]) > 0.05);
+        let (rack, _) = rack_with(VoiceKind::Pulse, 8, 0);
+        let mut c = Mixdown::new(48_000.0);
+        c.adopt_rack(rack);
+        let mono = play(&mut c, &snap, 0.6);
+        assert!((db(rms(&l[4800..]) / rms(&mono[4800..])) - 3.0103).abs() < 0.05);
+    }
+
+    /// B4B-04: unison. Three voices per note sound (from the pool), each
+    /// detuned across the spread, trimmed by 1/√3 so the note keeps about
+    /// one voice's loudness. The Voices cap counts unison voices.
+    #[test]
+    fn b4b_unison_voices_detune_and_keep_the_loudness() {
+        use crate::studio::{unison_cents, unison_trim};
+        assert_eq!((unison_cents(0, 1, 50), unison_cents(0, 3, 0)), (0.0, 0.0));
+        assert_eq!((unison_cents(0, 3, 20), unison_cents(1, 3, 20), unison_cents(2, 3, 20)), (-10.0, 0.0, 10.0));
+        assert_eq!((unison_trim(1), unison_trim(4)), (1.0, 0.5));
+        let notes = [(0u32, 19_200u32, 57u8, None)];
+        let snap = snap_with(&notes);
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 8, 0);
+        let mut one = Mixdown::new(48_000.0);
+        one.adopt_rack(rack);
+        let x = play(&mut one, &snap, 1.0);
+        assert_eq!(ctl.sounding.load(std::sync::atomic::Ordering::Relaxed), 1);
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 8, 0);
+        ctl.set_unison(3, 30, 0);
+        let mut uni = Mixdown::new(48_000.0);
+        uni.adopt_rack(rack);
+        let y = play(&mut uni, &snap, 1.0);
+        assert_eq!(ctl.sounding.load(std::sync::atomic::Ordering::Relaxed), 3);
+        let det: Vec<f64> = uni.rack.tracks[0].slots.iter().filter(|s| !s.voice.free()).map(|s| s.voice.driver.detune[s.voice.kind.lane()]).collect();
+        assert_eq!(det.len(), 3);
+        assert!(det.iter().any(|d| *d < -0.1) && det.iter().any(|d| *d > 0.1), "{det:?}");
+        let d = db(rms(&y[4800..]) / rms(&x[4800..]));
+        assert!(d.abs() < 2.0, "unison 3 vs one voice: {d:+.2} dB");
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 8, 2);
+        ctl.set_unison(4, 10, 0);
+        let mut capped = Mixdown::new(48_000.0);
+        capped.adopt_rack(rack);
+        play(&mut capped, &snap, 0.3);
+        assert_eq!(ctl.sounding.load(std::sync::atomic::Ordering::Relaxed), 2);
+    }
+
+    /// B4B-05: drift wanders slowly within ±drift cents, the same on every
+    /// run (pure arithmetic on the tick count).
+    #[test]
+    fn b4b_drift_is_slow_bounded_and_deterministic() {
+        use crate::studio::drift_cents;
+        assert_eq!(drift_cents(3, 1234, 0), 0.0);
+        let w: Vec<f64> = (0..3600).map(|t| drift_cents(2, t, 10)).collect();
+        assert!(w.iter().all(|c| c.abs() <= 10.0));
+        assert!(w.iter().cloned().fold(f64::MIN, f64::max) > 5.0);
+        assert!(w.windows(2).all(|p| (p[1] - p[0]).abs() < 0.2), "slow");
+        assert_ne!(drift_cents(1, 500, 10), drift_cents(2, 500, 10), "per voice");
+    }
+
+    /// B4B-06: gain staging. One note is untouched (the limiter never works,
+    /// so it stays at the console's level); a 16-note chord at +6 dB is held
+    /// at the −1 dBFS ceiling; the track's peak bound says it went over full
+    /// scale (the clip mark).
+    #[test]
+    fn b4b_gain_staging_keeps_one_note_and_bounds_chords() {
+        let notes = [(0u32, 9_600u32, 69u8, None)];
+        let snap = snap_with(&notes);
+        let (rack, _) = rack_with(VoiceKind::Pulse, 8, 0);
+        let mut m = Mixdown::new(48_000.0);
+        m.adopt_rack(rack);
+        play(&mut m, &snap, 0.5);
+        assert_eq!(m.take_limiter(), 1.0, "one note: the limiter never works");
+        let pitches: Vec<u8> = (0..16).map(|k| 40 + 3 * k).collect();
+        let notes = chord(&pitches, 0, 19_200);
+        let snap = snap_with(&notes);
+        let (rack, ctl) = rack_with(VoiceKind::Pulse, 32, 0);
+        ctl.set_gain(2.0);
+        let mut m = Mixdown::new(48_000.0);
+        m.adopt_rack(rack);
+        let out = play(&mut m, &snap, 1.0);
+        let peak = out.iter().fold(0f32, |a, v| a.max(v.abs()));
+        assert!(peak <= LIMIT_CEIL + 1e-6, "peak {peak}");
+        assert!(m.take_limiter() < 0.9, "the limiter worked");
+        assert!(ctl.take_out_peak() > 1.0, "the track went over full scale (clip mark)");
+    }
 }
