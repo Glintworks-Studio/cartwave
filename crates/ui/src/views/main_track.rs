@@ -40,28 +40,50 @@ const BADGE_H: f32 = 18.0;
 const BADGE_PAD: f32 = 4.0;
 const BADGE_PX: f32 = 11.0;
 const BADGE_BASELINE: f32 = 53.0;
-const BADGE_INK: Rgba = Rgba::hex(0x9A9A9A);
 const DEVICE_INK: Rgba = Rgba::hex(0x808080);
 const LABEL_PX: f32 = 10.0;
 const LABEL_INK: Rgba = Rgba::hex(0x808080);
-const VALUE_PX: f32 = 12.0;
-const VALUE_INK: Rgba = Rgba::hex(0xE6E6E6);
-/// PEAK in column A: the label's and the value's tops.
-const PEAK_LABEL_Y: f32 = 16.0;
-const PEAK_VALUE_Y: f32 = 32.0;
-/// The soft shadow the Main row casts on the tracks above it.
-const SHADOW_H: f32 = 8.0;
+/// The `main-track` board (Batch 4b §3.2, G5): PEAK is a two-line block
+/// centred in column A, both lines Inter 600 10/12, 4 px apart, the block
+/// centred in the 72 px row (tops 22 and 38); the value in `#9A9A9A`.
+const VALUE_PX: f32 = 10.0;
+const VALUE_INK: Rgba = Rgba::hex(0x9A9A9A);
+const PEAK_LABEL_Y: f32 = 22.0;
+const PEAK_VALUE_Y: f32 = 38.0;
+const PEAK_LINE: f32 = 12.0;
+/// The OUT badge's speaker glyph (the board's 10 × 10 SVG, drawn as paths)
+/// and its gap to the text.
+const SPEAKER_W: f32 = 10.0;
+const BADGE_ICON_GAP: f32 = 4.0;
+/// The lane: bar lines only, `#222222` (the board's lane has no beat lines).
+const MAIN_GRID: Rgba = Rgba::hex(0x222222);
+/// The shadow the Main row casts on the tracks above it: the board's
+/// `box-shadow: 0 -6px 8px -4px rgba(0,0,0,.6)`, drawn in a 12 px band above
+/// the row (its reach).
+const SHADOW_H: f32 = 12.0;
+const SHADOW_DY: f32 = -6.0;
+const SHADOW_BLUR: f32 = 8.0;
+const SHADOW_SPREAD: f32 = -4.0;
+const SHADOW_A: f32 = 0.6;
 
-/// The peak as text: dBFS with one decimal, "−inf" at silence.
+/// The peak as text: dBFS with one decimal and "dB" ("−1.2 dB", the boards'
+/// PEAK readouts), "+3.2 dB" over full scale, "−inf" at silence.
 pub fn peak_text(peak: f32) -> String {
     if peak <= 0.0 {
         "\u{2212}inf".into()
     } else {
-        let db = 20.0 * peak.log10();
-        // Over full scale it says so: "+3.2".
-        let t = if db > 0.0 { format!("+{db:.1}") } else { format!("{db:.1}") };
+        let db = ((20.0 * peak.log10()) * 10.0).round() / 10.0;
+        let t = if db > 0.0 { format!("+{db:.1} dB") } else { format!("{db:.1} dB") };
         t.replace('-', "\u{2212}")
     }
+}
+
+/// The speaker glyph at `o` (its 10 × 10 box): the board's
+/// `M1 3.5H3L6 1V9L3 6.5H1Z` filled and the arc `M7.5 3.2a2.5 2.5 0 0 1 0 3.6`
+/// stroked at 1 px.
+pub fn draw_speaker(canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba) {
+    canvas.draw_path(&gfx::svg_path("M1 3.5H3L6 1V9L3 6.5H1Z", o, s), &gfx::fill(ink));
+    canvas.draw_path(&gfx::svg_path("M7.5 3.2a2.5 2.5 0 0 1 0 3.6", o, s), &gfx::stroke(ink, s));
 }
 
 pub struct MainHeader {
@@ -86,10 +108,10 @@ impl MainHeader {
             .bind(s.header, |mut h| h.needs_redraw())
     }
 
-    /// The PEAK value's box (logical, row-relative): a click resets it.
+    /// The PEAK block's box (logical, row-relative): a click resets it.
     fn peak_rect(&self) -> (f32, f32, f32, f32) {
         let l = self.s.header.get_untracked();
-        (l.col_a(), 1.0 + PEAK_LABEL_Y - 2.0, 56.0, PEAK_VALUE_Y - PEAK_LABEL_Y + 16.0)
+        (l.col_a(), 1.0 + PEAK_LABEL_Y - 2.0, 56.0, PEAK_VALUE_Y + PEAK_LINE - PEAK_LABEL_Y + 4.0)
     }
 }
 
@@ -122,40 +144,55 @@ impl View for MainHeader {
     }
 
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
+        let _perf = crate::perf::scope(crate::perf::Span::Rows);
         let b = cx.bounds();
         let s = cx.scale_factor();
         let r = gfx::snap(b.into());
-        let hl = gfx::hairline(s);
         let lay = self.s.header.get_untracked();
-        // The divider on top, then the row.
-        canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(MAIN_DIVIDER));
-        let body = vg::Rect::from_ltrb(r.left, r.top + hl, r.right, r.bottom);
-        canvas.draw_rect(body, &gfx::fill(BG_0));
-        // The black strip (`main_strip`): black → #1C1C1C → #363636 across,
-        // a #4A4A4A highlight on its outer edge, a 6% inner glow.
-        let sx = (r.left + lay.strip_x() * s).round();
-        let strip = vg::Rect::from_ltrb(sx, body.top, (sx + 16.0 * s).round(), body.bottom);
-        let m = palette::main_strip();
-        let (a, z) = if lay.spill_right() { ((strip.left, strip.top), (strip.right, strip.top)) } else { ((strip.right, strip.top), (strip.left, strip.top)) };
-        canvas.draw_rect(strip, &gfx::shaded(gfx::linear(a, z, &m.fill, Some(&[0.0, 0.5, 1.0]))));
-        let edge_x = if lay.spill_right() { strip.left } else { strip.right - hl };
-        canvas.draw_rect(vg::Rect::from_xywh(edge_x, strip.top, hl, strip.height()), &gfx::fill(m.edge));
-        gfx::ring(canvas, &gfx::rrect(strip.with_inset((hl, hl)), 0.0), hl, &gfx::fill(Rgba::white(m.glow)));
-
-        // Name, badge, PEAK: one image per content (the device name, the
-        // peak text, the layout and scale).
+        // The whole header (divider, body, the black strip, name, badge,
+        // PEAK and the dB value) is one image per content, layout and scale
+        // (Batch 4b §3.1, the way track rows cache theirs): while playing,
+        // the meter beside it redraws and this is one blit.
         let device = self.s.out_device.get_untracked();
         let peak = peak_text(self.s.master_peak.get_untracked());
         let db = crate::state::format_db(self.s.master_db.get_untracked());
-        let key = format!("{db}|{device}\u{1}{peak}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}", lay.w, lay.right, lay.by_clips, r.width(), (s * 100.0).round());
+        let key = format!("{db}|{device}\u{1}{peak}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}\u{1}{}", lay.w, lay.right, lay.by_clips, lay.num_w, r.width(), r.height(), (s * 100.0).round());
         let mut text = self.text.borrow_mut();
         if text.as_ref().is_none_or(|(k, _)| *k != key) {
-            *text = render_text(&lay, &device, &peak, &db, r.width(), r.height(), s).map(|img| (key, img));
+            *text = render_header(&lay, &device, &peak, &db, r.width(), r.height(), s).map(|img| (key, img));
         }
         if let Some((_, img)) = text.as_ref() {
             canvas.draw_image(img, (r.left, r.top), None);
         }
     }
+}
+
+/// The Main header as an image `w` × `h` device px: the divider on top,
+/// the body, the black strip (`main_strip`: black → #1C1C1C → #363636
+/// across, a #4A4A4A highlight on its outer edge, a 6% inner glow), then the
+/// text (`render_text`).
+fn render_header(l: &super::header_layout::HeaderLayout, device: &str, peak: &str, db: &str, w: f32, h: f32, s: f32) -> Option<vg::Image> {
+    let (wi, hi) = (w.round().max(1.0) as i32, h.round().max(1.0) as i32);
+    let mut surface = vg::surfaces::raster_n32_premul((wi, hi))?;
+    let canvas = surface.canvas();
+    canvas.clear(vg::Color::TRANSPARENT);
+    let r = vg::Rect::from_xywh(0.0, 0.0, wi as f32, hi as f32);
+    let hl = gfx::hairline(s);
+    canvas.draw_rect(vg::Rect::from_xywh(r.left, r.top, r.width(), hl), &gfx::fill(MAIN_DIVIDER));
+    let body = vg::Rect::from_ltrb(r.left, r.top + hl, r.right, r.bottom);
+    canvas.draw_rect(body, &gfx::fill(BG_0));
+    let sx = (r.left + l.strip_x() * s).round();
+    let strip = vg::Rect::from_ltrb(sx, body.top, (sx + 16.0 * s).round(), body.bottom);
+    let m = palette::main_strip();
+    let (a, z) = if l.spill_right() { ((strip.left, strip.top), (strip.right, strip.top)) } else { ((strip.right, strip.top), (strip.left, strip.top)) };
+    canvas.draw_rect(strip, &gfx::shaded(gfx::linear(a, z, &m.fill, Some(&[0.0, 0.5, 1.0]))));
+    let edge_x = if l.spill_right() { strip.left } else { strip.right - hl };
+    canvas.draw_rect(vg::Rect::from_xywh(edge_x, strip.top, hl, strip.height()), &gfx::fill(m.edge));
+    gfx::ring(canvas, &gfx::rrect(strip.with_inset((hl, hl)), 0.0), hl, &gfx::fill(Rgba::white(m.glow)));
+    if let Some(t) = render_text(l, device, peak, db, w, h, s) {
+        canvas.draw_image(&t, (0.0, 0.0), None);
+    }
+    Some(surface.image_snapshot())
 }
 
 fn render_text(l: &super::header_layout::HeaderLayout, device: &str, peak: &str, db: &str, w: f32, h: f32, s: f32) -> Option<vg::Image> {
@@ -169,13 +206,16 @@ fn render_text(l: &super::header_layout::HeaderLayout, device: &str, peak: &str,
     let (_, m) = f.metrics();
     let base = (top + NAME_TOP * s - m.ascent).round() + s.round();
     gfx::draw_text_clipped(canvas, "Main", (l.name_x() * s).round(), base, l.name_w() * s, &f, TEXT_HI);
-    // The OUT badge and the device name after it.
+    // The OUT badge (a speaker glyph, then "OUT": the board) and the device
+    // name after it.
     let bf = gfx::font(Face::SemiBold, BADGE_PX * s);
-    let bw = gfx::text_width(&bf, "OUT") + (2.0 + 2.0 * BADGE_PAD) * s;
+    let bw = gfx::text_width(&bf, "OUT") + (2.0 + 2.0 * BADGE_PAD + SPEAKER_W + BADGE_ICON_GAP) * s;
     let badge = vg::Rect::from_xywh((l.name_x() * s).round(), (top + BADGE_Y * s).round(), bw.round(), BADGE_H * s);
     gfx::ring(canvas, &gfx::rrect(badge, RADIUS_KEY * s), hl, &gfx::fill(STROKE));
     let bb = (top + BADGE_BASELINE * s).round();
-    gfx::draw_text(canvas, "OUT", (badge.left + hl + BADGE_PAD * s).round(), bb, &bf, BADGE_INK);
+    let ix = (badge.left + hl + BADGE_PAD * s).round();
+    draw_speaker(canvas, (ix, (badge.top + (BADGE_H - SPEAKER_W) * 0.5 * s).round()), s, BADGE_INK);
+    gfx::draw_text(canvas, "OUT", (ix + (SPEAKER_W + BADGE_ICON_GAP) * s).round(), bb, &bf, BADGE_INK);
     let df = gfx::font(Face::Medium, 12.0 * s);
     let dx = badge.right + 8.0 * s;
     gfx::draw_text_clipped(canvas, device, dx.round(), bb, (l.name_x() + l.name_w()) * s - dx, &df, DEVICE_INK);
@@ -184,11 +224,12 @@ fn render_text(l: &super::header_layout::HeaderLayout, device: &str, peak: &str,
     let tr = 0.1 * LABEL_PX * s;
     let lw = gfx::tracked_width("PEAK", &lf, tr);
     let cx = (l.col_a() + 28.0) * s;
-    let lb = gfx::css_baseline(&lf, top + PEAK_LABEL_Y * s, 12.0 * s).round();
-    gfx::draw_text_tracked(canvas, "PEAK", (cx - lw * 0.5).round(), lb, &lf, tr, LABEL_INK);
+    let lb = gfx::css_baseline(&lf, top + PEAK_LABEL_Y * s, PEAK_LINE * s).round();
+    // The tracking's trailing space isn't ink (CSS centres the box with it).
+    gfx::draw_text_tracked(canvas, "PEAK", (cx - (lw + tr) * 0.5).round(), lb, &lf, tr, LABEL_INK);
     let vf = gfx::font(Face::SemiBold, VALUE_PX * s);
     let vw = gfx::text_width(&vf, peak);
-    let vb = gfx::css_baseline(&vf, top + PEAK_VALUE_Y * s, 16.0 * s).round();
+    let vb = gfx::css_baseline(&vf, top + PEAK_VALUE_Y * s, PEAK_LINE * s).round();
     gfx::draw_text(canvas, peak, (cx - vw * 0.5).round(), vb, &vf, VALUE_INK);
     // The master fader's dB value, where a track's is (polish 2 §3 type).
     let r = super::chrome::db_value_rect(l, MAIN_ROW_H);
@@ -285,15 +326,10 @@ impl View for MainLane {
                     let ppb = view.px_per_bar() as f32;
                     let first_bar = (view.scroll_ticks / TICKS_PER_BAR as f64).floor() as i64;
                     let nbars = (lr.width() / s / ppb).ceil() as i64 + 2;
+                    // Bar lines only (the board's lane: no beat lines).
                     for bar in first_bar.max(0)..first_bar + nbars {
                         let bx = x_of((bar as u32 * TICKS_PER_BAR) as f64);
-                        if ppb >= 48.0 {
-                            for k in 1..4u32 {
-                                let x = (bx + k as f32 * ppb / 4.0 * s).round();
-                                c.draw_rect(vg::Rect::from_xywh(x, lb.top, hl, lb.height()), &gfx::fill(GRID_BEAT));
-                            }
-                        }
-                        c.draw_rect(vg::Rect::from_xywh(bx.round(), lb.top, hl, lb.height()), &gfx::fill(GRID_BAR));
+                        c.draw_rect(vg::Rect::from_xywh(bx.round(), lb.top, hl, lb.height()), &gfx::fill(MAIN_GRID));
                     }
                     (key, surface.image_snapshot())
                 });
@@ -322,7 +358,14 @@ impl MainShadow {
 
 impl View for MainShadow {
     fn draw(&self, cx: &mut DrawContext, canvas: &Canvas) {
-        let r: vg::Rect = cx.bounds().into();
-        canvas.draw_rect(r, &gfx::vgrad(r, Rgba::black(0.0), Rgba::black(0.28)));
+        // The board's box-shadow of the row just below this band, clipped
+        // to the band (the row covers the rest).
+        let s = cx.scale_factor();
+        let r: vg::Rect = gfx::snap(cx.bounds().into());
+        let row = vg::Rect::from_xywh(r.left, r.bottom, r.width(), MAIN_TOTAL_H * s);
+        canvas.save();
+        canvas.clip_rect(r, None, None);
+        gfx::drop_shadow(canvas, &gfx::rrect(row, 0.0), 0.0, SHADOW_DY * s, SHADOW_BLUR * s, SHADOW_SPREAD * s, Rgba::black(SHADOW_A));
+        canvas.restore();
     }
 }

@@ -85,7 +85,8 @@ pub fn lane_span(lane: usize) -> Option<(f32, f32)> {
 
 /// Kind bits in display order, with their lane colour.
 const KINDS: [(u8, Rgba); 6] = [
-    (K_PULSE, LANE_PULSE),
+    // The pulse presets' marker: not lime (Batch 4b lime inventory).
+    (K_PULSE, NEW_PULSE),
     (K_TRI, LANE_TRI),
     (K_NOISE, LANE_NOISE),
     (K_DMC, LANE_DPCM),

@@ -246,7 +246,9 @@ impl Arrangement {
         a.instruments.lanes.clear();
         for (n, &chan) in [0usize, 1, 2, 3].iter().enumerate() {
             let k = VoiceKind::of_lane(chan);
-            let at = a.insert_track(n, k, legacy[chan].color);
+            // G15: a new project's Pulse tracks never get the legacy lime.
+            let colour = if k == VoiceKind::Pulse { crate::theme::tokens::NEW_PULSE } else { legacy[chan].color };
+            let at = a.insert_track(n, k, colour);
             a.lanes[at].params = crate::instruments::default_params().values[chan];
         }
         let clips = a.clips.clone();

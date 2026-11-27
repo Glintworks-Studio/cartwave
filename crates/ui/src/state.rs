@@ -334,7 +334,7 @@ pub fn parse_pan(text: &str) -> Option<i8> {
 /// The palette offered by the Colour ▸ menus (clips and tracks): the lane
 /// colours first, then extra hues of the same lightness.
 pub const PALETTE: [(&str, u32); 12] = [
-    ("Lime", 0xC9D24A),
+    ("Sage", 0xB4C08A),
     ("Periwinkle", 0x7F86E0),
     ("Sand", 0xB5AC98),
     ("Amber", 0xE39A42),

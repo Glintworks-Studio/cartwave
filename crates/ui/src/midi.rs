@@ -302,6 +302,11 @@ pub fn arrange(song: &MidiSong, vrc6: bool) -> Imported {
         report.push(format!("{} tempo changes ignored (the song keeps the first tempo)", song.tempo_events - 1));
     }
     let mut a = Arrangement::empty();
+    // A new project (G15): its Pulse tracks get the new Pulse colour, not
+    // the legacy lime.
+    for l in a.lanes.iter_mut().filter(|l| l.voice == chip::voice::VoiceKind::Pulse) {
+        l.color = crate::theme::tokens::NEW_PULSE;
+    }
     let mut end = 0u32;
     for (_, notes, name) in lanes.iter_mut() {
         let before = notes.len();

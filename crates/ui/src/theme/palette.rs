@@ -8,9 +8,10 @@
 //! - The 12 colours in use before (lane defaults and the old Colour menu)
 //!   sit in their nearest cells, so existing projects look the same.
 //! - Nothing lies within OKLab ΔE 0.06 of the toggle lime `#C7D74E`, so a
-//!   clip can't pass for a lit toggle. One exception: the legacy pulse lane
-//!   colour `#C9D24A` (the approved mockup's own), kept so that existing
-//!   projects don't change (POLISH.md, RUNLOG PL-D4).
+//!   clip can't pass for a lit toggle. Batch 4b (G15, RUNLOG B4B-D*): the
+//!   legacy pulse lane colour `#C9D24A` left the grid (its cell is Sage
+//!   `#B4C08A`); existing projects that use it keep it untouched, but nothing
+//!   new gets it.
 //! - The palette stores base colours only. Every surface derives its
 //!   shades through the recipes below (VISUAL-SPEC.md): strips, clips,
 //!   notes, edges, browser markers, macro graphs. No surface paints a flat
@@ -20,7 +21,7 @@ use super::tokens::{Rgba, ACCENT};
 
 pub const BASE: [[u32; 14]; 5] = [
     [0xFFBFB8, 0xFDC3A2, 0xF7C985, 0xDED485, 0xBEDE97, 0x9DE5B3, 0x82E7D2, 0x79E4F0, 0x96DCFF, 0xB6D3FC, 0xC9CCFF, 0xE0C3FD, 0xFAB9ED, 0xFEBCCF],
-    [0xFD968F, 0xF99E67, 0xB5AC98, 0xC9D24A, 0xD8B83C, 0x7FD08A, 0x3CC4A6, 0x1ACFDF, 0x4DC6FB, 0x89BAFD, 0xACAFFC, 0xCEA0F7, 0xE997DA, 0xFA93B5],
+    [0xFD968F, 0xF99E67, 0xB5AC98, 0xB4C08A, 0xD8B83C, 0x7FD08A, 0x3CC4A6, 0x1ACFDF, 0x4DC6FB, 0x89BAFD, 0xACAFFC, 0xCEA0F7, 0xE997DA, 0xFA93B5],
     [0xE0705A, 0xE67F3C, 0xE39A42, 0xB1A109, 0x83AF3E, 0x40B971, 0x13B7A0, 0x8C98A8, 0x4FA8E0, 0x5C9FFA, 0x9190F8, 0xA77BE0, 0xD578C5, 0xE7739C],
     [0xCD605A, 0xC7692A, 0xB27A00, 0x968800, 0x6E952B, 0x2C9E5D, 0x129B88, 0x0698A4, 0x0092C3, 0x4A87D9, 0x7F86E0, 0x9D6DC7, 0xB763A9, 0xD9579A],
     [0x9C433F, 0x944810, 0x7D5502, 0x665C09, 0x476705, 0x006D39, 0x036A5C, 0x016770, 0x056689, 0x2B5DA0, 0x5755A2, 0x734B94, 0x88437D, 0x984261],
@@ -291,11 +292,13 @@ mod tests {
         d.sort();
         d.dedup();
         assert_eq!(d.len(), 70, "no duplicates");
-        for l in LEGACY {
+        // The legacy pulse lime left the grid (G15); the rest are kept.
+        for l in LEGACY.into_iter().filter(|l| *l != 0xC9D24A) {
             assert!(v.contains(&l), "legacy {l:06X} kept");
         }
-        // Today's lane defaults are all in it.
-        for lane in crate::state::default_lanes() {
+        assert!(!v.contains(&0xC9D24A));
+        // Today's lane defaults are all in it, but the legacy pulse.
+        for lane in crate::state::default_lanes().into_iter().filter(|l| crate::state::rgb_hex(l.color) != 0xC9D24A) {
             assert!(index_of(lane.color).is_some(), "lane colour {:06X}", crate::state::rgb_hex(lane.color));
         }
         for (_, h) in crate::state::PALETTE {

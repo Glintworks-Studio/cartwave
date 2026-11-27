@@ -144,21 +144,15 @@ pub const RECORD: Rgba = Rgba::hex(0xE5484D);
 // its left). Pulse lime and triangle periwinkle come from the prototype; the
 // rest are picked at the same lightness and saturation.
 pub const LANE_PULSE: Rgba = Rgba::hex(0xC9D24A);
+/// The Pulse colour for **new** projects and tracks (Batch 4b G15, the CEO's
+/// decision): Sky, a palette colour far from the toggle lime. `LANE_PULSE`
+/// stays the legacy layout's, so existing projects keep their colours.
+pub const NEW_PULSE: Rgba = Rgba::hex(0x4FA8E0);
 pub const LANE_TRI: Rgba = Rgba::hex(0x7F86E0);
 pub const LANE_NOISE: Rgba = Rgba::hex(0xB5AC98);
 pub const LANE_DPCM: Rgba = Rgba::hex(0xE39A42);
 pub const LANE_VRC6_PULSE: Rgba = Rgba::hex(0xD9579A);
 pub const LANE_VRC6_SAW: Rgba = Rgba::hex(0x3CC4A6);
-
-// The track volume meter-fader: cool-to-hot stops over its full 68 px
-// (px from the left, colour).
-pub const FADER_STOPS: [(f32, Rgba); 5] = [
-    (0.0, Rgba::hex(0x2F6FD6)),
-    (22.0, Rgba::hex(0x2FB7B0)),
-    (44.0, Rgba::hex(0xC7D74E)),
-    (56.0, Rgba::hex(0xF0A23A)),
-    (68.0, Rgba::hex(0xE0483B)),
-];
 
 // Arrangement surfaces (Option D)
 /// Ruler band and the TRACKS cell beside it.
