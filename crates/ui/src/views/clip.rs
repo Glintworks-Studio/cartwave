@@ -65,7 +65,9 @@ pub fn draw_clip_shadow(canvas: &Canvas, p: &ClipPaint) {
         gfx::drop_shadow(canvas, &rr, 0.0, 8.0 * a.drag * s, 18.0 * a.drag * s, 0.0, Rgba::black(0.6 * a.drag));
     }
     if a.selected > 0.01 {
-        gfx::drop_shadow(canvas, &rr, 0.0, 0.0, 12.0 * s, 1.0 * s, p.color.with_alpha(0.55 * a.selected));
+        // Neutral selection (G12): a faint white glow, not the lane colour.
+        use crate::theme::palette::{SELECT_GLOW_A, SELECT_GLOW_R};
+        gfx::drop_shadow(canvas, &rr, 0.0, 0.0, SELECT_GLOW_R * s, 0.0, Rgba::white(SELECT_GLOW_A * a.selected));
     }
 }
 
@@ -128,8 +130,14 @@ pub fn draw_clip_body(canvas: &Canvas, p: &ClipPaint) {
     }
     canvas.restore();
 
-    // The 1 px border in the lane colour; selection brightens it.
+    // The 1 px border in the lane colour.
     gfx::ring(canvas, &rr, hl, &gfx::fill(k.edge));
+    // Selected (G12): a 1 px #E6E6E6 outline just outside it (the board's
+    // `0 0 0 1px` ring).
+    if a.selected > 0.01 {
+        let out = gfx::rrect(r.with_outset((hl, hl)), RADIUS_CLIP * s + hl);
+        gfx::ring(canvas, &out, hl, &gfx::fill(crate::theme::palette::SELECT_OUTLINE.with_alpha(a.selected)));
+    }
 
     if layered {
         canvas.restore();

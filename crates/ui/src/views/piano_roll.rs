@@ -1303,14 +1303,20 @@ fn draw_notes(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &P
         }
         let selected = p.sel.contains(&n.id);
         let vol = n.volume.unwrap_or(lane_vol) as f32 / notes::MAX_VOLUME as f32;
-        let body = if selected { color.lighten(0.35) } else { color.mix(Rgba::hex(0x1E1E1E), 0.45 * (1.0 - vol)) };
+        // Selection is neutral (G12): the note keeps its colour; a white
+        // outline and a faint glow mark it.
+        let body = color.mix(Rgba::hex(0x1E1E1E), 0.45 * (1.0 - vol));
         let r = vg::Rect::from_ltrb(x0.round(), (y + s).round(), (x1.round() - s).max(x0.round() + s), (y + px(m.row_h) - s).round());
         // Lit from the top with a gradient stroke, like the clips.
         let rr = gfx::rrect(r, (2.0 * s).min(r.height() * 0.5));
+        if selected {
+            use crate::theme::palette::{SELECT_GLOW_A, SELECT_GLOW_R};
+            gfx::drop_shadow(canvas, &rr, 0.0, 0.0, SELECT_GLOW_R * s, 0.0, Rgba::white(SELECT_GLOW_A));
+        }
         canvas.draw_rrect(rr, &gfx::vgrad(r, body.lighten(0.08), body.darken(0.12)));
         let hl = gfx::hairline(s);
         if selected {
-            gfx::ring(canvas, &rr, hl, &gfx::fill(Rgba::white(0.9)));
+            gfx::ring(canvas, &rr, hl, &gfx::fill(crate::theme::palette::SELECT_OUTLINE));
         } else {
             gfx::ring_vgrad(canvas, &rr, hl, body.lighten(0.35), Rgba::black(0.45));
         }
@@ -1336,9 +1342,11 @@ fn draw_notes(canvas: &vg::Canvas, s: f32, m: &Map, c: &Clip, color: Rgba, p: &P
             let v = n.volume.unwrap_or(lane_vol) as f32 / notes::MAX_VOLUME as f32;
             let top = inner(v);
             let selected = p.sel.contains(&n.id);
-            let col = if n.volume.is_none() { color.with_alpha(0.35) } else if selected { color.lighten(0.35) } else { color };
+            let col = if n.volume.is_none() { color.with_alpha(0.35) } else { color };
             canvas.draw_rect(vg::Rect::from_ltrb(x0, top, x0 + bw, v1 - px(4.0)), &gfx::fill(col));
-            canvas.draw_rect(vg::Rect::from_ltrb(x0, top, x0 + bw.max(px(6.0)), top + px(2.0)), &gfx::fill(col.lighten(0.3)));
+            // A selected note's bar: a neutral white cap (G12).
+            let cap = if selected { crate::theme::palette::SELECT_OUTLINE } else { col.lighten(0.3) };
+            canvas.draw_rect(vg::Rect::from_ltrb(x0, top, x0 + bw.max(px(6.0)), top + px(2.0)), &gfx::fill(cap));
         }
         canvas.restore();
         let f = gfx::font(Face::Medium, LABEL_PX * s);

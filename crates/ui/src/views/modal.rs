@@ -6,6 +6,7 @@
 //! same in a plugin window.
 
 use vizia::prelude::*;
+use crate::HelpExt;
 
 use crate::file::Settings;
 use crate::notes::Grid;
@@ -288,7 +289,7 @@ fn editing(cx: &mut Context, st: &Settings) {
     let def = crate::file::parse_hex(&st.default_track_colour).unwrap_or(crate::theme::tokens::LANE_TRI);
     row(cx, "Default track colour", move |cx| {
         let why = if auto { "Used when auto-assign is off." } else { "New tracks get this colour. Click to choose another." };
-        SwatchKey::new(cx, def, !auto).tooltip(move |cx| crate::tip(cx, why));
+        SwatchKey::new(cx, def, !auto).help(why);
     });
     row(cx, "Reduced automatic colours", |cx| {
         choice(cx, "On", st.reduced_auto_colours, true, set(Set::ReducedAutoColours(true)));

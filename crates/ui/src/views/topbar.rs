@@ -527,10 +527,22 @@ impl DisplayWell {
     }
 }
 
-/// The overhang: a top gradient (black .62 at 0, .4 at 8, .22 at 18, .1 at
-/// 26, 0 at 34 CSS px) plus `inset 0 14px 16px -10px rgba(0,0,0,.8)`, in the
-/// display's padding box (radius 7). The polish pass toned the mockup's
-/// (.78 / .5 / .28 / .12, inset .95) to about 80%, keeping its 34 px reach.
+/// The overhang's reach and its curve (VISUAL-SPEC.md §13, G11; the
+/// `fixups` board): black at alpha `0.6 · (1 − y/48)^2.2`, easing out over
+/// 48 px (it was a 34 px linear-ish ramp), sampled every 4 px as the board's
+/// gradient is.
+pub const OVERHANG_REACH: f32 = 48.0;
+const OVERHANG_ALPHA: f32 = 0.6;
+const OVERHANG_EASE: f32 = 2.2;
+const OVERHANG_STEP: f32 = 4.0;
+
+/// The overhang's alpha `y` CSS px below the display's inner top.
+pub fn overhang_alpha(y: f32) -> f32 {
+    OVERHANG_ALPHA * (1.0 - (y / OVERHANG_REACH).clamp(0.0, 1.0)).powf(OVERHANG_EASE)
+}
+
+/// The overhang: the eased gradient above plus the softer inset
+/// `0 16px 24px −12px` black at 0.55, in the display's padding box (radius 7).
 fn render_overhang(w: i32, h: i32, radius: f32, s: f32) -> Option<vg::Image> {
     let mut surface = vg::surfaces::raster_n32_premul((w.max(1), h.max(1)))?;
     let c = surface.canvas();
@@ -539,17 +551,29 @@ fn render_overhang(w: i32, h: i32, radius: f32, s: f32) -> Option<vg::Image> {
     let rr = gfx::rrect(r, radius);
     c.save();
     c.clip_rrect(rr, vg::ClipOp::Intersect, true);
-    let stops = [0.0, 8.0, 18.0, 26.0, 34.0];
-    let alphas = [0.62, 0.40, 0.22, 0.10, 0.0];
-    let colors: Vec<Rgba> = alphas.iter().map(|a| Rgba::black(*a)).collect();
-    let pos: Vec<f32> = stops.iter().map(|y| y / 34.0).collect();
+    let n = (OVERHANG_REACH / OVERHANG_STEP) as usize;
+    let ys: Vec<f32> = (0..=n).map(|k| k as f32 * OVERHANG_STEP).collect();
+    let colors: Vec<Rgba> = ys.iter().map(|y| Rgba::black(overhang_alpha(*y))).collect();
+    let pos: Vec<f32> = ys.iter().map(|y| y / OVERHANG_REACH).collect();
     c.draw_rect(
-        vg::Rect::from_xywh(0.0, 0.0, w as f32, 34.0 * s),
-        &gfx::shaded(gfx::linear((0.0, 0.0), (0.0, 34.0 * s), &colors, Some(&pos))),
+        vg::Rect::from_xywh(0.0, 0.0, w as f32, OVERHANG_REACH * s),
+        &gfx::shaded(gfx::linear((0.0, 0.0), (0.0, OVERHANG_REACH * s), &colors, Some(&pos))),
     );
     c.restore();
-    gfx::css_inset_shadow(c, &rr, 0.0, 14.0 * s, 16.0 * s, -10.0 * s, Rgba::black(0.8));
+    gfx::css_inset_shadow(c, &rr, 0.0, 16.0 * s, 24.0 * s, -12.0 * s, Rgba::black(0.55));
     Some(surface.image_snapshot())
+}
+
+#[cfg(test)]
+mod overhang_tests {
+    /// G11: the board's stops (`fixups`: .600 at 0, .495 at 4, .183 at 20,
+    /// .028 at 36, 0 at 48).
+    #[test]
+    fn the_overhang_eases_out_over_48_px() {
+        for (y, a) in [(0.0, 0.600), (4.0, 0.495), (20.0, 0.183), (36.0, 0.028), (48.0, 0.0)] {
+            assert!((super::overhang_alpha(y) - a).abs() < 0.0015, "{y}: {}", super::overhang_alpha(y));
+        }
+    }
 }
 
 impl View for DisplayWell {

@@ -3,6 +3,7 @@
 //! styling: stock `.btn` toggles in labelled rows.
 
 use vizia::prelude::*;
+use crate::HelpExt;
 
 use crate::game_export::{Loudness, Range, Stems};
 use crate::{AppEvent, Signals};
@@ -226,7 +227,7 @@ fn choice(cx: &mut Context, d: &ExportDialog, text: &str, p: Pick, enabled: bool
     match why {
         // On a wrapper: a disabled button is never hovered.
         Some(why) => {
-            crate::tip_wrap(cx, button).tooltip(move |cx| crate::tip(cx, why));
+            crate::tip_wrap(cx, button).help(why);
         }
         None => button(cx),
     }
@@ -302,11 +303,11 @@ pub fn build(cx: &mut Context, s: Signals) {
                             .class("btn")
                             .class("checked")
                             .on_press(|cx| cx.emit(AppEvent::ExportGo))
-                            .tooltip(|cx| crate::tip(cx, "Choose where to save, then render (Enter)."));
+                            .help("Choose where to save, then render (Enter).");
                         Button::new(cx, |cx| Label::new(cx, "Close"))
                             .class("btn")
                             .on_press(|cx| cx.emit(AppEvent::ExportClose))
-                            .tooltip(|cx| crate::tip(cx, "Close (Esc). Your choices are kept for next time."));
+                            .help("Close (Esc). Your choices are kept for next time.");
                     }
                 })
                 .gap(Pixels(8.0))

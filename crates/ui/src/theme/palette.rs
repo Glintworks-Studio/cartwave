@@ -164,17 +164,27 @@ pub struct ClipColours {
 }
 
 pub fn clip(c: Rgba, hover: f32, selected: f32) -> ClipColours {
-    let lane = c.lighten(0.06 * hover + 0.04 * selected);
-    let tint = 0.04 * hover + 0.06 * selected;
+    // Selection is neutral (VISUAL-SPEC.md §13, G12): a white outline and a
+    // faint glow drawn around the clip (`SELECT_*`), never a lighter lane
+    // colour, so `selected` no longer changes these shades.
+    let _ = selected;
+    let lane = c.lighten(0.06 * hover);
+    let tint = 0.04 * hover;
     ClipColours {
         header: lane,
         ink: header_ink(lane, lane),
         body_top: lane.with_alpha(0.22 + tint),
         body_bottom: lane.with_alpha(0.10 + tint),
-        edge: lane.with_alpha((0.5 + 0.15 * hover + 0.45 * selected).min(1.0)),
+        edge: lane.with_alpha((0.5 + 0.15 * hover).min(1.0)),
         note: lane.lighten(0.12).with_alpha(0.92),
     }
 }
+
+/// Neutral selection (G12, the `fixups` board): a 1 px `#E6E6E6` outline
+/// and a white glow at 22%, 10 px, around a selected clip or note.
+pub const SELECT_OUTLINE: Rgba = Rgba::hex(0xE6E6E6);
+pub const SELECT_GLOW_A: f32 = 0.22;
+pub const SELECT_GLOW_R: f32 = 10.0;
 
 /// A browser kind marker (the square before a preset): top → bottom.
 pub fn marker(c: Rgba) -> (Rgba, Rgba) {

@@ -918,7 +918,7 @@ impl Arrangement {
         // The track layout decides where every clip plays (console channel or
         // studio voices).
         for l in &self.lanes {
-            (l.id, l.lock, l.voice, l.voices).hash(&mut h);
+            (l.id, l.lock, l.voice, l.voices, l.unison.voices).hash(&mut h);
         }
         self.editing.hash(&mut h);
         self.editing_notes.hash(&mut h);
@@ -1422,6 +1422,11 @@ pub struct Meters {
     /// The Main track's meter: the output level before the master gain
     /// (the fader's meter applies the gain, like a track's), 0..1.
     pub main: f32,
+    /// Each track's held output peak (track id, linear: 1.0 = 0 dBFS) since
+    /// its last reset (Batch 4b G8): the clip mark lights above 1.0 and holds
+    /// until clicked; the mixer's PEAK readout shows it. Keyed by id, so it
+    /// follows a track that moves.
+    pub held: Vec<(u32, f32)>,
 }
 
 impl Meters {
@@ -1434,6 +1439,31 @@ impl Meters {
 
     pub fn level_of(&self, i: usize) -> f32 {
         self.level.get(i).copied().unwrap_or(0.0)
+    }
+
+    /// Track `id`'s held peak (1.0 = 0 dBFS; 0 when reset or silent).
+    pub fn held_of(&self, id: u32) -> f32 {
+        self.held.iter().find(|h| h.0 == id).map_or(0.0, |h| h.1)
+    }
+
+    /// Whether track `id`'s clip mark is lit: it went over 0 dBFS since its
+    /// last reset.
+    pub fn clipped(&self, id: u32) -> bool {
+        self.held_of(id) > 1.0
+    }
+
+    /// Raises track `id`'s held peak to `v` (it only goes up until a reset).
+    pub fn hold(&mut self, id: u32, v: f32) {
+        match self.held.iter_mut().find(|h| h.0 == id) {
+            Some(h) => h.1 = h.1.max(v),
+            None if v > 0.0 => self.held.push((id, v)),
+            None => {}
+        }
+    }
+
+    /// Clears track `id`'s held peak (a click on its clip mark or PEAK).
+    pub fn reset_held(&mut self, id: u32) {
+        self.held.retain(|h| h.0 != id);
     }
 
     pub fn light_of(&self, i: usize) -> f32 {

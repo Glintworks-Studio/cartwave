@@ -945,15 +945,20 @@ const PAN_FILL: Rgba = Rgba::hex(0x8A8A8A);
 /// change per Alt+wheel notch (three 4 px steps).
 pub const ROW_EDGE_GRAB: f32 = 4.0;
 pub const ROW_WHEEL_STEP: f32 = 12.0;
-/// The meter's cool-to-hot stops, as fractions of the fader's length from
-/// the bottom (polish 2 §3: it turns hot at 0 dB, 89%).
-pub const METER_STOPS: [(f32, Rgba); 5] = [
-    (0.0, Rgba::hex(0x2F6FD6)),
-    (0.45, Rgba::hex(0x2FB7B0)),
-    (0.70, Rgba::hex(0xC7D74E)),
-    (0.85, Rgba::hex(0xF0A23A)),
-    (0.89, Rgba::hex(0xE0483B)),
-];
+/// The header meter's fill: the pan grey (VISUAL-SPEC.md §13, G8; it was a
+/// cool-to-hot gradient with a lime stop). Lime stays for toggles.
+pub const METER_FILL: Rgba = PAN_FILL;
+/// The clip mark above each header meter (G8): 4 × 2 px at y 1, clear of
+/// the thumb at +6 dB (its top is y 4). Unlit: the well's dark; lit: bright
+/// white with a soft glow, held until clicked.
+pub const CLIP_Y: f32 = 1.0;
+pub const CLIP_H: f32 = 2.0;
+/// The press band for the clip mark (the fader's view starts at the row's
+/// top; below it a press moves the fader).
+pub const CLIP_HIT_H: f32 = 4.0;
+pub const CLIP_OFF: Rgba = Rgba::hex(0x2A2A2A);
+pub const CLIP_ON: Rgba = Rgba::hex(0xFFFFFF);
+const CLIP_GLOW_R: f32 = 4.0;
 /// The strip's lit look: `inset 0 0 10px` white and a `0 0 10px` spill in
 /// the track colour (alphas: the palette's strip recipe).
 const STRIP_GLOW_R: f32 = 10.0;
@@ -1718,6 +1723,8 @@ pub const MAIN: usize = usize::MAX;
 
 impl VolumeFader {
     pub const HELP: &'static str = "Volume: drag to change · double-click the value to type it in dB";
+    pub const CLIP_HELP: &'static str = "Clip: lights white when the track goes over 0 dBFS and stays lit · click to reset";
+    pub const MAIN_CLIP_HELP: &'static str = "Clip: lights white when the output goes over 0 dBFS and stays lit · click to reset (with PEAK)";
     pub const MAIN_HELP: &'static str = "Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too";
     /// dB per wheel notch.
     const WHEEL_DB: f32 = 1.0;
@@ -1740,6 +1747,11 @@ impl VolumeFader {
                     h.needs_redraw();
                 }
             })
+            .bind(s.master_peak, move |mut h| {
+                if lane == MAIN {
+                    h.needs_redraw();
+                }
+            })
             .bind(s.meters, move |mut h| {
                 let v = Self::state(&s, lane);
                 if !frozen && shown.get() != v {
@@ -1749,8 +1761,23 @@ impl VolumeFader {
             })
     }
 
-    /// (fill px ×4, thumb y ×4): what the view shows.
+    /// Whether the clip mark is lit (G8): the track's held peak, or Main's
+    /// PEAK, over 0 dBFS.
+    pub(crate) fn clipped(s: &Signals, lane: usize) -> bool {
+        if lane == MAIN {
+            return s.master_peak.get_untracked() > 1.0;
+        }
+        s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.id)).is_some_and(|id| s.meters.with_untracked(|m| m.clipped(id)))
+    }
+
+    /// (fill px ×4, thumb y ×4 with the clip mark in the top bit): what the
+    /// view shows.
     pub(crate) fn state(s: &Signals, lane: usize) -> (u16, u16) {
+        let (f, t) = Self::state_parts(s, lane);
+        (f, t | if Self::clipped(s, lane) { 0x8000 } else { 0 })
+    }
+
+    fn state_parts(s: &Signals, lane: usize) -> (u16, u16) {
         if lane == MAIN {
             let db = s.master_db.get_untracked();
             let len = row::fader_len(crate::state::ROW_H_MIN);
@@ -1805,6 +1832,23 @@ impl View for VolumeFader {
             WindowEvent::MouseEnter if lock.is_some() => {
                 cx.emit(AppEvent::HoverHelp(crate::tracks::locked_help(lock.unwrap_or(0))));
             }
+            // The clip mark (G8): a press on it resets the held peak (locked
+            // tracks too: it is a display, not a control).
+            WindowEvent::MouseDown(MouseButton::Left) if local_mouse(cx).1 < CLIP_HIT_H => {
+                cx.emit(if self.lane == MAIN { AppEvent::ResetPeak } else { AppEvent::ResetTrackPeak(self.lane) });
+                meta.consume();
+            }
+            WindowEvent::MouseMove(..) if self.drag.is_none() && local_mouse(cx).1 < CLIP_HIT_H => {
+                cx.emit(AppEvent::HoverHelp(if self.lane == MAIN { Self::MAIN_CLIP_HELP } else { Self::CLIP_HELP }.into()));
+            }
+            WindowEvent::MouseMove(..) if self.drag.is_none() && self.hover => {
+                let help = match lock {
+                    Some(c) => crate::tracks::locked_help(c),
+                    None if self.lane == MAIN => Self::MAIN_HELP.into(),
+                    None => Self::HELP.into(),
+                };
+                cx.emit(AppEvent::HoverHelp(help));
+            }
             WindowEvent::MouseDown(_) | WindowEvent::MouseScroll(..) | WindowEvent::MouseDoubleClick(_) if lock.is_some() => meta.consume(),
             WindowEvent::MouseDown(MouseButton::Left) => {
                 self.drag = Some((local_mouse(cx).1, self.db()));
@@ -1847,7 +1891,8 @@ impl View for VolumeFader {
         let _perf = crate::perf::scope(crate::perf::Span::Rows);
         let s = cx.scale_factor();
         let r = gfx::snap(cx.bounds().into());
-        let (fill4, thumb4) = Self::state(&self.s, self.lane);
+        let (fill4, thumb4) = Self::state_parts(&self.s, self.lane);
+        let clipped = Self::clipped(&self.s, self.lane);
         let len = self.len();
         let left = (r.left + (COL_B_W - row::FADER_WELL_W) * 0.5 * s).round();
         let top = (r.top + row::FADER_TOP * s).round();
@@ -1855,12 +1900,17 @@ impl View for VolumeFader {
         slider_track(canvas, well, s);
         let fill = fill4 as f32 / 4.0;
         if fill > 0.0 {
-            // The gradient spans the full well; the fill reveals its bottom part.
-            let stops: Vec<Rgba> = METER_STOPS.iter().map(|(_, c)| *c).collect();
-            let pos: Vec<f32> = METER_STOPS.iter().map(|(x, _)| *x).collect();
-            let paint = gfx::shaded(gfx::linear((0.0, well.bottom), (0.0, well.top), &stops, Some(&pos)));
+            // The pan grey (G8), from the bottom.
             let fh = (fill * s).round();
-            canvas.draw_rect(vg::Rect::from_xywh(well.left, well.bottom - fh, well.width(), fh), &paint);
+            canvas.draw_rect(vg::Rect::from_xywh(well.left, well.bottom - fh, well.width(), fh), &gfx::fill(METER_FILL));
+        }
+        // The clip mark (G8): above the well, white and glowing when lit.
+        let mark = vg::Rect::from_xywh(well.left, (r.top + CLIP_Y * s).round(), well.width(), (CLIP_H * s).round());
+        if clipped {
+            canvas.draw_rect(mark, &glow_paint(CLIP_ON.with_alpha(0.6), CLIP_GLOW_R * s));
+            canvas.draw_rect(mark, &gfx::fill(CLIP_ON));
+        } else {
+            canvas.draw_rect(mark, &gfx::fill(CLIP_OFF));
         }
         let cy = top + thumb4 as f32 / 4.0 * s;
         let th = vg::Rect::from_xywh(

@@ -10,6 +10,7 @@ use std::cell::RefCell;
 
 use chip::presets::{lane_kind, Category, K_DMC, K_NOISE, K_PULSE, K_SAW, K_TRI, K_VPULSE, LAYOUTS, PRESETS};
 use vizia::prelude::*;
+use crate::HelpExt;
 use vizia::vg;
 
 use super::gfx::{self, Face};
@@ -578,18 +579,13 @@ pub fn browser(cx: &mut Context, s: Signals) {
         HStack::new(cx, |cx| {
             Label::new(cx, "BROWSER").class("section-title");
             Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
-            PreviewKey::new(cx, s).tooltip(move |cx| {
-                let text = s.settings.map(|st| {
-                    if st.preview_on_select {
-                        "Preview is on: selecting a preset (click or the arrow keys) plays it while the song is stopped. Click to turn it off."
-                    } else {
-                        "Preview is off: selecting a preset is silent. Click to turn it on."
-                    }
-                });
-                Tooltip::new(cx, move |cx| {
-                    Label::new(cx, text).class("tip-text").class("long");
-                })
-                .class("tip")
+            PreviewKey::new(cx, s).help_fn(move || {
+                if s.settings.with_untracked(|st| st.preview_on_select) {
+                    "Preview is on: selecting a preset (click or the arrow keys) plays it while the song is stopped. Click to turn it off."
+                } else {
+                    "Preview is off: selecting a preset is silent. Click to turn it on."
+                }
+                .into()
             });
             Element::new(cx).width(Pixels(8.0)).height(Pixels(1.0));
             Label::new(cx, crate::shortcuts::label(crate::shortcuts::Action::ToggleBrowser)).class("browser-hint");

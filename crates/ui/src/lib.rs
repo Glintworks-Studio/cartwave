@@ -500,6 +500,8 @@ pub enum AppEvent {
     SetMasterDb(f32),
     /// A click on PEAK: reset it.
     ResetPeak,
+    /// A track's held peak and clip mark (a click on either; Batch 4b G8).
+    ResetTrackPeak(usize),
     /// The insert marker (A1): tick, track.
     SetInsert(u32, usize),
     CloseGuide,
@@ -797,6 +799,11 @@ impl Model for AppState {
                 }
             }
             AppEvent::ResetPeak => self.s.master_peak.set(0.0),
+            AppEvent::ResetTrackPeak(lane) => {
+                if let Some(id) = self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).map(|l| l.id)) {
+                    self.s.meters.update(|m| m.reset_held(id));
+                }
+            }
             AppEvent::SetInsert(t, l) => {
                 self.set_insert(*t, *l);
                 self.s.arrangement.update(|a| a.track_sel.clear());
@@ -1196,6 +1203,25 @@ impl AppState {
             }
             // Per track: a locked track reads its channel, a studio track its
             // rack controls (the light fires at once: no latency queue yet).
+            // Each track's output peak (1.0 = 0 dBFS) for the clip mark and
+            // PEAK: a locked track's channel at its DAC peak through its own
+            // curve (the console's level), a studio track's peak bound.
+            let outs: Vec<(u32, f32)> = self.s.arrangement.with_untracked(|a| {
+                a.lanes
+                    .iter()
+                    .map(|l| match l.lock {
+                        Some(c) => {
+                            let kind = chip::voice::VoiceKind::of_lane(c);
+                            let dac = (chan_levels[c].clamp(0.0, 1.0) * kind.full_scale() as f32).round() as u8;
+                            (l.id, chip::voice::level_of(kind, dac).abs() as f32)
+                        }
+                        None => (l.id, self.rack_ctls.iter().find(|(id, _)| *id == l.id).map_or(0.0, |(_, c)| c.take_out_peak())),
+                    })
+                    .collect()
+            });
+            for (id, v) in outs {
+                m.hold(id, v);
+            }
             let (levels, fire): (Vec<f32>, Vec<bool>) = self.s.arrangement.with_untracked(|a| {
                 a.lanes
                     .iter()
@@ -2033,23 +2059,18 @@ const AUDITION_BRIEF: Duration = Duration::from_millis(600);
 /// Pump interval while nothing animates (meter decay etc. still settles).
 const IDLE_PUMP: Duration = Duration::from_millis(50);
 
-/// A tooltip (I4, F-34): every control says what it does on hover, and a
-/// disabled one says why.
-pub fn tip<'a>(cx: &'a mut Context, text: &str) -> Handle<'a, Tooltip> {
-    let text = text.to_string();
-    let long = text.chars().count() > TIP_LONG;
-    Tooltip::new(cx, move |cx| {
-        Label::new(cx, text.clone()).class("tip-text").toggle_class("long", long);
-    })
-    .class("tip")
-}
-
 /// A wrapper that carries a control's tooltip: vizia never hovers a
 /// disabled view, so a disabled button's "why" goes on this instead (I4).
 /// The status bar's hover help for a view (polish 2 §6.5): one line while
 /// the mouse is over it.
+///
+/// Every control says what it does on hover, and a disabled one says why
+/// (I4, F-34), here: there are no tooltips (VISION.md principle 3, Batch 4b
+/// G9). `help_fn` computes the line when the mouse arrives (it may depend on
+/// the state).
 pub trait HelpExt {
     fn help(self, text: impl Into<String>) -> Self;
+    fn help_fn(self, text: impl Fn() -> String + Send + Sync + 'static) -> Self;
 }
 
 impl<V: View> HelpExt for Handle<'_, V> {
@@ -2057,14 +2078,16 @@ impl<V: View> HelpExt for Handle<'_, V> {
         let t: String = text.into();
         self.on_hover(move |cx| cx.emit(AppEvent::HoverHelp(t.clone()))).on_hover_out(|cx| cx.emit(AppEvent::HoverHelp(String::new())))
     }
+
+    fn help_fn(self, text: impl Fn() -> String + Send + Sync + 'static) -> Self {
+        self.on_hover(move |cx| cx.emit(AppEvent::HoverHelp(text()))).on_hover_out(|cx| cx.emit(AppEvent::HoverHelp(String::new())))
+    }
 }
 
 pub fn tip_wrap<'a>(cx: &'a mut Context, content: impl FnOnce(&mut Context)) -> Handle<'a, HStack> {
     HStack::new(cx, content).width(Auto).height(Auto).class("tip-wrap")
 }
 
-/// A tooltip longer than this (characters) wraps at a fixed width.
-const TIP_LONG: usize = 40;
 
 /// How long the pointer rests before a tooltip shows.
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(500);
@@ -2661,7 +2684,7 @@ fn device_panel(cx: &mut Context, s: Signals) {
                         Label::new(cx, "Select a clip to edit its channel.").class("section-title");
                     }
                     for (slot, (_, spec)) in dials.into_iter().enumerate() {
-                        Dial::new(cx, s, slot, spec).class("dial").tooltip(move |cx| tip(cx, &dial_tip(s, slot, spec.label)));
+                        Dial::new(cx, s, slot, spec).class("dial").help_fn(move || dial_tip(s, slot, spec.label));
                     }
                 })
                 .gap(Pixels(DIAL_GAP))
@@ -2695,9 +2718,9 @@ fn device_panel(cx: &mut Context, s: Signals) {
                         .disabled(st.map(|(none, unique, _)| *none || *unique))
                         .on_press(|cx| cx.emit(AppEvent::MakeInstrumentUnique));
                 })
-                    .tooltip(move |cx| {
+                    .help_fn(move || {
                         let (none, unique, _) = st.get_untracked();
-                        tip(cx, if none { "Select a clip: Make Unique gives it its own copy of the instrument." } else if unique { edit::WHY_NOT_UNIQUE } else { "Give the selected clip(s) their own copy of this instrument, so editing it changes only them." })
+                        if none { "Select a clip: Make Unique gives it its own copy of the instrument." } else if unique { edit::WHY_NOT_UNIQUE } else { "Give the selected clip(s) their own copy of this instrument, so editing it changes only them." }.into()
                     });
                 tip_wrap(cx, |cx| {
                     Button::new(cx, |cx| Label::new(cx, "Use Track Instrument"))
@@ -2705,9 +2728,9 @@ fn device_panel(cx: &mut Context, s: Signals) {
                         .disabled(st.map(|(none, _, track)| *none || *track))
                         .on_press(|cx| cx.emit(AppEvent::UseLaneInstrument));
                 })
-                    .tooltip(move |cx| {
+                    .help_fn(move || {
                         let (none, _, track) = st.get_untracked();
-                        tip(cx, if none { "Select a clip that has its own instrument." } else if track { edit::WHY_TRACK_INST } else { "The selected clip(s) go back to the track's instrument." })
+                        if none { "Select a clip that has its own instrument." } else if track { edit::WHY_TRACK_INST } else { "The selected clip(s) go back to the track's instrument." }.into()
                     });
             })
             .class("inst-actions");
@@ -2738,13 +2761,13 @@ fn device_panel(cx: &mut Context, s: Signals) {
                 Button::new(cx, |cx| Label::new(cx, "Save as Preset"))
                     .class("btn")
                     .on_press(|cx| cx.emit(AppEvent::SaveUserPreset))
-                    .tooltip(|cx| tip(cx, "Save this instrument to your presets (the browser lists them after the factory presets)."));
+                    .help("Save this instrument to your presets (the browser lists them after the factory presets).");
             })
             .class("inst-actions");
             InstrumentView::new(cx, s)
                 .width(Stretch(1.0))
                 .height(Stretch(1.0))
-                .tooltip(|cx| tip(cx, "Drag across a graph to draw the macro. Shift-click sets the loop point, Alt-click the release point; double-click a marker to remove it. Drag the vibrato values up or down."));
+                .help("Drag across a graph to draw the macro. Shift-click sets the loop point, Alt-click the release point; double-click a marker to remove it. Drag the vibrato values up or down.");
         })
         .class("device-section")
         .width(Stretch(1.0))
@@ -2795,7 +2818,7 @@ fn piano_panel(cx: &mut Context, s: Signals) {
                 .class("btn")
                 .toggle_class("checked", draw)
                 .on_press(|cx| cx.emit(AppEvent::Run(Action::DrawMode)))
-                .tooltip(|cx| tip(cx, &format!("Draw Mode ({}): a click draws a note, a click on a note erases it. Off: a click selects, a drag selects several, a double-click adds or deletes a note.", shortcuts::label(Action::DrawMode))));
+                .help(format!("Draw Mode ({}): a click draws a note, a click on a note erases it. Off: a click selects, a drag selects several, a double-click adds or deletes a note.", shortcuts::label(Action::DrawMode)));
             Label::new(cx, "GRID").class("field-label");
             let grid = s.piano.map(|p| p.grid.label());
             Button::new(cx, |cx| Label::new(cx, grid))
