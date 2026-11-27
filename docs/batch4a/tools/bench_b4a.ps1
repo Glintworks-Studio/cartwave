@@ -11,7 +11,7 @@
 # (Ctrl+wheel zoom, a time-scrollbar drag) for a like-for-like comparison. Default settings (the polish 2 build shows the Overview and the status
 # bar, so its rows start 32 px lower: the clip grab moves from (760, 140) to (760, 172)).
 # Appends one line per run to <Work>\bench_p2_log.txt with proof the 200-clip set was on.
-param([string]$Label = "run", [int]$Secs = 12, [string]$Repo, [switch]$Main, [string]$Only = "",
+param([string]$Label = "run", [int]$Secs = 12, [string]$Repo, [switch]$Main, [string]$Only = "", [string]$ShotBeforeScroll = "",
   [string]$Work = (Join-Path $env:TEMP "chipdaw-b4a-perf"))
 $New = $true
 $env:CHIPDAW_DEV = "1"
@@ -72,7 +72,14 @@ Move-To 900 (400 + $dy); if (-not (App-Front)) { $global:FocusLost++ }; KeyDown 
 $global:Res["zoom_wheel"] = Measure-Cpu { param($i) $d = if (($i % 8) -lt 4) { 120 } else { -120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }
 KeyUp 0x11; Start-Sleep -Milliseconds 300
 }
-$sb = 920 - 6 - 24 - $(if ($Main) { 73 } else { 0 })
+# The time scrollbar's thumb sits 5 px above the lanes' bottom. 200drag clicks a clip and so
+# opens the inspector, which ends the lanes at client 663 (B4A-D24: polish 2's bench aimed at the
+# window bottom, inside the inspector, so its "scrollbar drag" dragged across the inspector).
+# Without the inspector the lanes end above the status bar. The Main row takes 73 px more.
+$lanesBottom = if (Want "200drag") { 663 } else { 920 - 24 }
+$sb = $lanesBottom - 5 - $(if ($Main) { 73 } else { 0 })
+# -ShotBeforeScroll <png>: proof of what the scrollbar drag starts from (B4A-D24).
+if ($ShotBeforeScroll) { Move-To 650 $sb; Start-Sleep -Milliseconds 400; pwsh -NoProfile -File "$PSScriptRoot\..\..\perf\tools\shot.ps1" -Out $ShotBeforeScroll | Out-Null }
 if (Want "scrollbar_drag") { CpuDrag "scrollbar_drag" 650 $sb 160 0 }
 # A window-width resize (the lanes' width changes every frame, as in a header-width drag).
 Add-Type -Namespace P2 -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int w, int hh, uint f); public struct RECT { public int L, T, R, B; }' -ErrorAction SilentlyContinue

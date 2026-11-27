@@ -648,14 +648,24 @@
     {
       "id": 32,
       "lane": 1,
-      "start": 23520,
-      "len": 2880,
+      "start": 21600,
+      "len": 1440,
       "name": "Arp Climb",
       "notes": [
-        { "id": 5, "start": 240, "len": 240, "pitch": 57 },
-        { "id": 6, "start": 480, "len": 720, "pitch": 57 },
-        { "id": 7, "start": 2160, "len": 480, "pitch": 57 },
-        { "id": 8, "start": 2640, "len": 240, "pitch": 55 }
+        { "id": 1, "start": 0, "len": 480, "pitch": 64 },
+        { "id": 2, "start": 480, "len": 720, "pitch": 61 },
+        { "id": 3, "start": 1200, "len": 240, "pitch": 59 }
+      ]
+    },
+    {
+      "id": 201,
+      "lane": 1,
+      "start": 24960,
+      "len": 1440,
+      "name": "Arp Climb",
+      "notes": [
+        { "id": 7, "start": 720, "len": 480, "pitch": 57 },
+        { "id": 8, "start": 1200, "len": 240, "pitch": 55 }
       ]
     },
     {
@@ -3074,7 +3084,7 @@
     {
       "id": 5,
       "lane": 1,
-      "start": 21600,
+      "start": 23040,
       "len": 1920,
       "name": "Hook A",
       "notes": [

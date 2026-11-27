@@ -1111,3 +1111,12 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   badge width is measured once per text and scale, the content key is hashed once per pump tick,
   and the Main lane redraws only when its playhead moves a pixel. After: flush and custom equal the
   baseline; draw +0.03, events +0.03 ms/frame.
+- **B4A-D24 (the "scrollbar drag" bench missed the scrollbar).** After the first fix the gate still
+  showed scrollbar_drag +2.4 in every round, yet the same drag run alone was level (13.4 vs 13.1 %),
+  and the baseline's in-sequence 8.5 % was *below* its own standalone 12.5–13.4 %. Screenshots
+  before the drag settled it: 200drag clicks a clip, which opens the inspector, and polish 2's
+  bench aimed at the window bottom, so its "scrollbar drag" dragged inside the inspector: empty
+  space on the baseline, the CLIP section's buttons and tooltip on this branch. The bench now aims
+  at the thumb (5 px above the lanes' bottom: client 658 on the baseline, 585 with the Main row
+  and the inspector open; screenshot check). The polish 2 report's scrollbar numbers measured the
+  inspector, not the scrollbar.

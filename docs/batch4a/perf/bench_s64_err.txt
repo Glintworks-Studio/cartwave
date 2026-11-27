@@ -3,73 +3,6 @@ dev: project format 48000 24
 dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\songs\stress64.chipdaw (64 clips)
 dev: spectrum style bars (settings)
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
@@ -82,11 +15,9 @@ dev: lane scroll 300 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 420 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -113,10 +44,9 @@ dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 900 max 3985
+dev: lane scroll 960 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 720 max 3985
@@ -139,12 +69,10 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 120 max 3985
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
@@ -227,13 +155,14 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 420 max 3985
 dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 900 max 3985
@@ -250,73 +179,6 @@ dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
@@ -328,12 +190,13 @@ dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 420 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -358,12 +221,14 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 360 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
@@ -383,14 +248,8 @@ dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1260 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 960 max 3985
@@ -416,12 +275,18 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 300 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
+dev: lane scroll 120 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 60 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 0 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 300 max 3985
@@ -437,22 +302,19 @@ dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -471,7 +333,6 @@ dev: lane scroll 780 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 720 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
 dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
@@ -491,17 +352,22 @@ dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 0 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 60 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 360 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
@@ -523,14 +389,8 @@ dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1260 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 960 max 3985
@@ -560,75 +420,8 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
+dev: lane scroll 0 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1260 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1200 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
@@ -646,11 +439,11 @@ dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
 dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 900 max 3985
@@ -731,6 +524,75 @@ dev: lane scroll 960 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 120 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 60 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 120 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
@@ -741,15 +603,15 @@ dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 960 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
 dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 720 max 3985
@@ -771,16 +633,12 @@ dev: lane scroll 240 max 3985
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 300 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 360 max 3985
@@ -805,7 +663,15 @@ dev: lane scroll 960 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -840,14 +706,6 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
@@ -859,13 +717,14 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 420 max 3985
 dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 900 max 3985
@@ -880,145 +739,11 @@ dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
+dev: lane scroll 1320 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 120 max 3985
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 0 max 3985
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1053,16 +778,216 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
+dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 120 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 840 max 3985
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 120 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: lane scroll 180 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
 dev: lane scroll 300 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 360 max 3985
@@ -1091,74 +1016,11 @@ dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1080 max 3985
+dev: lane scroll 1320 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 900 max 3985
-dev: lane scroll 840 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 780 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 180 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 240 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 300 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 360 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 420 max 3985
-dev: lane scroll 480 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 720 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 840 max 3985
-dev: lane scroll 900 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 960 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1020 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 1080 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 1140 max 3985
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1175,13 +1037,12 @@ dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 660 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 600 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 540 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 420 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1194,11 +1055,76 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
+dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
+dev: lane scroll 240 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1232,8 +1158,18 @@ dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 960 max 3985
@@ -1261,14 +1197,6 @@ dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
-dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 120 max 3985
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 240 max 3985
@@ -1280,13 +1208,14 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 420 max 3985
 dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 600 max 3985
+dev: lane scroll 540 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 660 max 3985
+dev: lane scroll 600 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 720 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 840 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 900 max 3985
@@ -1298,6 +1227,14 @@ dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
 dev: lane scroll 1080 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 1200 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1331,11 +1268,72 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 240 max 3985
 dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 60 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: lane scroll 0 max 3985
+dev: lane scroll 240 max 3985
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 600 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
 dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
-dev: lane scroll 60 max 3985
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1320 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1260 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1200 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1140 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1080 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 1020 max 3985
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: lane scroll 960 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 900 max 3985
+dev: lane scroll 840 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 780 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 720 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 660 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
+dev: lane scroll 480 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 420 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 360 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 300 max 3985
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 240 max 3985
+dev: lane scroll 180 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: lane scroll 120 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
@@ -1350,8 +1348,9 @@ dev: help Track: click to select · double-click the name to rename · right-cli
 dev: lane scroll 420 max 3985
 dev: lane scroll 480 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 540 max 3985
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: insert track 8 Triangle Triangle 17
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
 dev: insert track 9 Pulse Pulse 17
 dev: insert track 10 Vrc6Pulse VRC6 Pulse 17
 dev: insert track 11 Saw Saw 17
@@ -1369,6 +1368,7 @@ dev: insert track 22 Vrc6Pulse VRC6 Pulse 17
 dev: insert track 23 Saw Saw 17
 dev: insert track 24 Triangle Triangle 17
 dev: insert track 25 Pulse Pulse 17
+dev: insert track 26 Vrc6Pulse VRC6 Pulse 17
 dev: help Track: click to select · double-click the name to rename · right-click for its menu
-dev: move track 8 -> 10
-dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: move track 9 -> 10
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
