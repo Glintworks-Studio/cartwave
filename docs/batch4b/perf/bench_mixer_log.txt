@@ -1,0 +1,10 @@
+mixer-1          s64_arrangement  18.1%  s64_mixer  11.6%  s64_mixer_scroll  18.5%  64 tracks, mixer shown  focus held
+mixer-2          s64_arrangement  18.1%  s64_mixer  10.9%  s64_mixer_scroll  15.7%  64 tracks, mixer shown  focus held
+mixer-3          s64_arrangement  14.1%  s64_mixer   8.9%  s64_mixer_scroll    19%  64 tracks, mixer shown  focus held
+mixer-4          s64_arrangement  13.7%  s64_mixer  10.8%  s64_mixer_scroll  20.7%  64 tracks, mixer shown  focus held
+mixer-5          s64_arrangement  16.8%  s64_mixer  10.9%  s64_mixer_scroll  14.3%  64 tracks, mixer shown  focus held
+mixer-6          s64_arrangement    18%  s64_mixer  10.7%  s64_mixer_scroll  15.8%  64 tracks, mixer shown  focus held
+mixer-7          s64_arrangement  14.3%  s64_mixer   9.4%  s64_mixer_scroll  21.2%  64 tracks, mixer shown  focus held
+mixer-8          s64_arrangement  18.3%  s64_mixer    12%  s64_mixer_scroll    19%  64 tracks, mixer shown  focus held
+mixer-9          s64_arrangement  17.4%  s64_mixer  12.6%  s64_mixer_scroll  20.3%  64 tracks, mixer shown  focus held
+mixer-10         s64_arrangement    14%  s64_mixer  13.7%  s64_mixer_scroll  20.8%  64 tracks, mixer shown  focus held

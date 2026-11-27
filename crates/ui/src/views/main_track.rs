@@ -68,8 +68,12 @@ const SHADOW_A: f32 = 0.6;
 
 /// The peak as text: dBFS with one decimal and "dB" ("−1.2 dB", the boards'
 /// PEAK readouts), "+3.2 dB" over full scale, "−inf" at silence.
+/// Below this a held peak reads "−inf": a decaying filter tail leaves values like 1e-40
+/// (−792 dB) after the music stops (B4B-D29). −120 dB is under 24-bit's floor.
+pub const PEAK_FLOOR: f32 = 1e-6;
+
 pub fn peak_text(peak: f32) -> String {
-    if peak <= 0.0 {
+    if peak < PEAK_FLOOR {
         "\u{2212}inf".into()
     } else {
         let db = ((20.0 * peak.log10()) * 10.0).round() / 10.0;
@@ -367,5 +371,16 @@ impl View for MainShadow {
         canvas.clip_rect(r, None, None);
         gfx::drop_shadow(canvas, &gfx::rrect(row, 0.0), 0.0, SHADOW_DY * s, SHADOW_BLUR * s, SHADOW_SPREAD * s, Rgba::black(SHADOW_A));
         canvas.restore();
+    }
+}
+
+#[cfg(test)]
+mod peak_tests {
+    #[test]
+    fn a_tiny_peak_reads_minus_inf() {
+        assert_eq!(super::peak_text(1e-40), "\u{2212}inf");
+        assert_eq!(super::peak_text(0.0), "\u{2212}inf");
+        assert_eq!(super::peak_text(1.0), "0.0 dB");
+        assert_eq!(super::peak_text(0.5), "\u{2212}6.0 dB");
     }
 }

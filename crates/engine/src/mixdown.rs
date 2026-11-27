@@ -305,7 +305,7 @@ impl Mixdown {
             for (i, v) in out.iter_mut().enumerate() {
                 *v *= g0 + (g1 - g0) * (i + 1) as f32 / n;
             }
-            if let Some(r) = right.as_deref_mut() {
+            if let Some(r) = right {
                 for (i, v) in r.iter_mut().enumerate() {
                     *v *= g0 + (g1 - g0) * (i + 1) as f32 / n;
                 }

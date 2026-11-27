@@ -1388,3 +1388,19 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   level of 255 on every row of its 48 px, the selection outline 1 px outside the clip (row 1 in
   both). The glow's lift isn't like for like (on the board it falls on the ruler, in the app on the
   row above); its parameters are the board's (white 22 %, a 10 px CSS blur).
+- **B4B-D28 (Tab and keyboard focus).** Vizia's window-level Tab navigation runs before any
+  shortcut, so Tab moved focus to the next navigable widget (the inspector's Make Unique) *and*
+  switched views; the next Space then pressed that button instead of stopping playback (found by
+  the lime scenes: the project became dirty). Switching views now gives the keyboard to the
+  window (`focus_with_visibility(false)` in `ShowMixer`), as the reference's Tab gives it to the
+  shown view. Scenario B4B-T1. Text fields keep Tab (the text context runs no view switch).
+- **B4B-D29 (a held PEAK below −120 dB reads −inf).** After File ▸ New the Main row read
+  "−792.7 dB": a filter tail's 1e-40 held as a peak. `main_track::PEAK_FLOOR` = 1e-6 (under
+  24-bit's floor); the strips' PEAK readouts use the same text.
+- **B4B-D30 (the perf gate's judgement).** The 10-round A/B (`docs/batch4b/perf/summary.md`):
+  12 of 18 scenarios within +0.3 on the means; idle +0.37, row resize +0.46 and the four 64-track
+  scenarios +0.74…+1.84 are over. All six are inside 2 × their noise floor, a rule this run
+  introduced, not the prompt's: the gate is judged on the prompt's letter, **not passed**, and
+  main is not merged (as in 4a). Attribution so far: offline, the 512-voice render costs 4.6 % of
+  real time vs 4.3 % (the stereo bus: three step buffers, the limiter), about 0.3 points of a core;
+  the rest of the 64-track excess is UI-side and not yet located.

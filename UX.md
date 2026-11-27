@@ -56,7 +56,7 @@ Edit (Windows convention), Exit under File.
 | Open Recent ▸ | — | — | Last 10 projects; "Clear Menu" | M | ✓ |
 | Save | Ctrl+S | ⌘S | Save | M | ✓ |
 | Save As… | Ctrl+Shift+S | ⇧⌘S | Save under a new name | M | ✓ |
-| Import ▸ MIDI File… | — | — | Adds the file's parts as new tracks at the insert marker (F-17) | M | ✓ |
+| Import ▸ MIDI File… | — | — | Adds the file's parts as new tracks after the last (F-17; §4f S4, B4B-D17) | M | ✓ · **done** (4b) |
 | Import ▸ Audio as DPCM Sample… | — | — | WAV → DPCM slot | M | ✓ |
 | Export Audio… | Ctrl+Shift+R | ⇧⌘R | Export dialog (R124) | M | ✓ |
 | Export MIDI Clip… | Ctrl+Shift+E | ⇧⌘E | Selected clip as `.mid` (R125) | L | ✓ |
@@ -94,6 +94,7 @@ Edit (Windows convention), Exit under File.
 | Item | Windows | macOS | Does | Pri | CEO |
 |---|---|---|---|---|---|
 | Browser | Ctrl+Alt+B | ⌥⌘B | Show/hide (R80) | M | ✓ |
+| Mixer | Tab | Tab | Toggle the main view between Arrangement and Mixer, with a check (R77; B4B-D20). In a text field Tab moves to the next field | M | 4b · **done** |
 | Piano Roll / Inspector | Shift+Tab | ⇧Tab | Toggle the bottom panel between clip editor and instrument (R78) | S | ✓ |
 | Follow | Ctrl+Shift+F | ⌥⇧F | Auto-scroll while playing, both editors (R135; decision 3) | S | ✓ |
 | Zoom In / Out | + / − | + / − | Time zoom of the focused editor (R34) | M | ✓ · **done** (B3) |
@@ -203,7 +204,7 @@ See [docs/design/VISUAL-SPEC.md](docs/design/VISUAL-SPEC.md) §2.
 
 | # | Control | Does | Pri | Status |
 |---|---|---|---|---|
-| TB1 | Arrangement / Mixer keys | Arrangement is the only view; Mixer is disabled with its reason (Batch 4) | S | done |
+| TB1 | Arrangement / Mixer keys | Switch the main view (Tab toggles, §4f S6); the shown view's key is lit (a toggle on-state). *Until 4b: Mixer disabled with its reason* | S | done (4b) |
 | TB2 | Play, Stop, Record, Loop | Play starts (does nothing while playing, ours); Stop stops, again goes to the start; Record disabled ("Recording arrives with MIDI input"); Loop switches the song loop. The keys never light: the display shows the state | M | done |
 | TB3 | The display | Read-only: indicators (playing, looping, the project's rate and bit depth, lime while active), TIME, POSITION, START and LENGTH (the time selection or the selected clips' span), BPM. **BPM**: drag (Shift: finer) or wheel; double-click to type | M | done |
 | TB4 | TAP (key **T**, ours) | Each tap sets BPM from the average of the last 4 intervals; taps more than 2 s apart start over; one sequence is one undo step | S | done |
@@ -259,6 +260,23 @@ VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, 
 | M9 | **The Main track**: pinned at the bottom of the track list (Live 12 manual, ch. 18 Mixing, §18.4: "the bottom end of the Arrangement View"; never scrolling is ours), a black strip, "Main", OUT and the output device, PEAK (held; a click resets), the master fader (−inf … +6 dB) applied after the whole mix, saved in the project and the export JSON. It follows the header layouts. Its lane: the grid and the playhead (Batch 5: master automation) | M | done |
 | M10 | **Migration**: older projects open with every track locked to its channel; rendered audio is bit-identical (golden render and v2…v6 hashes) | M | done |
 
+## 4f. Stereo, unison, MIDI import and the mixer (Batch 4b)
+
+VISION.md roadmap step 3. Code: `engine::studio` / `engine::mixdown` (pan, unison, the bus
+limiter), `midi_tracks.rs` / `midi_drop.rs` (import), `views/mixer.rs`. Decisions: RUNLOG
+B4B-D4…D27; the rundown: BATCH4B.md.
+
+| # | Behaviour | Pri | Status |
+|---|---|---|---|
+| S1 | **Pan is heard** on studio tracks: equal power (−3 dB per side at centre, so a centred track is unchanged), −50 … +50. Locked tracks and the console stay centred. A project with nothing panned renders bit-identical to 4a (golden and v2…v7 hashes) | M | done |
+| S2 | **Exports follow the mix**: mono until a studio track is panned, then a stereo mix and stereo stems (the stems sum to the mix); the game export's JSON says `"channels"` | M | done |
+| S3 | **Unison / Detune / Drift** (studio tracks; the inspector's VOICES row): 1–4 voices per note, spread ±Detune cents (0–50), Drift (0–10 cents) a slow per-voice wander. Saved (format 8). Gain staging: one note at the console's level, unison trimmed 1/√n, a −1 dBFS safety limiter on the studio bus (bit-transparent below it) | M | done |
+| S4 | **MIDI import as tracks**: File ▸ Import ▸ MIDI File… adds the parts as new tracks after the last; a `.mid` dragged over the window shows its parts as ghost clips that follow the cursor (onto a track at the cursor's bar, or new tracks under the last), with the conflicts it would cause named in the status bar while dragging; Esc or leaving the window changes nothing | M | done |
+| S5 | **The import dialog only on conflict** (a chord or overlap on a locked track, a part outside its channel): Studio tracks / Fit (with "chords as arpeggios") / Cancel / Don't ask again. No profile, or nothing conflicting: no dialog | M | done |
+| S6 | **The mixer view** (Tab, View ▸ Mixer; the two view keys show which is up): a 152 px strip per track (the Main strip 176 px, pinned right), scrolling sideways; per strip the colour bar, the two-digit number and name, the pan knob (machined), M / S, the plastic fader cap on its scale, stereo LED meters (warm palette) with PEAK (held; a click resets), VOICES in use / the cap, the dB readout (double-click to type). The channel-budget bar across the top. **One model with the headers**: a change in either shows in both and is one undo step | M | done |
+| S7 | **Locked strips** follow M5: the fader parked at 0 dB and dimmed, the knob veiled, a lock instead of the readout's value, no typed values, the reason on hover | M | done |
+| S8 | **Header meters** in the pan grey with a white **clip mark** that lights past 0 dBFS and holds until clicked (VISUAL-SPEC §13) | M | done |
+
 ## 5. Behaviour tables
 
 ### 5.1 Arrangement
@@ -298,7 +316,7 @@ VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, 
 | T6 | Del with a track selected | Delete track (R86) | M (model) | ✓ · **done** (4a) |
 | T7 | Click the badge | The lock menu: Studio (unlocked) and the profile's channels of the track's type; a taken channel is disabled and names its owner (§4e) | L | ✓ · **done** (4a) |
 | T8 | Volume meter-fader | **Polish 2:** a vertical fader in **dB** (−inf … +6 dB, position `(dB + 48) / 54`): a gain after the chip on every track (RUNLOG P2-D4). Drag (press sets the value) or wheel (1 dB); **double-click the dB value to type it** (`-3`, `-3 dB`, `−3`, `+2.5`, `-inf`; Enter commits, Esc cancels, a click away commits; clamped; one undo step; unsaved mark; P2-R31). The post-fader meter fills from the bottom on the same scale, hot at 0 dB, never past the thumb. dB scale marks (0 6 12 24) on rows ≥ 96 px | S | polish 2 · **done** |
-| T9 | Pan | **Polish 2:** editable and saved (−50 … +50, shown 50L … C … 50R): drag, wheel, or double-click the value to type `C`, `0`, `25L`, `30R`, `-25`, `+25`. Heard once stereo mixing arrives (Batch 4); its hover help says so | L | polish 2 · **done** (not heard yet) |
+| T9 | Pan | **Polish 2:** editable and saved (−50 … +50, shown 50L … C … 50R): drag, wheel, or double-click the value to type `C`, `0`, `25L`, `30R`, `-25`, `+25`. **Heard since Batch 4b** on studio tracks (§4f S1) | L | polish 2 · **done** (heard: 4b) |
 | T10 | Strip | Lights on each note-on and fades over ~250 ms; toned down ~20% (polish 2) | S | design pass · **done** |
 | T11 | Row height | 72 (minimum) … 300 px in 4 px steps: **drag a track's bottom edge** (P2-R19; Alt / ⌥ while dragging: every track, P2-R20) or **Alt+wheel** (⌥+wheel; on a trackpad the steps accumulate, MC-D14) over a track (P2-R21). Saved per track in the project (format v6), undoable. Taller rows keep the number, name and column A in a 72 px band; only the fader stretches | S | polish 2 · **done** |
 | T12 | Header width | Drag the boundary between headers and lanes: 380 … 600 px, extra width to the name only; saved per user. (The manual doesn't describe one: P2-R29, ours) | S | polish 2 · **done** |
@@ -421,6 +439,18 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 | B4A-08 (M9) | Three wheel notches on the Main fader: −3 dB, saved; PEAK's hover help |
 | B4A-09 (T3, M2) | Insert Track ▸ Noise from the header menu; Voices ▸ 4; Ctrl+D on a selected track duplicates it with its clip |
 | [unit] (Batch 4a) | `engine::mixdown::tests` (bit-identity without studio tracks, 8-voice chords, quietest-voice stealing, the Voices cap, pool growth, Main gain), `core::studio_rack_plays_and_grows_without_allocating`, `chip::voice::tests` (one implementation; a lone voice = the console within 0.1 dB), `tracks::tests` (names, insert/delete/move/duplicate, lock/unlock, budget, mute/solo), `params::tests`, `palette::black_is_reserved_for_main`, `warn::tests`, `edit::colour_preview_tests`, `selection_tests`, `tests/glyphs.rs`, `tests/migration.rs` (v6 → v7 hashes, the profile rules, the −3 dB report) |
+| B4B-M1 (AT-17, S4) | File ▸ Import ▸ MIDI File… on an existing song adds its parts as new tracks; the old clips are unchanged in the saved file |
+| B4B-M2 (S4) | A real OS drag of a `.mid` over empty space, no profile: the ghost clips follow the cursor; the drop adds studio tracks with no dialog |
+| B4B-M3 (S5) | A drop onto track 2 at bar 3 that conflicts with its lock: the dialog; Fit with "chords as arpeggios" puts the parts there, no overlaps |
+| B4B-M4 (S4) | A drag that ends with Esc changes nothing and asks nothing |
+| B4B-X1 (S6) | Tab shows the mixer; its fader, pan, M / S and a typed value change the same track as the headers, one undo step each; Tab returns |
+| B4B-X2 (S7) | A locked strip: the fader doesn't move, a typed value is refused, the hover help gives the reason |
+| B4B-U1 (S3) | Unison 4 and Detune 15 set in the inspector on a studio track are saved; a locked track shows no VOICES row |
+| B4B-C1 (S8) | A track driven past 0 dBFS lights its clip mark white; it holds; a click resets it |
+| [unit] (Batch 4b) | `engine::mixdown::tests::b4b_*` (pan law, the mono path bit-identical, a panned track, unison, drift, gain staging, idle voices), `tests/batch4b.rs` (the stereo golden hash, stereo exports and stems, unison determinism), `tests/migration.rs` (v7 corpus hashes, a v7 panned track heard), `midi_tracks::tests`, `header_layout::number_column_follows_the_largest_number`, `topbar::overhang_*`, `mixer::tests` |
+
+Batch 4b results: B4B-M1…C1 in `docs/batch4b/tools/at_b4b.ps1` (checker `check_b4b.py`); see
+[BATCH4B.md](BATCH4B.md).
 
 Batch 4a results: B4A-01…B4A-09 in `docs/batch4a/tools/at_b4a.ps1` (checker `check_b4a.py`); see
 [BATCH4A.md](BATCH4A.md).
@@ -459,7 +489,7 @@ Batches 1 and 2 were built on `app-shell/batch-1-2` (SHELL.md).
 | **3. Ableton-parity quick fixes** | Piano roll double-click/draw mode, zoom keys, rename, context menus, copy/paste, split/consolidate, time-selection editing, keyboard navigation, shortcut conflicts, empty-project guide, export dialog fixes, tooltips | F-07–F-12, F-14, F-22–F-29, F-32–F-39 | ~2–3 weeks |
 | **4a. The model change** | Tracks as instruments, voice pools, profiles and locks, the Main track (BATCH4A.md) | F-13, F-40, F-42, F-43, F-48 | **done** |
 | **Authenticity A/B** | Reference oracles outside the repo, register-write diffs, Mika's ear review (VISION.md "Sound systems") | | next |
-| **4b.** | Visual fixups (§8, VISUAL-SPEC.md §13, the `fixups` and `main-track` boards), the mixer view, stereo pan audible, MIDI import as tracks with the drop preview, unison and detune | F-17 (full), F-47 | |
+| **4b.** | Visual fixups (§8, VISUAL-SPEC.md §13, the `fixups` and `main-track` boards), the mixer view, stereo pan audible, MIDI import as tracks with the drop preview, unison and detune | F-17 (full), F-47 | **built** (BATCH4B.md) |
 | **Presets + Browser + device panel** | Chip Synth (Voice selector), DPCM Sampler, the in-instrument preset picker, the new browser, Mika's 100+ bank | | |
 | **5. Automation** | Lanes, clip envelopes, tempo automation (the registry is ready: docs/batch4a/parameters.md) | F-44 | ~3–4 weeks |
 | **Then** | The device chain (MIDI effects, then audio effects) → tracker import → recording and MIDI input → time signatures and scales (F-45, F-46) → the export polish → the Metal backend → the arcade board (ymfm) → the SNES (VISION.md roadmap, decided 2026-11-26) | | |
@@ -468,14 +498,14 @@ Every batch ends with its acceptance tests in the scenario harness (VISION.md, "
 
 ## 8. Open issues
 
-Known bugs, listed 2026-11-26 (the meeting); fixed in 4b's visual fixups unless marked closed.
+Known bugs, listed 2026-11-26 (the meeting); Batch 4b's statuses below (RUNLOG B4B-D*).
 Each fix gets an automated test.
 
 | # | Issue | Platform | Target | Status |
 |---|---|---|---|---|
-| K1 | The menu bar (File, Edit, Create…) **flickers while the window is resized**. Suspected cause: the dark-menu owner-drawn bar (docs/design/DARK-MENUS.md). Test with dark menus off | Windows | **0 flashing frames** in a scripted resize capture | open (4b) |
-| K2 | The browser search field's **focus ring is clipped** | macOS | Draw the ring inside the field, or pad the container | open (4b) |
-| K3 | **Track numbers ≥ 10** crowd the name | both | The number column's width follows the largest track number (VISUAL-SPEC.md §13) | open (4b) |
+| K1 | The menu bar (File, Edit, Create…) **flickers while the window is resized**. Suspected cause: the dark-menu owner-drawn bar (docs/design/DARK-MENUS.md). Test with dark menus off | Windows | **0 flashing frames** in a scripted resize capture | **not reproduced** in 4b: a real sizing-loop drag captured at 60 fps (ddagrab) shows 0 flash frames before and after, dark menus on and off; the capture's positive control finds 12 (B4B-D18, `docs/batch4b/flicker/`). The capture tool stays as the regression check; reopen with a recording if it's seen again |
+| K2 | The browser search field's **focus ring is clipped** | macOS | Draw the ring inside the field, or pad the container | **closed** on Windows (B4B-D19: the ring and glow drawn inset; the field doesn't move). Re-check on the next Mac run |
+| K3 | **Track numbers ≥ 10** crowd the name | both | The number column's width follows the largest track number (VISUAL-SPEC.md §13) | **closed** (B4B-D3; `header_layout::number_column_follows_the_largest_number`, the fixups match) |
 | K4 | **Return and Backspace reach the song behind dialogs** (MAC-CATCHUP.md §8, MC-D9) | shared | Keys never reach the song while a dialog is open | **closed** by Batch 4a (RUNLOG B4A-D2; scenario B4A-01, which fails on the baseline). Tested on Windows; re-run B4A-01's steps on the next Mac run |
 | K5 | **Colour-preview leaks**: Esc after hovering a colour kept it; hover A, pick B, undo gave A (MC-D15) | shared | Previews never reach undo | **closed** by Batch 4a (B4A-D3; `edit::colour_preview_tests`, scenario B4A-02). Tested on Windows; re-check on the next Mac run |
-| K6 | The project loader **panics on a fuzzed file in debug builds**: `load_clips`' error message adds 1 to a huge lane index (`file.rs:790`); `robustness::project_loader_never_panics_or_hangs` fails under `cargo test`, passes under `--release` (RUNLOG DOC-D17) | shared | The fuzz test passes in debug and release | open (4b) |
+| K6 | The project loader **panics on a fuzzed file in debug builds**: `load_clips`' error message adds 1 to a huge lane index (`file.rs:790`); `robustness::project_loader_never_panics_or_hangs` fails under `cargo test`, passes under `--release` (RUNLOG DOC-D17) | shared | The fuzz test passes in debug and release | **closed** (B4B-D2; the fuzz test passes in both) |

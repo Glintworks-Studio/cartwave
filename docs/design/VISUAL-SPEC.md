@@ -236,18 +236,18 @@ Decided by the CEO; recorded by the docs update (RUNLOG DOC-D*). **Rules only:**
 implement them, and each line names where today's build differs. Boards:
 [`meeting-2026-11-26/`](meeting-2026-11-26/README.md).
 
-| Rule | Spec | Today (Batch 4a) |
+| Rule | Spec | Built (Batch 4b, BATCH4B.md) |
 |---|---|---|
-| **Lime** | `#C7D74E` only for **toggle on-states** and **the centre display** (its indicators). Never selection, meters, instrument displays or track identity | The header meter's 70 % stop is `#C7D74E` (to change in 4b). The default Pulse track colour `#C9D24A` is lime used as identity (palette ΔE exception, §7, §9): **for the owner to decide in 4b** |
+| **Lime** | `#C7D74E` only for **toggle on-states** and **the centre display** (its indicators). Never selection, meters, instrument displays or track identity | **Built.** The header meters are grey (below). New projects' Pulse tracks get `#4FA8E0` (`tokens::NEW_PULSE`); the palette's lime cell became Sage `#B4C08A`; existing files keep their colours bit for bit (B4B-D13). The lime audit finds `#C7D74E` only on toggle on-states and the display |
 | **Instrument displays** | Waveforms and envelopes in **one warm display colour, `#E8DCC0`**. The track colour marks identity only: the strip, the name plate, the device tab | The inspector's macro graphs use the track colour (`graph_bar` / `graph_fill`, §7): to change in the Presets + Browser + device panel batch |
-| **Locked means dimmed** | On a locked track, displays and knobs at about **40 % brightness**; labels kept at **≥ 4.5 : 1** | The header's fader and pan are at 40 % (§4b); the instrument device has no locked style yet: Presets + Browser + device panel batch |
-| **Selection** | Neutral: a **white outline and a faint glow**, never lime | Selected clips and notes lighten their own colour (§7 `clip`; the piano roll's `lighten(0.35)`): to change in 4b |
-| **Header meters** | The **pan grey** (`#8A8A8A`, the pan fill of §4), plus a **white clip mark that holds until clicked** | The cool-to-hot gradient (§4 column B): to change in 4b |
-| **Mixer meters** | The warm palette, `meter-colours` option 2: segments warm white (`#A09C93 → #E0DCD3 → #A09C93`), amber (`#F5C870` centre, `#B68830` edges), orange (`#FFA757` / `#BF6817`), red above 0 dB (`#FF6C63` / `#BF2C23`); unlit segments their colour at 10 %; the peak mark `#F2F2F2` with a 4 px white glow. Zone boundaries as on the board | No mixer view yet: 4b |
-| **No tooltips** | Hover help goes to the status bar (§10) everywhere | Tooltips remain (17 call sites in `chrome.rs`, `browser.rs`, `lib.rs`, `export_dialog.rs`, `modal.rs`): to change in 4b |
-| **Track number column** | Its width follows the project's largest track number | Fixed x 28–56 (§4): to change in 4b |
-| **The display's overhang** | Eases out over **48 px** | 34 px (§2): to change in 4b |
-| **Mixer M/S keys** | 24 px, a **darker key body** and a **`#101010` border**, so they separate from the textured panel | No mixer view yet: 4b |
+| **Locked means dimmed** | On a locked track, displays and knobs at about **40 % brightness**; labels kept at **≥ 4.5 : 1** | The header's and the mixer strip's fader, pan and knob at 40 % (the strip's fader drawn whole at 45 %, the knob veiled once); the instrument device: Presets + Browser + device panel batch |
+| **Selection** | Neutral: a **white outline and a faint glow**, never lime | **Built.** `SELECT_OUTLINE #E6E6E6` 1 px outside the clip or note, a white 22 % glow (10 px blur); the fill keeps its own colour |
+| **Header meters** | The **pan grey** (`#8A8A8A`, the pan fill of §4), plus a **white clip mark that holds until clicked** | **Built.** `METER_FILL` = the pan fill; the clip mark 2 px tall at the meter's top (a 4 px hit area), lit past 0 dBFS, reset by a click (B4B-D11) |
+| **Mixer meters** | The warm palette, `meter-colours` option 2: segments warm white (`#A09C93 → #E0DCD3 → #A09C93`), amber (`#F5C870` centre, `#B68830` edges), orange (`#FFA757` / `#BF6817`), red above 0 dB (`#FF6C63` / `#BF2C23`); unlit segments their colour at 10 %; the peak mark `#F2F2F2` with a 4 px white glow. Zone boundaries as on the board | **Built** (`views/mixer.rs`; the `mixer` board match: `docs/batch4b/mixer-match/`) |
+| **No tooltips** | Hover help goes to the status bar (§10) everywhere | **Built.** No tooltip remains; every former tooltip text is hover help in the status bar (B4B-D12) |
+| **Track number column** | Its width follows the project's largest track number | **Built.** 28 px up to 9 tracks, 48 px for two digits, +20 px per digit after (B4B-D3) |
+| **The display's overhang** | Eases out over **48 px** | **Built.** α = 0.6 · (1 − y/48)^2.2 (`topbar::overhang_alpha`), within 1 level of the board on every row |
+| **Mixer M/S keys** | 24 px, a **darker key body** and a **`#101010` border**, so they separate from the textured panel | **Built** (24 px, `#101010` border, the darker body) |
 
 Mixer knobs: `knobs` option A (machined: brushed cap, knurled skirt, thin white value ring).
 Fader caps: plastic, as on the `mixer` board.

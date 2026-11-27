@@ -577,6 +577,7 @@ fn with_shared<R>(s: f32, f: impl FnOnce(&Shared) -> R) -> R {
 
 /// The lit part of one meter column: `n` segments from the bottom, and the
 /// peak-hold segment `peak` (white) if above them.
+#[allow(clippy::too_many_arguments)]
 fn draw_column(c: &vg::Canvas, img: &vg::Image, x: f32, top: f32, segw: f32, n: usize, peak: usize, s: f32) {
     let pad = (4.0 * s).ceil();
     if n > 0 {
@@ -1053,7 +1054,7 @@ impl View for Strip {
         let pr = vg::Rect::from_xywh(at(STRIP_W - 2.0 * INSET - 12.0 - 64.0, 0.0).0, at(0.0, PEAK_Y).1, 64.0 * s, 20.0 * s);
         readout_text(canvas, &super::main_track::peak_text(held), pr, 10.0, 0.0, s, false);
         let line = match lock {
-            Some(c) => crate::tracks::channel_name(c).replace(' ', " ").to_uppercase().replacen(' ', " \u{B7} ", 1),
+            Some(c) => crate::tracks::channel_name(c).to_uppercase().replacen(' ', " \u{B7} ", 1),
             None => {
                 let n = self.s.meters.with_untracked(|m| m.voices_of(id));
                 let cap = if cap == 0 { "\u{221E}".to_string() } else { cap.to_string() };

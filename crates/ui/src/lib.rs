@@ -950,6 +950,10 @@ impl Model for AppState {
                     // A text field over the old view goes away with it.
                     self.s.rename.set(None);
                     self.s.view_mixer.set(*on);
+                    // The keyboard goes to the window, not to whatever widget vizia's Tab
+                    // navigation reached before the shortcut ran (a focused button would take
+                    // the next Space: B4B-D28).
+                    cx.focus_with_visibility(false);
                     if crate::dev::enabled() {
                         eprintln!("dev: view {}", if *on { "mixer" } else { "arrangement" });
                     }

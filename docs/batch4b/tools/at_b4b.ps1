@@ -192,5 +192,21 @@ if (Want "B4B-C1") {
   Stop-App
 }
 
+# ─────────── B4B-T1: Tab switches views and leaves no button focused (Space plays, never presses Make Unique) ───────────
+if (Want "B4B-T1") {
+  $p = Fx "fx_studio" "t1"; $d = Join-Path $Work "dt1"
+  Launch -Project $p -Data $d; Place
+  ClickL 700 170; Start-Sleep -Milliseconds 600                            # a clip: the inspector shows Make Unique
+  Save; Keep $p "t1_before"                                                # as the app writes it
+  K 0x09; Start-Sleep -Milliseconds 600                                    # the mixer
+  K 0x20; Start-Sleep -Milliseconds 1200; K 0x20; Start-Sleep -Milliseconds 400
+  Shot "t1_mixer"
+  K 0x09; Start-Sleep -Milliseconds 600                                    # back
+  K 0x20; Start-Sleep -Milliseconds 800; K 0x20; Start-Sleep -Milliseconds 400
+  Save; Keep $p "t1_after"
+  $obs.t1_views = DevLines $d "dev: view (mixer|arrangement)"
+  Stop-App
+}
+
 $obs | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $Work "obs.json")
 python "$Repo\docs\batch4b\tools\check_b4b.py" $Work

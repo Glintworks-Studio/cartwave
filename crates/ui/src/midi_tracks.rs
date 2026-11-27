@@ -297,6 +297,7 @@ fn fold(notes: &mut [Span], range: Option<(u8, u8)>) -> usize {
 /// `mode` as above, under profile `p` at `bpm`. Returns the report and the
 /// indices of the tracks that got clips. Every existing clip and track keeps
 /// its content (new tracks shift the ones below them, as Insert Track does).
+#[allow(clippy::too_many_arguments)]
 pub fn import(a: &mut Arrangement, parts: &[PlannedPart], at: u32, target: Target, mode: Mode, p: SoundChip, bpm: f32, pick_colour: &mut dyn FnMut(VoiceKind) -> crate::theme::tokens::Rgba) -> (String, Vec<usize>) {
     let mut report = Vec::new();
     let mut lanes = Vec::new();
@@ -346,11 +347,9 @@ pub fn import(a: &mut Arrangement, parts: &[PlannedPart], at: u32, target: Targe
                 how.push_str(&format!("{moved} notes folded into range, "));
             }
             match chan {
-                Some(c) if !onto || a.lanes[lane].lock.is_none() => {
-                    if a.lanes[lane].voice == VoiceKind::of_lane(c) && a.channel_owner(c).is_none() {
-                        a.lock_track(lane, c);
-                        how.push_str(&format!("locked to {}", crate::tracks::channel_name(c)));
-                    }
+                Some(c) if (!onto || a.lanes[lane].lock.is_none()) && a.lanes[lane].voice == VoiceKind::of_lane(c) && a.channel_owner(c).is_none() => {
+                    a.lock_track(lane, c);
+                    how.push_str(&format!("locked to {}", crate::tracks::channel_name(c)));
                 }
                 None => how.push_str("no free channel: a studio track"),
                 _ => {}

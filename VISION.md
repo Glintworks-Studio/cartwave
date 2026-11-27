@@ -288,7 +288,8 @@ in the Presets + Browser + device panel batch.** Reference:
 - Reference: `docs/design/meeting-2026-11-26/mixer.*` and `knobs.*` (option A);
   `meter-colours.*` option 2.
 
-*Built in 4a:* the Mixer view key is disabled with its reason. **The mixer view comes in 4b.**
+*Built in 4a:* the Mixer view key is disabled with its reason. *Built in 4b:* the mixer view
+(Tab), as above (BATCH4B.md).
 
 *Decided 2026-11-26:* this section is new.
 
@@ -384,7 +385,8 @@ automation. The second system is the 1989 arcade FM board.
 ## Build roadmap (decided 2026-11-26; replaces the order from Batch 4a)
 1. **4a** (done, merged: tracks as instruments, hardware profiles and locks, the Main track);
 2. **the authenticity A/B pass;**
-3. **4b:** visual fixups, the mixer view, audible stereo pan, MIDI import, unison and detune;
+3. **4b** (built on `batch4b/mixer`, BATCH4B.md: visual fixups, the mixer view, audible stereo
+   pan, MIDI import, unison and detune);
 4. **Presets + Browser + device panel** (Chip Synth, DPCM Sampler, the in-instrument picker,
    Mika's 100+ bank);
 5. **Batch 5: automation** (the parameter registry is ready: docs/batch4a/parameters.md);

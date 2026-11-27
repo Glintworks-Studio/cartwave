@@ -82,7 +82,7 @@ pub fn target_at(a: &crate::state::Arrangement, pos: Option<(f32, f32)>) -> (Tar
     (lane.map_or(Target::End, Target::Onto), tick)
 }
 
-fn warn_text(c: &Vec<Conflict>) -> String {
+fn warn_text(c: &[Conflict]) -> String {
     c.iter().map(|x| x.text()).collect::<Vec<_>>().join(", ")
 }
 
@@ -104,7 +104,7 @@ impl AppState {
     }
 
     /// A file entered the window (an OS drag).
-    pub(crate) fn midi_hover(&mut self, path: &PathBuf) {
+    pub(crate) fn midi_hover(&mut self, path: &std::path::Path) {
         if !is_midi(path) {
             return;
         }

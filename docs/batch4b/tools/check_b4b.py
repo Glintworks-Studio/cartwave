@@ -183,6 +183,13 @@ if ran("c1_") or os.path.exists(os.path.join(work, "c1_lit.png")):
     quiet = shot_px("c1_lit", 589, 138 + 73)
     check(sc, quiet is not None and lum(quiet) < 0x40, f"the quiet track's mark stays dark: {quiet}")
 
+if ran("t1_"):
+    sc = "B4B-T1 (Tab leaves no button focused)"
+    a, before = load("t1_after"), load("t1_before")
+    if a and before:
+        check(sc, a["clips"] == before["clips"] and a["instruments"] == before["instruments"], "Space after Tab played and stopped; the clips and instruments are unchanged (Make Unique wasn't pressed)")
+    check(sc, len(lst("t1_views")) == 2, f"Tab showed the mixer and the arrangement: {lst('t1_views')}")
+
 fail = 0
 for sc, rs in results.items():
     for ok, msg in rs:

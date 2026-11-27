@@ -414,7 +414,7 @@ fn a_v7_panned_studio_track_is_heard_now() {
     assert_eq!((p.arrangement.lanes[0].pan, ui::tracks::channels(&p.arrangement)), (-20, 2));
     let (x, ch) = export::render_channels(&p);
     assert_eq!(ch, 2);
-    let (l, r): (Vec<f32>, Vec<f32>) = x.chunks_exact(2).map(|f| (f[0], f[1])).unzip();
+    let (l, r): (Vec<f32>, Vec<f32>) = x.as_chunks::<2>().0.iter().map(|f| (f[0], f[1])).unzip();
     assert_ne!(render::hash(&l), render::hash(&r), "panned: the channels differ");
     // Version 7 rendered the panned file as if centred: centred again, it
     // is that sound exactly (the hash from the old build).
