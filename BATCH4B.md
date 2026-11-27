@@ -7,8 +7,9 @@ Branch **`batch4b/mixer`** (from `main` d4f1afd), pushed. Prompt: `BATCH4B_PROMP
 
 ## 1. Summary (one screen)
 
-**Merge: not done.** `main` stays at d4f1afd and no `pre-batch4b` tag was made. Two gates
-are not met by their letter: performance (§9.6: +0.3 on the 10-round means; §3) and the audio
+**Merge: done on the owner's go-ahead (2026-11-27, B4B-D35).** The CEO accepted the two gates
+below as measured; `main` was tagged `pre-batch4b` at d4f1afd and fast-forwarded to this branch.
+At the end of the unattended run the merge was held, because two gates are not met by their letter: performance (§9.6: +0.3 on the 10-round means; §3) and the audio
 gate's "0 dropouts at full Main volume" as the loopback pilot measures it (§4: the dense mix
 masks the pilot; the engine reads 0 underruns and the same project at −40 dB reads 0 pilot
 dropouts). Every other gate passes.

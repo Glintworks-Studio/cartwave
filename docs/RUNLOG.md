@@ -1429,3 +1429,4 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   is reported as not met by that measurement, with this evidence. A 30-minute run at −40 dB on
   the final build follows (`audio_b4b.ps1 -Runs S64UM`).
 - **B4B-D34 (merge decision).** Two gates are not met by their letter: performance (D30) and the audio gate's full-volume pilot count (D33). Per the prompt, no `pre-batch4b` tag and no merge; `main` stays at d4f1afd. Everything is on `batch4b/mixer` for the owner.
+- **B4B-D35 (merge, owner's go-ahead, 2026-11-27).** The CEO accepted D30 (the 64-track performance residual) and D33 (the pilot masked at full volume; engine 0 underruns, 0 pilot dropouts at −40 dB over 30 min) as measured. Per the prompt: `pre-batch4b` tagged on `main` at d4f1afd and pushed, `main` fast-forwarded to `batch4b/mixer` and pushed.
