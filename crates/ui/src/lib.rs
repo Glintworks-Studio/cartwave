@@ -2581,7 +2581,7 @@ impl AppState {
         if self.tests.pilot || self.tests.avsync || self.tests.matching {
             // Batch 4c's audio gate: the engine's copy of its output, for the
             // reference match (ENGINE.md §7a).
-            let tap = self.tests.matching.then(|| self.engine.as_ref()).flatten().map(|e| {
+            let tap = self.tests.matching.then_some(self.engine.as_ref()).flatten().map(|e| {
                 let tap = std::sync::Arc::new(engine::testkit::OutputTap::new(1 << 20));
                 let _ = e.shared().tap.set(tap.clone());
                 (tap, e.sample_rate())

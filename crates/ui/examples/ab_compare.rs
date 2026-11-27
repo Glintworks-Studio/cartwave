@@ -381,9 +381,9 @@ fn main() {
         // The level match: AC RMS over the overlap (a global least-squares
         // gain is biased low by the small phase differences per note).
         let (mut oo, mut rr) = (Vec::new(), Vec::new());
-        for k in 0..ours.len() {
+        for (k, &x) in ours.iter().enumerate() {
             if let Some(y) = at(r, k) {
-                oo.push(ours[k]);
+                oo.push(x);
                 rr.push(y);
             }
         }

@@ -32,7 +32,7 @@ fn main() {
     let mut st = 0x1234_5678u32;
     let out = dev
         .build_output_stream(
-            cfg.clone().into(),
+            cfg.into(),
             move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                 let mut s = s2.lock().unwrap();
                 for f in data.chunks_mut(ch) {

@@ -464,6 +464,41 @@ audio thread. The first measurement found **idle at 2.1–2.5%**. The cause: the
 was being sent fresh audio statistics every 250 ms, which drew a frame and kept the 4 ms pump fast,
 so the app never went idle. The statistics are now published only while the overlay is visible.
 
+## 7a. The reference match: the audio gate since Batch 4c
+
+**Why.** The pilot tone (§7) can be masked: at full Main volume, 1,024 band-limited studio voices
+put energy into its band and it reported ~6 false dropouts a second (BATCH4B.md §4). Batch 4c
+replaced it as the gate's ground truth (pre-approved, BATCH4C_PROMPT.md §0.2).
+
+**How.** WASAPI shared-mode loopback returns exactly the samples we hand the device
+(`crates/engine/examples/tapprobe.rs`: 187,200 of 187,200 frames bit-identical, gain 1.000000).
+So instead of listening for a tone, the harness compares the capture with **the engine's own
+copy of its output**:
+- `Shared::tap` (`testkit::OutputTap`, set once by the harness): the audio thread stores the first
+  output channel, as written to the device, into a preallocated ring of atomics (no allocation,
+  no locks; tested under the allocation checker).
+- A checker thread (`testkit::Matcher`) locks onto the copy in the capture with 1,024 equal
+  samples, then compares every 128-frame block exactly (tolerance 1e-5). A **dropout** is silence
+  the device inserted: the capture's offset from the copy jumps forward by the gap's length, in
+  frames (a sample counter, in effect). Backward jumps are capture-side gaps; a mismatch that
+  re-locks at the same offset is foreign sound.
+- A −60 dBFS pseudo-random **marker** (`Command::TestMarker`) keeps the alignment unique through
+  silence and held notes. Silence never locks. The music can't mask anything: it is subtracted
+  exactly.
+
+Hooks: `CARTWAVE_MATCH=1` (app; the audio log gains `match_dropouts`, `match_mismatch_runs`,
+`match_blocks`, `match_samples` and a `# match:` summary), `--match` (headless);
+`CARTWAVE_INJECT_STALLS=ms,…` / `CARTWAVE_INJECT_EVERY=s` inject audio-callback stalls in the app.
+
+**Validated** (`docs/batch4c/audio/`): 23 stall lengths 5…50 ms, 3 passes, music muted and
+playing, on the HDMI endpoint (480-frame periods): **the match, the pilot (muted: it can't be
+masked) and the starved detector agree on all 138 stalls**: stalls ≤ 19 ms never drop out, ≥ 21 ms
+always do (20 ms: 5 of 6, the same ones in all three). The reported gaps are multiples of the
+device period (8, 18, 28, 38 ms). In the app at full volume on the 1,024-voice project, with
+stalls of 10/19/30/40 ms: the match finds exactly the 12 stalls of 30/40 ms and none of the 12
+shorter ones; the pilot reports 460 "dropouts". The ≥ 22 ms threshold of §8.1 is the MOTU's
+(a 1,126-frame buffer); each device has its own.
+
 ## 8. Windows audio findings, and what will differ on macOS
 
 ### 8.1 Windows (WASAPI shared mode through cpal 0.18.2; probes in `crates/engine/examples/probe.rs`, `headless.rs`)
