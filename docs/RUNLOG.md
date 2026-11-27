@@ -1218,3 +1218,94 @@ Docs only; no code changed. The rundown is [`DOCS-2026-11-26.md`](../DOCS-2026-1
   --release` passes (7/7; overflow wraps), as in Batch 4a's gate run. No crate differs from `main`,
   so this predates the docs update; it is not fixed here (docs only). Listed as UX.md K6; the fix is
   one `saturating_add` (or reporting the lane as given), for 4b's fixups.
+
+## Batch 4b (BATCH4B_PROMPT.md, branch `batch4b/mixer`, Windows PC), 2026-11-26/27
+
+Pre-flight: `main` = `origin/main` = d4f1afd (Batch 4a merged by the owner, plus the docs update).
+Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight reference boards in
+`docs/design/meeting-2026-11-26/` are all present.
+
+- **B4B-D1 (roadmap order).** VISION.md's roadmap puts "the authenticity A/B pass" before 4b; the
+  owner asked for 4b now. Nothing in 4b depends on the A/B pass (it adds no emulation change), so 4b
+  runs; the A/B pass stays next on the roadmap. Logged as a sequencing difference, not a conflict.
+- **B4B-D2 (K6).** `load_clips`' message uses `c.lane.saturating_add(1)`: a fuzzed lane index near
+  `usize::MAX` no longer overflows in debug. The existing fuzz test (`robustness::
+  project_loader_never_panics_or_hangs`) is the test; it passes in debug again.
+- **B4B-D3 (K3/G10, the number column).** `HeaderLayout::num_w` = 28 px up to 9 tracks, 48 px for
+  10–99 (the `fixups` board), +20 px per digit beyond; the name column starts 12 px after it and
+  gives up the width (the control block doesn't move). Numbers stay centred in the column, as on
+  the board. The layout follows the track count every tick (`sync_header_layout`), so every row
+  (and the Main row's name) moves together. Test `number_column_follows_the_largest_number`.
+- **B4B-D4 (the pan law).** Equal power, "−3 dB at centre" read as the standard pan law: a centred
+  track is 3 dB below a hard-panned one's side. Gains `√2·cos θ`, `√2·sin θ`, so centre is exactly
+  unity in each channel (the mono level, bit for bit) and hard left is +3 dB on the left, silent on
+  the right. Locked tracks and the console stay centred (their pan is fixed, as before).
+- **B4B-D5 (stereo without breaking the mono path).** The studio bus keeps three step buffers:
+  centre, left only, right only. A centred voice puts everything in the centre (the old single
+  buffer, so the render is the old one bit for bit); a panned voice puts its quieter side's share
+  in the centre and the difference in its louder side (two steps per change). The side buffers are
+  read and filtered only once a side step has happened; they take the centre's timing at that
+  moment (found by the stem test: an unread buffer's clock stood still). `Mixdown::render` stays the
+  mono render; `render_stereo` returns whether the output is stereo. The live engine writes L/R to
+  the device's first two channels (others get the centre) and folds to mono on a mono device.
+- **B4B-D6 (how exports signal stereo).** By the project: `tracks::channels` = 2 once any studio
+  track's pan is off centre, else 1. A mono project writes exactly the old mono WAVs (byte-
+  identical; `wav_bytes_ch(.., 1, ..)` = `wav_bytes`). A stereo project writes 2-channel WAVs for the
+  mix **and every stem**, so stems line up with the mix sample for sample and channel for channel
+  (studio stems add up to the mix within −60 dB, test). The loop JSON's `channels` says which.
+  Loudness (EBU R128) measures both channels.
+- **B4B-D7 (unison, detune, drift).** Unison 1–4 voices per note, each from the track's pool (the
+  pool is sized `polyphony × unison`, and the Voices cap counts them). Detune spreads the voices
+  evenly over 0–50 cents (total width, centred on the note). Drift is a slow per-voice wander of
+  0–10 cents: two sines (about 0.11 and 0.27 Hz) with per-voice phases, pure arithmetic on the
+  frame-tick count (`chip::math`), so renders are the same on every machine. The offset goes into
+  the driver's fine pitch (`Driver::detune`), applied at the frame tick like the instrument's own
+  fine pitch: the chip's period is an integer, so small detunes on high notes are quantised (as on
+  the chip). VISION.md lists "pulse-width drift" as a studio-only control; the prompt specifies
+  Drift as pitch wander. They are different controls, so there is no conflict to resolve: Drift
+  (pitch) is built here as specified, pulse-width drift arrives with the device panel (VISION.md's
+  "Instruments" batch), logged for it.
+- **B4B-D8 (the rate class).** Detune and Drift are **frame-tick** (stepped at the driver's tick,
+  like every pitch control). Unison is **frame-tick, structural**: a change re-allocates voices at
+  the next tick (new notes take the new count; a removed unison voice is released). Registered in
+  `params.rs` with that note.
+- **B4B-D9 (gain staging).** The scheme: (1) one studio voice is the console's level (+0.000 dB, as
+  4a measured); (2) unison trims each voice of a note by `1/√n`, so a unison note keeps about one
+  voice's loudness (detuned voices add in power); (3) a **safety limiter on the studio bus**: a
+  linked peak limiter at −1 dBFS, instant attack, 150 ms release. It is bit-transparent (gain exactly
+  1.0, no multiply) while the bus stays under the ceiling, which one note, and chords of a few notes,
+  always do; it bounds chords, unison and many tracks so the output never passes full scale. A
+  per-track `1/√polyphony` trim was rejected: drawing a chord would turn the whole track down, a
+  surprise (VISION principle 5). The console (locked tracks) is untouched: its own non-linear mixer
+  already compresses chords, as the hardware does.
+- **B4B-D10 (format v8).** Version 8 = version 7 plus optional `unison`, `detune`, `drift` per track
+  (written only when not 1/0/0). v7 files read through the same reader with the defaults. A v7
+  corpus (docs/songs/v7, 10 files incl. 4 studio-track projects) was written **by the baseline
+  build** with its hashes; every one renders identically in v8 except `v7_studio_panned`, whose pan
+  v7 saved but didn't play: it is heard now, and centred again it gives the v7 hash.
+- **B4B-D11 (the clip mark).** A track's mark lights when its output passes 0 dBFS: for a studio
+  track, the sum of its voices' peaks after its gain and pan (an upper bound of the track's own peak:
+  voices are mixed linearly, so the true peak can't exceed it); for a locked track, its channel's DAC
+  peak through the channel's curve (a lone channel never reaches full scale). Held by track id (it
+  follows a moved track) until a click on the mark resets it. Main's mark is PEAK over 0 dBFS; a
+  click on either resets PEAK. The mark is 4 × 2 px at y 1, above the well, clear of the thumb at
+  +6 dB.
+- **B4B-D12 (no tooltips).** The 12 remaining `.tooltip` sites (instrument dials, Make Unique / Use
+  Track Instrument, Save as Preset, the graph hint, Draw Mode, the browser's Preview key, three in
+  the export dialog, the default-colour swatch) became status-bar hover help; state-dependent lines
+  use a new `HelpExt::help_fn` evaluated on hover. The `tip()` helper is gone. One exception stays,
+  as P2-D15 allows: the track row's full-name display (name, kind, preset) when the row truncates.
+- **B4B-D13 (G15 colours).** New projects (File > New, New from MIDI File) give their Pulse tracks
+  **Sky `#4FA8E0`** (`tokens::NEW_PULSE`), a palette colour far from the toggle lime. The legacy
+  layout keeps `#C9D24A`, so every existing project opens with its colours unchanged (bit-identical
+  files: the migration tests re-save them). The colour grid's lime cell is now **Sage `#B4C08A`**
+  (ΔE 0.10 from the lime, 0.06 from its nearest neighbour), so nothing new can pick it either; the
+  browser's pulse marker uses Sky. A dead `FADER_STOPS` token with a lime stop is removed.
+- **B4B-D14 (the Main row vs its board).** The `main-track` board differs from 4a's text spec in
+  five places, and the board wins (it is "Locked"): a speaker glyph before "OUT" (drawn from the
+  board's SVG paths), the badge ink `#A8A8A8` (4a had `#9A9A9A` on Main only), PEAK as a two-line
+  block centred in column A in Inter 600 10/12 with "dB" (4a: a 12 px value on a 16 px line), bar
+  lines only in the lane in `#222222` (4a drew beat lines), and the CSS shadow `0 −6px 8px −4px`
+  black .6 (4a: an 8 px gradient to .28). `mockup_match_main.py` measures board and app with the
+  same detectors: 95/95 within 1 px at 100 % and 150 %. The whole Main header (body, strip, text) is
+  now one cached image (§3.1).
