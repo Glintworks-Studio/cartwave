@@ -68,7 +68,8 @@ const UNLIT_A: f32 = 0.10;
 const PEAK_SEG: Rgba = Rgba::hex(0xF2F2F2);
 
 /// The knob (option A, machined).
-const KNOB_C: (f32, f32) = (76.0, 73.0);
+/// Centred in the padding box (150 px wide on a 152 px strip: centre 75).
+const KNOB_C: (f32, f32) = (75.0, 73.0);
 const KNOB_R: f32 = 17.0;
 const RING_W: f32 = 2.0;
 /// Full pan swing of the indicator either side (degrees).
@@ -77,7 +78,7 @@ const PAN_TEXT_Y: f32 = 94.0;
 
 const KEYS_Y: f32 = 118.0;
 const KEY: f32 = 24.0;
-const KEYS_X: [f32; 2] = [48.0, 80.0];
+const KEYS_X: [f32; 2] = [47.0, 79.0];
 const CLIP_RECT: (f32, f32, f32, f32) = (102.0, 148.0, 16.0, 4.0);
 
 /// A track strip's columns: glass x, width and the two segment columns.
@@ -98,10 +99,16 @@ const M_TICK_X: f32 = 66.0;
 const M_LABEL_R: f32 = 62.0;
 
 const CAP_W: f32 = 30.0;
+/// Room around the cap's image for its shadow (3σ).
+const CAP_PAD: f32 = 16.0;
 const CAP_H: f32 = 44.0;
 const PEAK_Y: f32 = 440.0;
 const VOICES_Y: f32 = 472.0;
-const READOUT: (f32, f32) = (514.0, 26.0);
+/// The dB readout: `bottom: 12px` inside the 1 px border (550 − 12 − 26).
+const READOUT: (f32, f32) = (512.0, 26.0);
+/// The board's parts are placed from the strip's padding box, inside its
+/// 1 px border: every position above is that far in (CSS absolute offsets).
+const INSET: f32 = 1.0;
 
 const INK_HI: Rgba = Rgba::hex(0xE6E6E6);
 const INK_VAL: Rgba = Rgba::hex(0xC8C8C8);
@@ -135,7 +142,7 @@ fn register(lane: usize, b: BoundingBox) {
 /// (x, y, w, h) of the name plate, the pan value or the dB readout.
 pub fn field_rect(lane: usize, what: Field, scale: f32) -> Option<(f32, f32, f32, f32)> {
     let b = STRIP_AT.with(|r| r.borrow().get(lane).copied().flatten())?;
-    let (x, y) = (b.x / scale, b.y / scale);
+    let (x, y) = (b.x / scale + INSET, b.y / scale + INSET);
     Some(match what {
         Field::Name => (x + 8.0, y + 8.0, STRIP_W - 16.0, 40.0),
         Field::Pan => (x + 40.0, y + PAN_TEXT_Y - 2.0, 72.0, 16.0),
@@ -253,6 +260,8 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
     } else {
         draw_panel(c, rect(0.0, 0.0, w, STRIP_H), s, rgba(0x1E1E1E), rgba(0x141414));
     }
+    // Everything inside is placed from the padding box (INSET).
+    c.translate((INSET * s, INSET * s));
     // The name plate: recessed, the colour as a lit 4 px bar on top.
     let plate = rect(8.0, 8.0, w - 16.0, 40.0);
     let (p0, p1) = if k.main { (rgba(0x0A0A0A), rgba(0x111111)) } else { (rgba(0x0E0E0E), rgba(0x151515)) };
@@ -261,7 +270,8 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
     c.clip_rrect(gfx::rrect(plate, 4.0 * s), vg::ClipOp::Intersect, true);
     let bar = vg::Rect::from_xywh(plate.left, plate.top, plate.width(), 4.0 * s);
     let colour = rgba(k.colour);
-    let stops: [Rgba; 3] = if k.main { [rgba(0x000000), rgba(0x1C1C1C), rgba(0x363636)] } else { crate::theme::palette::strip(colour, 0.0).0 };
+    // The lit strip's colours (the board: colour → +28 % → +55 % white).
+    let stops: [Rgba; 3] = if k.main { [rgba(0x000000), rgba(0x1C1C1C), rgba(0x363636)] } else { crate::theme::palette::strip(colour, 1.0).0 };
     if !k.main {
         let mut glow = gfx::fill(colour.with_alpha(0.35));
         glow.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 4.0 * s, false));
@@ -270,21 +280,36 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
     c.draw_rect(bar, &gfx::shaded(gfx::linear((bar.left, bar.top), (bar.right, bar.top), &stops, Some(&[0.0, 0.55, 1.0]))));
     c.restore();
     // Number (a fixed two-digit slot, right-aligned), name, badge line.
+    // Line 1 (number and name, baseline-aligned): its box starts under the
+    // 4 px bar and 4 px padding; the 14 px number sets the baseline. Line 2
+    // (the badge, 9 px) follows 1 px under line 1's box.
     let line1 = (8.0 + 4.0 + 4.0) * s;
     let nf = gfx::font(Face::SemiBold, 12.0 * s);
-    let base1 = gfx::css_baseline(&nf, line1, 15.0 * s).round();
+    // Main has no number: its line is the 12 px name's.
+    let (_, m14) = if k.main { nf.metrics() } else { gfx::font(Face::HeavyItalic, 14.0 * s).metrics() };
+    let base1 = (line1 - m14.ascent).round();
+    let line2 = line1 + (m14.descent - m14.ascent) + 1.0 * s;
     let mut x = (8.0 + 8.0) * s;
     if !k.main {
         let numf = gfx::font(Face::HeavyItalic, 14.0 * s);
         let slot = if k.number.len() > 2 { 28.0 } else { 20.0 };
-        let nw = gfx::text_width(&numf, &k.number);
-        gfx::draw_text(c, &k.number, (x + slot * s - nw).round(), base1, &numf, NUM_INK);
+        // Tabular figures (the board's `font-variant-numeric: tabular-nums`):
+        // every digit in a cell as wide as "0", right-aligned in the slot.
+        let cell = gfx::text_width(&numf, "0");
+        let mut dx = x + slot * s - cell * k.number.chars().count() as f32;
+        for ch in k.number.chars() {
+            let g = ch.to_string();
+            let gw = gfx::text_width(&numf, &g);
+            gfx::draw_text(c, &g, (dx + (cell - gw) * 0.5).round(), base1, &numf, NUM_INK);
+            dx += cell;
+        }
         x += (slot + 6.0) * s;
     }
     gfx::draw_text_clipped(c, &k.name, x.round(), base1, (w - 8.0) * s - x - 8.0 * s, &nf, INK_HI);
     let bf = gfx::font(Face::SemiBold, 9.0 * s);
     let tr = 0.06 * 9.0 * s;
-    let base2 = gfx::css_baseline(&bf, line1 + 16.0 * s, 11.0 * s).round();
+    let (_, m9) = bf.metrics();
+    let base2 = (line2 - m9.ascent).round();
     let mut bx = (8.0 + 8.0) * s;
     if k.locked {
         draw_lock(c, (bx.round(), (base2 - 8.0 * s).round()), s, INK_MID);
@@ -300,6 +325,12 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
         // The knob's track ring (270°, the gap at the bottom) and its body
         // (the knurled skirt and the brushed cap): drawn by `draw_knob_body`.
         draw_knob_body(c, at(KNOB_C.0, KNOB_C.1), s, k.locked);
+        if k.locked {
+            // Locked: the indicator is parked at centre under the veil.
+            let o = at(KNOB_C.0, KNOB_C.1);
+            draw_indicator(c, o, 0.0, s);
+            c.draw_oval(vg::Rect::from_xywh(o.0 - 14.0 * s, o.1 - 14.0 * s, 28.0 * s, 28.0 * s), &gfx::fill(rgba(0x0A0A0A).with_alpha(0.45)));
+        }
         // M and S key bodies (the mixer key style).
         for kx in KEYS_X {
             draw_key_body(c, rect(kx, KEYS_Y, KEY, KEY), s);
@@ -309,8 +340,8 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
         let lf = gfx::font(Face::SemiBold, 10.0 * s);
         let ltr = 0.1 * 10.0 * s;
         let lw = gfx::tracked_width("PEAK", &lf, ltr) - ltr;
-        gfx::draw_text_tracked(c, "PEAK", ((w * s - lw) * 0.5).round(), gfx::css_baseline(&lf, 64.0 * s, 12.0 * s).round(), &lf, ltr, INK_LO);
-        let pr = rect((w - 72.0) * 0.5, 80.0, 72.0, 26.0);
+        gfx::draw_text_tracked(c, "PEAK", (((w - 2.0 * INSET) * s - lw) * 0.5).round(), gfx::css_baseline(&lf, 64.0 * s, 12.0 * s).round(), &lf, ltr, INK_LO);
+        let pr = rect((w - 2.0 * INSET - 72.0) * 0.5, 80.0, 72.0, 26.0);
         recess(c, pr, 4.0, s, gfx::fill(RECESS), 1.0);
     }
     // The clip mark's well (tracks; Main's PEAK says it).
@@ -342,17 +373,27 @@ fn render_static(k: &StaticKey, s: f32) -> Option<vg::Image> {
     // The fader slot cut into the panel.
     let sl = rect(slot_x, METER_TOP - 6.0, 6.0, METER_LEN + 12.0);
     let srr = gfx::rrect(sl, 3.0 * s);
+    // Locked: the whole fader (slot and cap) at 45 % (the board's `opacity: .45`).
+    if k.locked {
+        c.save_layer_alpha_f(sl.with_outset((4.0 * s, 4.0 * s)), 0.45);
+    }
     c.draw_rrect(srr, &gfx::shaded(gfx::linear((sl.left, sl.top), (sl.right, sl.top), &[rgba(0x000000), rgba(0x0B0B0B), rgba(0x000000)], Some(&[0.0, 0.5, 1.0]))));
     gfx::inner_shadow(c, &srr, 0.0, s, 2.0 * s, Rgba::black(0.9));
+    // Its lips: a light one under it, a dark one over it (`0 1px 0` white .06,
+    // `0 -1px 0` black .6).
     c.draw_rect(vg::Rect::from_xywh(sl.left + 2.0 * s, sl.bottom, sl.width() - 4.0 * s, gfx::hairline(s)), &gfx::fill(Rgba::white(0.06)));
+    c.draw_rect(vg::Rect::from_xywh(sl.left + 2.0 * s, sl.top - gfx::hairline(s), sl.width() - 4.0 * s, gfx::hairline(s)), &gfx::fill(Rgba::black(0.6)));
+    if k.locked {
+        c.restore();
+    }
     if !k.main {
         // PEAK: the label and its recessed readout; the readout well at the bottom.
         let lf = gfx::font(Face::SemiBold, 10.0 * s);
         let ltr = 0.1 * 10.0 * s;
         gfx::draw_text_tracked(c, "PEAK", 12.0 * s, gfx::css_baseline(&lf, (PEAK_Y + 4.0) * s, 12.0 * s).round(), &lf, ltr, INK_LO);
-        recess(c, rect(w - 12.0 - 64.0, PEAK_Y, 64.0, 20.0), 4.0, s, gfx::fill(RECESS), 1.0);
+        recess(c, rect(w - 2.0 * INSET - 12.0 - 64.0, PEAK_Y, 64.0, 20.0), 4.0, s, gfx::fill(RECESS), 1.0);
     }
-    let ro = rect(12.0, READOUT.0, w - 24.0, READOUT.1);
+    let ro = rect(12.0, READOUT.0, w - 2.0 * INSET - 24.0, READOUT.1);
     recess(c, ro, 4.0, s, gfx::fill(if k.main { RECESS } else { rgba(0x0A0A0A) }), 3.0);
     Some(surface.image_snapshot())
 }
@@ -435,10 +476,16 @@ fn draw_knob_body(c: &vg::Canvas, o: (f32, f32), s: f32, locked: bool) {
     c.draw_oval(cap, &bp);
     c.draw_oval(cap, &gfx::shaded(gfx::radial((o.0, o.1 - 0.5 * cr), cr * 1.1, &[Rgba::white(0.35), Rgba::white(0.0)], Some(&[0.0, 0.55]))));
     c.draw_arc(cap.with_inset((0.5 * s, 0.5 * s)), 200.0, 140.0, false, &gfx::stroke(Rgba::white(0.6), s));
-    if locked {
-        // Darkened (the board's locked knob: a 45 % dark veil over the body).
-        c.draw_oval(skirt, &gfx::fill(rgba(0x0A0A0A).with_alpha(0.45)));
-    }
+    let _ = locked;
+}
+
+/// The knob's indicator at `ang` degrees from 12 o'clock.
+fn draw_indicator(c: &vg::Canvas, o: (f32, f32), ang: f32, s: f32) {
+    c.save();
+    c.rotate(ang, Some(vg::Point::new(o.0, o.1)));
+    let ind = vg::Rect::from_xywh(o.0 - s, o.1 - 8.0 * s, 2.0 * s, 6.0 * s);
+    c.draw_rrect(gfx::rrect(ind, s), &gfx::fill(rgba(0x151515)));
+    c.restore();
 }
 
 /// A sweep gradient starting at 12 o'clock (CSS conic `from 0deg`).
@@ -461,15 +508,15 @@ fn draw_key_body(c: &vg::Canvas, r: vg::Rect, s: f32) {
 /// The plastic cap (30 × 44) with its cast shadow, grip ridges and white
 /// centre line, as an image (padding for the shadow), drawn at any y.
 fn render_cap(s: f32) -> Option<vg::Image> {
-    let pad = (10.0 * s).ceil();
+    let pad = (CAP_PAD * s).ceil();
     let (w, h) = ((CAP_W * s + 2.0 * pad).ceil() as i32, (CAP_H * s + 2.0 * pad + 6.0 * s).ceil() as i32);
     let mut surface = vg::surfaces::raster_n32_premul((w.max(1), h.max(1)))?;
     let c = surface.canvas();
     c.clear(vg::Color::TRANSPARENT);
     let r = vg::Rect::from_xywh(pad, pad, CAP_W * s, CAP_H * s);
-    // The cast shadow: 6 px down, blurred 5.
+    // The cast shadow: 6 px down, `filter: blur(5px)` (a 5 px standard deviation).
     let mut sh = gfx::fill(Rgba::black(0.55));
-    sh.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 2.5 * s, false));
+    sh.set_mask_filter(vg::MaskFilter::blur(vg::BlurStyle::Normal, 5.0 * s, false));
     c.draw_rrect(gfx::rrect(r.with_offset((0.0, 6.0 * s)), 5.0 * s), &sh);
     let rr = gfx::rrect(r, 4.0 * s);
     let stops = [0x6A6A6A, 0x4A4A4A, 0x2E2E2E, 0x262626, 0x3A3A3A, 0x505050].map(rgba);
@@ -677,11 +724,11 @@ impl Strip {
         if inside((8.0, 8.0, w - 16.0, 40.0), p) {
             return Part::Plate;
         }
-        if inside((12.0, READOUT.0, w - 24.0, READOUT.1), p) {
+        if inside((12.0, READOUT.0, w - 2.0 * INSET - 24.0, READOUT.1), p) {
             return Part::Readout;
         }
         if self.main() {
-            if inside(((w - 72.0) * 0.5, 64.0, 72.0, 42.0), p) {
+            if inside(((w - 2.0 * INSET - 72.0) * 0.5, 64.0, 72.0, 42.0), p) {
                 return Part::Peak;
             }
         } else {
@@ -779,6 +826,7 @@ impl View for Strip {
         event.map(|we, meta| match we {
             WindowEvent::MouseMove(..) => {
                 let p = local(cx);
+                let p = (p.0 - INSET, p.1 - INSET);
                 match self.drag {
                     Some(Drag::Pan(y0, pan0)) => {
                         // Up turns right: 100 units over 150 px (Shift: finer).
@@ -805,6 +853,7 @@ impl View for Strip {
             }
             WindowEvent::MouseDown(MouseButton::Left) => {
                 let p = local(cx);
+                let p = (p.0 - INSET, p.1 - INSET);
                 if !self.main() {
                     cx.emit(AppEvent::SelectTrack(self.lane, false));
                 }
@@ -848,7 +897,8 @@ impl View for Strip {
                     meta.consume();
                     return;
                 }
-                let target = match self.part_at(local(cx)) {
+                let l = local(cx);
+                let target = match self.part_at((l.0 - INSET, l.1 - INSET)) {
                     Part::Plate => Some(crate::edit::RenameTarget::Track(self.lane)),
                     Part::PanValue => Some(crate::edit::RenameTarget::Pan(self.lane)),
                     Part::Readout => Some(crate::edit::RenameTarget::Volume(self.lane)),
@@ -860,7 +910,8 @@ impl View for Strip {
                 meta.consume();
             }
             WindowEvent::MouseScroll(_, y) if !cx.modifiers().alt() => {
-                let part = self.part_at(local(cx));
+                let l = local(cx);
+                let part = self.part_at((l.0 - INSET, l.1 - INSET));
                 if matches!(part, Part::Knob | Part::PanValue | Part::Fader | Part::Readout) {
                     let steps = self.wheel.steps(*y);
                     if steps != 0 && lock.is_none() {
@@ -907,7 +958,7 @@ impl View for Strip {
                 canvas.draw_image(img, (r.left, r.top), None);
             }
         }
-        let at = |x: f32, y: f32| (r.left + x * s, r.top + y * s);
+        let at = |x: f32, y: f32| (r.left + (x + INSET) * s, r.top + (y + INSET) * s);
         let lock = self.lock();
         let live = Self::live(&self.s, self.lane);
         let (cols, segw, glass, cap_x) = if main { (M_SEG_COLS, M_SEG_W, M_GLASS, M_CAP_X) } else { (SEG_COLS, SEG_W, GLASS, CAP_X) };
@@ -928,7 +979,7 @@ impl View for Strip {
             if let Some(cap) = sh.cap.as_ref() {
                 let db = if lock.is_some() { 0.0 } else { self.db() };
                 let cy = cap_y(db);
-                let pad = (10.0 * s).ceil();
+                let pad = (CAP_PAD * s).ceil();
                 let (x, y) = at(cap_x, cy - CAP_H * 0.5);
                 let mut p = vg::Paint::default();
                 if lock.is_some() {
@@ -939,9 +990,9 @@ impl View for Strip {
         });
         let f10 = gfx::font(Face::SemiBold, 10.0 * s);
         if main {
-            let pr = vg::Rect::from_xywh(at((MAIN_W - 72.0) * 0.5, 80.0).0, at(0.0, 80.0).1, 72.0 * s, 26.0 * s);
+            let pr = vg::Rect::from_xywh(at((MAIN_W - 2.0 * INSET - 72.0) * 0.5, 80.0).0, at(0.0, 80.0).1, 72.0 * s, 26.0 * s);
             readout_text(canvas, &super::main_track::peak_text(self.s.master_peak.get_untracked()), pr, 11.0, 0.0, s, false);
-            let ro = vg::Rect::from_xywh(at(12.0, 0.0).0, at(0.0, READOUT.0).1, (MAIN_W - 24.0) * s, READOUT.1 * s);
+            let ro = vg::Rect::from_xywh(at(12.0, 0.0).0, at(0.0, READOUT.0).1, (MAIN_W - 2.0 * INSET - 24.0) * s, READOUT.1 * s);
             readout_text(canvas, &crate::state::format_db(self.db()), ro, 11.0, 0.02, s, false);
             return;
         }
@@ -957,14 +1008,8 @@ impl View for Strip {
             p.set_stroke_cap(vg::PaintCap::Butt);
             canvas.draw_arc(oval, -90.0, ang, false, &p);
         }
-        canvas.save();
-        canvas.rotate(ang, Some(vg::Point::new(o.0, o.1)));
-        let ind = vg::Rect::from_xywh(o.0 - s, o.1 - 8.0 * s, 2.0 * s, 6.0 * s);
-        canvas.draw_rrect(gfx::rrect(ind, s), &gfx::fill(rgba(0x151515)));
-        canvas.restore();
-        if lock.is_some() {
-            // The locked knob's veil covers the indicator too.
-            canvas.draw_oval(vg::Rect::from_xywh(o.0 - 14.0 * s, o.1 - 14.0 * s, 28.0 * s, 28.0 * s), &gfx::fill(rgba(0x0A0A0A).with_alpha(0.45)));
+        if lock.is_none() {
+            draw_indicator(canvas, o, ang, s);
         }
         // The pan value under the knob ("C" and the lock glyph when locked).
         let pt = vg::Rect::from_xywh(r.left, at(0.0, PAN_TEXT_Y).1, r.width(), 12.0 * s);
@@ -1005,7 +1050,7 @@ impl View for Strip {
         }
         // PEAK's readout, VOICES n / ∞ (studio) or the channel (locked).
         let held = self.s.meters.with_untracked(|m| m.held_of(id));
-        let pr = vg::Rect::from_xywh(at(STRIP_W - 12.0 - 64.0, 0.0).0, at(0.0, PEAK_Y).1, 64.0 * s, 20.0 * s);
+        let pr = vg::Rect::from_xywh(at(STRIP_W - 2.0 * INSET - 12.0 - 64.0, 0.0).0, at(0.0, PEAK_Y).1, 64.0 * s, 20.0 * s);
         readout_text(canvas, &super::main_track::peak_text(held), pr, 10.0, 0.0, s, false);
         let line = match lock {
             Some(c) => crate::tracks::channel_name(c).replace(' ', " ").to_uppercase().replacen(' ', " \u{B7} ", 1),
@@ -1021,7 +1066,7 @@ impl View for Strip {
         let vw = gfx::tracked_width(&line, &vf, vtr) - vtr;
         gfx::draw_text_tracked(canvas, &line, (r.center_x() - vw * 0.5).round(), gfx::css_baseline(&vf, at(0.0, VOICES_Y).1, 12.0 * s).round(), &vf, vtr, INK_LO);
         // The dB readout (locked: 0.0 dB and the lock glyph).
-        let ro = vg::Rect::from_xywh(at(12.0, 0.0).0, at(0.0, READOUT.0).1, (STRIP_W - 24.0) * s, READOUT.1 * s);
+        let ro = vg::Rect::from_xywh(at(12.0, 0.0).0, at(0.0, READOUT.0).1, (STRIP_W - 2.0 * INSET - 24.0) * s, READOUT.1 * s);
         let db = if lock.is_some() { 0.0 } else { self.db() };
         readout_text(canvas, &crate::state::format_db(db), ro, 11.0, 0.02, s, lock.is_some());
     }
@@ -1111,7 +1156,7 @@ pub struct StripsArea {
 impl StripsArea {
     fn content_w(&self) -> f32 {
         let n = self.s.arrangement.with_untracked(|a| a.lanes.len()) as f32;
-        MARGIN + n * (STRIP_W + STRIP_GAP) - STRIP_GAP
+        n * (STRIP_W + STRIP_GAP) - STRIP_GAP
     }
 
     fn max_scroll(&self, view_w: f32) -> f32 {
@@ -1187,7 +1232,7 @@ impl View for StripsArea {
         if total > w {
             let r = gfx::snap(b.into());
             let y = r.bottom - (SCROLLBAR_H + SCROLLBAR_GAP) * s;
-            let track = vg::Rect::from_xywh(r.left + MARGIN * s, y, r.width() - MARGIN * s, SCROLLBAR_H * s);
+            let track = vg::Rect::from_xywh(r.left, y, r.width(), SCROLLBAR_H * s);
             canvas.draw_rrect(gfx::rrect(track, 2.0 * s), &gfx::fill(Rgba::white(0.04)));
             let tw = (w / total * track.width()).max(24.0 * s);
             let tx = track.left + self.s.mixer_scroll.get_untracked() / (total - w).max(1.0) * (track.width() - tw);
@@ -1223,10 +1268,12 @@ pub fn build(cx: &mut Context, s: Signals) {
                 .height(Pixels(STRIP_H))
                 .position_type(PositionType::Absolute)
                 .top(Pixels(STRIPS_TOP))
-                .left(s.mixer_scroll.map(|v| Pixels(MARGIN - *v)));
+                .left(s.mixer_scroll.map(|v| Pixels(-*v)));
             })
+            // The viewport starts at the margin, so a strip scrolled away
+            // never shows in it (the board's margins are empty).
             .position_type(PositionType::Absolute)
-            .left(Pixels(0.0))
+            .left(Pixels(MARGIN))
             .right(Pixels(MARGIN + MAIN_W + MAIN_GAP))
             .top(Pixels(0.0))
             .bottom(Pixels(0.0))
