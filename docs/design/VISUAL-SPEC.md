@@ -18,8 +18,8 @@ materials in `views/gfx.rs`; the top bar in `views/topbar.rs`; rows, keys and th
 | Icons idle / dim | `#D6D6D6` / `#8C8C8C`; the record ring `#B9534C` |
 | Key material | 1 px border `#383838`; body `#161616 → #424242` over the whole border box; a 1 px sheen **inside** the border (the second pixel row, clipped by the inner corners) `#3E3E3E → #999999 (centre) → #3A3A3A` **(file)**; radius 8 on 40/56 px keys, 4 on 24 px keys |
 | Recessed well | fill `#151515`, 1 px `#323232`, radius 8; inner bottom highlight `inset 0 -1px 0 rgba(255,255,255,.07)`, outer `0 1px 0 rgba(255,255,255,.04)` |
-| Lime `#C7D74E` | **switched-on states only**: lit M/S glyphs (text glow `0 0 6px` 85% + `0 0 2px` 90%), the display's active indicators (icon `drop-shadow(0 0 3px .65)`, text `0 0 6px .75`), the selected view icon (`drop-shadow(0 0 3px .55)` **(file)**), the loop brace while looping |
-| Neutral stand-in | `#E6E6E6` for the playhead, focus, dial arcs, checked buttons, drag targets |
+| Lime `#C7D74E` | **toggle on-states and the centre display only** (§13): lit M/S glyphs (text glow `0 0 6px` 85% + `0 0 2px` 90%), the display's active indicators (icon `drop-shadow(0 0 3px .65)`, text `0 0 6px .75`), the selected view icon (`drop-shadow(0 0 3px .55)` **(file)**), the loop brace while looping |
+| Neutral stand-in | `#E6E6E6` for the playhead, focus, dial arcs, checked buttons, drag targets; selection is a white outline and a faint glow (§13) |
 | Button tiers | key material: view, transport, TAP, M/S. Every stylesheet button (dialogs, panels, browser): flat `#151515`, plain 1 px `#323232` (hover `#4A4A4A`, checked `#9A9A9A`), no sheen, no gradient stroke. Notices: no stroke |
 | Dithering | every gradient: drawn ones (Skia `Paint::set_dither`) and stylesheet ones (vizia fork 60907aad) |
 | Grid | every layout distance a multiple of 4, except timeline positions (they follow the zoom), 1 px hairlines, and the 73 px row pitch (72 + hairline) **(file)** |
@@ -53,6 +53,8 @@ dividers 1×32 `#2A2A2A` with 8 px margins.
   plus `inset 0 14px 16px -10px rgba(0,0,0,.8)`, inside the border (radius 7): the mockup's
   (78 / 50 / 28 / 12 %, inset .95) toned to ~80% by the CEO in the polish pass, same 34 px
   reach. Rendered once per size and scale. The spectrum well has none.
+  **Decided 2026-11-26:** the overhang eases out over **48 px** (§13). Built: the 34 px reach
+  above; to change in 4b's visual fixups.
 
 **Right** (gap 12): the spectrum well 216×56 (no overhang): 24 square bars 4 px wide, 4 px apart,
 12 px side padding, 8 px bottom padding; bar gradient `#4A4A4A → #9A9A9A (60%) → #D6D6D6`; a 2 px
@@ -85,12 +87,16 @@ Positions in the "strip-first" frame (logical px from the row's top-left, header
 | Element | Position and style |
 |---|---|
 | Colour strip | x 0–16, full row height, square. Unlit `mix(c, black .62) → mix(c, black .35)`; lit `c → mix(c, white .28) (55%) → mix(c, white .55)`, inner glow `inset 0 0 10px` white **40%**, a `0 0 10px` spill in the track colour at **25%** toward the header's inside (polish 2: toned down ~20%); edges: left `mix(c, black .2)` → `mix(c, white .6)` lit, right `mix(c, black .5)`. Note-ons light it; it fades over 250 ms |
-| Number | Inter 800 italic 40, `#222222`, centred in x 28–56, line box y 16–56, tracking −.02em |
+| Number | Inter 800 italic 40, `#222222`, centred in x 28–56, line box y 16–56, tracking −.02em. **Decided 2026-11-26:** the column's width follows the project's largest track number (§13); built: fixed, so numbers ≥ 10 crowd the name (to change in 4b) |
 | Name | x 68, Inter 600 14, `#E6E6E6`, ellipsis at `w − 144` (extra width goes only here) |
 | Profile badge, preset | x 68, y 40, as before; the preset ends with "…" at `w − 144` |
 | Control block | 120 px, 12 px in from the far edge: x `w − 132` … `w − 12`; never stretches or mirrors inside |
 | Column A (56 px, at block + 8) | M / S keys 24 × 24, 8 apart, at y 10 (unchanged keys, lime glyph when on); the pan value at y 42 (Inter 600 10/12, tracking .02em, `#9A9A9A`: `C`, `13L`, `25R`); the pan well 56 × 4 at y 58 (`#050505`, `inset 0 1px 0 #000`, `0 1px 0 #262626`), a 1 × 8 `#4A4A4A` centre tick at 28, a `#8A8A8A` fill from the centre, the 8 × 12 thumb (`#4A4A4A` border, `#5A5A5A → #2E2E2E`, `#A0A0A0` inner top line); thumb centre `28 + pan / 50 · 28` |
 | Column B (40 px, 16 after A) | the vertical meter-fader: well 4 px wide at the column's centre, from y 8, **row height − 32** long; the post-fader meter fills from the bottom with the cool-to-hot gradient, stops at **0 / 45 / 70 / 85 / 89 %** of the length (`#2F6FD6`, `#2FB7B0`, `#C7D74E`, `#F0A23A`, `#E0483B`: hot at 0 dB), never past the thumb; the 12 × 8 thumb, centre at `round((1 − (dB + 48) / 54) · length)`; the dB value 4 px under the well (Inter 600 10/12, `#9A9A9A`, one decimal, a real minus `−`, `−inf dB` at silence) |
+
+**Decided 2026-11-26:** header meters use the pan grey with a white clip mark that holds until
+clicked (§13). Built: the cool-to-hot gradient in column B above, whose `#C7D74E` stop is lime
+outside a toggle; to change in 4b's visual fixups.
 
 **Taller rows** (`E1-row-heights`): the strip runs the full height; the number, the name block and
 column A stay in the **72 px band at the top**, exactly as in a 72 px row; only the fader stretches.
@@ -98,7 +104,8 @@ column A stay in the **72 px band at the top**, exactly as in a 72 px row; only 
 `#808080`), ticks 4 px `#3A3A3A` at well x −10 … −6 (2 px left of the thumb), labels right-aligned at
 well x −12; a label < 12 px from the last shown one is skipped (a 96 px row shows `0 12 24`).
 
-Full name, profile and preset show on hover (a tooltip: content, not help).
+Full name, profile and preset show on hover (a tooltip: content, not help). **Decided 2026-11-26:**
+no tooltips anywhere; this goes to the status bar's hover help (§13). To change in 4b.
 
 ## 4a. Header layouts (polish 2 §5)
 
@@ -125,7 +132,7 @@ B4A-D1): the Main row follows the prompt's text on the E1 grid (B4A-D15).
 | Element | Spec |
 |---|---|
 | **Badge** (x 68, y 40, 18 px, radius 4, 1 px `#383838` ring, Inter 600 11 `#9A9A9A`, 4 px padding) | Locked: the drawn lock glyph (9 × 11; Inter has no 🔒, `docs/batch4a/cmap.txt`) and the channel: `2A03 P1`, `2A03 P2`, `2A03 TRI`, `2A03 NOI`, `2A03 DPCM`, `VRC6 P1`, `VRC6 P2`, `VRC6 SAW`. Studio: the type without a lock: `PULSE`, `TRIANGLE`, `NOISE`, `DPCM`, `VRC6 PULSE`, `SAW`. A track locked to a channel the profile lacks: an amber (`#F0A23A`, the status bar's) 9 × 8 warning triangle first and an amber ring. A click opens the lock menu; the hand cursor over it |
-| **Locked header** | The fader thumb at 0 dB and the pan thumb centred, drawn at **40% opacity** (the disabled style of drawn controls, `DISABLED_ALPHA`); the dB value replaced by the lock glyph in `#9A9A9A`, centred in column B; no gestures; hover help names the channel and the register |
+| **Locked header** | The fader thumb at 0 dB and the pan thumb centred, drawn at **40% opacity** (the disabled style of drawn controls, `DISABLED_ALPHA`; "locked means dimmed", §13); the dB value replaced by the lock glyph in `#9A9A9A`, centred in column B; no gestures; hover help names the channel and the register |
 | **Channel budget** | TRACKS cell: `P 2/2 · T 1/1 · N 1/1 · D 0/1 · V 1/2 · S 0/1`, Inter 600 10, tracking .1em, `#808080`, right-aligned 16 px in (the "24 BARS" style); a type over budget in `#F07075` (the record red `#E5484D` lightened to 5.3:1 on `#0F0F0F`; never lime). Project Settings lists the full form |
 | **Header drag** | A 2 px `#E6E6E6` line on the row where the track lands (top edge moving up, bottom edge moving down); the dragged row lifts by white 4% |
 | **Main row** | Pinned under the rows and lanes: a 1 px `#2E2E2E` divider, then 72 px (73 in all: the lanes give it up); an 8 px soft shadow (black 0 → 28%) on the rows above |
@@ -222,3 +229,25 @@ Digital Color Meter's "Display in sRGB" does (converted from the display's profi
   raw values and on the sRGB-converted ones is the same (`docs/mac-catchup/results/banding.md`).
 - Untested here: a Retina (P3) laptop panel, and the 2× path on a native 2× display (the 2×
   checks ran in a HiDPI mode of an sRGB-like monitor).
+
+## 13. Rules from the 2026-11-26 meeting
+
+Decided by the CEO; recorded by the docs update (RUNLOG DOC-D*). **Rules only:** the batches
+implement them, and each line names where today's build differs. Boards:
+[`meeting-2026-11-26/`](meeting-2026-11-26/README.md).
+
+| Rule | Spec | Today (Batch 4a) |
+|---|---|---|
+| **Lime** | `#C7D74E` only for **toggle on-states** and **the centre display** (its indicators). Never selection, meters, instrument displays or track identity | The header meter's 70 % stop is `#C7D74E` (to change in 4b). The default Pulse track colour `#C9D24A` is lime used as identity (palette ΔE exception, §7, §9): **for the owner to decide in 4b** |
+| **Instrument displays** | Waveforms and envelopes in **one warm display colour, `#E8DCC0`**. The track colour marks identity only: the strip, the name plate, the device tab | The inspector's macro graphs use the track colour (`graph_bar` / `graph_fill`, §7): to change in the Presets + Browser + device panel batch |
+| **Locked means dimmed** | On a locked track, displays and knobs at about **40 % brightness**; labels kept at **≥ 4.5 : 1** | The header's fader and pan are at 40 % (§4b); the instrument device has no locked style yet: Presets + Browser + device panel batch |
+| **Selection** | Neutral: a **white outline and a faint glow**, never lime | Selected clips and notes lighten their own colour (§7 `clip`; the piano roll's `lighten(0.35)`): to change in 4b |
+| **Header meters** | The **pan grey** (`#8A8A8A`, the pan fill of §4), plus a **white clip mark that holds until clicked** | The cool-to-hot gradient (§4 column B): to change in 4b |
+| **Mixer meters** | The warm palette, `meter-colours` option 2: segments warm white (`#A09C93 → #E0DCD3 → #A09C93`), amber (`#F5C870` centre, `#B68830` edges), orange (`#FFA757` / `#BF6817`), red above 0 dB (`#FF6C63` / `#BF2C23`); unlit segments their colour at 10 %; the peak mark `#F2F2F2` with a 4 px white glow. Zone boundaries as on the board | No mixer view yet: 4b |
+| **No tooltips** | Hover help goes to the status bar (§10) everywhere | Tooltips remain (17 call sites in `chrome.rs`, `browser.rs`, `lib.rs`, `export_dialog.rs`, `modal.rs`): to change in 4b |
+| **Track number column** | Its width follows the project's largest track number | Fixed x 28–56 (§4): to change in 4b |
+| **The display's overhang** | Eases out over **48 px** | 34 px (§2): to change in 4b |
+| **Mixer M/S keys** | 24 px, a **darker key body** and a **`#101010` border**, so they separate from the textured panel | No mixer view yet: 4b |
+
+Mixer knobs: `knobs` option A (machined: brushed cap, knurled skirt, thin white value ring).
+Fader caps: plastic, as on the `mixer` board.

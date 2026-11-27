@@ -1152,3 +1152,69 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   5 runs of the baseline's own P2-11 on the baseline build failed once (rc: track 3's dB value),
   this build 2 of 5 (rc track 3's dB, ro track 4's pan); in the failing runs the hover log shows
   the double-click landing on the neighbouring control. Not an app regression; logged, not fixed.
+
+## Docs update: the 2026-11-26 meeting (DOCS_UPDATE_PROMPT.md, branch `docs/meeting-2026-11-26`)
+
+Docs only; no code changed. The rundown is [`DOCS-2026-11-26.md`](../DOCS-2026-11-26.md).
+
+- **DOC-D1 (pre-flight).** `main` = `origin/main` = d3ac25f, the head of `batch4a/model`, so Batch 4a
+  is merged (a fast-forward; the owner confirmed the merge when starting this run). BATCH4A.md §1 still said "Merge:
+  not done"; a one-line note at its top now records the merge (its gate text is unchanged).
+- **DOC-D2 (the reference pack).** `meeting-2026-11-26-ref/` copied to
+  `docs/design/meeting-2026-11-26/` (24 files) with a README giving each board's status. The
+  original folder in the repo root is left untracked, as handed over.
+- **DOC-D3 (the team).** VISION.md has no team section; the roles are named on its byline
+  ("Owners: Product (Marcus) and Design (Sam)"). Mika Torres (Sound Design) is added there, not in a
+  new section.
+- **DOC-D4 (the glint: four or eight points).** The prompt says an eight-point glint; board A's
+  caption says "the soft four-point glint". Third source: the board's drawing (glintworks-logo@1x.png)
+  has four long curved points and four short diagonal ones. The decision and the drawing win; the
+  pack README says so.
+- **DOC-D5 (context rows on the boards).** `main-track` and `fixups` show track rows with the old
+  cool-to-hot header meters and full-strength controls on locked tracks. They are context for the
+  locked Main row and the fixups; the new VISUAL-SPEC rules win (pack README).
+- **DOC-D6 (the name).** "ChipDAW" → Cartwave in the living docs' titles and product text: VISION.md,
+  README.md, PRODUCT.md (title and byline), CLAUDE.md (header), ASSETS.md (palette line). Kept: UX.md's
+  app-menu strings and data folders (they describe what the code shows today; a note says they
+  follow the code rename), historical reports (RUNLOG, BATCH*, MAC-CATCHUP, PERF…), and every
+  identifier, crate and `.chipdaw`.
+- **DOC-D7 (the dropped idea).** "Customisable header block order" is not in IDEAS.md (nor in any doc
+  outside the prompts), so nothing was removed. Logged so the drop isn't re-added.
+- **DOC-D8 (IDEAS.md rows the meeting touched).** The old roadmap row now points at the new order;
+  the Metal backend and MIDI input rows note their roadmap steps; the VRC6 calibration row points
+  to the new hardware A/B row; the per-preset marks row points to the Hardware folder.
+- **DOC-D9 (where reference listening lives).** The decision says the fan MIDI is git-ignored but
+  names no path. This run chose `reference-private/` and added it to `.gitignore` so the rule is
+  enforced, not just written (VISION.md, ASSETS.md).
+- **DOC-D10 (open issues).** Neither VISION.md nor UX.md had an open-issues section; UX.md §8 is new
+  (it is the build spec). K4 (Return/Backspace behind dialogs) and K5 (colour-preview leaks) are
+  **closed** by Batch 4a: B4A-D2 / B4A-01 and B4A-D3 / `edit::colour_preview_tests` / B4A-02, with
+  B4A-01 failing on the baseline. They were found on the Mac and fixed in shared code, but tested on
+  Windows only, so the next Mac run re-checks them.
+- **DOC-D11 (gaps against 4a).** Each place the meeting changes what 4a built says "Built in 4a:"
+  and "to change in <batch>" (VISION.md, VISUAL-SPEC.md §13, UX.md §4e/§5.4); the list is in
+  DOCS-2026-11-26.md §2. Batch names follow the new roadmap: "4b", "the Presets + Browser + device
+  panel batch", "the device-chain batch", "the export polish".
+- **DOC-D12 (the Pulse colour).** "Lime only for toggles and the centre display" meets the default
+  Pulse track colour `#C9D24A` (the mockup's, the palette's one ΔE exception). Recoloring a default
+  is a design call, so it's marked **for the owner to decide in 4b**, not "to change".
+- **DOC-D13 (the mixer meter colours).** The prompt gives the warm palette in words. VISUAL-SPEC §13
+  adds the segment colours read from `meter-colours.html` option 2 (warm white `#E0DCD3`, amber
+  `#F5C870`, orange `#FFA757`, red `#FF6C63`, with their edge shades) and leaves the zone
+  boundaries to the board.
+- **DOC-D14 (open questions).** The meeting's decisions answer VISION.md's open questions 1 (business
+  model) and 3 (name) outright, and question 2 (the first effects set) for audio and MIDI effects;
+  all three are struck through with a pointer. Principle 9 becomes "Open core".
+- **DOC-D15 (the File menu).** VISION.md's File ▸ Import list gains "tracker projects", since the CEO
+  allowed format names in the Import menu. UX.md's menu table is unchanged until tracker import is
+  built.
+- **DOC-D16 (preset provenance).** The rule and the author credit are in ASSETS.md; the 60 existing
+  presets still share one row. Writing 60 entries now would invent per-preset history, so they
+  arrive with the Presets + Browser batch.
+- **DOC-D17 (`cargo test`: a pre-existing debug-only failure).** `cargo test --workspace` (debug) fails
+  `ui --test robustness::project_loader_never_panics_or_hangs` deterministically (3 runs): 3 fuzzed
+  JSON inputs (#578, #899, #907) panic with "attempt to add with overflow" at `file.rs:790`, where
+  `load_clips`' error message formats `c.lane + 1` for a lane index near `usize::MAX`. `cargo test
+  --release` passes (7/7; overflow wraps), as in Batch 4a's gate run. No crate differs from `main`,
+  so this predates the docs update; it is not fixed here (docs only). Listed as UX.md K6; the fix is
+  one `saturating_add` (or reporting the lane as given), for 4b's fixups.

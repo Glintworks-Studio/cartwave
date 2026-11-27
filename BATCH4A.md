@@ -6,6 +6,9 @@ Branch **`batch4a/model`** (from `main` 0e669ac), pushed. Prompt: `BATCH4A_PROMP
 
 ## 1. Summary (one screen)
 
+> **2026-11-26: merged.** `main` is at d3ac25f, this branch's head (the owner merged it; RUNLOG
+> DOC-D1). The text below is the run's report as written, including its performance-gate finding.
+
 **Merge: not done.** `main` stays at 0e669ac and no `pre-batch4a` tag was made: the performance
 gate (§9.6) does not pass by its letter. Every other gate passes. See §3.
 

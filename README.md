@@ -1,8 +1,9 @@
-# ChipDAW
+# Cartwave
 
 > **Start here:** [PRODUCT.md](PRODUCT.md) is the current rundown: features, screenshots, history and next steps.
 
-> **Prototype.** "ChipDAW" is a working title. This repository started as a GUI bake-off: it
+> **Prototype.** The app is **Cartwave**, by **Glintworks** (decided 2026-11-26, VISION.md); "ChipDAW"
+> was its working title, and the code, crates and `.chipdaw` files keep it until a planned rename. This repository started as a GUI bake-off: it
 > tests whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom,
 > premium-looking DAW interface drawn entirely with stylesheets and procedural drawing (no
 > bitmap images). It now plays the arrangement in real time through a clean-room NES 2A03 +

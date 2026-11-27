@@ -1,9 +1,17 @@
-# VISION: ChipDAW (working title)
+# VISION: Cartwave
 
-*Draft for CEO sign-off · 2026-11-25 · Owners: Product (Marcus) and Design (Sam)*
+*Draft for CEO sign-off · 2026-11-25, updated 2026-11-26 (the meeting) · Owners: Product (Marcus)
+and Design (Sam) · Sound design: Mika Torres*
 
 **Every prompt, spec and review starts from this page.** If a change conflicts with it,
 the change is wrong, or this page needs updating first, with the CEO's sign-off.
+
+> **Cartwave** is the app, made by **Glintworks** (below). The code, the crates, the file
+> extension (`.chipdaw`) and the repository still say "chipdaw": renaming them is a separate,
+> planned change, not part of any docs update.
+
+*Decided 2026-11-26:* the working title "ChipDAW" is replaced by **Cartwave**, and Mika Torres
+(Sound Design) joins the team.
 
 ---
 
@@ -30,7 +38,7 @@ only workflow reference.** Tracker conventions are not a design input.
 2. **Every control has exactly one home.** No duplicates. If two places do the same thing,
    one of them goes.
 3. **Nothing pretends to work.** A control that does nothing in the current state is hidden
-   or clearly disabled, with the reason on hover.
+   or clearly disabled, with the reason on hover (in the status bar: there are no tooltips).
 4. **Authenticity is opt-in, per track.** Studio tracks are the default. The rules apply only
    where the user chose them.
 5. **Warn, don't surprise.** Any action that would break an active hardware profile asks
@@ -39,7 +47,12 @@ only workflow reference.** Tracker conventions are not a design input.
 7. **Game-ready output.** Seamless loops, stems and sensible loudness are core features.
 8. **Fast and glitch-free on ordinary computers.** PERF.md and ENGINE.md budgets are
    requirements.
-9. **Open source** (MIT OR Apache-2.0), with every asset provably ours (ASSETS.md).
+9. **Open core.** The app and the NES/Famicom engine are open source (MIT OR Apache-2.0),
+   free forever, with every asset provably ours (ASSETS.md). Paid extensions live outside this
+   repository (see "Company, product and business model").
+
+*Decided 2026-11-26:* principle 9 is open core (it was "open source"); hover help goes to the
+status bar (principle 3).
 
 ## The core model
 
@@ -60,27 +73,76 @@ There are two kinds of track: **studio tracks** (the default: no hardware rules)
   chip), so many instances are fine.
 - MIDI clips on tracks, edited in the piano roll, as in Ableton.
 
+### Instruments
+- **Chip Synth** is the main instrument. Its **Voice** selector picks the sound source:
+  **Pulse · Triangle · Noise · VRC6 Pulse · VRC6 Saw**. A preset remembers its voice.
+- **DPCM Sampler** is a separate instrument. **FM Synth** arrives with the arcade board.
+- **Studio-only controls:** Unison, Detune and pulse-width drift. A locked track never shows
+  them.
+- **On a locked track** the voice is fixed to the real channel, only that channel's controls
+  are shown, and the device is drawn **dimmed** (labels stay readable, ≥ 4.5:1).
+- Reference: `docs/design/meeting-2026-11-26/workflow-chip-synth.*` (locked for layout).
+
+*Built in 4a:* a track is typed by its voice (Pulse, Triangle, Noise, DPCM, VRC6 Pulse, Saw:
+Create ▸ Insert Track ▸ a type, the badge shows the type) and the inspector has no Chip Synth
+device, voice selector or studio-only controls. **To change in the Presets + Browser + device
+panel batch** (Unison and Detune come first, in 4b).
+
+*Decided 2026-11-26:* this section is new.
+
+### The device chain (as in Ableton)
+Every track runs **MIDI effects → instrument → audio effects**. Devices are dragged from the
+browser onto any track, including Main.
+- **MIDI effects:** **Chip Arp** (chords into frame-locked arpeggios), **Chord** and **Scale**.
+  On a locked track they are allowed only if the result stays one note at a time; otherwise
+  they ask first.
+- **Audio effects:** **Compressor, Limiter, Delay and Reverb.** **None on locked tracks** (the
+  real chip has none): adding one asks first (**Unlock track** · **Cancel**). **Always allowed
+  on Main**, which comes after the chip mix.
+
+*Built in 4a:* no MIDI or audio effects exist yet, and Main has no device slot (its OUT badge
+and output device only). **To change in the device-chain batch** (MIDI effects, then audio
+effects).
+
+*Decided 2026-11-26:* this section is new; it answers the "first effects set" question.
+
 ### Hardware profiles and locked tracks
 - A **hardware profile** is a rulebook for one real console setup: which chips, how many
   channels of each kind, and what each channel can do. The first profiles are **2A03** and
   **2A03 + VRC6**. More consoles arrive as more profiles.
-- **Authentic presets** belong to a profile. Loading one puts the project under that profile
-  (if it isn't already) and **locks the track**: 🔒 2A03 / 🔒 VRC6, shown on the track header
-  and on the preset in the browser.
+- **Authentic presets** belong to a profile and live in the browser's **Hardware** folder.
+  Loading one puts the project under that profile (if it isn't already) and **locks the
+  track**: 🔒 2A03 / 🔒 VRC6, shown on the track header and on the preset in the browser.
 - **A locked track follows the real chip:** one note at a time, only the controls the
-  hardware has, and no effects. Unavailable controls are hidden, not broken.
+  hardware has, no audio effects, and MIDI effects only while the result stays one note at a
+  time. Unavailable controls are hidden, not broken.
+- **Locked tracks in the mixer:** the fader is pinned at 0 dB and the pan centred. Locking a
+  track whose fader or pan isn't neutral asks to reset them; unlocking restores them.
 - **Click the lock to unlock:** the track becomes a studio track that sounds the same, with
   polyphony and effects.
 - **Channel budget**, shown for the project: e.g. *Pulse 2/2 · Triangle 1/1 · Noise 1/1 ·
   DPCM 0/1 · VRC6 Pulse 1/2 · Saw 0/1*. It turns red when over.
   **All tracks locked + within budget = the song plays on real hardware.**
 - **One expansion chip per project**, as on a real cartridge.
+- **The Main track** is pinned at the bottom: a black strip (black is reserved for it), PEAK,
+  and a master fader that **always works, even when every track is locked**. Main's devices
+  come after the chip mix (above). Reference: `docs/design/meeting-2026-11-26/main-track.*`.
 - **Under the hood:** locked tracks share one virtual console and its real (non-linear)
   mixer. Studio tracks each get their own chip instance, a normal mixer and effects.
 - **Profile warnings:** any action that would break the active profile asks first. Examples:
   adding an effect to a locked track, adding a chord, a note outside the chip's range, a
   third pulse track, a preset from a different expansion chip. The options: **Unlock track** ·
   **Fit to hardware** (where one applies) · **Cancel**.
+
+*Built in 4a:* the locked fader and pan, "Reset and lock", restore on unlock, and the Main
+track (black strip, PEAK, a master fader after the whole mix) are done (UX.md §4e). The Main
+row was built from the prompt's text because its board was missing (RUNLOG B4A-D1, D15); the
+board is now in the pack. **To check against `main-track.*` in 4b's visual fixups.** The
+authentic presets are today the channel layouts (B4A-D14); **the Hardware folder comes in the
+Presets + Browser batch.**
+
+*Decided 2026-11-26:* locked tracks in the mixer, the Main track, effects on locked tracks
+and the Hardware folder.
 
 ### Importing MIDI (drag and drop)
 - Drag a `.mid` over the arrangement and a **live ghost preview** shows the tracks to be
@@ -95,6 +157,16 @@ There are two kinds of track: **studio tracks** (the default: no hardware rules)
   - ☐ *Don't ask again* (changeable in Settings).
 - *To verify in the audit:* whether we can track the cursor during an operating-system file
   drag on Windows and macOS.
+
+### Importing tracker projects
+- In this order: **FamiStudio** projects (MIT), then **FamiTracker text export**, then
+  **`.ftm`**. The format names may appear in the Import menu (CEO decision).
+- **Clean-room, from format documentation, never from GPL source.**
+- Channels become tracks, instrument sequences become macros, and effects become frame-tick
+  automation.
+- **NSF import is not allowed:** an NSF is a ROM rip (the ROM rule, "Sound systems").
+
+*Decided 2026-11-26:* this section is new.
 
 ### Automation (as in Ableton)
 - **Arrangement automation:** every track has automation lanes for any parameter
@@ -138,7 +210,9 @@ There are two kinds of track: **studio tracks** (the default: no hardware rules)
 ### Sound systems (profile roadmap)
 Each new system ships as **an emulator + a hardware profile + an idiomatic preset set**,
 built clean-room from public documentation. A system is done only when its presets sound
-the way that hardware was commonly used.
+the way that hardware was commonly used. The NES/Famicom system is part of the free open
+core; the systems after it are paid **Emulations** (see "Company, product and business
+model").
 
 | Order | System | Chips | Character |
 |---|---|---|---|
@@ -159,11 +233,81 @@ the way that hardware was commonly used.
 - **Naming:** profiles are named after the hardware ("YM2151 + PCM arcade"), never after a
   game or publisher. "Konami", "TMNT" and game titles don't appear in the product.
 
+**The authenticity method:**
+- **Never translate or paraphrase GPL code.**
+- Accurate open-source cores serve as **external reference oracles**, kept outside the repo:
+  feed both the same register writes, diff the audio, then Mika reviews by ear.
+- Where a permissively licensed core exists, use it: **ymfm (BSD-3) for the arcade board's
+  YM2151.**
+
+**Reference listening:** a fan MIDI of copyrighted game music may be used **privately, by ear,
+only**. It lives in `reference-private/`, which is git-ignored, and never appears in the repo, screenshots, demos, fixtures or release
+notes. Presets are never tuned to copy a specific game's sound.
+
+*Decided 2026-11-26:* the authenticity method, reference listening, ymfm for the YM2151, and
+paid Emulations after the NES.
+
+## Presets and the browser
+
+### Presets
+- Every preset is **credited to Jeffrey Scott Frederick** as its author, and every preset has
+  its own provenance entry in ASSETS.md. Nothing is derived from any third-party library, game
+  ROM or ripped patch.
+- The NES/Famicom starter bank is free and genuinely good; Mika builds the 100+ preset bank.
+
+*Built in 4a:* the 60 presets and 5 channel layouts share one ASSETS.md row. **Per-preset
+entries to add in the Presets + Browser batch**, with Mika's bank.
+
+### The browser (Live's structure)
+- **Sidebar:** **Collections / Library / Places**.
+- **Library:** **Sounds** (by role: Leads, Basses, Arps, Pads, Bells & Keys, FX, Game
+  Sounds), **Drums**, **Instruments**, **Hardware** (authentic presets by profile; loading one
+  locks the track), **Audio Effects**, **MIDI Effects**, **Clips**, **Samples**.
+- **Places:** User Library, Current Project, Imported Projects.
+- **Folders with expand and collapse are the main way to browse;** tags only power search.
+- Select to preview; double-click or drag to load.
+- **The old flat browser is replaced, not kept alongside.**
+
+### The preset picker inside the instrument
+A centred preset field with **◀ ▶** to step through its folder (with preview), a dropdown with
+the same folders as the browser, *Show in Browser* and *Save Preset As…*.
+
+*Built in 4a:* the browser is one flat, searchable list (presets by category, then "Channel
+Layouts") with a Preview key (UX.md §5.4), and the inspector has no preset field. **To change
+in the Presets + Browser + device panel batch.** Reference:
+`docs/design/meeting-2026-11-26/workflow-chip-synth.*`.
+
+*Decided 2026-11-26:* this section is new.
+
+## The mixer view
+- **Machined knobs, plastic fader caps,** and 24 px M/S keys in the mixer's darker key style.
+- **Warm meters:** warm white → amber → orange → red above 0 dB; **PEAK** per channel;
+  **VOICES n / ∞** on studio tracks, the hardware channel on locked tracks.
+- **The channel-budget bar** across the top, **two-digit number slots**, and wider strips that
+  scroll sideways.
+- Reference: `docs/design/meeting-2026-11-26/mixer.*` and `knobs.*` (option A);
+  `meter-colours.*` option 2.
+
+*Built in 4a:* the Mixer view key is disabled with its reason. **The mixer view comes in 4b.**
+
+*Decided 2026-11-26:* this section is new.
+
+## Export
+- Seamless loops, stems and the game export, as today.
+- **Loudness targets** are an export setting (e.g. "Game: −16 LUFS / −1 dBTP").
+- **Authentic export** bypasses Main's devices, so the file is exactly the chip mix.
+
+*Built in 4a:* the export applies Main's master gain after the mix and writes it to the JSON;
+there are no loudness targets and no devices on Main yet. **To change in the export polish**
+(authentic export once Main has devices).
+
+*Decided 2026-11-26:* this section is new.
+
 ## The app shell (baseline for a real app)
 - **Native menus.** On macOS the system menu bar: App, File, Edit, Create, View, Window, Help.
   On Windows the standard in-window menu bar.
-  - **File:** New, Open, Open Recent, Save, Save As, Import (MIDI, audio), Export…,
-    Project Settings, Quit
+  - **File:** New, Open, Open Recent, Save, Save As, Import (MIDI, audio, tracker projects),
+    Export…, Project Settings, Quit
   - **Edit:** Undo, Redo, Cut, Copy, Paste, Duplicate, Delete, Select All, Rename
   - **Create:** Track, MIDI Clip
   - **View:** browser, piano roll, zoom
@@ -189,29 +333,69 @@ model above them: fixed hardware lanes become instrument tracks, plus profiles.
 Audio recording tracks, third-party plugin hosting, exporting to real-hardware music
 formats. The arcade FM and SNES systems come after the app shell is solid. See IDEAS.md.
 
+## Company, product and business model
+- **Company: Glintworks.** Website **glintworks.studio**: one domain that hosts every product
+  page (e.g. `glintworks.studio/cartwave`), in the style of getartcraft.com.
+- **App: Cartwave.**
+- **App icon:** concept A, "Chip, refined": a graphite board, a brushed-metal lid with an
+  etched square wave, and one lime LED. A simplified variant is used at 32 px and below. It's
+  drawn as vector. Reference: `docs/design/meeting-2026-11-26/cartwave-icon.*` (column A).
+- **Company logo:** an **eight-point glint** (four long curved points plus four short
+  diagonal triangles) in **one plain colour**: warm white `#F2E9D6` on dark, near-black
+  `#1A1A1A` on light. No gradient, no glow.
+  - Beside it, **Glintworks** in bold, with **STUDIO** letter-spaced underneath and tight to
+    the wordmark.
+  - The glint alone is the avatar and favicon.
+  - Final-file tweaks (Sam): the star 3 px lower (centred on the visible letters), a 10 px gap
+    to the wordmark, STUDIO's trailing letter-space trimmed, and slightly customised
+    letterforms.
+  - Reference: `docs/design/meeting-2026-11-26/glintworks-logo.*` (column A).
+- **Business model: open core.**
+  - **Free and open source forever** (MIT OR Apache-2.0): the app, the NES/Famicom engine and
+    profile, the core effects, and a genuinely good starter preset bank. **A free feature is
+    never moved behind a paywall.**
+  - **Paid extensions**, from private repos under a commercial licence:
+    - **Emulations** (the arcade FM board, the SNES, future systems);
+    - **premium effects;**
+    - **Cartridges:** premium preset banks, kits, templates and genre packs, under a content
+      licence.
+  - One store on glintworks.studio. No nag screens, no crippled free version, and
+    offline-friendly licence keys.
+  - **Outside contributions** go into the open core only. GPL stays excluded everywhere. BSD-3
+    (e.g. ymfm) is fine inside paid extensions, with attribution.
+- **Still to do (CEO):** official trademark checks for Glintworks and Cartwave (USPTO, plus
+  EUIPO if selling in Europe) before any public announcement.
+
+*Decided 2026-11-26:* this section is new. It answers open questions 1 (business model) and 3
+(product name).
+
 ## Open questions for the CEO
-1. **Business model.** The code is open source (MIT OR Apache-2.0), so limits in a "free
-   version" can be removed by anyone who builds it from source. Options that fit open source:
-   - (a) everything free; revenue from **paid preset and sample packs** (separately
-     licensed content);
-   - (b) **paid signed installers / store builds**, with free source;
-   - (c) **sponsorships and donations**;
-   - (d) **support and licensing for studios**;
-   - (e) **change the licence** (e.g. open-core with closed paid features). That would
-     reverse an earlier decision and affects contributors.
-2. The first effects set for studio tracks (e.g. EQ, filter, delay, reverb, bitcrush,
-   chorus, compressor)?
-3. The product name.
+1. ~~Business model~~: **decided 2026-11-26**, open core ("Company, product and business
+   model").
+2. ~~The first effects set~~: **decided 2026-11-26** for audio effects (Compressor, Limiter,
+   Delay, Reverb) and MIDI effects (Chip Arp, Chord, Scale): "The device chain". Premium
+   effects are paid extensions.
+3. ~~The product name~~: **decided 2026-11-26**, Cartwave by Glintworks.
 
 *Decided 2026-11-25:* studio tracks are unlimited (tracks, voices, effects). Time
 signatures and tempo work exactly as in Ableton, including mid-song changes and tempo
 automation. The second system is the 1989 arcade FM board.
 
-## Build roadmap (updated by Batch 4a, 2026-11-26)
-**4a** (done: tracks as instruments, hardware profiles and locks, the Main track) → **4b** (stereo
-pan audible, the mixer view, MIDI import as tracks with the drop preview) → **Batch 5: automation**
-(the parameter registry is ready: docs/batch4a/parameters.md) → **input and recording** → **time
-signatures and scales** → **effects** → **the arcade FM board** → **the SNES**.
+## Build roadmap (decided 2026-11-26; replaces the order from Batch 4a)
+1. **4a** (done, merged: tracks as instruments, hardware profiles and locks, the Main track);
+2. **the authenticity A/B pass;**
+3. **4b:** visual fixups, the mixer view, audible stereo pan, MIDI import, unison and detune;
+4. **Presets + Browser + device panel** (Chip Synth, DPCM Sampler, the in-instrument picker,
+   Mika's 100+ bank);
+5. **Batch 5: automation** (the parameter registry is ready: docs/batch4a/parameters.md);
+6. **the device chain** (MIDI effects, then audio effects);
+7. **tracker import;**
+8. **recording and MIDI input;**
+9. **time signatures and scales;**
+10. **the export polish;**
+11. **the Metal backend;**
+12. **the arcade board** (ymfm);
+13. **the SNES.**
 
 ## How we work from here
 1. **Every prompt starts with VISION.md.** Claude reads it first.
@@ -230,3 +414,16 @@ signatures and scales** → **effects** → **the arcade FM board** → **the SN
   double-click here). Changed in "Automation".
 - **UX.md** (from the UX audit's draft, every proposed priority accepted) is the build spec
   from now on. The replaced `CLAUDE.md` points here first.
+
+*2026-11-26, CEO, the meeting, recorded by the docs update (DOCS_UPDATE_PROMPT.md,
+[DOCS-2026-11-26.md](DOCS-2026-11-26.md), RUNLOG DOC-D*):*
+- Cartwave by Glintworks, open core, the icon and the logo; Mika Torres joins (Sound Design).
+- Chip Synth with a Voice selector, DPCM Sampler, FM Synth later; studio-only Unison, Detune
+  and pulse-width drift; locked devices dimmed.
+- Locked tracks in the mixer; the Main track; the device chain and which effects are allowed
+  where; export loudness targets and authentic export.
+- The browser in Live's structure (replacing the flat one) and the in-instrument preset picker;
+  presets credited to Jeffrey Scott Frederick.
+- The mixer view; tracker import (never NSF); the authenticity method; reference listening.
+- The roadmap above. Reference boards: `docs/design/meeting-2026-11-26/` (its README gives
+  each board's status).

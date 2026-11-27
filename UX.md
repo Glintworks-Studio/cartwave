@@ -36,7 +36,7 @@ Native menus (docs/ux-audit/FEASIBILITY.md §1). On Windows, About goes under He
 Edit (Windows convention), Exit under File.
 
 **macOS (as built, MAC-CATCHUP.md):** the system menu bar: App, File, Edit, Create, View, Window, Help.
-- **App menu:** About ChipDAW (our About: version, commit, licences, font credits), Settings… ⌘,,
+- **App menu** (the name becomes Cartwave with the planned code rename, VISION.md): About ChipDAW (our About: version, commit, licences, font credits), Settings… ⌘,,
   Services ▸, Hide ChipDAW ⌘H, Hide Others ⌥⌘H, Show All, Quit ChipDAW ⌘Q. (Unbundled, the menu bar's
   bold title reads the process name, "app", until the app ships as an `.app` bundle.)
 - **File** has no Quit; **Edit** has no Settings; **Help** has no About. macOS adds its own Edit items
@@ -248,14 +248,14 @@ VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, 
 
 | # | Behaviour | Pri | Status |
 |---|---|---|---|
-| M1 | **A track is an instrument** of one voice type (Pulse, Triangle, Noise, DPCM, VRC6 Pulse, Saw). **Studio** (default): unlimited tracks, unlimited polyphony (a pool of voices grown from the UI thread; the quietest voice is stolen if a pool is ever full), fader and pan work. **Locked**: bound to one real channel, the full chip emulator, monophonic (the last note wins), fader at 0 dB and pan centred | M | done |
+| M1 | **A track is an instrument** of one voice type (Pulse, Triangle, Noise, DPCM, VRC6 Pulse, Saw; *2026-11-26: becomes Chip Synth with a Voice selector plus the DPCM Sampler in the Presets + Browser + device panel batch, VISION.md "Instruments"*). **Studio** (default): unlimited tracks, unlimited polyphony (a pool of voices grown from the UI thread; the quietest voice is stolen if a pool is ever full), fader and pan work. **Locked**: bound to one real channel, the full chip emulator, monophonic (the last note wins), fader at 0 dB and pan centred | M | done |
 | M2 | **Voices ▸** (studio tracks): Unlimited, 1 … 16: a cap on the track's voices | S | done |
 | M3 | **The badge**: locked: the lock and the channel ("2A03 P1", "VRC6 SAW"); studio: the type ("PULSE"); an amber warning mark when the track is locked to a channel the profile lacks. A click opens the lock menu | M | done |
 | M4 | **Locking** a track whose fader isn't at 0 dB or pan isn't centred asks ("This track's fader is at −6.0 dB. Locking resets it to 0 dB and centre": Reset and lock / Cancel); one undo step restores lock, fader and pan. **Unlocking** restores the fader and pan from before locking | M | done |
 | M5 | **Locked header**: the fader thumb at 0 dB, disabled (40% opacity); a lock glyph instead of the dB value; pan centred and disabled; hover help "Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)" | M | done |
 | M6 | **The channel budget** (`Pulse 2/2 · Triangle 1/1 · …`), red when over: in Project Settings, and compact in the TRACKS cell (`P 2/2 · T 1/1 · …`, hover help in full). One expansion chip per project | M | done |
 | M7 | **Profile warnings** ask before an action breaks the profile: a chord or overlap on a locked track (Unlock / Fit: the last note wins / Cancel), a note outside the channel's range (Fit: by octaves / Cancel), DPCM notes without a sample (Fit: removed / Cancel), a layout for another chip (Switch profile / Load on studio tracks / Cancel), a profile without a channel in use (Unlock tracks / Switch anyway / Cancel). "Don't ask again" (Settings ▸ Warnings resets it). No dialog when nothing conflicts; an old file over budget is a status-bar problem | M | done |
-| M8 | **Authentic presets** are the channel layouts: loading one puts the project under its profile and locks the tracks it fills (B4A-D14) | L | done (layouts) |
+| M8 | **Authentic presets** are the channel layouts: loading one puts the project under its profile and locks the tracks it fills (B4A-D14). *2026-11-26: they move to the browser's Hardware folder (Presets + Browser batch)* | L | done (layouts) |
 | M9 | **The Main track**: pinned at the bottom of the track list (Live 12 manual, ch. 18 Mixing, §18.4: "the bottom end of the Arrangement View"; never scrolling is ours), a black strip, "Main", OUT and the output device, PEAK (held; a click resets), the master fader (−inf … +6 dB) applied after the whole mix, saved in the project and the export JSON. It follows the header layouts. Its lane: the grid and the playhead (Batch 5: master automation) | M | done |
 | M10 | **Migration**: older projects open with every track locked to its channel; rendered audio is bit-identical (golden render and v2…v6 hashes) | M | done |
 
@@ -321,6 +321,10 @@ VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, 
 | P12 | F / G | Fold / Fold to Scale (R68, R69) | L | ✓ |
 
 ### 5.4 Browser
+*Decided 2026-11-26:* this flat browser is **replaced, not kept alongside**, by Live's structure
+(Collections / Library / Places, folders first) in the Presets + Browser + device panel batch
+(VISION.md "The browser"). The rows below describe today's browser.
+
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
 | B1 | Typing in search | Never triggers shortcuts (F-03); Esc clears | M | ✓ · **done** (B3) |
@@ -454,8 +458,24 @@ Batches 1 and 2 were built on `app-shell/batch-1-2` (SHELL.md).
 | **2. App shell** | Native menus (File/Edit/Create/View/Help, macOS App menu), Open Recent, About, shortcut sheet, Settings window, Project Settings; top bar slimmed (file keys, CHIP, FILTER, SNAP out) | F-06, F-15, F-16, F-18, F-19, F-20, F-21, F-31 | ~2 weeks |
 | **3. Ableton-parity quick fixes** | Piano roll double-click/draw mode, zoom keys, rename, context menus, copy/paste, split/consolidate, time-selection editing, keyboard navigation, shortcut conflicts, empty-project guide, export dialog fixes, tooltips | F-07–F-12, F-14, F-22–F-29, F-32–F-39 | ~2–3 weeks |
 | **4a. The model change** | Tracks as instruments, voice pools, profiles and locks, the Main track (BATCH4A.md) | F-13, F-40, F-42, F-43, F-48 | **done** |
-| **4b.** | Stereo pan audible, the mixer view, MIDI import as tracks with the drop preview | F-17 (full), F-47 | next |
+| **Authenticity A/B** | Reference oracles outside the repo, register-write diffs, Mika's ear review (VISION.md "Sound systems") | | next |
+| **4b.** | Visual fixups (§8, VISUAL-SPEC.md §13, the `fixups` and `main-track` boards), the mixer view, stereo pan audible, MIDI import as tracks with the drop preview, unison and detune | F-17 (full), F-47 | |
+| **Presets + Browser + device panel** | Chip Synth (Voice selector), DPCM Sampler, the in-instrument preset picker, the new browser, Mika's 100+ bank | | |
 | **5. Automation** | Lanes, clip envelopes, tempo automation (the registry is ready: docs/batch4a/parameters.md) | F-44 | ~3–4 weeks |
-| **Then** | Input and recording → time signatures and scales (F-45, F-46) → effects → the arcade FM board → the SNES (VISION.md roadmap) | | |
+| **Then** | The device chain (MIDI effects, then audio effects) → tracker import → recording and MIDI input → time signatures and scales (F-45, F-46) → the export polish → the Metal backend → the arcade board (ymfm) → the SNES (VISION.md roadmap, decided 2026-11-26) | | |
 
 Every batch ends with its acceptance tests in the scenario harness (VISION.md, "How we work").
+
+## 8. Open issues
+
+Known bugs, listed 2026-11-26 (the meeting); fixed in 4b's visual fixups unless marked closed.
+Each fix gets an automated test.
+
+| # | Issue | Platform | Target | Status |
+|---|---|---|---|---|
+| K1 | The menu bar (File, Edit, Create…) **flickers while the window is resized**. Suspected cause: the dark-menu owner-drawn bar (docs/design/DARK-MENUS.md). Test with dark menus off | Windows | **0 flashing frames** in a scripted resize capture | open (4b) |
+| K2 | The browser search field's **focus ring is clipped** | macOS | Draw the ring inside the field, or pad the container | open (4b) |
+| K3 | **Track numbers ≥ 10** crowd the name | both | The number column's width follows the largest track number (VISUAL-SPEC.md §13) | open (4b) |
+| K4 | **Return and Backspace reach the song behind dialogs** (MAC-CATCHUP.md §8, MC-D9) | shared | Keys never reach the song while a dialog is open | **closed** by Batch 4a (RUNLOG B4A-D2; scenario B4A-01, which fails on the baseline). Tested on Windows; re-run B4A-01's steps on the next Mac run |
+| K5 | **Colour-preview leaks**: Esc after hovering a colour kept it; hover A, pick B, undo gave A (MC-D15) | shared | Previews never reach undo | **closed** by Batch 4a (B4A-D3; `edit::colour_preview_tests`, scenario B4A-02). Tested on Windows; re-check on the next Mac run |
+| K6 | The project loader **panics on a fuzzed file in debug builds**: `load_clips`' error message adds 1 to a huge lane index (`file.rs:790`); `robustness::project_loader_never_panics_or_hangs` fails under `cargo test`, passes under `--release` (RUNLOG DOC-D17) | shared | The fuzz test passes in debug and release | open (4b) |

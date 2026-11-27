@@ -1,7 +1,8 @@
-# CLAUDE.md: ChipDAW
+# CLAUDE.md: Cartwave
 
-> Working title: **ChipDAW** (placeholder; don't brand anything) · Rust · GUI: Vizia (our fork) ·
-> MIT OR Apache-2.0
+> **Cartwave** by **Glintworks** (decided 2026-11-26; trademark checks pending, VISION.md) · Rust ·
+> GUI: Vizia (our fork) · MIT OR Apache-2.0 (the open core). The code, crates, repo and `.chipdaw`
+> files keep the working title "ChipDAW" until a separate, planned rename: don't rename them here.
 
 ## 0. Read VISION.md first
 

@@ -33,3 +33,6 @@ desktop.ini
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Private reference listening (VISION.md "Reference listening"): never committed
+/reference-private/

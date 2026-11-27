@@ -1,6 +1,6 @@
-# ChipDAW: project rundown
+# Cartwave: project rundown
 
-*As of 2026-11-25 · updated for `stabilize/v1.1` (see [STABILIZE.md](STABILIZE.md)) · "ChipDAW" is still a working title.*
+*As of 2026-11-25 · updated for `stabilize/v1.1` (see [STABILIZE.md](STABILIZE.md)) · 2026-11-26: the app is now **Cartwave** by Glintworks (VISION.md); "ChipDAW", the working title, stays in the code until a planned rename.*
 
 ChipDAW is a music workstation for indie game developers. It writes music that plays on
 **real sound-chip hardware**: the NES 2A03 and the VRC6 expansion chip,
