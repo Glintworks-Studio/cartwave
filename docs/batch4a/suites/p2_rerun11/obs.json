@@ -1,0 +1,47 @@
+{
+  "work": "C:/Users/jeffrey/Documents/c++/pixelwide_studio/chipdaw/docs/batch4a/suites/p2_rerun11",
+  "p211_lo_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=false strip_by_clips=false browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 87851"
+  ],
+  "p211_lc_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=false strip_by_clips=true browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 87851"
+  ],
+  "p211_rc_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=true strip_by_clips=true browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 94161"
+  ],
+  "p211_ro_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=true strip_by_clips=false browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 94161"
+  ]
+}

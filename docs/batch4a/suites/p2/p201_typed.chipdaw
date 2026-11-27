@@ -1,0 +1,303 @@
+{
+  "format": "chipdaw",
+  "version": 7,
+  "bpm": 150.0,
+  "profile": "nes",
+  "filter": "famicom",
+  "loop_end": 122880,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "Square Lead",
+      "volume": "15 14 13 12 12 11 / 8 6 4 2 0",
+      "duty": "8",
+      "vibrato": [
+        18,
+        6,
+        20
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Bright Lead",
+      "volume": "15 13 12 11 11 10 / 7 4 2 0",
+      "duty": "2 4",
+      "vibrato": [
+        20,
+        6,
+        16
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Triangle Bass"
+    },
+    {
+      "id": 4,
+      "name": "Standard Kit",
+      "kit": [
+        {
+          "top": 47,
+          "inst": {
+            "name": "Kick",
+            "volume": "15 13 10 7 4 2 0",
+            "arpeggio": "0 -2 -4 -5 -6 -6",
+            "duty": "0"
+          }
+        },
+        {
+          "top": 64,
+          "inst": {
+            "name": "Snare",
+            "volume": "15 14 12 10 9 8 7 6 5 4 3 3 2 2 1 1 0",
+            "arpeggio": "3 0",
+            "duty": "0"
+          }
+        },
+        {
+          "top": 79,
+          "inst": {
+            "name": "Closed Hat",
+            "volume": "12 8 5 2 0",
+            "duty": "0"
+          }
+        },
+        {
+          "top": 87,
+          "inst": {
+            "name": "Open Hat",
+            "volume": "12 11 10 9 8 7 6 5 5 4 4 3 3 2 2 1 1 0",
+            "duty": "0"
+          }
+        },
+        {
+          "top": 127,
+          "inst": {
+            "name": "Crash",
+            "volume": "15 14 13 12 12 11 11 10 10 9 9 9 8 8 8 7 7 7 6 6 6 6 5 5 5 5 4 4 4 4 3 3 3 3 2 2 2 2 1 1 1 1 0",
+            "duty": "0"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Sample Kit"
+    },
+    {
+      "id": 6,
+      "name": "Cello",
+      "volume": "4 6 8 9 10 11 12 12 / 11 9 7 5 3 2 1 0",
+      "pitch": "-6 2 2 2",
+      "duty": "4 4 | 5 5",
+      "vibrato": [
+        22,
+        6,
+        10
+      ]
+    },
+    {
+      "id": 7,
+      "name": "Flute",
+      "volume": "5 8 10 11 12 12 / 10 7 4 1 0",
+      "pitch": "-4 1 1 1 1",
+      "duty": "8",
+      "vibrato": [
+        14,
+        7,
+        18
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Saw Bass",
+      "volume": "15 14 13 12 11 11 / 7 3 0"
+    }
+  ],
+  "loop_start": 0,
+  "loop": true,
+  "tracks": [
+    {
+      "id": 1,
+      "name": "Pulse 1",
+      "voice": "pulse",
+      "color": "#C9D24A",
+      "params": {
+        "duty": 2,
+        "envelope": 0,
+        "sweep": 0,
+        "sweep_rate": 3,
+        "volume": 12
+      },
+      "volume_db": -3.0,
+      "inst": 1
+    },
+    {
+      "id": 2,
+      "name": "Pulse 2",
+      "voice": "pulse",
+      "color": "#C9D24A",
+      "params": {
+        "duty": 2,
+        "envelope": 0,
+        "sweep": 0,
+        "sweep_rate": 3,
+        "volume": 12
+      },
+      "inst": 2
+    },
+    {
+      "id": 3,
+      "name": "Triangle",
+      "voice": "triangle",
+      "color": "#7F86E0",
+      "params": {},
+      "inst": 3
+    },
+    {
+      "id": 4,
+      "name": "Noise",
+      "voice": "noise",
+      "color": "#B5AC98",
+      "params": {
+        "envelope": 0,
+        "noise_mode": 0,
+        "noise_period": -1,
+        "volume": 12
+      },
+      "inst": 4
+    },
+    {
+      "id": 5,
+      "name": "DPCM",
+      "voice": "dpcm",
+      "color": "#E39A42",
+      "params": {
+        "loop": 0,
+        "rate": 15,
+        "sample": -1
+      },
+      "inst": 5
+    },
+    {
+      "id": 6,
+      "name": "VRC6 Pulse 1",
+      "voice": "vrc6_pulse",
+      "color": "#D9579A",
+      "params": {
+        "duty": 7,
+        "volume": 12
+      },
+      "inst": 6
+    },
+    {
+      "id": 7,
+      "name": "VRC6 Pulse 2",
+      "voice": "vrc6_pulse",
+      "color": "#D9579A",
+      "params": {
+        "duty": 7,
+        "volume": 12
+      },
+      "inst": 7
+    },
+    {
+      "id": 8,
+      "name": "VRC6 Saw",
+      "voice": "saw",
+      "color": "#3CC4A6",
+      "params": {
+        "rate": 42
+      },
+      "inst": 8
+    }
+  ],
+  "clips": [
+    {
+      "id": 1,
+      "lane": 0,
+      "start": 0,
+      "len": 15360,
+      "name": "Lead A",
+      "notes": [
+        { "id": 1, "start": 0, "len": 480, "pitch": 60 },
+        { "id": 2, "start": 960, "len": 480, "pitch": 61 },
+        { "id": 3, "start": 1920, "len": 480, "pitch": 62 },
+        { "id": 4, "start": 2880, "len": 480, "pitch": 63 },
+        { "id": 5, "start": 3840, "len": 480, "pitch": 64 },
+        { "id": 6, "start": 4800, "len": 480, "pitch": 65 },
+        { "id": 7, "start": 5760, "len": 480, "pitch": 66 },
+        { "id": 8, "start": 6720, "len": 480, "pitch": 67 },
+        { "id": 9, "start": 7680, "len": 480, "pitch": 68 },
+        { "id": 10, "start": 8640, "len": 480, "pitch": 69 },
+        { "id": 11, "start": 9600, "len": 480, "pitch": 70 },
+        { "id": 12, "start": 10560, "len": 480, "pitch": 71 },
+        { "id": 13, "start": 11520, "len": 480, "pitch": 60 },
+        { "id": 14, "start": 12480, "len": 480, "pitch": 61 },
+        { "id": 15, "start": 13440, "len": 480, "pitch": 62 },
+        { "id": 16, "start": 14400, "len": 480, "pitch": 63 }
+      ]
+    },
+    {
+      "id": 2,
+      "lane": 1,
+      "start": 0,
+      "len": 7680,
+      "name": "Harm A",
+      "notes": [
+        { "id": 1, "start": 0, "len": 480, "pitch": 64 },
+        { "id": 2, "start": 960, "len": 480, "pitch": 65 },
+        { "id": 3, "start": 1920, "len": 480, "pitch": 66 },
+        { "id": 4, "start": 2880, "len": 480, "pitch": 67 },
+        { "id": 5, "start": 3840, "len": 480, "pitch": 68 },
+        { "id": 6, "start": 4800, "len": 480, "pitch": 69 },
+        { "id": 7, "start": 5760, "len": 480, "pitch": 70 },
+        { "id": 8, "start": 6720, "len": 480, "pitch": 71 }
+      ]
+    },
+    {
+      "id": 3,
+      "lane": 1,
+      "start": 7680,
+      "len": 7680,
+      "name": "Harm B",
+      "notes": [
+        { "id": 1, "start": 0, "len": 480, "pitch": 67 },
+        { "id": 2, "start": 960, "len": 480, "pitch": 68 },
+        { "id": 3, "start": 1920, "len": 480, "pitch": 69 },
+        { "id": 4, "start": 2880, "len": 480, "pitch": 70 },
+        { "id": 5, "start": 3840, "len": 480, "pitch": 71 },
+        { "id": 6, "start": 4800, "len": 480, "pitch": 72 },
+        { "id": 7, "start": 5760, "len": 480, "pitch": 73 },
+        { "id": 8, "start": 6720, "len": 480, "pitch": 74 }
+      ]
+    },
+    {
+      "id": 4,
+      "lane": 2,
+      "start": 0,
+      "len": 30720,
+      "name": "Bass",
+      "notes": [
+        { "id": 1, "start": 0, "len": 960, "pitch": 40 },
+        { "id": 2, "start": 1920, "len": 960, "pitch": 41 },
+        { "id": 3, "start": 3840, "len": 960, "pitch": 42 },
+        { "id": 4, "start": 5760, "len": 960, "pitch": 43 },
+        { "id": 5, "start": 7680, "len": 960, "pitch": 44 },
+        { "id": 6, "start": 9600, "len": 960, "pitch": 45 },
+        { "id": 7, "start": 11520, "len": 960, "pitch": 46 },
+        { "id": 8, "start": 13440, "len": 960, "pitch": 47 },
+        { "id": 9, "start": 15360, "len": 960, "pitch": 48 },
+        { "id": 10, "start": 17280, "len": 960, "pitch": 49 },
+        { "id": 11, "start": 19200, "len": 960, "pitch": 50 },
+        { "id": 12, "start": 21120, "len": 960, "pitch": 51 },
+        { "id": 13, "start": 23040, "len": 960, "pitch": 40 },
+        { "id": 14, "start": 24960, "len": 960, "pitch": 41 },
+        { "id": 15, "start": 26880, "len": 960, "pitch": 42 },
+        { "id": 16, "start": 28800, "len": 960, "pitch": 43 }
+      ]
+    }
+  ],
+  "rate": 48000,
+  "bits": 16
+}

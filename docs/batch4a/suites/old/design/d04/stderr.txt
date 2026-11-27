@@ -1,0 +1,10 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: help Mixer view: arrives in Batch 4
+dev: help Record: arrives with MIDI input
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Pan: centred while locked to the 2A03 Pulse 1 (the console's output is mono)
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Locked to the 2A03 Triangle: level comes from the chip's own level (the triangle has no Volume register)
+dev: help Volume: drag to change · double-click the value to type it in dB

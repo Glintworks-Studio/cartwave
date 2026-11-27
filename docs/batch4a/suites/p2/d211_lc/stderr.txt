@@ -1,0 +1,39 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p211_lc.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Mute this track
+dev: help Solo this track only · Ctrl-click to solo several
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 76
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 80
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 84
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 88
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 92
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 5 96
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: help Track headers: drag to make them wider or narrower (380 to 600 px)
+dev: look headers_right=false strip_by_clips=true browser_right=false overview=true width=420
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: ruler click px_per_bar 92.00 scroll 0
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: overview click px_per_bar 92.00 scroll 87851

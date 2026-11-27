@@ -1,0 +1,5 @@
+shell exit 0
+batch3 exit 0
+design exit 0
+polish exit 0
+logs -> C:/Users/jeffrey/Documents/c++/pixelwide_studio/chipdaw/docs/batch4a/suites/old

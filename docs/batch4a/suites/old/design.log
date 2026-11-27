@@ -1,0 +1,28 @@
+PASS DP-01: four taps 500 ms apart: [118.89, 119.49, 120.46] BPM (the unit test proves exactly 120)
+PASS DP-01: the first sequence is one undo step: [('1', '0'), ('1', '0'), ('1', '0')]
+PASS DP-01: saved tempo 120.46
+PASS DP-01: one Ctrl+Z restores 150: 150.0
+PASS DP-01: Ctrl+Y redoes it: 120.46
+PASS DP-01: the TAP key taps too (a second sequence): [84.15, 85.64]
+PASS DP-02: the right-click menu lists the styles: dev: menu Spectrum: Bars|LED Segments|Line|Peak Dots
+PASS DP-02: choosing LED Segments: ['dev: spectrum style bars (settings)', 'dev: spectrum style leds']
+PASS DP-02: settings.json: leds
+PASS DP-02: after a restart: ['dev: spectrum style leds (settings)']
+PASS DP-03: a click and an arrow key each audition a preset: ['dev: audition preset 0 lane 0', 'dev: audition preset 1 lane 0']
+PASS DP-03: Down moves to the next preset: 0 -> 1
+PASS DP-03: with the Preview key off, a click is silent: ['dev: audition preset 0 off (Preview key)']
+PASS DP-03: during playback it says why: ['Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one.']
+PASS DP-03: the Preview key's state is remembered (back on)
+PASS DP-04: the Mixer key says why on the status bar: ['dev: help Mixer view: arrives in Batch 4']
+PASS DP-04: the Record key says why on the status bar: ['dev: help Record: arrives with MIDI input']
+PASS DP-04: the pan slider (editable; heard with stereo mixing) says why on the status bar: ['dev: help Pan: drag to change ╖ double-click the value to type it (C, 25L, 30R) ╖ it applies once stereo mixing arrives', 'dev: help Pan: drag to change ╖ double-click the value to type it (C, 25L, 30R) ╖ it applies once stereo mixing arrives']
+PASS DP-04: the triangle's fader (works since polish 2) says why on the status bar: ['dev: help Volume: drag to change ╖ double-click the value to type it in dB', 'dev: help Volume: drag to change ╖ double-click the value to type it in dB']
+PASS DP-05: a version 4 file opens as 16-bit: ['dev: project format 48000 16']
+PASS DP-05: Project Settings sets 24-bit: ['dev: project format 48000 16', 'dev: project format 48000 24']
+PASS DP-05: saved: version 7, bits 24
+PASS DP-05: the display's indicator changes: (5, 5, 68, 13)
+DP-01: PASS (6/6)
+DP-02: PASS (4/4)
+DP-03: PASS (5/5)
+DP-04: PASS (4/4)
+DP-05: PASS (4/4)

@@ -1,0 +1,6 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: help Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: project format 48000 24
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit

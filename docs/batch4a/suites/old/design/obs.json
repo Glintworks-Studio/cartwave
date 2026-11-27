@@ -1,0 +1,51 @@
+{
+  "work": "C:\\Users\\jeffrey\\Documents\\c++\\pixelwide_studio\\chipdaw\\docs\\batch4a\\suites\\old\\design",
+  "dp01_taps": [
+    "dev: tap bpm 118.89 undo steps (1, 0)",
+    "dev: tap bpm 119.49 undo steps (1, 0)",
+    "dev: tap bpm 120.46 undo steps (1, 0)",
+    "dev: tap bpm 84.15 undo steps (2, 0)",
+    "dev: tap bpm 85.64 undo steps (2, 0)"
+  ],
+  "dp02_menu": [
+    "dev: menu Spectrum: Bars|LED Segments|Line|Peak Dots"
+  ],
+  "dp02_first": [
+    "dev: spectrum style bars (settings)",
+    "dev: spectrum style leds"
+  ],
+  "dp02_second": [
+    "dev: spectrum style leds (settings)"
+  ],
+  "dp03_on": [
+    "dev: audition preset 0 lane 0",
+    "dev: audition preset 1 lane 0"
+  ],
+  "dp03_off": [
+    "dev: audition preset 0 lane 0",
+    "dev: audition preset 1 lane 0",
+    "dev: audition preset 0 off (Preview key)"
+  ],
+  "dp03_playing": [
+    "Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one."
+  ],
+  "dp04_mixer": [
+    "dev: help Mixer view: arrives in Batch 4"
+  ],
+  "dp04_record": [
+    "dev: help Record: arrives with MIDI input"
+  ],
+  "dp04_pan": [
+    "dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives",
+    "dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives"
+  ],
+  "dp04_tri": [
+    "dev: help Volume: drag to change · double-click the value to type it in dB",
+    "dev: help Volume: drag to change · double-click the value to type it in dB"
+  ],
+  "dp05_clicked": true,
+  "dp05_dev": [
+    "dev: project format 48000 16",
+    "dev: project format 48000 24"
+  ]
+}

@@ -1,0 +1,5 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: audition preset 0 lane 0
+dev: audition preset 1 lane 0
+dev: audition preset 0 off (Preview key)

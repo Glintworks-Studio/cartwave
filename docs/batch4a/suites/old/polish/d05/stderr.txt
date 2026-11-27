@@ -1,0 +1,4 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu

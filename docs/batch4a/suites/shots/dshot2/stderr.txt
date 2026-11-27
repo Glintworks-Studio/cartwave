@@ -1,0 +1,6 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 24
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\shots\shot_warn.chipdaw (2 clips)
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn't have the channels these locked tracks use: /  / "Shine" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back.

@@ -1,0 +1,47 @@
+{
+  "format": "chipdaw",
+  "version": 7,
+  "bpm": 150.0,
+  "profile": "nes",
+  "filter": "auto",
+  "loop_end": 30720,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "Raw Channel"
+    }
+  ],
+  "loop_start": 0,
+  "loop": true,
+  "tracks": [
+    {
+      "id": 1,
+      "name": "Pulse 1",
+      "voice": "pulse",
+      "color": "#C9D24A",
+      "params": {},
+      "inst": 1,
+      "lock": "2a03_p1"
+    },
+    {
+      "id": 2,
+      "name": "Pulse 3",
+      "voice": "pulse",
+      "color": "#4FA8E0",
+      "params": {},
+      "inst": 1
+    }
+  ],
+  "clips": [
+    {
+      "id": 1,
+      "lane": 0,
+      "start": 0,
+      "len": 7680,
+      "name": "Empty",
+      "notes": []
+    }
+  ],
+  "rate": 48000,
+  "bits": 24
+}

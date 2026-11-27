@@ -1,0 +1,43 @@
+unlocked 8 tracks
+PASS P2-11: lo: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: lo: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: lo: the dB value of track 3 (-6.0)
+PASS P2-11: lo: the pan value of track 4 (10)
+PASS P2-11: lo: the fader of track 5 (-21.0)
+PASS P2-11: lo: the bottom edge of track 6 (96.0)
+PASS P2-11: lo: the name of track 6 (Hit; track 7 is under the Main row since Batch 4a)
+PASS P2-11: lo: the width boundary (420.0)
+PASS P2-11: lo: the ruler
+PASS P2-11: lo: the Overview
+PASS P2-11: lc: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: lc: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: lc: the dB value of track 3 (-6.0)
+PASS P2-11: lc: the pan value of track 4 (10)
+PASS P2-11: lc: the fader of track 5 (-21.0)
+PASS P2-11: lc: the bottom edge of track 6 (96.0)
+PASS P2-11: lc: the name of track 6 (Hit; track 7 is under the Main row since Batch 4a)
+PASS P2-11: lc: the width boundary (420.0)
+PASS P2-11: lc: the ruler
+PASS P2-11: lc: the Overview
+PASS P2-11: rc: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: rc: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: rc: the dB value of track 3 (-6.0)
+PASS P2-11: rc: the pan value of track 4 (10)
+PASS P2-11: rc: the fader of track 5 (-21.0)
+PASS P2-11: rc: the bottom edge of track 6 (96.0)
+PASS P2-11: rc: the name of track 6 (Hit; track 7 is under the Main row since Batch 4a)
+PASS P2-11: rc: the width boundary (420.0)
+PASS P2-11: rc: the ruler
+PASS P2-11: rc: the Overview
+PASS P2-11: ro: M on track 1 mutes it ([True, False, False, False, False, False, False, False])
+PASS P2-11: ro: S on track 2 solos it ([False, True, False, False, False, False, False, False])
+PASS P2-11: ro: the dB value of track 3 (-6.0)
+PASS P2-11: ro: the pan value of track 4 (10)
+PASS P2-11: ro: the fader of track 5 (-21.0)
+PASS P2-11: ro: the bottom edge of track 6 (96.0)
+PASS P2-11: ro: the name of track 6 (Hit; track 7 is under the Main row since Batch 4a)
+PASS P2-11: ro: the width boundary (420.0)
+PASS P2-11: ro: the ruler
+PASS P2-11: ro: the Overview
+
+ALL PASS: P2-11

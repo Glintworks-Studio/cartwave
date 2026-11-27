@@ -1,0 +1,59 @@
+PASS AT-01: opens clean, named after the file: 'at01 ù ChipDAW'
+PASS AT-01: an edit marks the title: '*at01 ù ChipDAW'
+PASS AT-01: Ctrl+N with changes asks to save
+PASS AT-01: Cancel keeps the edited song
+PASS AT-01: Save wrote the edit (one clip fewer)
+PASS AT-01: saving clears the mark: 'at01 ù ChipDAW'
+PASS AT-01: undo after the save: unsaved again
+PASS AT-01: redo back to the saved state: clean again
+PASS AT-01: Don't Save gives a new empty project: 'Untitled ù ChipDAW'
+PASS AT-01: Don't Save left the file as last saved
+PASS AT-01: Ctrl+N with no changes: no prompt
+PASS AT-01: a new clip in the empty project marks it
+PASS AT-01: Ctrl+O asks; Cancel
+PASS AT-01: Ctrl+O, Don't Save: the Open dialog appears (cancelled)
+PASS AT-01: File > New from MIDI File asks
+PASS AT-01: a dropped .chipdaw asks
+PASS AT-01: Cancel on the drop keeps the song
+PASS AT-01: closing the window asks; Cancel keeps it open
+PASS AT-01: Don't Save closes the app
+PASS AT-01: the unsaved work is kept for recovery (setting on by default)
+PASS AT-01: the next start offers it
+PASS AT-02: F3-F7 without CHIPDAW_DEV: the saved project is identical
+PASS AT-02: F3-F7 without CHIPDAW_DEV: no overlay, the window is pixel-identical (0 px differ)
+PASS AT-02: control: in dev mode F3 does show the overlay (156000 px differ)
+PASS AT-02: control: in dev mode F4 does swap in the stress set (200 clips)
+PASS AT-03: the search field holds the typed text (['field:a b'])
+PASS AT-03: typing Space, Ctrl+Z, Delete in the field changed nothing in the song
+PASS AT-03: no clip was deleted by Delete in the field
+PASS AT-03: the rename survived Ctrl+Z in the field: ['verse']
+PASS AT-04: switching to 2A03 with VRC6 clips asks first
+PASS AT-04: the profile is saved: 2A03
+PASS AT-04: a click + Delete on a dimmed VRC6 clip removed nothing
+PASS AT-04: the VRC6 headers are drawn dimmed (brightness against the 2A03 headers 1.04 -> 0.73)
+PASS AT-06: File > Save from the menu saves (mark cleared)
+PASS AT-06: the file was written with the edit
+PASS AT-06: a screenshot of every menu
+PASS AT-15: Ctrl+, opens Settings
+PASS AT-15: the buffer size is saved: 256
+PASS AT-15: the frame-rate cap is saved: 120
+PASS AT-15: Esc closes it
+PASS AT-16: profile and filter saved in the project: 2A03, famicom
+PASS AT-18: Open Recent: newest first: ['second.chipdaw', 'first.chipdaw']
+PASS AT-18: a missing file is removed, with a notice
+PASS AT-18: and it is gone from settings.json
+PASS AT-18: Open Recent opens it: 'second ù ChipDAW'
+PASS AT-18: Help > About: version, licence, credits
+PASS AT-18: Help > Keyboard Shortcuts lists the table
+PASS AT-19: Ctrl+S still saves
+PASS AT-19: top-bar screenshot taken (checked by eye: no file keys, no CHIP/FILTER/SNAP)
+
+AT-01: PASS (21/21)
+AT-02: PASS (4/4)
+AT-03: PASS (4/4)
+AT-04: PASS (4/4)
+AT-06: PASS (3/3)
+AT-15: PASS (4/4)
+AT-16: PASS (1/1)
+AT-18: PASS (6/6)
+AT-19: PASS (2/2)

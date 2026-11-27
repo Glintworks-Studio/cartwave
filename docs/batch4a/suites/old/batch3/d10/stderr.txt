@@ -1,0 +1,23 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\batch3\at10.chipdaw (4 clips)
+dev: open piano roll 1
+dev: CHIPDAW_OPEN_CLIP 1 (piano roll open: true)
+dev: spectrum style bars (settings)
+dev: piano roll bounds 8 448 1424 464 scale 1.00
+dev: piano roll bounds 8 448 1424 444 scale 1.00
+dev: piano roll bounds 8 448 1424 464 scale 1.00
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: menu Track(1): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock
+dev: submenu TrackColor(1) at 536 232
+dev: submenu TrackColor(1) at 536 232
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: menu Ruler: -Set Loop to Selection|Zoom to Fit
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: menu Piano(true): Cut|Copy|-Paste|Duplicate|Delete|Quantize|Select All|Draw Mode
+dev: menu Piano(false): -Cut|-Copy|-Paste|-Duplicate|-Delete|-Quantize|Select All|Draw Mode
+dev: help Main: everything you hear, after the master gain · the output device is in Settings > Audio
+dev: menu Clip(1): Cut|Copy|-Paste|Duplicate|Delete|-Split|-Consolidate|Rename|Colour|Loop Clip|Make Instrument Unique|-Use Track Instrument|Save Instrument as Preset
+dev: menu Empty: -Paste|Insert MIDI Clip|Loop Selection|Insert Silence|Delete Time|Grid (1/16)

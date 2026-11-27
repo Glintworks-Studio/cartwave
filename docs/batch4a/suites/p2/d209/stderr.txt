@@ -1,0 +1,15 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p209.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: overview click px_per_bar 92.00 scroll 84783
+dev: overview drag px_per_bar 92.00 scroll 30007
+dev: overview drag px_per_bar 163.66 scroll 17248
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: overview click px_per_bar 163.66 scroll 17248
+dev: zoom ZoomToFit range (0, 122880) px_per_bar 24.00 scroll 0
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: look headers_right=false strip_by_clips=false browser_right=false overview=false width=380
+dev: look headers_right=false strip_by_clips=false browser_right=false overview=true width=380
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit

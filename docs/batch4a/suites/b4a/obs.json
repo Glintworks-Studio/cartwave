@@ -1,0 +1,59 @@
+{
+  "work": "C:/Users/jeffrey/Documents/c++/pixelwide_studio/chipdaw/docs/batch4a/suites/b4a",
+  "b401_piano": [],
+  "b402_title0": "b402 — ChipDAW",
+  "b402_title_esc": "b402 — ChipDAW",
+  "b404_dev": [
+    "dev: insert track 1 Pulse Pulse 3",
+    "dev: move track 1 -> 0"
+  ],
+  "b405_menu": [
+    "dev: menu Badge(0): Studio (unlocked)|2A03 Pulse 1|-2A03 Pulse 2  (Pulse 2)"
+  ],
+  "b405_dialog": "Lock \"Lead\" to the chip?\n\nThis track's fader is at −6.0 dB and its pan at 20R. Locking resets it to 0 dB and centre: a locked track's level comes from the chip itself. Unlocking puts them back.",
+  "b405_dev": [
+    "dev: lock track 0 -> Some((Some(0), 0.0, 0))",
+    "dev: lock track 0 -> Some((None, -6.0, 20))"
+  ],
+  "b406_click_unlock": true,
+  "b406_warn_unlock": [
+    "dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn't have the channels these locked tracks use: /  / \"Shine\" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back."
+  ],
+  "b406_click_fit": true,
+  "b406_warn_fit": [
+    "dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn't have the channels these locked tracks use: /  / \"Shine\" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back."
+  ],
+  "b406_click_cancel": true,
+  "b406_warn_cancel": [
+    "dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn't have the channels these locked tracks use: /  / \"Shine\" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back."
+  ],
+  "b407_bounds_fit": [
+    "dev: piano roll bounds 8 480 1424 408 scale 1.00"
+  ],
+  "b407_warn_fit": [
+    "dev: warning A locked track plays one note at a time | \"Pulse 1\" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can't play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins)."
+  ],
+  "b407_bounds_unlock": [
+    "dev: piano roll bounds 8 480 1424 408 scale 1.00"
+  ],
+  "b407_warn_unlock": [
+    "dev: warning A locked track plays one note at a time | \"Pulse 1\" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can't play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins)."
+  ],
+  "b407_bounds_cancel": [
+    "dev: piano roll bounds 8 480 1424 408 scale 1.00"
+  ],
+  "b407_warn_cancel": [
+    "dev: warning A locked track plays one note at a time | \"Pulse 1\" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can't play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins)."
+  ],
+  "b408_title": "*b408 — ChipDAW",
+  "b408_help": [
+    "dev: help PEAK: the Main track's sample peak since the last reset (held) · click to reset"
+  ],
+  "b409_menu": [
+    "dev: menu Track(0): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock|Voices"
+  ],
+  "b409_sub": [
+    "dev: submenu InsertTrack at 636 205",
+    "dev: submenu InsertTrack at 636 205"
+  ]
+}

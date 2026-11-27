@@ -1,0 +1,9 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\b4a\b408.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Main: everything you hear, after the master gain · the output device is in Settings > Audio
+dev: help Main: the gain after the whole mix, −inf … +6 dB (drag or wheel); it works on locked tracks too
+dev: help Main: everything you hear, after the master gain · the output device is in Settings > Audio
+dev: help PEAK: the Main track's sample peak since the last reset (held) · click to reset

@@ -1,0 +1,19 @@
+PASS PL-01: the triangle takes the picked grid colour: #4DC6FB
+PASS PL-01: the project is marked unsaved: *pl01 ù ChipDAW
+PASS PL-01: one Ctrl+Z restores it: None
+PASS PL-01: the other tracks are unchanged (the hover preview was put back)
+PASS PL-02: both selected clips take it: ['#B1A109', '#B1A109']
+PASS PL-02: the track's colour changed: #FFBFB8
+PASS PL-02: the clips keep their own colour, independent of the track: ['#B1A109', '#B1A109']
+PASS PL-03: one clip inserted: 1
+PASS PL-03: it got a palette colour of its own: #2B5DA0
+PASS PL-04: the lanes overflow above the inspector: ['dev: lane scroll 177 max 177']
+PASS PL-04: the wheel over the headers scrolled them
+PASS PL-04: the headers and lanes moved (screenshots differ in (242, 95, 1537, 562))
+PASS PL-05: an 800x600 request opens at the minimum: 1296x720 logical (1296x720 px at 96 dpi)
+PASS PL-05: it fits a 1080p laptop at 125% (1536x816)
+PL-01: PASS (4/4)
+PL-02: PASS (3/3)
+PL-03: PASS (2/2)
+PL-04: PASS (3/3)
+PL-05: PASS (2/2)

@@ -1,0 +1,32 @@
+{
+  "clock_bars": false,
+  "audio_device": null,
+  "buffer_frames": null,
+  "sample_rate": 48000,
+  "frame_cap": 60,
+  "arrangement_grid": "1/16",
+  "piano_grid": "1/16",
+  "follow_playhead": true,
+  "autosave_secs": 120,
+  "offer_recovery": true,
+  "open_last": false,
+  "silenced": [],
+  "recent": [
+    "C:\\Users\\jeffrey\\Documents\\c++\\pixelwide_studio\\chipdaw\\docs\\batch4a\\suites\\old\\batch3\\at23.chipdaw"
+  ],
+  "browser_open": true,
+  "export": [],
+  "ui_scale": 100,
+  "spectrum_style": "bars",
+  "preview_on_select": true,
+  "auto_track_colours": true,
+  "default_track_colour": "#7F86E0",
+  "reduced_auto_colours": false,
+  "new_clip_colour": "track",
+  "dark_menus": true,
+  "header_width": 380.0,
+  "headers_right": false,
+  "strip_by_clips": false,
+  "browser_right": false,
+  "show_overview": false
+}

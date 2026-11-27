@@ -1,0 +1,67 @@
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+The argument 'C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\perf	ools\shot.ps1' is not recognized as the name of a script file. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+PASS B4A-01: Backspace/Delete behind Export: clips unchanged ([1, 2, 3, 4])
+PASS B4A-01: Return/Backspace/Delete behind Settings: clips unchanged ([1, 2, 3, 4])
+PASS B4A-01: Return behind a dialog never opened the piano roll ([])
+PASS B4A-02: hover a colour, Esc: the old colour is back (#7F86E0 vs #7F86E0)
+PASS B4A-02: ... and nothing is unsaved ('b402 — ChipDAW')
+PASS B4A-02: pick B: the track takes it (#B1A109)
+PASS B4A-02: hover A, pick B, undo: the original colour (#7F86E0 vs #7F86E0)
+PASS B4A-03: a Ctrl-click makes no copies ([1, 2, 3, 4])
+PASS B4A-03: click Lead A, Ctrl-click Harm B, Delete: both gone ([2, 4])
+PASS B4A-03: ... Ctrl-click Lead A again toggles it off: only Harm B gone ([1, 2, 4])
+PASS B4A-03: click Harm A, Shift-click Bass: the range (Harm A, Harm B, Bass) ([1])
+PASS B4A-03: Ctrl-drag still copies: Lead A stays, a copy at bar 5 ([0, 15360])
+PASS B4A-04: Ctrl+Shift+T: a studio Pulse 3 below track 1 ([('Pulse 1', '2a03_p1'), ('Pulse 3', None), ('Pulse 2', '2a03_p2')])
+PASS B4A-04: its colour is a new automatic one (#665C09)
+PASS B4A-04: dragged above track 1 (['Pulse 3', 'Pulse 1', 'Pulse 2'])
+PASS B4A-04: the clips moved with their tracks
+PASS B4A-04: Delete removes it (8)
+PASS B4A-04: the colour from the context menu is saved (#4DC6FB)
+PASS B4A-04: dev lines ['dev: insert track 1 Pulse Pulse 3', 'dev: move track 1 -> 0']
+PASS B4A-05: the badge's menu: ['dev: menu Badge(0): Studio (unlocked)|2A03 Pulse 1|-2A03 Pulse 2  (Pulse 2)']
+PASS B4A-05: the reset dialog: 'Lock "Lead" to the chip?\n\nThis track\'s fader is at −6.0 dB and its pan at 20R. Locking resets it to 0 dB and centre: a locked track\'s level comes from the chip itself. Unlocking puts them back.'
+PASS B4A-05: Reset and lock: locked at 0 dB / C, old values kept ({'id': 1, 'name': 'Lead', 'voice': 'pulse', 'lock': '2a03_p1', 'before_lock': [-6.0, 20], 'color': '#C9D24A', 'params': {'duty': 2, 'envelope': 0, 'sweep': 0, 'sweep_rate': 3, 'volume': 12}, 'inst': 1})
+PASS B4A-05: one undo restores lock state and values ({'id': 1, 'name': 'Lead', 'voice': 'pulse', 'color': '#C9D24A', 'params': {'duty': 2, 'envelope': 0, 'sweep': 0, 'sweep_rate': 3, 'volume': 12}, 'pan': 20, 'volume_db': -6.0, 'inst': 1})
+PASS B4A-05: redo locks again
+PASS B4A-05: unlocking restores the fader and pan ({'id': 1, 'name': 'Lead', 'voice': 'pulse', 'color': '#C9D24A', 'params': {'duty': 2, 'envelope': 0, 'sweep': 0, 'sweep_rate': 3, 'volume': 12}, 'pan': 20, 'volume_db': -6.0, 'inst': 1})
+PASS B4A-06: unlock: the warning lists the VRC6 track (['dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn\'t have the channels these locked tracks use: /  / "Shine" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back.'])
+PASS B4A-06: Unlock tracks: NES, Shine is a studio track (nes, None)
+PASS B4A-06: fit: the warning lists the VRC6 track (['dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn\'t have the channels these locked tracks use: /  / "Shine" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back.'])
+PASS B4A-06: Switch anyway: NES, Shine stays locked (silent) (nes, vrc6_p1)
+PASS B4A-06: cancel: the warning lists the VRC6 track (['dev: warning Switch the hardware profile to NES (2A03)? | NES (2A03) doesn\'t have the channels these locked tracks use: /  / "Shine" (VRC6 Pulse 1) /  / Unlock them to keep them playing as studio tracks, or switch anyway: they stay locked, dimmed and silent until you switch back.'])
+PASS B4A-06: Cancel: nothing changed (famicom+vrc6)
+PASS B4A-07: fit: the chord asked first (['dev: warning A locked track plays one note at a time | "Pulse 1" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can\'t play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins).'])
+PASS B4A-07: Fit: no overlaps, still locked ([{'id': 2, 'start': 5040, 'len': 240, 'pitch': 63}])
+PASS B4A-07: unlock: the chord asked first (['dev: warning A locked track plays one note at a time | "Pulse 1" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can\'t play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins).'])
+PASS B4A-07: Unlock: the chord stays on a studio track ([{'id': 1, 'start': 5040, 'len': 240, 'pitch': 58}, {'id': 2, 'start': 5040, 'len': 240, 'pitch': 63}], None)
+PASS B4A-07: cancel: the chord asked first (['dev: warning A locked track plays one note at a time | "Pulse 1" (2A03 Pulse 1): this edit makes a chord or overlapping notes, which the real chip can\'t play. /  / Unlock the track to keep the chord (a studio track, unlimited voices), or fit it to the hardware: each note is cut where the next one starts (the last note wins).'])
+PASS B4A-07: Cancel: the second note is gone, still locked ([{'id': 1, 'start': 5040, 'len': 240, 'pitch': 58}])
+PASS B4A-08: three wheel notches down: Main at -3 dB, saved (-3.0)
+PASS B4A-08: PEAK's hover help (["dev: help PEAK: the Main track's sample peak since the last reset (held) · click to reset"])
+PASS B4A-09: the header's menu: ['dev: menu Track(0): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock|Voices']
+PASS B4A-09: Insert Track > Noise: a studio Noise 1 below ([('Lead', 'pulse'), ('Noise 1', 'noise'), ('Pulse 2', 'pulse'), ('Bass', 'triangle'), ('Shine', 'vrc6_pulse')])
+PASS B4A-09: Voices > 4 on the studio track (4)
+PASS B4A-09: Ctrl+D on a selected track duplicates it (['Lead', 'Lead 2', 'Noise 1', 'Pulse 2', 'Bass', 'Shine'])
+PASS B4A-09: with a copy of its clip
+
+PASS B4A-01
+PASS B4A-02
+PASS B4A-03
+PASS B4A-04
+PASS B4A-05
+PASS B4A-06
+PASS B4A-07
+PASS B4A-08
+PASS B4A-09

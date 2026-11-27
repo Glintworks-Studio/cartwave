@@ -1,0 +1,6 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\batch3\at29.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: warning A layout for another chip setup | The layout "2A03 + VRC6 Band" is made for Famicom + VRC6. This project's hardware profile is NES (2A03). /  / Fit to hardware switches the profile to Famicom + VRC6 and locks the tracks to its channels. Or load it on studio tracks: the presets, no locks.

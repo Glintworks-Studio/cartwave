@@ -21,6 +21,16 @@ function ClickL($x, $y) { MoveL $x $y; Start-Sleep -Milliseconds 150; Down; Up; 
 function DragL($x0, $y0, $x1, $y1) { MoveL $x0 $y0; Start-Sleep -Milliseconds 150; $a = P $x0 $y0; $b = P $x1 $y1; Down; for ($i = 1; $i -le 16; $i++) { Move-To ([int]($a[0] + ($b[0] - $a[0]) * $i / 16)) ([int]($a[1] + ($b[1] - $a[1]) * $i / 16)); Start-Sleep -Milliseconds 15 }; Up; Start-Sleep -Milliseconds 300 }
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 function Want($id) { $Only.Count -eq 0 -or $Only -contains $id }
+
+# Batch 4a (RUNLOG B4A-D27): fx_basic is a version 6 file, so it opens with every track locked to
+# its channel, and a locked track's fader and pan are fixed (BATCH4A §5.3). The fader, pan and
+# header tests (P2-01/02/03/11) run on fx_basic_studio: fx_basic opened and saved by this build
+# (the real migration to format 7), then every track unlocked in the saved file.
+if ((Want "P2-01") -or (Want "P2-02") -or (Want "P2-03") -or (Want "P2-11")) {
+  $sp = Join-Path $Work "fx_basic_studio.chipdaw"; Copy-Item (Join-Path $Work "fx_basic.chipdaw") $sp -Force
+  Launch -Project $sp -Data (Join-Path $Work "d_studio_fx"); Save; Stop-App
+  python -I (Join-Path $Repo "docs\batch4a\tools\unlock_all.py") $sp
+}
 function Fx($name, $as) { $p = Join-Path $Work "$as.chipdaw"; Copy-Item (Join-Path $Work "$name.chipdaw") $p -Force; $p }
 function Keep($proj, $as) { Copy-Item $proj (Join-Path $Work "$as.chipdaw") -Force }
 function KeepSettings($d, $as) { Copy-Item (Join-Path $d "settings.json") (Join-Path $Work "$as.settings.json") -Force -ErrorAction SilentlyContinue }
@@ -63,7 +73,7 @@ function Edge($L, $i) { @(($L.hl + 200), ((RowY $i) + 71)) }
 
 # ─────────── P2-01: type a volume (dB) ───────────
 if (Want "P2-01") {
-  $p = Fx "fx_basic" "p201"; $d = Join-Path $Work "d201"
+  $p = Fx "fx_basic_studio" "p201"; $d = Join-Path $Work "d201"
   Launch -Project $p -Data $d
   $L = Lay $false $false
   $v = DbVal $L 0
@@ -80,7 +90,7 @@ if (Want "P2-01") {
 
 # ─────────── P2-02: type a pan value ───────────
 if (Want "P2-02") {
-  $p = Fx "fx_basic" "p202"; $d = Join-Path $Work "d202"
+  $p = Fx "fx_basic_studio" "p202"; $d = Join-Path $Work "d202"
   Launch -Project $p -Data $d
   $L = Lay $false $false
   $v = PanVal $L 1
@@ -94,7 +104,7 @@ if (Want "P2-02") {
 
 # ─────────── P2-03: fader and pan drags, one undo step each ───────────
 if (Want "P2-03") {
-  $p = Fx "fx_basic" "p203"; $d = Join-Path $Work "d203"
+  $p = Fx "fx_basic_studio" "p203"; $d = Join-Path $Work "d203"
   Launch -Project $p -Data $d
   $L = Lay $false $false
   $a = Well $L 0 4; DragL $a[0] $a[1] $a[0] ($a[1] + 20); Save; Keep $p "p203_fader"
@@ -223,7 +233,7 @@ if (Want "P2-11") {
   $n = 0
   foreach ($lay in @(@($false, $false, "lo"), @($false, $true, "lc"), @($true, $true, "rc"), @($true, $false, "ro"))) {
     $right, $by, $tag = $lay
-    $p = Fx "fx_basic" "p211_$tag"; $d = Join-Path $Work "d211_$tag"
+    $p = Fx "fx_basic_studio" "p211_$tag"; $d = Join-Path $Work "d211_$tag"
     Settings $d ("{ ""headers_right"": " + "$right".ToLower() + ", ""strip_by_clips"": " + "$by".ToLower() + " }")
     Launch -Project $p -Data $d
     $L = Lay $right $by
@@ -235,7 +245,9 @@ if (Want "P2-11") {
     $c = Well $L 4 20; ClickL $c[0] $c[1]; Gap
     # The name: a double-click opens the rename field over it.
     $nx = if ($L.mir) { $L.hl + 160 } else { $L.hl + 90 }
-    DblL $nx ((RowY 6) + 22); SelectAllType "Hit"; K 0x0D; Gap
+    # Batch 4a (B4A-D27): track 6, the last row above the Main row with the inspector open
+    # (track 7 now sits under it; the lanes are 73 px shorter, BATCH4A §7).
+    DblL $nx ((RowY 5) + 22); SelectAllType "Hit"; K 0x0D; Gap
     $c = Edge $L 5; DragL $c[0] $c[1] $c[0] ($c[1] + 24); Gap
     Save; Keep $p "p211_${tag}_after"
     $dir = if ($right) { -40 } else { 40 }

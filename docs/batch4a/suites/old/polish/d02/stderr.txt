@@ -1,0 +1,11 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\polish\pl02.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: menu Clip(2): Cut|Copy|-Paste|Duplicate|Delete|Split|Consolidate|-Rename|Colour|Loop Clip|Make Instrument Unique|-Use Track Instrument|Save Instrument as Preset
+dev: submenu ClipColor at 903 446
+dev: submenu ClipColor at 903 446
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: menu Track(1): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock
+dev: submenu TrackColor(1) at 636 242
+dev: submenu TrackColor(1) at 636 242

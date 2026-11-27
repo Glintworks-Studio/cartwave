@@ -1,0 +1,4 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\b4a\b403.chipdaw (4 clips)
+dev: spectrum style bars (settings)

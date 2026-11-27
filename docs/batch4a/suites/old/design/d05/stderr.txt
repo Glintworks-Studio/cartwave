@@ -1,0 +1,8 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\design\dp05.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Pan: centred while locked to the 2A03 DPCM (the console's output is mono)
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: project format 48000 24

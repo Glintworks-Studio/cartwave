@@ -1,0 +1,6 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p208.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: zoom FitSong range (0, 122880) px_per_bar 24.00 scroll 0
+dev: zoom ZoomBack px_per_bar 92.00 scroll 0

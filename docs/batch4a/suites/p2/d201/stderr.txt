@@ -1,0 +1,9 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p201.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Volume: drag to change · double-click the value to type it in dB

@@ -1,0 +1,173 @@
+{
+  "format": "chipdaw",
+  "version": 7,
+  "bpm": 150.0,
+  "profile": "famicom+vrc6",
+  "filter": "auto",
+  "loop_end": 30720,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "Raw Channel"
+    }
+  ],
+  "loop_start": 0,
+  "loop": true,
+  "tracks": [
+    {
+      "id": 1,
+      "name": "Lead",
+      "voice": "pulse",
+      "color": "#C9D24A",
+      "params": {},
+      "inst": 1,
+      "volume_db": -6.0,
+      "pan": 20
+    },
+    {
+      "id": 2,
+      "name": "Pulse 2",
+      "voice": "pulse",
+      "color": "#C9D24A",
+      "params": {},
+      "inst": 1,
+      "lock": "2a03_p2"
+    },
+    {
+      "id": 3,
+      "name": "Bass",
+      "voice": "triangle",
+      "color": "#7F86E0",
+      "params": {},
+      "inst": 1,
+      "lock": "2a03_tri"
+    },
+    {
+      "id": 4,
+      "name": "Shine",
+      "voice": "vrc6_pulse",
+      "color": "#D9579A",
+      "params": {},
+      "inst": 1,
+      "lock": "vrc6_p1"
+    }
+  ],
+  "clips": [
+    {
+      "id": 1,
+      "lane": 0,
+      "start": 0,
+      "len": 7680,
+      "name": "Lead A",
+      "notes": [
+        {
+          "id": 1,
+          "start": 0,
+          "len": 480,
+          "pitch": 64
+        },
+        {
+          "id": 2,
+          "start": 960,
+          "len": 480,
+          "pitch": 65
+        },
+        {
+          "id": 3,
+          "start": 1920,
+          "len": 480,
+          "pitch": 66
+        },
+        {
+          "id": 4,
+          "start": 2880,
+          "len": 480,
+          "pitch": 67
+        },
+        {
+          "id": 5,
+          "start": 3840,
+          "len": 480,
+          "pitch": 68
+        },
+        {
+          "id": 6,
+          "start": 4800,
+          "len": 480,
+          "pitch": 64
+        },
+        {
+          "id": 7,
+          "start": 5760,
+          "len": 480,
+          "pitch": 65
+        },
+        {
+          "id": 8,
+          "start": 6720,
+          "len": 480,
+          "pitch": 66
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "lane": 3,
+      "start": 0,
+      "len": 7680,
+      "name": "Shine A",
+      "notes": [
+        {
+          "id": 1,
+          "start": 0,
+          "len": 480,
+          "pitch": 72
+        },
+        {
+          "id": 2,
+          "start": 960,
+          "len": 480,
+          "pitch": 73
+        },
+        {
+          "id": 3,
+          "start": 1920,
+          "len": 480,
+          "pitch": 74
+        },
+        {
+          "id": 4,
+          "start": 2880,
+          "len": 480,
+          "pitch": 75
+        },
+        {
+          "id": 5,
+          "start": 3840,
+          "len": 480,
+          "pitch": 76
+        },
+        {
+          "id": 6,
+          "start": 4800,
+          "len": 480,
+          "pitch": 72
+        },
+        {
+          "id": 7,
+          "start": 5760,
+          "len": 480,
+          "pitch": 73
+        },
+        {
+          "id": 8,
+          "start": 6720,
+          "len": 480,
+          "pitch": 74
+        }
+      ]
+    }
+  ],
+  "rate": 48000,
+  "bits": 24
+}

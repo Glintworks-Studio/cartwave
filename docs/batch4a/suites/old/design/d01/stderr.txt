@@ -1,0 +1,10 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\design\dp01.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: tap bpm 118.89 undo steps (1, 0)
+dev: tap bpm 119.49 undo steps (1, 0)
+dev: tap bpm 120.46 undo steps (1, 0)
+dev: help Tap tempo (T): the average of the last four taps · taps more than 2 s apart start over
+dev: tap bpm 84.15 undo steps (2, 0)
+dev: tap bpm 85.64 undo steps (2, 0)

@@ -1,0 +1,18 @@
+{
+  "work": "C:\\Users\\jeffrey\\Documents\\c++\\pixelwide_studio\\chipdaw\\docs\\batch4a\\suites\\old\\polish",
+  "pl01_title": "*pl01 — ChipDAW",
+  "pl01_menu": [
+    "dev: menu Track(2): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock"
+  ],
+  "pl02_menu": [
+    "dev: menu Clip(2): Cut|Copy|-Paste|Duplicate|Delete|Split|Consolidate|-Rename|Colour|Loop Clip|Make Instrument Unique|-Use Track Instrument|Save Instrument as Preset"
+  ],
+  "pl04_scroll": [
+    "dev: lane scroll 177 max 177"
+  ],
+  "pl05_client": [
+    1296,
+    720,
+    96
+  ]
+}

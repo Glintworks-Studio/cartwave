@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "kinds": 1,
+      "instrument": {
+        "duty": "8",
+        "name": "Square Lead 2",
+        "vibrato": [
+          18,
+          6,
+          20
+        ],
+        "volume": "15 14 13 12 12 11 / 8 6 4 2 0"
+      }
+    }
+  ]
+}

@@ -48,7 +48,7 @@ def has(lines, pat):
 if os.path.exists(os.path.join(work, "p201_typed.chipdaw")):
     S = "P2-01"
     t, u, e, inf, away = (load(n) for n in ("p201_typed", "p201_undone", "p201_esc", "p201_inf", "p201_away"))
-    check(S, t and t["version"] == 6, "saved as format version 6")
+    check(S, t and t["version"] in (6, 7), f"saved by this build (format {t and t['version']}: 6 before Batch 4a, 7 since)")
     check(S, lane(t, 0, "volume_db") == -3.0, f"'-3' + Enter: track 1 at -3 dB ({lane(t, 0, 'volume_db')})")
     check(S, lane(u, 0, "volume_db") is None, f"one Ctrl+Z restores 0 dB ({lane(u, 0, 'volume_db')})")
     check(S, lane(e, 0, "volume_db") is None, f"Esc cancels ({lane(e, 0, 'volume_db')})")
@@ -155,7 +155,7 @@ for tag in ("lo", "lc", "rc", "ro"):
     v = lane(f, 4, "volume_db")
     check(S, isinstance(v, (int, float)) and v < -10.0, f"{tag}: the fader of track 5 ({v})")
     check(S, lane(f, 5, "height") == 96.0, f"{tag}: the bottom edge of track 6 ({lane(f, 5, 'height')})")
-    check(S, lane(f, 6, "name") == "Hit", f"{tag}: the name of track 7 ({lane(f, 6, 'name')})")
+    check(S, lane(f, 5, "name") == "Hit", f"{tag}: the name of track 6 ({lane(f, 5, 'name')}; track 7 is under the Main row since Batch 4a)")
     st = settings(f"p211_{tag}")
     check(S, st is not None and st.get("header_width") == 420.0, f"{tag}: the width boundary ({st and st.get('header_width')})")
     d = lst(f"p211_{tag}_dev")

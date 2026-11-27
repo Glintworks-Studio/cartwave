@@ -1,0 +1,14 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 24
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\b4a\b409.chipdaw (2 clips)
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: menu Track(0): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock|Voices
+dev: submenu InsertTrack at 636 205
+dev: submenu InsertTrack at 636 205
+dev: insert track 1 Noise Noise 1
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: menu Track(0): Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock|Voices
+dev: submenu Voices(0) at 636 325
+dev: submenu Voices(0) at 636 325
+dev: help Track: click to select · double-click the name to rename · right-click for its menu

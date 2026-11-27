@@ -1141,3 +1141,14 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   have means of −0.02, −0.16, +0.48, +0.78 (idle: one 2.9 outlier): run-to-run noise, rechecked
   in the final run. The 64-track header drag now scrolls back to the top first (two rounds had
   started on a row's resize edge).
+- **B4A-D27 (the polish 2 suite on this build).** P2-01, P2-02, P2-03 and P2-11 type and drag the
+  volume and pan of `fx_basic`'s tracks. `fx_basic` is a version 6 file, so it opens with every
+  track locked, and a locked track's fader and pan are fixed (§5.3): the scenarios had nothing to
+  edit. They now run on `fx_basic_studio`: `fx_basic` opened and saved by this build (the real v7
+  migration), then every track unlocked (`docs/batch4a/tools/unlock_all.py`). The checker
+  accepts format 6 or 7. P2-11's rename moved from track 7 to track 6: with the inspector open,
+  track 7 now sits under the Main row (the lanes are 73 px shorter, §7) and the double-click
+  landed on the Main row. **P2-11's typed values are intermittent and were before this batch**:
+  5 runs of the baseline's own P2-11 on the baseline build failed once (rc: track 3's dB value),
+  this build 2 of 5 (rc track 3's dB, ro track 4's pan); in the failing runs the hover log shows
+  the double-click landing on the neighbouring control. Not an app regression; logged, not fixed.

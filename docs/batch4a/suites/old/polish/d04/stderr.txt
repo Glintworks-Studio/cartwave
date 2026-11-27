@@ -1,0 +1,7 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\old\polish\pl04.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: lane scroll 177 max 177
+dev: help Track: click to select · double-click the name to rename · right-click for its menu

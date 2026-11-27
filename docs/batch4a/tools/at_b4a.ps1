@@ -17,7 +17,7 @@ foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM"
 $obs = [ordered]@{ work = $Work }
 # Shot moves the window to the top-left: place it there right after each launch, so a later
 # shot never moves the window under the cursor mid-gesture.
-function Place { pwsh -NoProfile -File "$Repo\docs\perf	ools\shot.ps1" -Out "$global:Work\_place.png" | Out-Null; Start-Sleep -Milliseconds 300 }
+function Place { pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out "$global:Work\_place.png" | Out-Null; Start-Sleep -Milliseconds 300 }
 function ClickL($x, $y) { MoveL $x $y; Start-Sleep -Milliseconds 150; Down; Up; Start-Sleep -Milliseconds 300 }
 function DragL($x0, $y0, $x1, $y1) { MoveL $x0 $y0; Start-Sleep -Milliseconds 150; $a = P $x0 $y0; $b = P $x1 $y1; Down; for ($i = 1; $i -le 16; $i++) { Move-To ([int]($a[0] + ($b[0] - $a[0]) * $i / 16)) ([int]($a[1] + ($b[1] - $a[1]) * $i / 16)); Start-Sleep -Milliseconds 15 }; Up; Start-Sleep -Milliseconds 300 }
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
@@ -246,6 +246,33 @@ if (Want "B4A-09") {
   $n = NameAt 0; ClickL $n[0] $n[1]; Start-Sleep -Milliseconds 300
   Ctrl 0x44; Start-Sleep -Milliseconds 500              # Ctrl+D with the track selected: Duplicate Track
   Save; Keep $p "b409_dup"
+  Stop-App
+}
+
+# ─────────── SHOTS (opt-in: -Only SHOTS): the report's fixups.png and profile-warning.png ───────────
+# Not in the default run: the profile warning here is the real Windows dialog (no
+# CHIPDAW_WARN_ANSWER), which waits for an answer. Shots land in <Work>; screen_*.png is the whole
+# screen (the dialog is its own window), cut to the app and the dialog afterwards.
+if ($Only -contains "SHOTS") {
+  # The fixups: Ctrl-click toggles a clip into the selection, Shift-click extends it (R28); the
+  # header menu's submenu arrow is ">" (Inter has no "▸").
+  $p = Fx "fx_basic" "shot_fixups"; $d = Join-Path $Work "dshot1"
+  Launch -Project $p -Data $d; Place
+  ClickL ((BarX 2) + 10) ((RowY 0) + 40); Start-Sleep -Milliseconds 400
+  CtrlClickL ((BarX 3) + 40) ((RowY 1) + 40); Start-Sleep -Milliseconds 400
+  ShiftClickL ((BarX 6) + 10) ((RowY 2) + 40); Start-Sleep -Milliseconds 400
+  RightL 420 ((RowY 0) + 20); Start-Sleep -Milliseconds 600
+  Shot "fixups"
+  K 0x1B; Stop-App
+  # The profile warning: a studio project with a chord, switched to NES.
+  $p = Fx "fx4_studio" "shot_warn"; $d = Join-Path $Work "dshot2"
+  Remove-Item Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
+  Launch -Project $p -Data $d; Place
+  Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
+  $null = Click-Text "NES (2A03)"
+  Start-Sleep -Milliseconds 1200
+  pwsh -NoProfile -File "$Repo\docs\batch4a\tools\screen.ps1" -Out "$global:Work\screen_warn.png" | Out-Null
+  K 0x1B; Start-Sleep -Milliseconds 500   # Cancel
   Stop-App
 }
 

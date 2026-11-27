@@ -1,0 +1,120 @@
+{
+  "work": "C:/Users/jeffrey/Documents/c++/pixelwide_studio/chipdaw/docs/batch4a/suites/p2",
+  "p201_title0": "p201 — ChipDAW",
+  "p201_title": "*p201 — ChipDAW",
+  "p204_dev": [
+    "dev: row height 0 76",
+    "dev: row height 0 80",
+    "dev: row height 0 84",
+    "dev: row height 0 92",
+    "dev: row height 0 96",
+    "dev: row height 0 100",
+    "dev: row height 0 104",
+    "dev: row height 0 108",
+    "dev: row height 0 112",
+    "dev: row height 0 116",
+    "dev: row height 0 120",
+    "dev: row height 0 128",
+    "dev: row height 0 132",
+    "dev: row height 0 136",
+    "dev: row height 0 140",
+    "dev: row height 0 144",
+    "dev: row height 1 84"
+  ],
+  "p205_dev": [],
+  "p206_dev": [
+    "dev: look headers_right=true strip_by_clips=false browser_right=false overview=true width=380",
+    "dev: look headers_right=true strip_by_clips=true browser_right=false overview=true width=380",
+    "dev: look headers_right=true strip_by_clips=true browser_right=true overview=true width=380"
+  ],
+  "p207_dev": [
+    "dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: ruler drag px_per_bar 189.01 scroll 5977",
+    "dev: ruler drag px_per_bar 189.01 scroll 10040",
+    "dev: ruler click px_per_bar 189.01 scroll 10040",
+    "dev: zoom ZoomToFit range (0, 122880) px_per_bar 24.00 scroll 0"
+  ],
+  "p208_dev": [
+    "dev: zoom FitSong range (0, 122880) px_per_bar 24.00 scroll 0",
+    "dev: zoom ZoomBack px_per_bar 92.00 scroll 0"
+  ],
+  "p209_dev": [
+    "dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit",
+    "dev: overview click px_per_bar 92.00 scroll 84783",
+    "dev: overview drag px_per_bar 92.00 scroll 30007",
+    "dev: overview drag px_per_bar 163.66 scroll 17248",
+    "dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit",
+    "dev: overview click px_per_bar 163.66 scroll 17248",
+    "dev: zoom ZoomToFit range (0, 122880) px_per_bar 24.00 scroll 0",
+    "dev: look headers_right=false strip_by_clips=false browser_right=false overview=false width=380",
+    "dev: look headers_right=false strip_by_clips=false browser_right=false overview=true width=380"
+  ],
+  "p210_dev": [
+    "dev: help Volume: drag to change · double-click the value to type it in dB",
+    "dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)",
+    "dev: help Volume: drag to change · double-click the value to type it in dB",
+    "dev: help Mute this track",
+    "dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives",
+    "dev: help Pan: centred while locked to the 2A03 Pulse 1 (the console's output is mono)",
+    "dev: help Arrangement view",
+    "dev: help Play (Space) · the display shows what's playing",
+    "dev: help Stop (Space) · press again to go back to the start (Home)",
+    "dev: help Record: arrives with MIDI input",
+    "dev: help Loop: plays the song between the loop brace's ends (the ruler)",
+    "dev: help Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type",
+    "dev: help Tap tempo (T): the average of the last four taps · taps more than 2 s apart start over",
+    "dev: help Spectrum of the mix · right-click for its styles",
+    "dev: help CPU: the sound engine's time per buffer, as a share of it (OFF: no output running) · MEM: this app's private memory",
+    "dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit",
+    "dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit",
+    "dev: help Volume: drag to change · double-click the value to type it in dB",
+    "dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)",
+    "dev: help Volume: drag to change · double-click the value to type it in dB",
+    "dev: menu Problems: Audio dropouts: 3 buffer underruns|so far. A larger buffer (Settings|> Audio) helps."
+  ],
+  "p211_lo_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=false strip_by_clips=false browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 87851"
+  ],
+  "p211_lc_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=false strip_by_clips=true browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 87851"
+  ],
+  "p211_rc_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=true strip_by_clips=true browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 94161"
+  ],
+  "p211_ro_dev": [
+    "dev: row height 5 76",
+    "dev: row height 5 80",
+    "dev: row height 5 84",
+    "dev: row height 5 88",
+    "dev: row height 5 92",
+    "dev: row height 5 96",
+    "dev: look headers_right=true strip_by_clips=false browser_right=false overview=true width=420",
+    "dev: ruler click px_per_bar 92.00 scroll 0",
+    "dev: overview click px_per_bar 92.00 scroll 94161"
+  ]
+}

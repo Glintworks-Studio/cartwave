@@ -1,0 +1,26 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p204.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 76
+dev: row height 0 80
+dev: help Track height: drag the row's bottom edge · Alt+wheel over a track
+dev: row height 0 84
+dev: row height 0 92
+dev: row height 0 96
+dev: row height 0 100
+dev: row height 0 104
+dev: row height 0 108
+dev: row height 0 112
+dev: row height 0 116
+dev: row height 0 120
+dev: row height 0 128
+dev: row height 0 132
+dev: row height 0 136
+dev: row height 0 140
+dev: row height 0 144
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: help Track: click to select · double-click the name to rename · right-click for its menu
+dev: row height 1 84

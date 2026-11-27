@@ -1,0 +1,25 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: project format 48000 16
+dev: CHIPDAW_PROJECT C:\Users\jeffrey\Documents\c++\pixelwide_studio\chipdaw\docs\batch4a\suites\p2\p210.chipdaw (4 clips)
+dev: spectrum style bars (settings)
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Mute this track
+dev: help Pan: drag to change · double-click the value to type it (C, 25L, 30R) · it applies once stereo mixing arrives
+dev: help Pan: centred while locked to the 2A03 Pulse 1 (the console's output is mono)
+dev: help Arrangement view
+dev: help Play (Space) · the display shows what's playing
+dev: help Stop (Space) · press again to go back to the start (Home)
+dev: help Record: arrives with MIDI input
+dev: help Loop: plays the song between the loop brace's ends (the ruler)
+dev: help Display: time, position, selection start and length, tempo · drag or wheel the BPM (Shift: finer) · double-click it to type
+dev: help Tap tempo (T): the average of the last four taps · taps more than 2 s apart start over
+dev: help Spectrum of the mix · right-click for its styles
+dev: help CPU: the sound engine's time per buffer, as a share of it (OFF: no output running) · MEM: this app's private memory
+dev: help Ruler: click to place the playhead · drag up or down to zoom, sideways to scroll · Shift+drag scrubs · double-click to fit
+dev: help Overview: drag to scroll · drag up or down to zoom · click outside the frame to jump there · double-click to fit
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)
+dev: help Volume: drag to change · double-click the value to type it in dB
+dev: menu Problems: Audio dropouts: 3 buffer underruns|so far. A larger buffer (Settings|> Audio) helps.
