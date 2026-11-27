@@ -1,0 +1,18 @@
+exe: .\target\release\app.exe
+[b4a-demo/demo] cpu 8.6%  frames 1799 in 30s
+  submit interval ms: mean 16.68  p50 16.68  p99 16.90  max 17.26  >20ms: 0
+  display updates: 1800 over 30.0s = 59.99/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 17.4 ms
+  ui-thread ms/frame: events 0.15  style 0.03  layout 0.00  make_current 0.00  draw 0.60  flush 0.30  present 15.52  custom 0.28
+scenario demo reached
+exe: .\target\release\app.exe
+[b4a-stress/stress] cpu 10.0%  frames 1799 in 30s
+  submit interval ms: mean 16.68  p50 16.68  p99 16.89  max 17.10  >20ms: 0
+  display updates: 1801 over 30.0s = 60.00/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 17.7 ms
+  ui-thread ms/frame: events 0.17  style 0.03  layout 0.00  make_current 0.00  draw 0.57  flush 0.29  present 15.53  custom 0.28
+scenario stress reached
+exe: .\target\release\app.exe
+[b4a-drag/drag] cpu 11.7%  frames 1799 in 30s
+  submit interval ms: mean 16.67  p50 16.68  p99 16.95  max 19.52  >20ms: 0
+  display updates: 1801 over 30.0s = 60.01/s; stalls (gap>1.5 vblank): 0 (0 vblanks w/o new frame, one per 30.0s); max gap 17.7 ms
+  ui-thread ms/frame: events 0.20  style 0.03  layout 0.00  make_current 0.00  draw 0.74  flush 0.45  present 15.07  custom 0.40
+scenario drag reached

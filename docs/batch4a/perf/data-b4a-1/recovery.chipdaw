@@ -649,7 +649,7 @@
       "id": 31,
       "lane": 1,
       "start": 16800,
-      "len": 4800,
+      "len": 4080,
       "name": "Harmony",
       "notes": [
         { "id": 1, "start": 0, "len": 720, "pitch": 60 },
@@ -657,30 +657,22 @@
         { "id": 3, "start": 1680, "len": 720, "pitch": 59 },
         { "id": 4, "start": 2400, "len": 240, "pitch": 59 },
         { "id": 5, "start": 2640, "len": 960, "pitch": 56 },
-        { "id": 6, "start": 3600, "len": 480, "pitch": 54 },
-        { "id": 7, "start": 4080, "len": 480, "pitch": 55 }
+        { "id": 6, "start": 3600, "len": 480, "pitch": 54 }
       ]
     },
     {
       "id": 32,
       "lane": 1,
-      "start": 21600,
-      "len": 960,
+      "start": 22800,
+      "len": 3600,
       "name": "Arp Climb",
       "notes": [
-        { "id": 1, "start": 0, "len": 480, "pitch": 64 },
-        { "id": 2, "start": 480, "len": 480, "pitch": 61 }
-      ]
-    },
-    {
-      "id": 201,
-      "lane": 1,
-      "start": 24480,
-      "len": 1920,
-      "name": "Arp Climb",
-      "notes": [
-        { "id": 7, "start": 1200, "len": 480, "pitch": 57 },
-        { "id": 8, "start": 1680, "len": 240, "pitch": 55 }
+        { "id": 3, "start": 0, "len": 480, "pitch": 59 },
+        { "id": 4, "start": 480, "len": 480, "pitch": 58 },
+        { "id": 5, "start": 960, "len": 240, "pitch": 57 },
+        { "id": 6, "start": 1200, "len": 720, "pitch": 57 },
+        { "id": 7, "start": 2880, "len": 480, "pitch": 57 },
+        { "id": 8, "start": 3360, "len": 240, "pitch": 55 }
       ]
     },
     {
@@ -3099,7 +3091,7 @@
     {
       "id": 5,
       "lane": 1,
-      "start": 22560,
+      "start": 20880,
       "len": 1920,
       "name": "Hook A",
       "notes": [

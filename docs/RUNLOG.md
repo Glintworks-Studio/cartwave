@@ -1120,3 +1120,9 @@ Mac mini M1, macOS 26.6.2, branch `mac/catchup` from `main` ef2ea19 (Polish 2 me
   at the thumb (5 px above the lanes' bottom: client 658 on the baseline, 585 with the Main row
   and the inspector open; screenshot check). The polish 2 report's scrollbar numbers measured the
   inspector, not the scrollbar.
+- **B4A-D25 (the last of demo's excess).** After D23/D24 every scenario passed but demo (+1.1 to
+  +1.8 in the gate's runs; +0.45 pooled over 31 runs). A 6,000-sample UI-thread profile of each
+  build showed `AppState::commit`, `doc()` and the hasher new on this branch: the per-tick commit
+  built the document twice (once to see whether anything changed, for the §5.5 conflict check,
+  then again to commit). It builds it once; a second time only after an edit whose answer (Fit) may
+  change it. Demo after: 7.8 / 7.7 / 6.8 vs the baseline's 7.3 / 7.9 / 8.3.

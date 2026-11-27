@@ -2853,11 +2853,16 @@ impl AppState {
             }
             // §5.5: a new conflict on a locked track asks first (Cancel
             // puts the last undo step back).
-            if !self.doc().same_as(self.history.current()) && !self.resolve_conflicts() {
-                self.update_dirty();
-                return;
+            // One document per tick (this runs every frame): a second one
+            // only after an edit, whose conflict answer (Fit) may change it.
+            let mut d = self.doc();
+            if !d.same_as(self.history.current()) {
+                if !self.resolve_conflicts() {
+                    self.update_dirty();
+                    return;
+                }
+                d = self.doc();
             }
-            let d = self.doc();
             self.history.commit(d);
             self.update_dirty();
         }
