@@ -1,20 +1,20 @@
-# usage: bench.ps1 [-Label run] [-Secs 12] [-Exe .\target\release\app.exe] [-Env "K=V;K2=V2"] [-Repo <repo>] [-Work <dir>]
+# usage: bench.ps1 [-Label run] [-Secs 12] [-Exe .\target\release\cartwave.exe] [-Env "K=V;K2=V2"] [-Repo <repo>] [-Work <dir>]
 # Measures process CPU (% of one core) over $Secs per scenario: idle, demo playing,
 # 200 clips playing, 200-clip drag. Window at 1440x900, 100% scale.
 # Appends one line per run to <Work>\bench_log.txt. -Exe is relative to -Repo.
-# Defaults: -Repo = this script's repo; -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf.
-param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\app.exe", [string]$Env = "",
+# Defaults: -Repo = this script's repo; -Work = $env:CARTWAVE_PERF_WORK or %TEMP%\chipdaw-perf.
+param([string]$Label = "run", [int]$Secs = 12, [string]$Exe = ".\target\release\cartwave.exe", [string]$Env = "",
   # Where the drag starts (client px): on a clip in the 200-clip view. (300, 160) was right before
   # the redesign; since then it is a track header, so that "drag" moved nothing (STABILIZE.md A2).
   # Since the design pass's layout (bars from x 621) the same grab is 760,140: 720,130 there
   # is a clip's left resize zone, which resized the clip instead (POLISH.md §perf).
   [int]$DragX = 720, [int]$DragY = 130,
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
-  [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+  [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 if ($Env) { foreach ($kv in $Env.Split(';')) { $k, $v = $kv.Split('='); Set-Item "Env:$k" $v } }
 $p = Start-Process $Exe -PassThru -RedirectStandardError "$Work\bench_err.txt"
 Start-Sleep -Seconds 3

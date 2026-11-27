@@ -1,8 +1,8 @@
 # Cartwave: project rundown
 
-*As of 2026-11-25 · updated for `stabilize/v1.1` (see [STABILIZE.md](STABILIZE.md)) · 2026-11-26: the app is now **Cartwave** by Glintworks (VISION.md); "ChipDAW", the working title, stays in the code until a planned rename.*
+*As of 2026-11-25 · updated for `stabilize/v1.1` (see [STABILIZE.md](STABILIZE.md)) · 2026-11-26: the app is now **Cartwave** by Glintworks (VISION.md); 2026-11-27: renamed in the code too (RENAME.md). "ChipDAW", the working title, stays in the reports written before; it stayed in the code until a planned rename.*
 
-ChipDAW is a music workstation for indie game developers. It writes music that plays on
+Cartwave is a music workstation for indie game developers. It writes music that plays on
 **real sound-chip hardware**: the NES 2A03 and the VRC6 expansion chip,
 emulated register by register. It is built in Rust with the Vizia GUI toolkit. Every pixel of
 the interface is drawn in code (no images), and it is open source (MIT OR Apache-2.0).
@@ -31,7 +31,7 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 | **DPCM audio import** *(new)* | Drop a WAV file and it is converted to the chip's 1-bit delta format. The highest sample rate that fits the hardware's memory limits is picked automatically. There are 4 user slots next to the built-in drums. |
 | **MIDI import** *(new)* | Drop a `.mid` file and it is arranged onto the chip channels. Drums go to the noise kit, the lowest part to the triangle, and chords are reduced to their top note. A track named "DPCM" plays samples. A report says what went where. |
 | **Game export** *(v1.1)* | Ctrl+Shift+R opens the export dialog: song, loop region or selection; 44.1/48 kHz, 16/24-bit. **Seamless loops** come as one WAV with `smpl` loop points, as intro + loop files, and as a JSON sidecar. Exporting `intro + loop × 3` is sample-identical to continuous playback. Also **stems** (8 channels, or groups), and loudness (authentic, peak −1 dBFS, or −16 LUFS with a true-peak ceiling). See [docs/EXPORT.md](docs/EXPORT.md). |
-| **Files** | `.chipdaw` JSON projects (format v3: instrument table, clip instruments, loop start). v1 and v2 files open and **sound bit-identical** (tested against renders from the build that saved them). Atomic saves, autosave and crash recovery, global undo (1000 steps). Projects, MIDI and WAV files can be dropped on the window or passed on the command line. The three importers survived 10,000 damaged files each without a crash. |
+| **Files** | `.cartwave` JSON projects (`.chipdaw` before the rename; they open forever) (format v3: instrument table, clip instruments, loop start). v1 and v2 files open and **sound bit-identical** (tested against renders from the build that saved them). Atomic saves, autosave and crash recovery, global undo (1000 steps). Projects, MIDI and WAV files can be dropped on the window or passed on the command line. The three importers survived 10,000 damaged files each without a crash. |
 | **Engine** | A clean-room 2A03 + VRC6 emulator, band-limited synthesis, the NES and Famicom output filters, and a lock-free real-time audio thread. |
 
 | | |
@@ -49,7 +49,7 @@ engine from [`docs/songs/showcase.mid`](docs/songs/showcase.mid).
 |---|---|---|---|
 | 2026-11-23 | **GUI bake-off**: can Vizia deliver a premium, image-free DAW UI? | Yes, with conditions (frame pacing and CPU). Every visual target was met: gradients, layered and inset shadows, animated states, custom Skia views. | [FINDINGS.md](FINDINGS.md), [NOTES.md](NOTES.md) |
 | 2026-11-23 | **Performance pass** | Playback went from 53–95% of a CPU core to **9–11%**, with 0 missed vblanks and judder-free 60 fps. The fixes are in our Vizia fork (vsync-paced frames, damage tracking). | [PERF.md](PERF.md) |
-| 2026-11-23 | **Open-sourced** | Published at github.com/jeffreyfrederick/chipdaw (MIT OR Apache-2.0). | – |
+| 2026-11-23 | **Open-sourced** | Published at github.com/jeffreyfrederick/chipdaw (MIT OR Apache-2.0); now github.com/glintworks-studio/cartwave. | – |
 | 2026-11-24 | **Real-time engine**: a clean-room 2A03 + VRC6 emulator, written from hardware docs only | **0 dropouts** over 15 stress runs and 3.5 h of playback. Edits are heard within one console frame (≤ 16.6 ms). Picture-to-sound sync is 0.3 ms. 58 hardware-behaviour tests. | [ENGINE.md](ENGINE.md) |
 | 2026-11-24/25 | **Piano roll**, undo, file format, autosave | Songs can be written end to end: 1000-step undo, crash recovery. | [PIANOROLL.md](PIANOROLL.md) |
 | 2026-11-25 | **Redesign** to the designer's prototype | Pixel-sampled palette, gradient strokes, 4 px grid, clip-launcher-style editing. | [DESIGN.md](DESIGN.md) |
@@ -65,7 +65,7 @@ Earlier states are kept as branches: `backup/pre-prototype-ui` (before the redes
 
 ### 3.1 Instruments, done the authentic way
 The chips have no envelopes, LFOs or filters. Game music drivers got expressive sounds by
-rewriting registers 60 times a second, and ChipDAW does the same (`crates/chip/src/instrument.rs`):
+rewriting registers 60 times a second, and Cartwave does the same (`crates/chip/src/instrument.rs`):
 
 - **Volume** (0–15 per frame), multiplied with the note's own volume. A **release point** lets a note
   ring out after it ends (a cello's bow lift) instead of cutting off.

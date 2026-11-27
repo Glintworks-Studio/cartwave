@@ -1,8 +1,8 @@
-# usage: polish_shots.ps1 [-Exe .\target\release\app.exe] [-Out docs\screens\polish]
+# usage: polish_shots.ps1 [-Exe .\target\release\cartwave.exe] [-Out docs\screens\polish]
 # Screenshots for POLISH.md: the colour grid (a track's Colour ▸, hovering a cell),
 # Settings ▸ Editing (Track and Clip Colors), and the window at its minimum size
 # (1536x816 logical, a 1080p laptop at 125% without its taskbar; then the true minimum).
-param([string]$Exe = ".\target\release\app.exe", [string]$Out = "docs\screens\polish")
+param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = "docs\screens\polish")
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $ErrorActionPreference = "Continue"
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
@@ -12,12 +12,12 @@ $Exe = (Resolve-Path $Exe).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 function Start-App([string[]]$AppArgs) {
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 300
   $d = Join-Path $env:TEMP "chipdaw-polish-shots"
   Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force $d | Out-Null
-  $env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "0"
+  $env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "0"
   $p = Start-Process $Exe -ArgumentList $AppArgs -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
   for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $p.Id).MainWindowHandle -ne 0) { break } }
   Start-Sleep -Milliseconds 1500

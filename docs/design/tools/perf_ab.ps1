@@ -13,7 +13,7 @@ foreach ($sc in "demo", "stress", "drag") {
   pwsh -NoProfile -File "$Repo\docs\perf\tools\pacing.ps1" -Label "before-$sc" -Scenario $sc -Secs 30 -Repo $BeforeRepo -Work $Work
   pwsh -NoProfile -File "$Repo\docs\perf\tools\pacing.ps1" -Label "design-$sc" -Scenario $sc -Secs 30 -Repo $Repo -Work $Work
 }
-$env:CHIPDAW_PERF_WORK = $Work
+$env:CARTWAVE_PERF_WORK = $Work
 Copy-Item "$env:TEMP\chipdaw-perf-dp\piano_bench.chipdaw" $Work -Force
 for ($i = 1; $i -le 2; $i++) {
   pwsh -NoProfile -File "$Repo\docs\pianoroll\tools\bench_pr.ps1" -Label "pr-before-$i" -Repo $BeforeRepo -Work $Work -NoteY 535

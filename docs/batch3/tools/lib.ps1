@@ -16,13 +16,13 @@ $global:S = 1.0
 function P($x, $y) { @([int][math]::Round($x * $global:S), [int][math]::Round($y * $global:S)) }
 
 function Launch([string]$Project = "", [string]$Data, [string[]]$AppArgs = @(), [int]$Scale = 100) {
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 300
   New-Item -ItemType Directory -Force $Data | Out-Null
   if ($Scale -ne 100) { "{ ""ui_scale"": $Scale }" | Set-Content -Encoding ascii (Join-Path $Data "settings.json") }
   $global:S = $Scale / 100.0
-  $env:CHIPDAW_DATA_DIR = $Data; $env:CHIPDAW_AUDIO = "0"; $env:CHIPDAW_DEV = "1"
-  if ($Project) { $env:CHIPDAW_PROJECT = $Project } else { Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue }
+  $env:CARTWAVE_DATA_DIR = $Data; $env:CARTWAVE_AUDIO = "0"; $env:CARTWAVE_DEV = "1"
+  if ($Project) { $env:CARTWAVE_PROJECT = $Project } else { Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue }
   $err = Join-Path $Data "stderr.txt"
   if ($AppArgs.Count -gt 0) { $script:proc = Start-Process $global:Exe -ArgumentList $AppArgs -PassThru -RedirectStandardError $err }
   else { $script:proc = Start-Process $global:Exe -PassThru -RedirectStandardError $err }
@@ -50,6 +50,6 @@ function RightL($x, $y) { MoveL $x $y; [In]::mouse_event(0x0008, 0, 0, 0, [UIntP
 function DragL($x0, $y0, $x1, $y1) { $a = P $x0 $y0; $b = P $x1 $y1; Move-To $a[0] $a[1]; Down; for ($i = 1; $i -le 16; $i++) { Move-To ([int]($a[0] + ($b[0] - $a[0]) * $i / 16)) ([int]($a[1] + ($b[1] - $a[1]) * $i / 16)); Start-Sleep -Milliseconds 15 }; Up; Start-Sleep -Milliseconds 300 }
 function TypeText($t) { foreach ($ch in $t.ToCharArray()) { $vk = [int][char]::ToUpper($ch); if ($ch -eq ' ') { $vk = 0x20 }; if ([char]::IsUpper($ch)) { KeyDown 0x10; Key $vk; KeyUp 0x10 } else { Key $vk } }; Start-Sleep -Milliseconds 200 }
 function Shot($n) { pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out "$global:Work\$n.png" | Out-Null }
-# Ctrl+S into the project the app was opened with (CHIPDAW_PROJECT keeps its path).
+# Ctrl+S into the project the app was opened with (CARTWAVE_PROJECT keeps its path).
 function Save { Ctrl 0x53; Start-Sleep -Milliseconds 600 }
 function StdErr($d) { Get-Content (Join-Path $d "stderr.txt") -ErrorAction SilentlyContinue }

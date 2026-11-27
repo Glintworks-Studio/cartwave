@@ -1,0 +1,57 @@
+{
+ "*": [
+  [
+   0,
+   0,
+   12,
+   12,
+   "window corner: the desktop behind Windows 11's rounded corner (differs between states of one build too)"
+  ],
+  [
+   1426,
+   0,
+   1450,
+   12,
+   "window corner: the desktop behind Windows 11's rounded corner (differs between states of one build too)"
+  ],
+  [
+   0,
+   956,
+   12,
+   980,
+   "window corner: the desktop behind Windows 11's rounded corner (differs between states of one build too)"
+  ],
+  [
+   1426,
+   956,
+   1450,
+   980,
+   "window corner: the desktop behind Windows 11's rounded corner (differs between states of one build too)"
+  ],
+  [
+   60,
+   0,
+   400,
+   32,
+   "title bar: the app's name (\"— Cartwave\")"
+  ]
+ ],
+ "menu_help": [
+  [
+   150,
+   60,
+   420,
+   170,
+   "Help menu: \"About Cartwave\""
+  ]
+ ],
+ "about": [
+  [
+   380,
+   140,
+   1070,
+   500,
+   "About panel: its title, the name and version line, and the new \"Made by Glintworks · glintworks.studio\" line (the credits below move down one line)"
+  ]
+ ]
+}

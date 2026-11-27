@@ -36,7 +36,7 @@ fn test_song() -> file::Project {
 }
 
 fn tmp(name: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("chipdaw-export-{}-{name}", std::process::id()));
+    let d = std::env::temp_dir().join(format!("cartwave-export-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     d
 }

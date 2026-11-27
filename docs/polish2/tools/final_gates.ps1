@@ -9,10 +9,10 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $sum = Join-Path $Out "summary.txt"
 pwsh -NoProfile -File "$PSScriptRoot\perf_p2.ps1" -Work (Join-Path $Out "perf") *> (Join-Path $Out "perf.log")
 "perf done" | Add-Content $sum
-$base = (Resolve-Path "..\before-polish2\target\release\app.exe").Path
+$base = (Resolve-Path "..\before-polish2\target\release\app.exe").Path  # built before the rename
 foreach ($sc in 100, 150) {
   pwsh -NoProfile -File "$PSScriptRoot\regress.ps1" -Exe $base -Out (Join-Path $Out "before$sc") -Scale $sc | Out-Null
-  pwsh -NoProfile -File "$PSScriptRoot\regress.ps1" -Exe ".\target\release\app.exe" -Out (Join-Path $Out "after$sc") -Scale $sc -New | Out-Null
+  pwsh -NoProfile -File "$PSScriptRoot\regress.ps1" -Exe ".\target\release\cartwave.exe" -Out (Join-Path $Out "after$sc") -Scale $sc -New | Out-Null
   $r = python "$PSScriptRoot\diff.py" (Join-Path $Out "before$sc") (Join-Path $Out "after$sc") $sc (Join-Path $Out "diff$sc")
   ($r | Select-Object -Last 1) + " @ $sc%" | Add-Content $sum
 }

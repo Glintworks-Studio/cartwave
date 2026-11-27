@@ -18,7 +18,7 @@ was the monitor's HDMI endpoint (480-frame callbacks), not the MOTU used in ENGI
 
 | Source | Value |
 |---|---|
-| App (fork `dwm_refresh_rate()`, logged once a second via `CHIPDAW_AUDIOLOG`) | 59.950–59.953 Hz |
+| App (fork `dwm_refresh_rate()`, logged once a second via `CARTWAVE_AUDIOLOG`) | 59.950–59.953 Hz |
 | Raw `DwmGetCompositionTimingInfo` (PowerShell probe, 10 readings) | `rateRefresh` 10000000 / 166802…166804 = 59.9506–59.9513 Hz |
 | `QueryDisplayConfig` target mode (`docs/perf/tools/dpi2.ps1`) | 59951/1000 = **59.951 Hz** |
 | winit's `refresh_rate_millihertz` (logged by the commit-8 build) | **59.000** (Windows' integer `dmDisplayFrequency`) |
@@ -73,7 +73,7 @@ suspicion with a probe.
   already playing when F4 loaded the 200 clips. The macOS `chipbench` "200" scenario starts with
   F4 alone, which is where bug 3 showed.
 - **Probe:** I ran the pre-fix build (`4027a25`) through `bench.ps1`'s exact sequence with
-  `CHIPDAW_AUDIOLOG`. It logged **0 playhead frames per second on the local clock** for the whole
+  `CARTWAVE_AUDIOLOG`. It logged **0 playhead frames per second on the local clock** for the whole
   200-clip phase. The playhead only reads the audio clock while the engine reports
   `playing`, so the engine was playing.
 - **Re-measured anyway** (current build, 3 runs; F3's new `clock` line read `audio 60/s local 0/s`):
@@ -282,7 +282,7 @@ pub struct Arrangement { pub clips: Vec<Arc<Clip>>, /* lanes, selection, view, .
   - It undoes everything, checking each intermediate state and that the model equals the
     original, then redoes everything to the final state.
 
-## 5. The `.chipdaw` format, version 1
+## 5. The project format (`.cartwave`; `.chipdaw` before the rename), version 1
 
 UTF-8 JSON (serde), written atomically (temporary file + rename). Notes are written one per line so
 the file stays readable and diffable. The test song is 51 KB; 50,000 notes are 3.2 MB.
@@ -312,8 +312,8 @@ the file stays readable and diffable. The test song is 51 KB; 50,000 notes are 3
 
 | Field | Meaning |
 |---|---|
-| `format` | Always `"chipdaw"`. Read first; anything else is "not a ChipDAW project" |
-| `version` | `1`. A higher version fails with "saved by a newer ChipDAW (file format version N) ... Update ChipDAW to open it"; checked before any other field |
+| `format` | Always `"chipdaw"` (kept after the rename: it names the format, RENAME.md). Read first; anything else is "not a Cartwave project" |
+| `version` | `1`. A higher version fails with "saved by a newer Cartwave (file format version N) ... Update Cartwave to open it"; checked before any other field |
 | `bpm` | Tempo, clamped to 40–300 on load |
 | `chip` | `"2A03"` or `"2A03+VRC6"` |
 | `filter` | `"auto"` (follows the chip), `"nes"`, `"nes+440"`, `"famicom"`, `"off"` |
@@ -332,9 +332,10 @@ the file stays readable and diffable. The test song is 51 KB; 50,000 notes are 3
   thread keeps playing.
 - **Autosave and recovery:**
   - Every 2 minutes, if the document changed, the project is serialised on a background thread
-    to `recovery.chipdaw`. It is saved again on quit.
-  - The folder is `%APPDATA%\ChipDAW` (Windows), `~/Library/Application Support/ChipDAW`
-    (macOS), `$XDG_DATA_HOME/chipdaw` (Linux), or `CHIPDAW_DATA_DIR`.
+    to `recovery.cartwave`. It is saved again on quit.
+  - The folder is `%APPDATA%\Cartwave` (Windows), `~/Library/Application Support/Cartwave`
+    (macOS), `$XDG_DATA_HOME/cartwave` (Linux), or `CARTWAVE_DATA_DIR`. The pre-rename `ChipDAW`
+    folder moves over on the first launch (RENAME.md).
   - A `session.lock` marker exists while the app runs and is removed on a clean quit.
   - If it's there at start (with a recovery file), the transport bar offers **Recover** /
     **Discard**. Autosave is paused until the user answers, so the old recovery file isn't
@@ -495,7 +496,7 @@ Screenshots (`docs/pianoroll/tools/screens.ps1`), in `docs/screens/pianoroll/`:
    mode, DPCM rate, saw rate. These are undoable too.
 8. Reuse clips by Ctrl-dragging them in the arrangement. Copies are independent: editing one
    doesn't change the others.
-9. Ctrl+S saves a `.chipdaw` file (it asks for a name the first time). Ctrl+Z / Ctrl+Shift+Z
+9. Ctrl+S saves a `.cartwave` file (it asks for a name the first time). Ctrl+Z / Ctrl+Shift+Z
    undo and redo anything. If the app crashes, the next start offers to recover the last autosave.
 
 `docs/songs/scale_test.chipdaw` is a reference for what each channel can do. It's a test song, not

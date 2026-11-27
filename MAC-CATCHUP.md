@@ -1,5 +1,7 @@
 # MAC-CATCHUP: macOS brought level with Windows (everything since ENGINE-macos.md)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-26 · unattended run of MAC_CATCHUP_PROMPT.md · branch `mac/catchup` from `main` ef2ea19
 (Polish 2) · Mac mini M1, macOS 26.6.2 · decisions MC-D1… in [docs/RUNLOG.md](docs/RUNLOG.md) ·
 harness and raw results in [`docs/mac-catchup/`](docs/mac-catchup/)*

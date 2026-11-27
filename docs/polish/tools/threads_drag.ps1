@@ -1,12 +1,12 @@
-# usage: threads_drag.ps1 -Exe <app.exe> [-DragX 760 -DragY 140] [-Secs 12]
+# usage: threads_drag.ps1 -Exe <cartwave.exe> [-DragX 760 -DragY 140] [-Secs 12]
 # Per-thread CPU (% of one core) during the 200-clip drag, the busiest threads first, with
 # each thread's start module (UI, audio, GL driver...). Attribution for POLISH.md §perf.
 param([string]$Exe, [int]$DragX = 760, [int]$DragY = 140, [int]$Secs = 12)
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 . "$Repo\docs\perf\tools\input.ps1"
-Get-Process app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 $d = Join-Path $env:TEMP "chipdaw-threads"; New-Item -ItemType Directory -Force $d | Out-Null
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "1"; $env:CHIPDAW_STRESS = "1"
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "1"; $env:CARTWAVE_STRESS = "1"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; $p.Refresh(); if ($p.MainWindowHandle -ne 0) { break } }
 Start-Sleep 3

@@ -12,7 +12,7 @@ for t in macdrive; do
     swiftc -O "$REPO/docs/mac-catchup/tools/$t.swift" -o "$MC_BIN/$t" 2>/dev/null
   fi
 done
-APP="${APP:-$REPO/target/release/app}"
+APP="${APP:-$REPO/target/release/cartwave}"
 launch() {
   local name="$1"; shift
   local proj="${1:-}"; [ $# -gt 0 ] && shift
@@ -21,8 +21,8 @@ launch() {
   # Audio: the built-in output unless MC_DEVICE says otherwise (never the system default).
   printf '{"audio_device": "%s"}\n' "${MC_DEVICE:-Mac mini Speakers}" > "$DATA/settings.json"
   LOG="$MC_WORK/$name.log"
-  local envs=(CHIPDAW_DEV=1 CHIPDAW_DATA_DIR="$DATA")
-  if [ -n "$proj" ]; then cp "$proj" "$MC_WORK/$name.chipdaw"; PROJ="$MC_WORK/$name.chipdaw"; envs+=(CHIPDAW_PROJECT="$PROJ"); fi
+  local envs=(CARTWAVE_DEV=1 CARTWAVE_DATA_DIR="$DATA")
+  if [ -n "$proj" ]; then cp "$proj" "$MC_WORK/$name.chipdaw"; PROJ="$MC_WORK/$name.chipdaw"; envs+=(CARTWAVE_PROJECT="$PROJ"); fi
   env "${envs[@]}" "$@" "$APP" ${MC_APP_ARGS:-} > "$LOG" 2>&1 &
   PID=$!
   for _ in $(seq 1 50); do "$MC_BIN/macdrive" $PID info 2>/dev/null | grep -q '^window' && break; sleep 0.2; done

@@ -336,7 +336,7 @@ pub fn step_meters_engine(m: &mut Meters, levels: &[f32], note_on: &[bool], dt: 
     }
 }
 
-/// The macro worst case for benchmarks (`CHIPDAW_SONG=heavy`): the demo's
+/// The macro worst case for benchmarks (`CARTWAVE_SONG=heavy`): the demo's
 /// clips with every note held for two beats, on every channel an instrument
 /// that runs all four macros (volume, arpeggio, pitch, duty) in loops plus
 /// vibrato, so the driver writes registers on every frame for every lane.

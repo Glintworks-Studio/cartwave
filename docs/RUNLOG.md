@@ -1430,3 +1430,103 @@ Baseline worktree `../before-batch4b` at d4f1afd, release built. The eight refer
   the final build follows (`audio_b4b.ps1 -Runs S64UM`).
 - **B4B-D34 (merge decision).** Two gates are not met by their letter: performance (D30) and the audio gate's full-volume pilot count (D33). Per the prompt, no `pre-batch4b` tag and no merge; `main` stays at d4f1afd. Everything is on `batch4b/mixer` for the owner.
 - **B4B-D35 (merge, owner's go-ahead, 2026-11-27).** The CEO accepted D30 (the 64-track performance residual) and D33 (the pilot masked at full volume; engine 0 underruns, 0 pilot dropouts at −40 dB over 30 min) as measured. Per the prompt: `pre-batch4b` tagged on `main` at d4f1afd and pushed, `main` fast-forwarded to `batch4b/mixer` and pushed.
+
+## Rename: ChipDAW → Cartwave by Glintworks (RENAME_PROMPT.md, branch `rename/cartwave`, Windows PC), 2026-11-27
+
+Entries above this heading keep the working title as written. Report: [RENAME.md](../RENAME.md).
+
+- **RN-D1 (GitHub).** `git ls-remote https://github.com/glintworks-studio/cartwave` answered
+  (the CEO had transferred and renamed the repo). The first `git remote set-url origin` was
+  stopped by the session's automatic permission check; the owner then allowed it mid-run, so
+  `origin` is `https://github.com/glintworks-studio/cartwave.git`. After `git fetch`, `main` and
+  `origin/main` are both 8e6b4f8 (the old URL showed the same). No repository was created,
+  renamed or transferred by this run.
+- **RN-D2 (packages and the binary).** No crate or package name contains "chipdaw" (`app`,
+  `chip`, `engine`, `ui`). The package `app` keeps its name (every harness builds with
+  `-p app`); its executable is renamed with a `[[bin]]` entry: `cartwave`, so
+  `target/release/cartwave.exe` on Windows (file names are case-insensitive there; an
+  installer may show it as `Cartwave.exe`). Every manifest gains `authors = ["Glintworks"]` and
+  the glintworks.studio homepage.
+- **RN-D3 (environment aliases).** One module, `engine::env`, reads every variable: the
+  `CARTWAVE_*` name first, then its `CHIPDAW_*` alias. The new name wins when both are set. Using
+  an alias prints one line per name in dev mode (`dev: CHIPDAW_X is the old name of CARTWAVE_X;
+  it still works, but use CARTWAVE_X`). `ui::dev`, the data folder, `CARTWAVE_AUDIO`,
+  `CARTWAVE_VSYNC`, the pilot frequency and the fuzz knobs all go through it. Dev mode itself
+  is read without the note (the note asks for dev mode), then `CHIPDAW_DEV` is noted once.
+  `CARTWAVE_COMMIT` is a build-time name inside the crate (no alias needed).
+- **RN-D4 (the project file).** New projects save as `.cartwave`. `.chipdaw` opens forever
+  (Open, drop, Open Recent, `CARTWAVE_PROJECT`); **Save keeps the file's own extension**
+  (an old file stays where it is), **Save As offers `.cartwave`** (the suggested name's
+  extension changes) and still lists `.chipdaw`; Open lists both in one filter. The atomic
+  save's temporary file follows the target's extension. **The format version is unchanged (8)
+  and so is the `"format": "chipdaw"` field:** it identifies the file format, every file ever
+  written has it, and changing it would need a version bump for no user benefit. The "not a
+  project" message no longer quotes it (RN-D13).
+- **RN-D5 (recovery).** The recovery file is `recovery.cartwave`. A `recovery.chipdaw` in the
+  data folder (moved over, or left by an old build in an explicit `CARTWAVE_DATA_DIR`) takes the
+  new name, so an unsaved session from before the rename is still offered.
+- **RN-D6 (the app-data move).** `%APPDATA%\ChipDAW` → `%APPDATA%\Cartwave` (macOS
+  `~/Library/Application Support/Cartwave`, Linux `$XDG_DATA_HOME/cartwave`). At start, before
+  anything reads settings, if the new folder doesn't exist and the old one does, the old one is
+  **copied** through a staging folder (`Cartwave.moving`, renamed into place at the end), and a
+  marker (`migrated-from-chipdaw.txt`: the old path, `pending`) is left. The old folder is the
+  backup: the launch that moved it marks the marker `launched` once the UI is built; the next
+  launch to get that far removes the old folder and the marker. With an explicit data folder
+  nothing moves. A failed copy leaves no new folder and the old one untouched (logged). Unit
+  tests: `app_data_folder_moves_and_old_one_is_kept_until_next_launch`,
+  `recovery_takes_a_legacy_file_in_its_folder`. The owner's real `%APPDATA%\ChipDAW` (settings,
+  a recovery file) was not touched by this run: it moves on the first launch of Cartwave.
+- **RN-D7 (export metadata).** Neither export writes a "software" field: WAVs have no
+  `LIST/INFO` chunk, and the loop JSON names the software only in `"format": "chipdaw-loop"`.
+  That field becomes `"cartwave-loop"` (version 1 unchanged); no field is added (that would be a
+  behaviour change). Every WAV is byte-identical (RN-D12). The committed example
+  `docs/export-examples/showcase.json` predates Batch 4a (no `master_gain_db`, fewer stems):
+  regenerating it would change more than the name, so only its `format` line is edited.
+- **RN-D8 (identifiers).** `ui::identity`: `APP_NAME` Cartwave, `COMPANY` Glintworks, `WEBSITE`
+  glintworks.studio, `APP_ID` `studio.glintworks.cartwave`. The standalone app sets it as the
+  process's Windows AppUserModelID before the window opens (`windows-sys`, already a
+  dependency; taskbar grouping and pinning). The Mac bundle id is recorded for later in
+  `[package.metadata.bundle]` (there is no bundle yet). No Windows VERSIONINFO resource: that
+  needs a resource compiler crate (CLAUDE.md: ask first).
+- **RN-D9 (visible text).** Window title (`— Cartwave`), About (`ABOUT CARTWAVE`, `Cartwave
+  0.1.0 · build …`, and a new line `Made by Glintworks · glintworks.studio`), the Help menu's
+  About item, the macOS app menu (`Cartwave`, Hide / Quit Cartwave), the warning dialogs'
+  title, the file-type names in the dialogs, the drop hint (`.cartwave`), the error texts
+  ("Not a Cartwave project", "a newer Cartwave"). The shortcut sheet shows the name only in
+  the macOS Quit row (Windows: Exit).
+- **RN-D10 (not renamed).** The vizia fork's `chipdaw-perf` branch and its pins; the file's
+  `format` field (RN-D4); git history; RUNLOG entries before this heading and the historical
+  reports (each gets a one-line note at the top); the corpus and fixture `.chipdaw` files
+  (they test old files); temp-folder names inside the tools (`%TEMP%\chipdaw-perf-dp` holds
+  generated benches the perf tools copy); `make_songs`' `piano_bench.chipdaw` (the perf tools
+  copy it by that name). Internal names nothing outside reads (the audio host thread, test
+  temp folders) became `cartwave-*`.
+- **RN-D11 (harnesses).** 81 scripts under `docs/*/tools` and `tools/`: `CHIPDAW_` →
+  `CARTWAVE_`, `app.exe` → `cartwave.exe`, the process name `app` → `cartwave` (`Get-Process`,
+  `pkill`, macOS `target/release/cartwave`). `final_gates.ps1`'s `../before-polish2` baseline
+  keeps `app.exe` (built before the rename). To shoot a pre-rename build with the shared
+  helpers (which find the window by process name), copy its `app.exe` to `cartwave.exe` and run
+  it with `CHIPDAW_*` names (`regress_rn.ps1 -Prefix CHIPDAW_`).
+- **RN-D12 (gates 1, 2: hashes).** `cargo test` keeps the golden hash and every v2…v7 migration
+  hash (those tests are unchanged and pass). Beyond them, `examples/corpus_hashes.rs` rendered
+  **all 290 `.chipdaw` files in the repo** (the v2…v7 corpus, the scale test, the stress
+  projects, every suite fixture and recovery file) with the baseline (`../before-rename`,
+  8e6b4f8) and this branch: render and export hashes **identical** for all 290, 0 load errors
+  (252 mono, 38 stereo; `docs/rename/corpus-hashes.tsv`). New test
+  `every_corpus_file_round_trips_through_a_cartwave_file`: every corpus version saved as
+  `.cartwave` reloads with the same text and sound. Exports: 101 files from 5 projects, every
+  WAV byte-identical, each JSON only its `format` field (`docs/rename/export-identity.md`).
+- **RN-D13 (one message).** The binary-strings scan found the "not a project" error quoting
+  `"format": "chipdaw"`: reworded to "Not a Cartwave project (its format field is missing or
+  names another format)." Text only.
+- **RN-D14 (gate 4: visual regression).** `docs/rename/tools/regress_rn.ps1` shoots polish 2's
+  states plus the ones that show the name (About, the shortcut sheet, Settings ▸ Files, the
+  Help menu); `diff_rn.py` allows nothing up front and lists every differing region of the
+  whole window (title bar included) for labelling. 150 % needed two harness fixes: the window
+  is taller than the work area there, and Windows placed it at a different height in each run
+  (the taskbar covered a different band), so the script now pins the window's frame to the
+  screen's top-left; and one `solo_mute` shot of this build lost its second click (Mute not
+  lit; the known quick-click flake): re-shot alone, it matches. Result at 100 % and 150 %:
+  only the title bar's name, the Help menu's About item and the About panel differ, plus a few
+  corner pixels outside the window's rounded frame (they differ between states of one build
+  too). This build with the old names is pixel-identical to it with the new names.

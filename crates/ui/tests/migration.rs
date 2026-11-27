@@ -428,3 +428,36 @@ fn a_v7_panned_studio_track_is_heard_now() {
     assert_eq!(again.arrangement.lanes[0].unison, u.arrangement.lanes[0].unison);
     assert!(file::to_string(&u).contains("\"unison\": 3"));
 }
+
+/// RENAME.md: every `.chipdaw` file in the corpus (every format version)
+/// opens, saves as `.cartwave` and opens again with the same text and the
+/// same sound. The corpus keeps its `.chipdaw` files: they are the old files
+/// this tests.
+#[test]
+fn every_corpus_file_round_trips_through_a_cartwave_file() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files: Vec<std::path::PathBuf> = vec![root.join("docs/songs/scale_test.chipdaw"), root.join("docs/batch4a/songs/stress64.chipdaw")];
+    for v in ["v2", "v3", "v4", "v5", "v6", "v7"] {
+        for e in std::fs::read_dir(root.join("docs/songs").join(v)).unwrap() {
+            let path = e.unwrap().path();
+            if path.extension().is_some_and(|x| x == file::LEGACY_EXTENSION) {
+                files.push(path);
+            }
+        }
+    }
+    assert!(files.len() >= 60, "the corpus is there ({} files)", files.len());
+    let out = std::env::temp_dir().join(format!("cartwave-corpus-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&out);
+    std::fs::create_dir_all(&out).unwrap();
+    for (i, path) in files.iter().enumerate() {
+        let p = file::load(path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let to = out.join(format!("{i}.{}", file::EXTENSION));
+        file::save(&p, &to).unwrap();
+        let q = file::load(&to).unwrap();
+        assert_eq!(file::to_string(&q), file::to_string(&p), "{}", path.display());
+        // The short render (the golden test's): the full export of 60 files
+        // is what the version tests above already pin.
+        assert_eq!(render::hash(&render::render(&q, 2.0)), render::hash(&render::render(&p, 2.0)), "{}", path.display());
+    }
+    let _ = std::fs::remove_dir_all(out);
+}

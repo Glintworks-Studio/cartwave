@@ -1,5 +1,7 @@
 # Banding on macOS (DESIGNPASS.md §3 measure), 320 Hz display, backing 1.0
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Run lengths of identical pixels down 5 neighbouring columns (`img runs`); the captured display
 values ("raw") and the same converted to sRGB agree on every row. "Off" = `CHIPDAW_NO_DITHER=1`
 (drawn gradients undithered; stylesheet gradients are dithered by the vizia fork either way).

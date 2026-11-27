@@ -1,5 +1,7 @@
 # POLISH.md: the Option D polish pass
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Branch **`polish/option-d`** (from `design/option-d`, which it contains). Prompt:
 `POLISH_PROMPT.md`. Decisions: [`docs/RUNLOG.md`](docs/RUNLOG.md) PL-D1…D17. Spec:
 [`docs/design/VISUAL-SPEC.md`](docs/design/VISUAL-SPEC.md) §2, §6–8.

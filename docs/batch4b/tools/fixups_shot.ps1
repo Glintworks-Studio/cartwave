@@ -1,17 +1,17 @@
-# usage: fixups_shot.ps1 -Out <png> [-Scale 100] [-Exe .\target\release\app.exe]
+# usage: fixups_shot.ps1 -Out <png> [-Scale 100] [-Exe .\target\release\cartwave.exe]
 # Batch 4b §9.3: the `fixups` board's view. fx_board12 (12 tracks: the board's 9-12 are the last
 # four), browser closed, window 1440 × 456 logical like the board, lanes scrolled to the bottom so
 # tracks 9-12 show, and a clip on track 9 selected (the board's "Hook A": the selection outline).
-param([string]$Out, [int]$Scale = 100, [string]$Exe = ".\target\release\app.exe")
+param([string]$Out, [int]$Scale = 100, [string]$Exe = ".\target\release\cartwave.exe")
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $d = Join-Path $env:TEMP ("chipdaw-fixups-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Force $d | Out-Null
 python "$Repo\docs\batch4b\tools\fixtures_b4b.py" $d | Out-Null
 "{ ""ui_scale"": $Scale, ""browser_open"": false }" | Set-Content -Encoding ascii (Join-Path $d "settings.json")
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "0"; $env:CHIPDAW_FROZEN_METERS = "1"
-$env:CHIPDAW_PROJECT = (Join-Path $d "fx_board12.chipdaw")
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "0"; $env:CARTWAVE_FROZEN_METERS = "1"
+$env:CARTWAVE_PROJECT = (Join-Path $d "fx_board12.chipdaw")
 $p = Start-Process (Resolve-Path $Exe).Path -ArgumentList "--size", "1440x720" -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
 Start-Sleep -Milliseconds 2500
 pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out (Join-Path $d "_place.png") | Out-Null
@@ -44,4 +44,4 @@ if ($cy) { Move-To ([int](420 * $k)) ([int]$cy + [int](6 * $k)); Start-Sleep -Mi
 Move-To ([int](1300 * $k)) ([int](60 * $k)); Start-Sleep -Milliseconds 400
 pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out $Out | Out-Null
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-Remove-Item Env:CHIPDAW_FROZEN_METERS, Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue
+Remove-Item Env:CARTWAVE_FROZEN_METERS, Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue

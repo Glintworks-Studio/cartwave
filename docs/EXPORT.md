@@ -4,7 +4,7 @@
 2A03 + VRC6 emulation you hear while editing, on a worker thread: the UI stays responsive, and the
 live audio thread is never touched. A typical song (40 s, mix + 8 stems) renders in under a second.
 
-Command line, same code: `cargo run --release -p ui --example game_export -- [options] song.chipdaw out_dir`
+Command line, same code: `cargo run --release -p ui --example game_export -- [options] song.cartwave out_dir` (a `.chipdaw` works too)
 (options in `crates/ui/examples/game_export.rs`). `docs/export-examples/` was made with it.
 
 ## 1. Options

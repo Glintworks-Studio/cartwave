@@ -5,11 +5,11 @@
 param([string]$Repo, [string]$Out, [int]$Samples = 3000, [int]$NoteY = 623, [switch]$NoDrag)
 # -NoDrag: sample while it plays, without the drag.
 $Tools = Join-Path $PSScriptRoot "..\..\perf\tools"
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DEV = "1"; $env:CHIPDAW_PROJECT = "$env:TEMP\chipdaw-perf-dp\piano_bench.chipdaw"
-$env:CHIPDAW_OPEN_CLIP = "1"; $env:CHIPDAW_PIANO_ZOOM = "32"; $env:CHIPDAW_DATA_DIR = "$env:TEMP\chipdaw-sample-pr"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DEV = "1"; $env:CARTWAVE_PROJECT = "$env:TEMP\chipdaw-perf-dp\piano_bench.chipdaw"
+$env:CARTWAVE_OPEN_CLIP = "1"; $env:CARTWAVE_PIANO_ZOOM = "32"; $env:CARTWAVE_DATA_DIR = "$env:TEMP\chipdaw-sample-pr"
 Set-Location $Repo
-$p = Start-Process ".\target\release\app.exe" -PassThru
+$p = Start-Process ".\target\release\cartwave.exe" -PassThru
 Start-Sleep -Seconds 3
 $p.Refresh(); $global:AppH = $p.MainWindowHandle
 . (Join-Path $Tools "input.ps1")

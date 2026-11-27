@@ -1,9 +1,9 @@
-# usage: at_polish.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only PL-01,PL-04]
+# usage: at_polish.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only PL-01,PL-04]
 # Polish pass scenarios (UX.md §6, PL-01…PL-05), the Batch 3 harness method: synthetic input
 # into the real app, saved files and dev-mode stderr lines checked by check_polish.py.
 # Client px at 100% (Option D): rows from 104 every 73 px, headers 241..620 with the browser
 # open, lanes from 621 at 92 px per bar.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-polish-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
 $global:Work = $Work

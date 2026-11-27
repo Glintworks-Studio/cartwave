@@ -21,7 +21,7 @@ TB = 32
 SONG = REPO / "docs/polish2/songs/mockup.chipdaw"
 ROWS = REPO / "docs/polish2/songs/mockup_rows.chipdaw"
 only = set(sys.argv[1].split(",")) if len(sys.argv) > 1 else set()
-QUIET = {"CHIPDAW_FROZEN_METERS": "1"}
+QUIET = {"CARTWAVE_FROZEN_METERS": "1"}
 
 
 def do(name):
@@ -109,7 +109,7 @@ if do("overview"):
 
 if do("status"):
     parts = []
-    a = App("status", SONG, env=dict(QUIET, CHIPDAW_FAKE_PROBLEM="Audio: can't open the output device (test)."))
+    a = App("status", SONG, env=dict(QUIET, CARTWAVE_FAKE_PROBLEM="Audio: can't open the output device (test)."))
     a.seq(("key", "s", "cmd"), ("sleep", .8), ("move", 1300, 905), ("sleep", .4))
     s = a.shot("st_msg")
     parts.append(crop(s, WORK / "st1.png", 0, 860, 1440, 60, "A message (after ⌘S), with the problem icon"))

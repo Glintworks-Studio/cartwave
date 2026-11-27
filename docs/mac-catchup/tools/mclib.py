@@ -18,7 +18,7 @@ X0 = 622        # bar 1's line, content x
 ROW0, PITCH = 136, 73
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--app", default=os.environ.get("MC_APP", str(REPO / "target/release/app")))
+ap.add_argument("--app", default=os.environ.get("MC_APP", str(REPO / "target/release/cartwave")))
 ap.add_argument("--only", default="")
 ap.add_argument("--out", default="")
 args, _rest = ap.parse_known_args()
@@ -51,7 +51,7 @@ def y_of(lane, part="body"):
 
 class App:
     def __init__(self, name, project=None, env=None, settings=None):
-        subprocess.run(["pkill", "-x", "app"], capture_output=True)
+        subprocess.run(["pkill", "-x", "cartwave"], capture_output=True)
         time.sleep(0.5)
         self.name = name
         self.data = WORK / f"data-{name}"
@@ -60,12 +60,12 @@ class App:
         s = {"audio_device": os.environ.get("MC_DEVICE", "Mac mini Speakers")}
         s.update(settings or {})
         (self.data / "settings.json").write_text(json.dumps(s))
-        e = dict(os.environ, CHIPDAW_DEV="1", CHIPDAW_DATA_DIR=str(self.data))
+        e = dict(os.environ, CARTWAVE_DEV="1", CARTWAVE_DATA_DIR=str(self.data))
         self.proj = None
         if project:
             self.proj = WORK / f"{name}.chipdaw"
             self.proj.write_bytes(pathlib.Path(project).read_bytes())
-            e["CHIPDAW_PROJECT"] = str(self.proj)
+            e["CARTWAVE_PROJECT"] = str(self.proj)
         e.update(env or {})
         self.log_path = WORK / f"{name}.log"
         self.p = subprocess.Popen([args.app], env=e, stdout=open(self.log_path, "w"), stderr=subprocess.STDOUT)

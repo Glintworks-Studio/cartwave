@@ -1,5 +1,7 @@
 # vizia PR descriptions
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Against vizia 0.4.0. Measured in ChipDAW, a GUI with a continuously animating arrangement view
 (PERF.md, PERF-macos.md, PIANOROLL.md). Suggested order: 11, 2, 5, 1, 6, 4, 3, 7, 9 + 10, 8. The
 standalone bug fixes go first; then the pacing work, which builds on 1 and 5.

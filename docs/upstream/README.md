@@ -1,5 +1,7 @@
 # Upstream write-ups (ready to submit; nothing has been submitted)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Everything ChipDAW found in its dependencies that should go upstream, as files the owner can
 submit by hand.
 

@@ -15,7 +15,7 @@ for ($i = 1; $i -le 2; $i++) {
 }
 $data = Join-Path $env:TEMP "b3s150"
 for ($i = 1; $i -le 2; $i++) {
-  pwsh -NoProfile -File "$Repo\docs\perf\tools\bench.ps1" -Label "scale150-$i" -Repo $Repo -Work $Work -Env "CHIPDAW_DATA_DIR=$data" -DragX 1080 -DragY 195
+  pwsh -NoProfile -File "$Repo\docs\perf\tools\bench.ps1" -Label "scale150-$i" -Repo $Repo -Work $Work -Env "CARTWAVE_DATA_DIR=$data" -DragX 1080 -DragY 195
 }
 "--- pacing / bench (150%) ---"; Get-Content (Join-Path $Work "*.txt") -ErrorAction SilentlyContinue | Select-Object -Last 30
 "--- piano roll ---"; Get-Content "$env:TEMP\b3pr_before\*.txt", "$env:TEMP\b3pr\*.txt" -ErrorAction SilentlyContinue | Select-Object -Last 10

@@ -1,5 +1,7 @@
 # Task: Find and fix the ChipDAW GUI playback CPU problem
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 You are working on the ChipDAW GUI prototype (Rust, vizia 0.4.0, Skia on OpenGL
 via glutin/winit, Windows 11, RTX 4070 SUPER). Read `CLAUDE.md`, `NOTES.md` and
 `FINDINGS.md` first. Everything they say about verifying APIs against the vizia

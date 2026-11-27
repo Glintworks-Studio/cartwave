@@ -1745,7 +1745,7 @@ pub const PHASE_NAMES: [&str; 7] = [
 ];
 
 /// Frame-rate cap (F6 cycles 60 → 120 → off; start value from
-/// `CHIPDAW_FPS_CAP=60|120|off`).
+/// `CARTWAVE_FPS_CAP=60|120|off`).
 ///
 /// The default is 60 fps (decided after PERF-macos.md §6): half the CPU and
 /// energy of anything else on a 320 Hz display, with the most even cadence.
@@ -1762,13 +1762,13 @@ pub enum FrameCap {
 
 impl FrameCap {
     pub fn from_env() -> Self {
-        Self::parse(crate::dev::var("CHIPDAW_FPS_CAP").as_deref())
+        Self::parse(crate::dev::var("CARTWAVE_FPS_CAP").as_deref())
     }
 
     /// From Settings > Display (60, 120; 0 = off, dev mode only). In dev
-    /// mode `CHIPDAW_FPS_CAP` overrides it (the benchmarks set it).
+    /// mode `CARTWAVE_FPS_CAP` overrides it (the benchmarks set it).
     pub fn from_setting(fps: u32) -> Self {
-        if crate::dev::var("CHIPDAW_FPS_CAP").is_some() {
+        if crate::dev::var("CARTWAVE_FPS_CAP").is_some() {
             return Self::from_env();
         }
         match fps {

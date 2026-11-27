@@ -1,25 +1,25 @@
-# usage: mockup_state.ps1 [-Exe .\target\release\app.exe] [-Out app.png] [-NoInput] [-Audio]
+# usage: mockup_state.ps1 [-Exe .\target\release\cartwave.exe] [-Out app.png] [-NoInput] [-Audio]
 # Puts the app into the mockup's state (docs/design/mockup-D.dc.html): the
 # demo song playing with the loop on, the browser closed, 100 px per bar,
 # Triangle soloed, Noise muted, a time selection over bars 9-11, then saves
 # a window screenshot. The window's client area starts under the menu bar;
 # compare.py finds it from the top bar's top line.
-param([string]$Exe = ".\target\release\app.exe", [string]$Out = "app.png", [switch]$NoInput,
+param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = "app.png", [switch]$NoInput,
   [switch]$Audio, [int]$Wait = 2500, [string]$Data = (Join-Path $env:TEMP "chipdaw-mockup-state"),
   [string]$Extra = "")
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $ErrorActionPreference = "Continue"
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
 $ErrorActionPreference = "Stop"
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 300
 Remove-Item -Recurse -Force $Data -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $Data | Out-Null
 "{ ""browser_open"": false $Extra }" | Set-Content -Encoding ascii (Join-Path $Data "settings.json")
-$env:CHIPDAW_DATA_DIR = $Data; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_PX_PER_BAR = "100"
-$env:CHIPDAW_AUDIO = $(if ($Audio) { "1" } else { "0" })
-$env:CHIPDAW_AUTOPLAY = "1"
-Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue
+$env:CARTWAVE_DATA_DIR = $Data; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_PX_PER_BAR = "100"
+$env:CARTWAVE_AUDIO = $(if ($Audio) { "1" } else { "0" })
+$env:CARTWAVE_AUTOPLAY = "1"
+Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru -RedirectStandardError (Join-Path $Data "stderr.txt")
 for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $p.Id).MainWindowHandle -ne 0) { break } }
 Start-Sleep -Milliseconds 1200
@@ -39,4 +39,4 @@ if (-not $NoInput) {
 }
 Start-Sleep -Milliseconds $Wait
 pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out $Out
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force

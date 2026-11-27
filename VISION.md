@@ -6,9 +6,10 @@ and Design (Sam) · Sound design: Mika Torres*
 **Every prompt, spec and review starts from this page.** If a change conflicts with it,
 the change is wrong, or this page needs updating first, with the CEO's sign-off.
 
-> **Cartwave** is the app, made by **Glintworks** (below). The code, the crates, the file
-> extension (`.chipdaw`) and the repository still say "chipdaw": renaming them is a separate,
-> planned change, not part of any docs update.
+> **Cartwave** is the app, made by **Glintworks** (below). **The rename is done** (2026-11-27,
+> RENAME.md): the app, its files (`.cartwave`; `.chipdaw` opens forever), settings folder,
+> environment variables and identifiers say Cartwave, and the repository is
+> `glintworks-studio/cartwave`.
 
 *Decided 2026-11-26:* the working title "ChipDAW" is replaced by **Cartwave**, and Mika Torres
 (Sound Design) joins the team.
@@ -364,8 +365,8 @@ formats. The arcade FM and SNES systems come after the app shell is solid. See I
     offline-friendly licence keys.
   - **Outside contributions** go into the open core only. GPL stays excluded everywhere. BSD-3
     (e.g. ymfm) is fine inside paid extensions, with attribution.
-- **Still to do (CEO):** official trademark checks for Glintworks and Cartwave (USPTO, plus
-  EUIPO if selling in Europe) before any public announcement.
+- ~~Still to do (CEO): official trademark checks for Glintworks and Cartwave~~: **cleared**
+  (the rename prompt, 2026-11-27); the code rename is done (RENAME.md).
 
 *Decided 2026-11-26:* this section is new. It answers open questions 1 (business model) and 3
 (product name).

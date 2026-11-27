@@ -54,7 +54,7 @@ impl StatusBar {
             .bind(s.file_path, |mut h| h.needs_redraw())
     }
 
-    /// The idle text: "Saved · song.chipdaw" or "Unsaved changes · …".
+    /// The idle text: "Saved · song.cartwave" or "Unsaved changes · …".
     pub fn idle_text(s: &Signals) -> String {
         let path = s.file_path.get_untracked();
         let name = std::path::Path::new(&path).file_name().and_then(|n| n.to_str()).map(str::to_string).unwrap_or_else(|| "Untitled".into());

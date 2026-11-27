@@ -1,4 +1,4 @@
-//! Robustness of the three parsers (`.mid`, `.wav`, `.chipdaw`) against
+//! Robustness of the three parsers (`.mid`, `.wav`, the project file) against
 //! damaged and hostile input (STABILIZE_PROMPT.md §A3).
 //!
 //! Thousands of seeded inputs per parser: valid seed files of every kind the
@@ -9,7 +9,7 @@
 //! steps the app runs (arrange, convert, snapshot, a short render), so a
 //! value that slips through the parser can't crash the engine later.
 //!
-//! Deterministic: the same seeds every run. `CHIPDAW_FUZZ_N` sets the count
+//! Deterministic: the same seeds every run. `CARTWAVE_FUZZ_N` sets the count
 //! per parser (default 2000). Run it in debug builds too: they check integer
 //! overflow, release builds don't.
 
@@ -41,7 +41,7 @@ impl Rng {
 }
 
 fn count() -> usize {
-    std::env::var("CHIPDAW_FUZZ_N").ok().and_then(|v| v.parse().ok()).unwrap_or(2000)
+    engine::env::var("CARTWAVE_FUZZ_N").and_then(|v| v.parse().ok()).unwrap_or(2000)
 }
 
 /// Runs `f` on its own thread with a time budget. Returns a failure message
@@ -150,7 +150,7 @@ fn campaign(name: &str, seeds: &[Vec<u8>], magic: &[u8], seed: u64, check: fn(Ve
         let copy = input.clone();
         if let Some(msg) = guarded(Duration::from_secs(20), move || check(copy)) {
             failures.push(format!("{name} input #{i} ({} bytes): {msg}", input.len()));
-            if std::env::var("CHIPDAW_FUZZ_DUMP").is_ok() {
+            if engine::env::var("CARTWAVE_FUZZ_DUMP").is_some() {
                 let _ = std::fs::write(format!("fuzz_{name}_{i}.bin"), &input);
             }
             if failures.len() >= 20 {
@@ -383,7 +383,7 @@ fn project_loader_never_panics_or_hangs() {
         let copy = input.clone();
         if let Some(msg) = guarded(Duration::from_secs(20), move || check_project(copy)) {
             failures.push(format!("json-mutated #{i}: {msg}"));
-            if std::env::var("CHIPDAW_FUZZ_DUMP").is_ok() {
+            if engine::env::var("CARTWAVE_FUZZ_DUMP").is_some() {
                 let _ = std::fs::write(format!("fuzz_json_{i}.chipdaw"), &input);
             }
             if failures.len() >= 20 {

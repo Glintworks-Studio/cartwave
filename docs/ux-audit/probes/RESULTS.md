@@ -1,5 +1,7 @@
 # UX audit: technical feasibility probes
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Date: 2026-11-25. Machine: Windows 11 Pro 10.0.26200, 2560×1440 at 100 %, 60 Hz.
 Stack under test: the vizia fork pinned in the root `Cargo.toml` (rev `159bbe55…`, local
 checkout `../vizia`), winit 0.30.13. No product code was changed. Each probe is its own Cargo

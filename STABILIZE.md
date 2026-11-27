@@ -1,5 +1,7 @@
 # STABILIZE: v1.1 (stabilize, per-clip instruments, game export)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *Unattended run, 2026-11-25, 07:44–10:26 · branch `stabilize/v1.1` (from `product/v1`) · Windows 11,
 Ryzen 7 9800X3D, RTX 4070 SUPER, 59.951 Hz display · the brief: STABILIZE_PROMPT.md · every decision,
 with its time: [docs/RUNLOG.md](docs/RUNLOG.md).*

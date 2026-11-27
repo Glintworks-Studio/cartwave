@@ -5,7 +5,7 @@ Each check acts through macdrive (CGEvent input, AX menu reads) and proves its r
 saved project (⌘S), settings.json, the dev-mode stderr lines, the menu bar's state (AX) or a
 screenshot measurement. Prints one PASS/FAIL line per check.
 
-usage: scen_mac.py [--app target/release/app] [--only name,name] [--out results.txt]
+usage: scen_mac.py [--app target/release/cartwave] [--only name,name] [--out results.txt]
 Needs Accessibility and Screen Recording permission for the terminal.
 """
 import json
@@ -202,10 +202,10 @@ if want("view"):
 
 # ---------------------------------------------------------------- Piano roll keys
 if want("piano"):
-    a = App("piano", FIX, env={"CHIPDAW_OPEN_CLIP": "1"})
+    a = App("piano", FIX, env={"CARTWAVE_OPEN_CLIP": "1"})
     m = a.log()
     bounds = re.search(r"piano roll bounds ([0-9.]+) ([0-9.]+) ([0-9.]+) ([0-9.]+)", m)
-    report("CHIPDAW_OPEN_CLIP opens clip A", bool(bounds), bounds.group(0) if bounds else m[-200:])
+    report("CARTWAVE_OPEN_CLIP opens clip A", bool(bounds), bounds.group(0) if bounds else m[-200:])
     px, py, pw, ph = (float(v) for v in bounds.groups()) if bounds else (400, 500, 900, 300)
     a.seq(("click", px + pw * .6, py + ph * .5), ("key", "a", "cmd"), ("sleep", .2))
     notes0 = sorted((n["start"], n["pitch"], n["len"]) for n in a.save()["clips"][0]["notes"])

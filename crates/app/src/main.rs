@@ -1,4 +1,4 @@
-//! Standalone host for ChipDAW.
+//! Standalone host for Cartwave.
 //!
 //! Optional: `--size WxH` sets the initial logical window size (useful for
 //! capturing at 150%/200% display scaling on a 1440p screen).
@@ -129,6 +129,11 @@ fn main() -> Result<(), ApplicationError> {
     let (w, h) = parse_size();
     let size = (w.max(ui::MIN_WINDOW_SIZE.0), h.max(ui::MIN_WINDOW_SIZE.1));
     // Settings > Display > Interface scale, on top of the OS scale.
+    // The pre-rename app-data folder moves over before anything reads it.
+    if let ui::file::DataMove::Failed(e) = ui::file::migrate_data_dir() {
+        eprintln!("{e}");
+    }
+    ui::identity::set_app_id();
     let scale = ui::file::load_settings().ui_scale_factor();
     #[cfg(target_os = "macos")]
     no_window_tabbing();
@@ -136,12 +141,12 @@ fn main() -> Result<(), ApplicationError> {
         ui::build_ui(cx);
     })
     .user_scale_factor(scale)
-    .title("ChipDAW")
+    .title(ui::identity::APP_NAME)
     .inner_size(size)
     // Below this the top bar's sides and the lanes would be cut off.
     .min_inner_size(Some(ui::MIN_WINDOW_SIZE))
     // Present on vblank; the UI advances its model once per presented frame.
-    // `CHIPDAW_VSYNC=0` turns it off (an experiment knob for PERF measurements).
-    .vsync(std::env::var("CHIPDAW_VSYNC").map_or(true, |v| v != "0"))
+    // `CARTWAVE_VSYNC=0` turns it off (an experiment knob for PERF measurements).
+    .vsync(engine::env::var("CARTWAVE_VSYNC").is_none_or(|v| v != "0"))
     .run()
 }

@@ -13,7 +13,7 @@ winctl = BIN / "winctl"
 out = []
 for disp, pos in (("320", None), ("60", ("100", "-1400"))):
     for sc in (100, 125, 150):
-        a = App("scale", REPO / "docs/polish2/songs/mockup.chipdaw", env={"CHIPDAW_AUDIO": "0"}, settings={"ui_scale": sc})
+        a = App("scale", REPO / "docs/polish2/songs/mockup.chipdaw", env={"CARTWAVE_AUDIO": "0"}, settings={"ui_scale": sc})
         if pos:
             subprocess.run([str(winctl), str(a.p.pid), "move", *pos], capture_output=True)
             time.sleep(2)

@@ -1,5 +1,7 @@
 # UX audit, part 1: inventory (what exists today)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · audited build: `stabilize/v1.1` @ `c0037d3` (main has not been merged yet, so this is
 the newest code) · Windows 11, 1440×900 window at 100% · built-in demo song, audio off, a
 throw-away data dir · screenshots made by [`tools/screens_ux.ps1`](tools/screens_ux.ps1) and

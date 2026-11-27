@@ -259,7 +259,7 @@ fn files_v1_loads_and_v2_round_trips() {
 
 #[test]
 fn files_atomic_save_keeps_the_old_file_when_writing_fails() {
-    let dir = std::env::temp_dir().join(format!("chipdaw-atomic-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cartwave-atomic-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("song.chipdaw");
@@ -278,9 +278,9 @@ fn files_atomic_save_keeps_the_old_file_when_writing_fails() {
 
 #[test]
 fn files_crash_recovery_round_trip() {
-    let dir = std::env::temp_dir().join(format!("chipdaw-recovery-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("cartwave-recovery-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    std::env::set_var("CHIPDAW_DATA_DIR", &dir);
+    std::env::set_var("CARTWAVE_DATA_DIR", &dir);
     let r = file::Recovery::new().unwrap();
     assert!(r.start_session().is_none(), "first start: nothing to recover");
     let mut p = project(4);
@@ -293,7 +293,7 @@ fn files_crash_recovery_round_trip() {
     assert_eq!(file::to_string(&back), file::to_string(&p));
     r2.end_session(&back);
     assert!(file::Recovery::new().unwrap().start_session().is_none(), "clean quit: no prompt");
-    std::env::remove_var("CHIPDAW_DATA_DIR");
+    std::env::remove_var("CARTWAVE_DATA_DIR");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

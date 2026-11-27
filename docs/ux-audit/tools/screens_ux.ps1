@@ -1,20 +1,20 @@
-# usage: screens_ux.ps1 [-Exe .\target\release\app.exe] [-Part 1|2|3]
+# usage: screens_ux.ps1 [-Exe .\target\release\cartwave.exe] [-Part 1|2|3]
 # UX audit inventory screenshots (docs/ux-audit/INVENTORY.md). Synthetic input as in
 # docs/stabilize/tools/scenario_v11.ps1. Window 1440x900 at 100%, the built-in demo song,
 # audio off, a throw-away data dir (so the user's settings.json is not touched).
 # Coordinates are client px (screenshot px minus the 1 px border and the 31 px title bar).
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-ux"),
   [int]$Part = 1)
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 $Out = Join-Path $Repo "docs\ux-audit\screens"
 New-Item -ItemType Directory -Force "$Work\data", $Out | Out-Null
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 Remove-Item "$Work\data\*" -ErrorAction SilentlyContinue
-$env:CHIPDAW_DATA_DIR = "$Work\data"; $env:CHIPDAW_AUDIO = "0"
+$env:CARTWAVE_DATA_DIR = "$Work\data"; $env:CARTWAVE_AUDIO = "0"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"

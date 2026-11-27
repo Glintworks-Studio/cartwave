@@ -1,13 +1,13 @@
-# usage: regress.ps1 -Exe <app.exe> -Out <dir> [-Scale 100|150] [-New]
+# usage: regress.ps1 -Exe <cartwave.exe> -Out <dir> [-Scale 100|150] [-New]
 # Polish 2 (POLISH2_PROMPT.md §9.1): the polish pass's gate with the Overview hidden
-# (settings) and the status bar hidden (dev hook CHIPDAW_HIDE_STATUS=1). -New: the
+# (settings) and the status bar hidden (dev hook CARTWAVE_HIDE_STATUS=1). -New: the
 # polish 2 build (its M / S keys moved: E1 header) and the extra states it adds.
 # The polish pass's visual regression gate (POLISH_PROMPT.md §4.1): fixed states, each a
-# window screenshot, with every level frozen (CHIPDAW_FROZEN_METERS=1), the playhead pinned
-# while playing (CHIPDAW_PLAYHEAD), audio off, the window at 1440x920 logical (--size) and
+# window screenshot, with every level frozen (CARTWAVE_FROZEN_METERS=1), the playhead pinned
+# while playing (CARTWAVE_PLAYHEAD), audio off, the window at 1440x920 logical (--size) and
 # the mouse parked on empty canvas. Run it on the "before" and "after" builds; diff.py
 # compares them.
-param([string]$Exe = ".\target\release\app.exe", [string]$Out = "regress", [int]$Scale = 100, [switch]$New)
+param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = "regress", [int]$Scale = 100, [switch]$New)
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $ErrorActionPreference = "Continue"
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
@@ -38,12 +38,12 @@ function Park { P 1300 840; Start-Sleep -Milliseconds 700 }
 # name, extra env, extra settings json, an action after launch
 $States = @(
   @("stopped", @{}, "", $null),
-  @("playing", @{ CHIPDAW_PLAYHEAD = "7680" }, "", { Key 0x20; Start-Sleep -Milliseconds 500 }),
+  @("playing", @{ CARTWAVE_PLAYHEAD = "7680" }, "", { Key 0x20; Start-Sleep -Milliseconds 500 }),
   @("loop_off", @{}, "", { Click 293 38 }),
   @("solo_mute", @{}, "", { if ($New) { Click (241 + 300) (104 + 2 * 73 + 22); Start-Sleep -Milliseconds 700; Click (241 + 268) (104 + 3 * 73 + 22) } else { Click (241 + 356) (104 + 2 * 73 + 28); Click (241 + 324) (104 + 3 * 73 + 28) } }),
   @("browser_closed", @{}, ', "browser_open": false', $null),
   @("inspector", @{}, "", { Click 700 140 }),
-  @("piano_roll", @{ CHIPDAW_OPEN_CLIP = "1" }, "", $null),
+  @("piano_roll", @{ CARTWAVE_OPEN_CLIP = "1" }, "", $null),
   @("settings", @{}, "", { KeyDown 0x11; Key 0xBC; KeyUp 0x11; Start-Sleep -Milliseconds 600 }),
   @("menu_edit", @{}, "", { Open-Menu "Edit"; Start-Sleep -Milliseconds 600 }),
   @("menu_view", @{}, "", { Open-Menu "View"; Start-Sleep -Milliseconds 600 })
@@ -54,14 +54,14 @@ if ($New) {
 }
 foreach ($st in $States) {
   $name, $envs, $extra, $act = $st
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 300
   $d = Join-Path $env:TEMP "chipdaw-regress-data"
   Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Force $d | Out-Null
   "{ ""ui_scale"": $Scale, ""show_overview"": false $extra }" | Set-Content -Encoding ascii (Join-Path $d "settings.json")
-  foreach ($k in "CHIPDAW_AUTOPLAY", "CHIPDAW_PLAYHEAD", "CHIPDAW_OPEN_CLIP", "CHIPDAW_PROJECT") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
-  $env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "0"; $env:CHIPDAW_FROZEN_METERS = "1"; $env:CHIPDAW_HIDE_STATUS = "1"
+  foreach ($k in "CARTWAVE_AUTOPLAY", "CARTWAVE_PLAYHEAD", "CARTWAVE_OPEN_CLIP", "CARTWAVE_PROJECT") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+  $env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "0"; $env:CARTWAVE_FROZEN_METERS = "1"; $env:CARTWAVE_HIDE_STATUS = "1"
   foreach ($k in $envs.Keys) { Set-Item "Env:$k" $envs[$k] }
   $p = Start-Process $Exe -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
   for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $p.Id).MainWindowHandle -ne 0) { break } }

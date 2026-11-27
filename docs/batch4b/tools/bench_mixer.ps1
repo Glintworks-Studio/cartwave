@@ -12,15 +12,15 @@ New-Item -ItemType Directory -Force $Work | Out-Null
 $d = Join-Path $Work "data-mixer-$Label"
 Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $d | Out-Null
-foreach ($k in "CHIPDAW_FROZEN_METERS", "CHIPDAW_AUDIO") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"
-$env:CHIPDAW_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64.chipdaw"); $env:CHIPDAW_AUTOPLAY = "1"
+foreach ($k in "CARTWAVE_FROZEN_METERS", "CARTWAVE_AUDIO") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"
+$env:CARTWAVE_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64.chipdaw"); $env:CARTWAVE_AUTOPLAY = "1"
 Set-Location $Repo
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 $err = Join-Path $Work "bench_mixer_err.txt"
-$p = Start-Process ".\target\release\app.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError $err
+$p = Start-Process ".\target\release\cartwave.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError $err
 Start-Sleep -Seconds 4
-Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_AUTOPLAY
+Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_AUTOPLAY
 . "$Repo\docs\perf\tools\input.ps1"
 Add-Type -Namespace B4B -Name Fg -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);' -ErrorAction SilentlyContinue
 $p.Refresh(); $global:AppH = $p.MainWindowHandle

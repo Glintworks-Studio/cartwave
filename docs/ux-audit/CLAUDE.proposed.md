@@ -1,5 +1,7 @@
 # CLAUDE.md: ChipDAW
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 > **Proposed replacement** for the root `CLAUDE.md`, from the UX audit (2026-11-25). It is not
 > active. Replacing the real file is the CEO's call.
 

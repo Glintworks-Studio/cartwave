@@ -1,4 +1,4 @@
-# usage: scenario.ps1 [-Exe .\target\release\app.exe] [-Repo <repo>] [-Work <dir>]
+# usage: scenario.ps1 [-Exe .\target\release\cartwave.exe] [-Repo <repo>] [-Work <dir>]
 # Scripted UI scenario (PIANOROLL.md §9): synthetic mouse/keyboard input, as in
 # docs/perf/tools/bench.ps1. File > New, set the arrangement grid to a bar, create a
 # clip by double-click, open it in the piano roll, draw three notes (the last one by
@@ -9,19 +9,19 @@
 # Updated in the app-shell run (SHELL.md): the old coordinates were from before the
 # redesign (a SNAP pill and a FILE field in the top bar), and the file check expected
 # format v1; it failed on the pre-shell build too.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
-  [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+  [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
 $exePath = (Resolve-Path $Exe).Path
 $out = Join-Path $Work "scenario.chipdaw"
 Remove-Item $out -ErrorAction SilentlyContinue
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DATA_DIR = Join-Path $Work "scenario-data"
-$env:CHIPDAW_AUDIO = "0"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DATA_DIR = Join-Path $Work "scenario-data"
+$env:CARTWAVE_AUDIO = "0"
 $p = Start-Process $exePath -PassThru -WorkingDirectory $Work
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"
@@ -69,7 +69,7 @@ Key 0x0D
 Start-Sleep -Milliseconds 800
 Shot "6_saved"
 Stop-Process -Id $p.Id -Force
-Remove-Item Env:CHIPDAW_AUDIO, Env:CHIPDAW_DATA_DIR
+Remove-Item Env:CARTWAVE_AUDIO, Env:CARTWAVE_DATA_DIR
 
 if (-not (Test-Path $out)) { "FAIL: $out was not written"; exit 1 }
 python -I -c @"

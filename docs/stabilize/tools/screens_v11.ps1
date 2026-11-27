@@ -1,19 +1,19 @@
-# usage: screens_v11.ps1 [-Exe .\target\release\app.exe]
+# usage: screens_v11.ps1 [-Exe .\target\release\cartwave.exe]
 # The v1.1 screenshots (docs/screens/v1.1/), 1440x900 at 100%, plus one export run through the
 # dialog (44.1 kHz, 24-bit, 8 channel stems), whose files are checked. Synthetic input.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-screens-v11"))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 $out = Join-Path $Repo "docs\screens\v1.1"
 New-Item -ItemType Directory -Force $out, $Work | Out-Null
 Remove-Item "$Work\*" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item docs\songs\v2\demo_band.chipdaw "$Work\demo.chipdaw" -Force
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_PROJECT = "$Work\demo.chipdaw"; $env:CHIPDAW_DATA_DIR = "$Work\data"; $env:CHIPDAW_AUDIO = "0"
-$env:CHIPDAW_EXPORT_TO = "$Work\export\song.wav"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_PROJECT = "$Work\demo.chipdaw"; $env:CARTWAVE_DATA_DIR = "$Work\data"; $env:CARTWAVE_AUDIO = "0"
+$env:CARTWAVE_EXPORT_TO = "$Work\export\song.wav"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"
@@ -54,11 +54,11 @@ Crop "export-dialog" "f_dialog" 355 110 1085 460
 Click 525 165                              # 44.1 kHz
 Click 748 165                              # 24-bit
 Click 620 229                              # 8 channels (the group row goes away)
-Click 418 318                              # Export... (CHIPDAW_EXPORT_TO: no dialog)
+Click 418 318                              # Export... (CARTWAVE_EXPORT_TO: no dialog)
 Start-Sleep -Seconds 4
 Move-To 1430 890; Full "f_exported"
 Stop-Process -Id $p.Id -Force
-Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_DATA_DIR, Env:CHIPDAW_AUDIO, Env:CHIPDAW_EXPORT_TO
+Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_DATA_DIR, Env:CARTWAVE_AUDIO, Env:CARTWAVE_EXPORT_TO
 
 python -I -c @"
 import os, struct, sys

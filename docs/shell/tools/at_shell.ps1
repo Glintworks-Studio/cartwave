@@ -1,4 +1,4 @@
-# usage: at_shell.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only AT-01,AT-03]
+# usage: at_shell.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only AT-01,AT-03]
 # Acceptance tests for Batches 1 and 2 (UX.md §6): AT-01, 02, 03, 04, 06, 15, 16, 18, 19.
 # Synthetic input as in docs/stabilize/tools/scenario_v11.ps1; the native dialogs are found
 # and answered through UI Automation (dialog.ps1), the menus are driven with their Alt
@@ -6,7 +6,7 @@
 # in obs.json, saves project files and screenshots into the work dir; check_shell.py then
 # checks obs.json and the saved files and prints PASS/FAIL per test.
 # Window 1440x900 at 100%, audio off, a throw-away data dir per test.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-shell-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
@@ -15,7 +15,7 @@ Set-Location $Repo
 $Exe = (Resolve-Path $Exe).Path
 New-Item -ItemType Directory -Force $Work | Out-Null
 $obs = [ordered]@{ work = $Work }
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 . "$Repo\docs\shell\tools\dialog.ps1"
 . "$Repo\docs\shell\tools\pixels.ps1"
@@ -27,11 +27,11 @@ $ErrorActionPreference = "Stop"
 function Want($id) { $Only.Count -eq 0 -or $Only -contains $id }
 function Fresh($name) { $p = Join-Path $Work "$name.chipdaw"; Copy-Item "$Repo\docs\songs\v2\demo_band.chipdaw" $p -Force; $p }
 function Launch([string]$Project = "", [string]$Data, [switch]$NoDev, [string[]]$AppArgs = @()) {
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 300
-  $env:CHIPDAW_DATA_DIR = $Data; $env:CHIPDAW_AUDIO = "0"
-  if ($NoDev) { Remove-Item Env:CHIPDAW_DEV -ErrorAction SilentlyContinue } else { $env:CHIPDAW_DEV = "1" }
-  if ($Project) { $env:CHIPDAW_PROJECT = $Project } else { Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue }
+  $env:CARTWAVE_DATA_DIR = $Data; $env:CARTWAVE_AUDIO = "0"
+  if ($NoDev) { Remove-Item Env:CARTWAVE_DEV -ErrorAction SilentlyContinue } else { $env:CARTWAVE_DEV = "1" }
+  if ($Project) { $env:CARTWAVE_PROJECT = $Project } else { Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue }
   if ($AppArgs.Count -gt 0) { $script:proc = Start-Process $Exe -ArgumentList $AppArgs -PassThru } else { $script:proc = Start-Process $Exe -PassThru }
   for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $script:proc.Id).MainWindowHandle -ne 0) { break } }
   Start-Sleep -Milliseconds 1500
@@ -120,7 +120,7 @@ if (Want "AT-01") {
   $obs.t01_close_dontsave = Press-Button "Don't Save"; Start-Sleep -Seconds 2
   $obs.t01_alive_after_dontsave = Alive
   $obs.t01_marker = (Get-Content (Join-Path $d "session.lock") -ErrorAction SilentlyContinue)
-  $obs.t01_recovery_file = Test-Path (Join-Path $d "recovery.chipdaw")
+  $obs.t01_recovery_file = Test-Path (Join-Path $d "recovery.cartwave")
   Launch -Data $d                                         # next start offers the unsaved work
   $obs.t01_restart_texts = (Ui-Texts) -join " | "
   Shot "at01_recovery_offer"
@@ -130,7 +130,7 @@ if (Want "AT-01") {
 # ─────────────────────────── AT-02 (F-02): debug keys only in dev mode ───────────────────────────
 if (Want "AT-02") {
   $a = Fresh "at02"; $d = Join-Path $Work "d02"
-  # Release build, no CHIPDAW_DEV: the project comes from the command line (CHIPDAW_PROJECT is a test hook).
+  # Release build, no CARTWAVE_DEV: the project comes from the command line (CARTWAVE_PROJECT is a test hook).
   Launch -Data $d -NoDev -AppArgs @("`"$a`"")
   Move-To 1300 800                                        # empty canvas: no hover, no tooltip
   Ctrl 0x53; Start-Sleep -Milliseconds 400; Copy-Item $a "$Work\at02_before.chipdaw" -Force
@@ -304,6 +304,6 @@ if (Want "AT-19") {
   Stop-App
 }
 
-Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_DATA_DIR, Env:CHIPDAW_AUDIO, Env:CHIPDAW_DEV -ErrorAction SilentlyContinue
+Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_DATA_DIR, Env:CARTWAVE_AUDIO, Env:CARTWAVE_DEV -ErrorAction SilentlyContinue
 $obs | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $Work "obs.json") -Encoding utf8
 python -I "$PSScriptRoot\check_shell.py" $Work

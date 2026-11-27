@@ -87,7 +87,7 @@ impl Cmd {
             Cmd::ProjectSettings => "Project Settings…".into(),
             Cmd::OpenRecent(i) => format!("Recent {i}"),
             Cmd::ClearRecent => "Clear Menu".into(),
-            Cmd::About => "About ChipDAW".into(),
+            Cmd::About => "About Cartwave".into(),
             Cmd::ShortcutSheet => "Keyboard Shortcuts".into(),
         }
     }
@@ -199,7 +199,7 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
     let mut out = Vec::new();
     if mac {
         out.push(MenuSpec {
-            title: "ChipDAW",
+            title: "Cartwave",
             entries: vec![
                 // Our own About (version, commit, licences, font credits): the
                 // system panel only knows the bundle's name, and there is no
@@ -532,7 +532,7 @@ mod native {
                             let p = match *which {
                                 "services" => PredefinedMenuItem::services(None),
                                 // The system's default label names the process ("Hide app").
-                                "hide" => PredefinedMenuItem::hide(Some("Hide ChipDAW")),
+                                "hide" => PredefinedMenuItem::hide(Some("Hide Cartwave")),
                                 "hide_others" => PredefinedMenuItem::hide_others(None),
                                 "show_all" => PredefinedMenuItem::show_all(None),
                                 "minimize" => PredefinedMenuItem::minimize(None),
@@ -664,7 +664,7 @@ mod tests {
         assert!(win.last().unwrap().entries.contains(&Entry::Item(Cmd::About)));
         // macOS: the App menu first, a Window menu, no Exit in File.
         let mac = spec(true);
-        assert_eq!(mac[0].title, "ChipDAW");
+        assert_eq!(mac[0].title, "Cartwave");
         assert!(mac.iter().any(|m| m.title == "Window"));
         assert!(!mac[1].entries.contains(&Entry::Item(Cmd::Action(Action::Quit))));
         // The App menu holds our About (licences, font credits), Settings and Quit.

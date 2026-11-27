@@ -1,6 +1,6 @@
-"""CPU-weighted analysis of a samply profile for the ChipDAW app process.
+"""CPU-weighted analysis of a samply profile for the Cartwave app process.
 
-usage: python -I analyze.py <profile.json.gz> <symbol-server-base-url> <out-prefix> [process=app.exe]
+usage: python -I analyze.py <profile.json.gz> <symbol-server-base-url> <out-prefix> [process=cartwave.exe]
 
 Weights every sample by threadCPUDelta (µs of real CPU since the previous
 sample), so off-CPU/wait samples from context-switch stacks count ~0.
@@ -14,7 +14,7 @@ import sys
 import urllib.request
 
 prof_path, server, out_prefix = sys.argv[1], sys.argv[2].rstrip('/'), sys.argv[3]
-proc_name = sys.argv[4] if len(sys.argv) > 4 else 'app.exe'
+proc_name = sys.argv[4] if len(sys.argv) > 4 else 'cartwave.exe'
 d = json.load(gzip.open(prof_path))
 libs = d['libs']
 threads = [t for t in d['threads'] if t.get('processName') == proc_name and t['samples']['length'] > 0]

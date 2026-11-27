@@ -18,7 +18,7 @@ out = pathlib.Path(sys.argv[1])
 n = int(sys.argv[2]) if len(sys.argv) > 2 else 4
 secs = 15 + n * 12
 os.environ["MC_DEVICE"] = "Mac mini Speakers"
-a = App("devsw", env={"CHIPDAW_AUDIOLOG": str(out), "CHIPDAW_QUIT_AFTER": str(secs), "CHIPDAW_AUTOPLAY": "1"})
+a = App("devsw", env={"CARTWAVE_AUDIOLOG": str(out), "CARTWAVE_QUIT_AFTER": str(secs), "CARTWAVE_AUTOPLAY": "1"})
 # Settings ▸ Audio: find the device buttons by screenshot positions (content coordinates).
 BUTTONS = {"M2": (611, 313), "Mac mini Speakers": (664, 341)}
 t0 = time.time()

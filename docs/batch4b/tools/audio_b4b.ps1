@@ -12,13 +12,13 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $Runs = $Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }
 New-Item -ItemType Directory -Force $Work | Out-Null
 python "$Repo\docs\batch4b\tools\fixtures_b4b.py" $Work | Out-Null
-$app = Join-Path $Repo "target\release\app.exe"
-$env:CHIPDAW_DEV = "1"
+$app = Join-Path $Repo "target\release\cartwave.exe"
+$env:CARTWAVE_DEV = "1"
 function Run-App([string]$name, [hashtable]$envs, [int]$secs) {
   $log = Join-Path $Work "$name.csv"
   $data = Join-Path $Work "data_$name"
   New-Item -ItemType Directory -Force $data | Out-Null
-  $all = @{ CHIPDAW_AUDIOLOG = $log; CHIPDAW_QUIT_AFTER = "$secs"; CHIPDAW_PILOT = "1"; CHIPDAW_GAIN = "0.3"; CHIPDAW_DATA_DIR = $data } + $envs
+  $all = @{ CARTWAVE_AUDIOLOG = $log; CARTWAVE_QUIT_AFTER = "$secs"; CARTWAVE_PILOT = "1"; CARTWAVE_GAIN = "0.3"; CARTWAVE_DATA_DIR = $data } + $envs
   foreach ($k in $all.Keys) { Set-Item "Env:$k" $all[$k] }
   $p = Start-Process -FilePath $app -PassThru -WorkingDirectory $Repo -RedirectStandardError (Join-Path $Work "$name.stderr.txt")
   try { if (-not $p.WaitForExit(($secs + 90) * 1000)) { $p.Kill(); "TIMEOUT $name" } }
@@ -28,13 +28,13 @@ function Run-App([string]$name, [hashtable]$envs, [int]$secs) {
 }
 foreach ($r in $Runs) {
   switch ($r) {
-    "S64U" { Run-App "S64U_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Work "fx_s64u.chipdaw") } $Secs }
+    "S64U" { Run-App "S64U_256" @{ CARTWAVE_BUFFER = "256"; CARTWAVE_AUTOPLAY = "1"; CARTWAVE_PROJECT = (Join-Path $Work "fx_s64u.chipdaw") } $Secs }
     # The third source for a pilot count that disagrees with the engine (B4B-D33): the same
     # project at Main -40 dB (4a's S64M method), so the mix can't mask or clip the pilot.
     "S64UM" {
       python -c "import json,sys; p=json.load(open(sys.argv[1],encoding='utf-8')); p['master_db']=-40.0; json.dump(p,open(sys.argv[2],'w',encoding='utf-8'))" (Join-Path $Work "fx_s64u.chipdaw") (Join-Path $Work "fx_s64u_main-40.chipdaw")
-      Run-App "S64UM_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1"; CHIPDAW_PROJECT = (Join-Path $Work "fx_s64u_main-40.chipdaw") } $Secs
+      Run-App "S64UM_256" @{ CARTWAVE_BUFFER = "256"; CARTWAVE_AUTOPLAY = "1"; CARTWAVE_PROJECT = (Join-Path $Work "fx_s64u_main-40.chipdaw") } $Secs
     }
-    "DEMO" { Run-App "DEMO_256" @{ CHIPDAW_BUFFER = "256"; CHIPDAW_AUTOPLAY = "1" } 120 }
+    "DEMO" { Run-App "DEMO_256" @{ CARTWAVE_BUFFER = "256"; CARTWAVE_AUTOPLAY = "1" } 120 }
   }
 }

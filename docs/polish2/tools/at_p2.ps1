@@ -1,10 +1,10 @@
-# usage: at_p2.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only P2-01,P2-11]
+# usage: at_p2.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only P2-01,P2-11]
 # Polish 2 scenarios (UX.md §6, P2-01…P2-11), the Batch 3 harness method: synthetic input into
 # the real app (default settings: the Overview and the status bar shown), saved files,
 # settings.json and dev-mode stderr lines, checked by check_p2.py.
 # Client px at 100%: top bar 76, Overview 76..108, ruler 108..136, rows from 136 every 73 px;
 # browser 0..241; headers 241..621 (left) or 1060..1440 (right); lanes 621.. at 92 px per bar.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-p2-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
 $global:Work = $Work
@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
 $global:Exe = (Resolve-Path $Exe).Path
 python "$Repo\docs\batch3\tools\fixtures.py" $Work | Out-Null
-foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $obs = [ordered]@{ work = $Work }
 # Clicks and drags settle on their spot first (hover state), so a click right after a layout
 # change (a width drag, a settings change) isn't lost.
@@ -220,7 +220,7 @@ if (Want "P2-09") {
 # ─────────── P2-10: the status bar ───────────
 if (Want "P2-10") {
   $p = Fx "fx_basic" "p210"; $d = Join-Path $Work "d210"
-  $env:CHIPDAW_FAKE_PROBLEM = "Audio dropouts: 3 buffer underruns so far. A larger buffer (Settings > Audio) helps."
+  $env:CARTWAVE_FAKE_PROBLEM = "Audio dropouts: 3 buffer underruns so far. A larger buffer (Settings > Audio) helps."
   Launch -Project $p -Data $d
   $L = Lay $false $false
   $f = Well $L 0 20; MoveL $f[0] $f[1]; Start-Sleep -Milliseconds 400
@@ -236,7 +236,7 @@ if (Want "P2-10") {
   Shot "p210_problems"
   K 0x1B
   $obs.p210_dev = @(DevLines $d "^dev: (help|menu Problems)")
-  Remove-Item Env:CHIPDAW_FAKE_PROBLEM
+  Remove-Item Env:CARTWAVE_FAKE_PROBLEM
   Stop-App
 }
 

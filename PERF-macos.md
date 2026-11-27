@@ -1,5 +1,7 @@
 # PERF-macos: ChipDAW on macOS (Apple M1, 320 Hz display)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 This is the companion to [PERF.md](PERF.md) (Windows). It covers the same scenarios and the same targets, plus the
 high-refresh question: what should the app do on a display that refreshes 5× faster than the
 one PERF.md was tuned on?

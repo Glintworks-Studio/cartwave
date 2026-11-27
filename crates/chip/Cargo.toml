@@ -3,6 +3,8 @@ name = "chip"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+authors = ["Glintworks"]
+homepage = "https://glintworks.studio"
 description = "Clean-room NES 2A03 APU + VRC6 expansion audio emulator, band-limited synthesis and a frame-tick sound driver. no_std, no allocation."
 
 [dependencies]

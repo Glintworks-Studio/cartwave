@@ -198,7 +198,7 @@ folded into the audio band. Pitch: the measured fundamental matches the period f
   - **No source disagrees, because only one makes any level claim, and it is qualitative.** That
     makes it the most uncertain number in the engine (§6.5, gap 1).
 
-### 3.4 Output stage (switchable: F7, `CHIPDAW_FILTER`)
+### 3.4 Output stage (switchable: F7, `CARTWAVE_FILTER`)
 
 | Mode | Stages | Source |
 |---|---|---|
@@ -451,7 +451,7 @@ was measured with the engine stopped. **On Windows it was not.** `bench.ps1` pre
 sends `Play`) *before* F4, so the engine was already playing when F4 loaded the 200 clips; only
 sequences that start with F4 alone (the macOS `chipbench` "200" scenario) hit the bug. The
 deciding probe: the pre-fix build (`4027a25`) run through `bench.ps1`'s exact key sequence with
-`CHIPDAW_AUDIOLOG` logged **0 playhead frames per second on the local clock** throughout the
+`CARTWAVE_AUDIOLOG` logged **0 playhead frames per second on the local clock** throughout the
 200-clip phase, i.e. every frame's playhead came from the playing engine. The original numbers
 therefore stand. The re-measured column (current build, fork commit 10, the F3 overlay showing
 "clock audio 60/s local 0/s") agrees within run-to-run noise. Two differences from the original

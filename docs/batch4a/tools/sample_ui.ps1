@@ -1,15 +1,15 @@
 # usage: sample_ui.ps1 -Repo <repo> -Out <folded file> [-Samples 3000] [-Interval 5]
-# Batch 4a gate 6 attribution: plays the demo song (CHIPDAW_AUTOPLAY) in the foreground and
+# Batch 4a gate 6 attribution: plays the demo song (CARTWAVE_AUTOPLAY) in the foreground and
 # samples the UI thread's stacks with docs/perf/tools/Sampler.cs (no ETW, no elevation).
 # Writes folded stacks ("a;b;c count") to -Out. Compare two builds with fold_diff.py.
 # -DragY <client y>: sample during a drag instead (the time scrollbar's thumb: 890 on the
 # baseline, 817 with the Main row at 1440 x 920).
 param([string]$Repo, [string]$Out, [int]$Samples = 3000, [int]$Interval = 5, [int]$DragY = 0)
 $Tools = Join-Path $PSScriptRoot "..\..\perf\tools"
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUTOPLAY = "1"
-$env:CHIPDAW_DATA_DIR = Join-Path $env:TEMP "chipdaw-sample-ui"
-$exe = Join-Path $Repo "target\release\app.exe"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUTOPLAY = "1"
+$env:CARTWAVE_DATA_DIR = Join-Path $env:TEMP "chipdaw-sample-ui"
+$exe = Join-Path $Repo "target\release\cartwave.exe"
 $p = Start-Process $exe -ArgumentList "--size", "1440x920" -PassThru -WorkingDirectory $Repo
 Start-Sleep -Seconds 4
 $p.Refresh(); $global:AppH = $p.MainWindowHandle

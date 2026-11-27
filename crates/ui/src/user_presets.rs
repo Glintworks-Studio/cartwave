@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn save_and_load_round_trip_with_unique_names() {
-        let dir = std::env::temp_dir().join(format!("chipdaw-presets-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cartwave-presets-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join(FILE);
         let mut cello = LaneInstrument::named("Cello");

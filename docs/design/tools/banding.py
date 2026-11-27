@@ -13,7 +13,7 @@ run of 4 px or more ("banded rows").
 Screenshots (window px: client + (1, 51)), from snap.ps1:
 - band-prerun.png     main 23b5da9, a clip selected (no dithering anywhere)
 - band-dither.png     this build, a clip selected
-- band-nodither.png   this build with CHIPDAW_NO_DITHER=1 (procedural gradients undithered;
+- band-nodither.png   this build with CARTWAVE_NO_DITHER=1 (procedural gradients undithered;
                       the stylesheet's are dithered by the vizia fork either way)
 - band-idle-*.png     the same pair, nothing selected (the canvas under the lanes shows)
 """

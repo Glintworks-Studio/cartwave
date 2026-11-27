@@ -1,5 +1,7 @@
 # BATCH4B.md: visual fixups, stereo, unison, MIDI import as tracks, the mixer view
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Branch **`batch4b/mixer`** (from `main` d4f1afd), pushed. Prompt: `BATCH4B_PROMPT.md`. Decisions:
 [`docs/RUNLOG.md`](docs/RUNLOG.md) **B4B-D1…D32**. Spec: [`VISION.md`](VISION.md), [`UX.md`](UX.md)
 §4f and §8; [`docs/design/VISUAL-SPEC.md`](docs/design/VISUAL-SPEC.md) §13. Vizia fork:

@@ -8,7 +8,7 @@ $global:Work = $Work
 New-Item -ItemType Directory -Force $Work | Out-Null
 . (Join-Path $PSScriptRoot "lib.ps1")
 Set-Location $Repo
-$global:Exe = (Resolve-Path ".\target\release\app.exe").Path
+$global:Exe = (Resolve-Path ".\target\release\cartwave.exe").Path
 Add-Type @"
 using System; using System.Runtime.InteropServices;
 public class CR { [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rt, B; }
@@ -17,9 +17,9 @@ public class CR { [StructLayout(LayoutKind.Sequential)] public struct R { public
 foreach ($sc in $Scales.Split(",")) {
   $sc = [int]$sc
   $p = Join-Path $Work "demo_$sc.chipdaw"; Copy-Item "$Repo\docs\songs\v3\demo_band.chipdaw" $p -Force
-  $env:CHIPDAW_OPEN_CLIP = "1"
+  $env:CARTWAVE_OPEN_CLIP = "1"
   Launch -Project $p -Data (Join-Path $Work "d$sc") -Scale $sc
-  Remove-Item Env:CHIPDAW_OPEN_CLIP
+  Remove-Item Env:CARTWAVE_OPEN_CLIP
   $r = New-Object CR+R; [CR]::GetClientRect($global:AppH, [ref]$r) | Out-Null
   "scale $sc%: client $($r.Rt)x$($r.B) (logical $([math]::Round($r.Rt / ($sc / 100)))x$([math]::Round($r.B / ($sc / 100))))"
   (StdErr (Join-Path $Work "d$sc") | Where-Object { $_ -match "piano roll bounds" } | Select-Object -Last 1)

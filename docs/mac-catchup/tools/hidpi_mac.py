@@ -36,7 +36,7 @@ print("display", DISP, "mode before:", orig)
 bounds = re.search(r"bounds \(([-0-9.]+), ([-0-9.]+)", subprocess.run([str(dm), "origin", DISP], capture_output=True, text=True).stdout)
 orig_xy = (str(int(float(bounds.group(1)))), str(int(float(bounds.group(2)))))
 env_pil = dict(os.environ, PYTHONPATH=str(REPO / "docs/mac-catchup/tools/pilshim"))
-QUIET = {"CHIPDAW_AUDIO": "0", "CHIPDAW_FROZEN_METERS": "1"}
+QUIET = {"CARTWAVE_AUDIO": "0", "CARTWAVE_FROZEN_METERS": "1"}
 results = []
 try:
     print(subprocess.run([str(dm), "set", DISP, HIDPI], capture_output=True, text=True).stdout)
@@ -50,7 +50,7 @@ try:
         ("E1-overview", REPO / "docs/polish2/songs/mockup.chipdaw", "136,209,282,355", "136,209,282,355", [], "1"),
     ]
     for board, song, btops, atops, extra, overview in runs:
-        a = App("hidpi", song, env=dict(QUIET, CHIPDAW_OVERVIEW=overview))
+        a = App("hidpi", song, env=dict(QUIET, CARTWAVE_OVERVIEW=overview))
         # Onto the HiDPI display: global (40, -680) is inside its 1280 x 720 pt frame above the main display.
         subprocess.run([str(winctl), str(a.p.pid), "move", "40", "-690"], capture_output=True)
         time.sleep(2.5)

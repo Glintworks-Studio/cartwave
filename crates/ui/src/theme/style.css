@@ -1,4 +1,4 @@
-/* ChipDAW main stylesheet. Values mirror src/theme/tokens.rs, which holds
+/* Cartwave main stylesheet. Values mirror src/theme/tokens.rs, which holds
    the palette sampled from the reference prototype (docs/design/reference.png).
    Every layout distance is a multiple of 4 px; 1 px hairlines are the only
    exception.

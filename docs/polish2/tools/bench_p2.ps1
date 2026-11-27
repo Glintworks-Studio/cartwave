@@ -8,16 +8,16 @@
 # Appends one line per run to <Work>\bench_p2_log.txt with proof the 200-clip set was on.
 param([string]$Label = "run", [int]$Secs = 12, [string]$Repo, [switch]$New, [string]$Only = "",
   [string]$Work = (Join-Path $env:TEMP "chipdaw-p2-perf"))
-$env:CHIPDAW_DEV = "1"
-foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM", "CHIPDAW_PROJECT", "CHIPDAW_FROZEN_METERS") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+$env:CARTWAVE_DEV = "1"
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM", "CARTWAVE_PROJECT", "CARTWAVE_FROZEN_METERS") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Force $Work | Out-Null
 $d = Join-Path $Work "data-$Label"
 Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $d | Out-Null
-$env:CHIPDAW_DATA_DIR = $d
+$env:CARTWAVE_DATA_DIR = $d
 Set-Location $Repo
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$p = Start-Process ".\target\release\app.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_p2_err.txt"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$p = Start-Process ".\target\release\cartwave.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_p2_err.txt"
 Start-Sleep -Seconds 3
 . "$PSScriptRoot\..\..\perf\tools\input.ps1"
 $global:AppH = $p.MainWindowHandle

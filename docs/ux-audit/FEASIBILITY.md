@@ -1,5 +1,7 @@
 # UX audit, part 3: technical feasibility
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · build `stabilize/v1.1` @ `c0037d3` · Windows 11 · vizia fork `159bbe55`, winit
 0.30.13. Probes live in [`probes/`](probes/) and are built separately: each is its own Cargo
 project with an empty `[workspace]`, never linked into the app. Raw logs and step-by-step evidence:

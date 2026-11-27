@@ -4,9 +4,9 @@
 # Prints the busiest threads by start order (thread 0 = the UI thread).
 param([string]$Repo, [int]$DragY = 0, [int]$Secs = 12, [switch]$Demo, [int]$PreIdle = 3)
 # -Demo: the bench's demo step instead (no autoplay; idle, then Space, 2 s, measure; no F4).
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DEV = "1"; if (-not $Demo) { $env:CHIPDAW_AUTOPLAY = "1" } else { Remove-Item Env:CHIPDAW_AUTOPLAY -ErrorAction SilentlyContinue }; $env:CHIPDAW_DATA_DIR = Join-Path $env:TEMP "chipdaw-thread-cpu"
-$p = Start-Process (Join-Path $Repo "target\release\app.exe") -ArgumentList "--size", "1440x920" -PassThru -WorkingDirectory $Repo
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DEV = "1"; if (-not $Demo) { $env:CARTWAVE_AUTOPLAY = "1" } else { Remove-Item Env:CARTWAVE_AUTOPLAY -ErrorAction SilentlyContinue }; $env:CARTWAVE_DATA_DIR = Join-Path $env:TEMP "chipdaw-thread-cpu"
+$p = Start-Process (Join-Path $Repo "target\release\cartwave.exe") -ArgumentList "--size", "1440x920" -PassThru -WorkingDirectory $Repo
 Start-Sleep -Seconds 4
 $p.Refresh(); $global:AppH = $p.MainWindowHandle
 . (Join-Path $PSScriptRoot "..\..\perf\tools\input.ps1")

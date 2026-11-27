@@ -26,7 +26,7 @@ are not from the reference. Priority: **M** must · **S** should · **L** later.
 
 **Correction to the draft:** the frame-rate cap defaults to **60 fps** (PERF-macos.md §6,
 ENGINE-macos.md §1), not "Display rate". The options are **60** and **120**; **Off** exists only in
-dev mode (`CHIPDAW_DEV=1`).
+dev mode (`CARTWAVE_DEV=1`).
 
 ---
 
@@ -36,8 +36,8 @@ Native menus (docs/ux-audit/FEASIBILITY.md §1). On Windows, About goes under He
 Edit (Windows convention), Exit under File.
 
 **macOS (as built, MAC-CATCHUP.md):** the system menu bar: App, File, Edit, Create, View, Window, Help.
-- **App menu** (the name becomes Cartwave with the planned code rename, VISION.md): About ChipDAW (our About: version, commit, licences, font credits), Settings… ⌘,,
-  Services ▸, Hide ChipDAW ⌘H, Hide Others ⌥⌘H, Show All, Quit ChipDAW ⌘Q. (Unbundled, the menu bar's
+- **App menu** (renamed 2026-11-27, RENAME.md): About Cartwave (our About: version, commit, licences, font credits), Settings… ⌘,,
+  Services ▸, Hide Cartwave ⌘H, Hide Others ⌥⌘H, Show All, Quit Cartwave ⌘Q. (Unbundled, the menu bar's
   bold title reads the process name, "app", until the app ships as an `.app` bundle.)
 - **File** has no Quit; **Edit** has no Settings; **Help** has no About. macOS adds its own Edit items
   (Writing Tools, AutoFill, Start Dictation…, Emoji & Symbols) and View ▸ Enter Full Screen.
@@ -52,7 +52,7 @@ Edit (Windows convention), Exit under File.
 |---|---|---|---|---|---|
 | New | Ctrl+N | ⌘N | New empty project (asks to save if dirty) | M | ✓ |
 | New from MIDI File… | — | — | Today's "replace with MIDI" behaviour | S | ✓ |
-| Open… | Ctrl+O | ⌘O | Open a `.chipdaw` (asks to save if dirty) | M | ✓ |
+| Open… | Ctrl+O | ⌘O | Open a `.cartwave` or `.chipdaw` (asks to save if dirty) | M | ✓ |
 | Open Recent ▸ | — | — | Last 10 projects; "Clear Menu" | M | ✓ |
 | Save | Ctrl+S | ⌘S | Save | M | ✓ |
 | Save As… | Ctrl+Shift+S | ⇧⌘S | Save under a new name | M | ✓ |
@@ -112,7 +112,7 @@ Edit (Windows convention), Exit under File.
 |---|---|---|---|
 | Keyboard Shortcuts | A generated sheet from the one shortcut table (F-30), per platform | M | ✓ |
 | Getting Started | Reopens the empty-project guide (F-14) | S | ✓ · **done** (B3) |
-| About ChipDAW (Windows) | Version, commit, licences, font credits (ASSETS.md) | M | ✓ |
+| About Cartwave (Windows) | Version, commit, licences, font credits (ASSETS.md) | M | ✓ |
 
 ### Window (macOS only)
 Minimize ⌘M, Zoom, bring all to front: the system defaults.
@@ -122,8 +122,8 @@ Minimize ⌘M, Zoom, bring all to front: the system defaults.
 Built as an **in-app modal panel**, not a second OS window (docs/ux-audit/FEASIBILITY.md §3: the fork's
 second window has title and focus bugs, and baseview plugins can't open one).
 
-Stored in `settings.json` in the data dir (`%APPDATA%\ChipDAW`, `~/Library/Application
-Support/ChipDAW`). Every field has a default, unknown fields are ignored (today's rule,
+Stored in `settings.json` in the data dir (`%APPDATA%\Cartwave`, `~/Library/Application
+Support/Cartwave`; the pre-rename `ChipDAW` folder moves over on the first launch, RENAME.md). Every field has a default, unknown fields are ignored (today's rule,
 `file.rs:677`).
 
 | Tab | Setting | Default | Pri | CEO |
@@ -179,7 +179,7 @@ Stored **in the project file** (v5 since the design pass).
 | Clip name | In place (Ctrl+R) | Inspector text field becomes a label |
 | Loop on/off | Capsule loop light (+ Ctrl+L sets and enables) | — |
 | Rewind | Home key / Stop when stopped | Clock double-click |
-| Debug tools | `CHIPDAW_DEV=1` builds only | F3–F7 in release |
+| Debug tools | `CARTWAVE_DEV=1` builds only | F3–F7 in release |
 
 ## 4a. Colours (polish pass)
 
@@ -386,8 +386,8 @@ saved file or screenshot), or as `crates/ui/tests` unit tests where marked [unit
 
 | ID | Test |
 |---|---|
-| AT-01 (F-01) | Edit a clip, press Ctrl+N: a "Save changes?" prompt appears; Cancel leaves the clip; Don't Save gives an empty project. Repeat for Ctrl+O, Import MIDI, a dropped `.chipdaw`, and closing the window. With no edits, Ctrl+N shows no prompt |
-| AT-02 (F-02) | In a release build without `CHIPDAW_DEV`, press F3–F7: the saved project is byte-identical and no overlay appears (screenshot diff) |
+| AT-01 (F-01) | Edit a clip, press Ctrl+N: a "Save changes?" prompt appears; Cancel leaves the clip; Don't Save gives an empty project. Repeat for Ctrl+O, Import MIDI, a dropped `.cartwave` or `.chipdaw`, and closing the window. With no edits, Ctrl+N shows no prompt |
+| AT-02 (F-02) | In a release build without `CARTWAVE_DEV`, press F3–F7: the saved project is byte-identical and no overlay appears (screenshot diff) |
 | AT-03 (F-03) | Focus the browser search, type "a b": transport stays stopped (playhead tick unchanged in the saved file) and the field reads "a b". Rename a clip, press Ctrl+Z in the field: the saved clip name is the new one |
 | AT-04 (F-04) | Set the profile to 2A03 with clips on VRC6 lanes: a confirmation appears; after it, the VRC6 headers are drawn dimmed (pixel check) |
 | AT-06 (F-06) | Menus exist: invoking File > Save via the menu API writes the file; every menu item's accelerator matches the shortcut table [unit] |

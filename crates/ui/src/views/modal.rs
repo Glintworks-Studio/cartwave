@@ -130,7 +130,7 @@ pub fn build(cx: &mut Context, s: Signals) {
                 let title = match m {
                     Modal::Settings(_) => "SETTINGS",
                     Modal::ProjectSettings => "PROJECT SETTINGS",
-                    Modal::About => "ABOUT CHIPDAW",
+                    Modal::About => "ABOUT CARTWAVE",
                     Modal::Shortcuts => "KEYBOARD SHORTCUTS",
                 };
                 HStack::new(cx, |cx| {
@@ -469,7 +469,9 @@ pub const CREDITS: &[&str] = &[
 ];
 
 fn about(cx: &mut Context) {
-    Label::new(cx, format!("ChipDAW {}  ·  build {}", env!("CARGO_PKG_VERSION"), env!("CHIPDAW_COMMIT"))).class("modal-title");
+    use crate::identity::{APP_NAME, COMPANY, WEBSITE};
+    Label::new(cx, format!("{APP_NAME} {}  ·  build {}", env!("CARGO_PKG_VERSION"), env!("CARTWAVE_COMMIT"))).class("modal-title");
+    note(cx, format!("Made by {COMPANY}  ·  {WEBSITE}"));
     for line in CREDITS {
         note(cx, *line);
     }

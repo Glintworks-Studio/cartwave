@@ -129,9 +129,9 @@ pub fn show(q: &Ask, hwnd: Option<isize>) -> (Choice, bool) {
     if crate::dev::enabled() {
         eprintln!("dev: warning {} | {}", q.title, q.text.replace('\n', " / "));
     }
-    // Scripted UI tests: `CHIPDAW_WARN_ANSWER=fit|unlock|cancel[,dont]` answers
+    // Scripted UI tests: `CARTWAVE_WARN_ANSWER=fit|unlock|cancel[,dont]` answers
     // without a dialog (the harness still sees the dev line above).
-    if let Some(a) = crate::dev::var("CHIPDAW_WARN_ANSWER") {
+    if let Some(a) = crate::dev::var("CARTWAVE_WARN_ANSWER") {
         let c = match a.split(',').next().unwrap_or("") {
             "unlock" if q.unlock.is_some() => Choice::Unlock,
             "fit" if q.fit.is_some() => Choice::Fit,
@@ -158,7 +158,7 @@ mod platform {
     const ID_CANCEL: i32 = 2; // IDCANCEL: Esc and the close box answer Cancel.
 
     pub fn show(q: &Ask, hwnd: Option<isize>) -> (Choice, bool) {
-        let title = wide("ChipDAW");
+        let title = wide("Cartwave");
         let main = wide(q.title);
         let content = wide(q.text);
         let verify = wide("Don't ask again");
@@ -214,7 +214,7 @@ mod platform {
             (Some(x), None) | (None, Some(x)) => MessageButtons::OkCancelCustom(x.into(), "Cancel".into()),
             (None, None) => MessageButtons::Ok,
         };
-        let r = rfd::MessageDialog::new().set_level(rfd::MessageLevel::Warning).set_title("ChipDAW").set_description(text).set_buttons(buttons).show();
+        let r = rfd::MessageDialog::new().set_level(rfd::MessageLevel::Warning).set_title("Cartwave").set_description(text).set_buttons(buttons).show();
         let c = match r {
             R::Custom(c) if Some(c.as_str()) == q.unlock => Choice::Unlock,
             R::Custom(c) if Some(c.as_str()) == q.fit => Choice::Fit,

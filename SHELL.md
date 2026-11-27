@@ -22,7 +22,7 @@ commits, no conflicts). On `main`: 153 tests pass, golden render included; `main
 | PERF.md pacing, 30 s each | demo / 200 / drag: **0 frames > 20 ms, 0 stalls**, 60.0 updates/s |
 | Piano roll, 2,000 notes | playing **7.2%**, dragging **7.8%** |
 | ENGINE.md stress A and C, 120 s, loopback, 23 kHz pilot | **0 pilot dropouts**, 0 starved / late, 0 allocation violations (HDMI endpoint: the MOTU is not connected) |
-| Every harness re-run after the `CHIPDAW_DEV` change | all reach their scenario (proof per harness below) |
+| Every harness re-run after the `CARTWAVE_DEV` change | all reach their scenario (proof per harness below) |
 
 **Built.**
 - **Batch 1:** save prompts and a dirty flag (F-01), debug keys and test hooks only in dev mode
@@ -86,24 +86,24 @@ commits, no conflicts). On `main`: 153 tests pass, golden render included; `main
   again. New, Open and Save mark the document clean. A song made from a MIDI file and a recovered
   session start out unsaved.
 - **Save / Don't Save / Cancel**, a native task dialog with the app window as its parent. It
-  appears for: New, Open, Open Recent, New from MIDI File, dropping a `.chipdaw` or `.mid`, closing
+  appears for: New, Open, Open Recent, New from MIDI File, dropping a `.cartwave`, `.chipdaw` or `.mid`, closing
   the window (also Alt+F4) and Quit. A clean document never gets the prompt. The window close is
   cancelled by the root model consuming `WindowClose`: models see the event before the window
   view, so no fork change was needed.
-- **Title:** `*name — ChipDAW`, or `Untitled` when the project has no file.
+- **Title:** `*name — Cartwave`, or `Untitled` when the project has no file.
 - **Recovery after an unsaved quit** (Settings > Files, on by default). Don't Save on quit writes
-  the work to `recovery.chipdaw` and marks the session as `unsaved-quit`. The next start offers it
+  the work to `recovery.cartwave` (`recovery.chipdaw` before the rename) and marks the session as `unsaved-quit`. The next start offers it
   with "Unsaved changes from your last session" (`file::LastSession`, unit-tested).
 
 ### F-02 Debug keys only in dev mode (AT-02)
-- `dev::enabled()` is true in a debug build or with `CHIPDAW_DEV=1`. F3–F7 and every test hook
-  (`CHIPDAW_STRESS`, `_PROJECT`, `_OPEN_CLIP`, `_PIANO_ZOOM`, `_EXPORT_TO`, `_FRAMELOG`,
+- `dev::enabled()` is true in a debug build or with `CARTWAVE_DEV=1`. F3–F7 and every test hook
+  (`CARTWAVE_STRESS`, `_PROJECT`, `_OPEN_CLIP`, `_PIANO_ZOOM`, `_EXPORT_TO`, `_FRAMELOG`,
   `_FPS_CAP`, `_SONG`, `_PILOT`, `_AUTO_EDIT`, `_AVSYNC`, …) go through it. Plain configuration
-  stays open: `CHIPDAW_DATA_DIR`, `CHIPDAW_AUDIO=0`, `CHIPDAW_VSYNC=0`.
+  stays open: `CARTWAVE_DATA_DIR`, `CARTWAVE_AUDIO=0`, `CARTWAVE_VSYNC=0`.
 - AT-02: in a release build without dev mode, F3–F7 leave the saved project byte-identical and the
   window **0 px** different. The control run in dev mode changes 154,704 px (F3 overlay) and swaps
   in the 200-clip set (F4).
-- **Every harness** sets `CHIPDAW_DEV=1`: 13 PowerShell scripts and 2 macOS scripts. In dev mode
+- **Every harness** sets `CARTWAVE_DEV=1`: 13 PowerShell scripts and 2 macOS scripts. In dev mode
   the app prints one stderr line per hook it applied, and the harnesses check for it:
 
 | Harness | Proof it reached its scenario |

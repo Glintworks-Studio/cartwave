@@ -11,7 +11,7 @@ Add-Type -AssemblyName UIAutomationTypes
 $global:UIA = [System.Windows.Automation.AutomationElement]
 $global:Cond = [System.Windows.Automation.PropertyCondition]
 
-function AppPid { (Get-Process -Name app | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).Id }
+function AppPid { (Get-Process -Name cartwave | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).Id }
 
 function Find-Dialog([int]$Timeout = 3000) {
   $procId = AppPid
@@ -83,7 +83,7 @@ Add-Type -Namespace MenuIn -Name K -MemberDefinition '[DllImport("user32.dll")] 
 function MKey([byte]$vk) { [MenuIn.K]::keybd_event($vk, 0, 0, [UIntPtr]::Zero); Start-Sleep -Milliseconds 30; [MenuIn.K]::keybd_event($vk, 0, 2, [UIntPtr]::Zero); Start-Sleep -Milliseconds 60 }
 
 function Open-Menu([string]$Top) {
-  $h = (Get-Process -Name app | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).MainWindowHandle
+  $h = (Get-Process -Name cartwave | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).MainWindowHandle
   [MenuIn.K]::SetForegroundWindow($h) | Out-Null
   Start-Sleep -Milliseconds 100
   $vk = [byte][char]$Top.Substring(0, 1).ToUpper()

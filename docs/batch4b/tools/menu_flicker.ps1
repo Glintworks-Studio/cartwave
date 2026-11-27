@@ -1,10 +1,10 @@
-# usage: menu_flicker.ps1 -Out <dir> [-Exe .\target\release\app.exe] [-DarkMenus] [-Seconds 4]
+# usage: menu_flicker.ps1 -Out <dir> [-Exe .\target\release\cartwave.exe] [-DarkMenus] [-Seconds 4]
 # Batch 4b §3.4 (K1): does the Windows menu bar (File, Edit, …) flash while the window is
 # resized? Launches the app (Settings > Display > Dark menus on or off), starts ffmpeg grabbing
 # the menu-bar band (ddagrab, every composed frame up to 120 fps; or gdigrab 60), PNG frames, then resizes the window by a real mouse drag
 # on its bottom-right corner (Windows' own sizing loop, as a user does), back and forth for
 # -Seconds. flicker.py counts the frames where the band turns light.
-param([string]$Out, [string]$Exe = ".\target\release\app.exe", [switch]$DarkMenus, [int]$Seconds = 4, [string]$Grabber = "ddagrab", [string]$Edge = "corner", [switch]$SelfTest)
+param([string]$Out, [string]$Exe = ".\target\release\cartwave.exe", [switch]$DarkMenus, [int]$Seconds = 4, [string]$Grabber = "ddagrab", [string]$Edge = "corner", [switch]$SelfTest)
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 Get-ChildItem $Out -Filter "f_*.png" -ErrorAction SilentlyContinue | Remove-Item -Force
@@ -27,9 +27,9 @@ public class Fl {
 }
 "@
 [Fl]::SetProcessDPIAware() | Out-Null
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_AUDIO = "0"; $env:CHIPDAW_DEV = "1"
-Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_AUDIO = "0"; $env:CARTWAVE_DEV = "1"
+Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
 Start-Sleep -Milliseconds 2500
 $h = (Get-Process -Id $p.Id).MainWindowHandle

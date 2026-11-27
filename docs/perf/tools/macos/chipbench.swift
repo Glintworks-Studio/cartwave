@@ -1,4 +1,4 @@
-// chipbench: macOS measurement harness for ChipDAW (the counterpart of bench.ps1 + pacing.ps1).
+// chipbench: macOS measurement harness for Cartwave (the counterpart of bench.ps1 + pacing.ps1).
 //
 // usage: chipbench --app <path> --scenario idle|demo|200|drag [--secs 12] [--warmup 0]
 //                  [--env K=V]... [--framelog <csv>] [--sck <txt>] [--drag-hz 125]

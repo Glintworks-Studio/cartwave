@@ -1,6 +1,6 @@
 //! Command-line game export: the same code as the app's export dialog.
 //!
-//! cargo run --release -p ui --example game_export -- [options] <song.chipdaw | tune.mid [sample.wav ...]> <out dir>
+//! cargo run --release -p ui --example game_export -- [options] <song.cartwave | song.chipdaw | tune.mid [sample.wav ...]> <out dir>
 //!
 //! Options: --rate 44100|48000  --bits 16|24  --stems none|channels|groups
 //!          --range loop|song  --loop-bars N (loop the last N bars)  --name base

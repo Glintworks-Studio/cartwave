@@ -1,4 +1,4 @@
-# usage: at_dp.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only DP-01,DP-03]
+# usage: at_dp.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only DP-01,DP-03]
 # Design pass scenarios (DESIGN_PASS_PROMPT.md §4.5), the same method as the Batch 3
 # harness (docs/batch3/tools): synthetic input into the real app, dev-mode stderr
 # lines and saved files checked afterwards by check_dp.py.
@@ -9,7 +9,7 @@
 #   DP-05  the bit depth is saved in the project and shown in the display
 # Client px at 100% (Option D): top bar 0..75, ruler 76..103, rows from 104 every 73 px,
 # browser 0..239, track headers 241..620, lanes from 621 (92 px per bar).
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-dp-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
 $global:Work = $Work

@@ -1731,9 +1731,9 @@ impl VolumeFader {
 
     pub fn new(cx: &mut Context, s: Signals, lane: usize) -> Handle<'_, Self> {
         let shown = Cell::new((u16::MAX, 0u16));
-        // `CHIPDAW_FROZEN_METERS=1` (dev): the meters don't follow the level
+        // `CARTWAVE_FROZEN_METERS=1` (dev): the meters don't follow the level
         // (the performance attribution in DESIGNPASS.md §6).
-        let frozen = crate::dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1");
+        let frozen = crate::dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1");
         Self { s, lane, drag: None, hover: false, wheel: Default::default() }
             .build(cx, |_| {})
             .class("fader")

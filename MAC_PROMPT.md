@@ -1,5 +1,7 @@
 # Task: Publish ChipDAW to GitHub, then build and measure it on macOS (M1)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 This prompt has **two parts that run on two different machines**:
 
 - **Part 1:** run on the **Windows PC**, where the project lives today.

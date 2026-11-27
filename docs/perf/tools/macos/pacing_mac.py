@@ -2,10 +2,10 @@
 
 usage: pacing_mac.py <framelog.csv> <secs> [sck.txt] [--hz 320] [--json]
 
-framelog.csv  CHIPDAW_FRAMELOG output; the last <secs> seconds are analyzed.
+framelog.csv  CARTWAVE_FRAMELOG output; the last <secs> seconds are analyzed.
 sck.txt       chipbench --sck output: display times (s) of the frames in which the
               app window's content changed, as seen by the window server.
---hz          refresh rate of the display under test (default $CHIPDAW_REFRESH_HZ or 320).
+--hz          refresh rate of the display under test (default $CARTWAVE_REFRESH_HZ or 320).
 
 App side: presented-frame intervals (the backend's swap-to-swap time).
 Display side (SCK): the interval between consecutive window updates, expressed in
@@ -22,7 +22,7 @@ import sys
 
 argv = [a for a in sys.argv[1:] if not a.startswith("--")]
 flags = sys.argv[1:]
-hz = float(os.environ.get("CHIPDAW_REFRESH_HZ", "320"))
+hz = float(os.environ.get("CARTWAVE_REFRESH_HZ", "320"))
 if "--hz" in flags:
     hz = float(flags[flags.index("--hz") + 1])
     argv = [a for a in argv if a != flags[flags.index("--hz") + 1]]

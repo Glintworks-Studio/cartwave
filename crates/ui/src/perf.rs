@@ -1,5 +1,5 @@
 //! Lightweight profiling: per-view draw spans, process CPU, and an optional
-//! per-frame log (`CHIPDAW_FRAMELOG=<path>`). Costs a couple of `Instant::now()`
+//! per-frame log (`CARTWAVE_FRAMELOG=<path>`). Costs a couple of `Instant::now()`
 //! calls per instrumented draw.
 
 use std::cell::RefCell;
@@ -186,7 +186,7 @@ pub fn log_gl_info_once() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         if let Some(info) = gl_info() {
-            eprintln!("chipdaw: {info}");
+            eprintln!("cartwave: {info}");
         }
     });
 }
@@ -252,7 +252,7 @@ impl CpuMeter {
     }
 }
 
-/// Optional CSV frame log, enabled with `CHIPDAW_FRAMELOG=<path>`.
+/// Optional CSV frame log, enabled with `CARTWAVE_FRAMELOG=<path>`.
 pub struct FrameLog {
     out: Option<std::io::BufWriter<std::fs::File>>,
     /// Per-view span times, one line per frame (`<log>.spans`).
@@ -264,7 +264,7 @@ pub struct FrameLog {
 
 impl FrameLog {
     pub fn from_env() -> Self {
-        let out = crate::dev::var_os("CHIPDAW_FRAMELOG").and_then(|p| std::fs::File::create(p).ok()).map(|f| {
+        let out = crate::dev::var_os("CARTWAVE_FRAMELOG").and_then(|p| std::fs::File::create(p).ok()).map(|f| {
             let mut w = std::io::BufWriter::new(f);
             let _ = writeln!(
                 w,
@@ -272,7 +272,7 @@ impl FrameLog {
             );
             w
         });
-        let spans_out = crate::dev::var_os("CHIPDAW_FRAMELOG").and_then(|p| {
+        let spans_out = crate::dev::var_os("CARTWAVE_FRAMELOG").and_then(|p| {
             let mut p = std::path::PathBuf::from(p);
             p.set_extension("spans");
             std::fs::File::create(p).ok()

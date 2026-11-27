@@ -1,13 +1,13 @@
-# usage: sample_drag.ps1 -Exe <app.exe> -Out <folded.txt> [-DragX 760 -DragY 140] [-Samples 2000]
+# usage: sample_drag.ps1 -Exe <cartwave.exe> -Out <folded.txt> [-DragX 760 -DragY 140] [-Samples 2000]
 # Samples the UI (main) thread's stacks during the 200-clip drag (docs/perf/tools/Sampler.cs,
 # a non-ETW sampler) and writes folded stacks. Used to attribute the drag's CPU (POLISH.md).
 param([string]$Exe, [string]$Out, [int]$DragX = 760, [int]$DragY = 140, [int]$Samples = 2000)
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 . "$Repo\docs\perf\tools\input.ps1"
 Add-Type -Path "$Repo\docs\perf\tools\Sampler.cs"
-Get-Process app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 $d = Join-Path $env:TEMP "chipdaw-sample"; New-Item -ItemType Directory -Force $d | Out-Null
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "1"; $env:CHIPDAW_STRESS = "1"
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "1"; $env:CARTWAVE_STRESS = "1"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; $p.Refresh(); if ($p.MainWindowHandle -ne 0) { break } }
 Start-Sleep 3

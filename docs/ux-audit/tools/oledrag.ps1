@@ -64,7 +64,7 @@ public static class OleDrag {
         Log(string.Format("target HWND=0x{0:X} client {1}x{2} at screen ({3},{4})", target.ToInt64(), w, h, origin.X, origin.Y));
         int result = 0;
         // The drop target is whatever window is under the cursor: make the target topmost
-        // for the duration, so no other window (a terminal, a running ChipDAW) gets the drop.
+        // for the duration, so no other window (a terminal, a running Cartwave) gets the drop.
         SetWindowPos(target, new IntPtr(-1), 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
         var t = new Thread(() => {
             var form = new Form();

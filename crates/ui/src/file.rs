@@ -1,4 +1,5 @@
-//! The `.chipdaw` project file (spec: PIANOROLL.md §5, version 3 changes in
+//! The project file, `.cartwave` (`.chipdaw` before the rename, which opens
+//! forever: RENAME.md) (spec: PIANOROLL.md §5, version 3 changes in
 //! STABILIZE.md §B), plus the autosave / recovery files.
 //!
 //! Versions: 1 (piano roll), 2 (instruments, DPCM samples), 3 (the lane
@@ -34,7 +35,9 @@ use crate::notes::{self, Note};
 use chip::instrument::{Instrument, Seq, Vibrato, KIT_ZONES, NONE, SEQ_LEN};
 use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 
-/// The `format` field of every project file.
+/// The `format` field of every project file. It keeps the working title: it
+/// identifies the format, not the app, and every file ever saved has it
+/// (RENAME.md, RN-D).
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
 pub const VERSION: u32 = 8;
@@ -46,7 +49,18 @@ pub const OLD_BIT_DEPTH: u16 = 16;
 /// The rates and depths a project can have (as the export offers).
 pub const PROJECT_RATES: [u32; 2] = [44_100, 48_000];
 pub const BIT_DEPTHS: [u16; 2] = [16, 24];
-pub const EXTENSION: &str = "chipdaw";
+/// New projects save as `.cartwave`.
+pub const EXTENSION: &str = "cartwave";
+/// The extension before the rename: such files open forever, and Save keeps
+/// it (Save As offers `.cartwave`).
+pub const LEGACY_EXTENSION: &str = "chipdaw";
+/// Every extension a project file can have, the current one first.
+pub const EXTENSIONS: [&str; 2] = [EXTENSION, LEGACY_EXTENSION];
+
+/// Whether `ext` (any case, no dot) is a project file's extension.
+pub fn is_project_extension(ext: &str) -> bool {
+    EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(ext))
+}
 
 /// Everything a project file stores.
 #[derive(Clone, Debug, PartialEq)]
@@ -620,16 +634,16 @@ fn compact_notes(pretty: &str) -> String {
 
 /// Parses project text. Errors are user-facing messages.
 pub fn from_str(text: &str) -> Result<Project, String> {
-    let h: Header = serde_json::from_str(text).map_err(|e| format!("Not a ChipDAW project: {e}"))?;
+    let h: Header = serde_json::from_str(text).map_err(|e| format!("Not a Cartwave project: {e}"))?;
     if h.format.as_deref() != Some(FORMAT) {
-        return Err("Not a ChipDAW project (no \"format\": \"chipdaw\" field).".into());
+        return Err("Not a Cartwave project (its format field is missing or names another format).".into());
     }
     match h.version {
         Some(1..=VERSION) => {}
         Some(v) if v > VERSION => {
             return Err(format!(
-                "This project was saved by a newer ChipDAW (file format version {v}). \
-                 This version reads format {VERSION}. Update ChipDAW to open it."
+                "This project was saved by a newer Cartwave (file format version {v}). \
+                 This version reads format {VERSION}. Update Cartwave to open it."
             ))
         }
         Some(v) => return Err(format!("Unsupported file format version {v}.")),
@@ -1085,7 +1099,9 @@ pub fn migrate_v2(a: &mut Arrangement, params: &mut Params, report: &mut Vec<Str
 /// so a crash mid-save never leaves a half-written project.
 pub fn save(p: &Project, path: &Path) -> Result<(), String> {
     let text = to_string(p);
-    let tmp = path.with_extension("chipdaw.tmp");
+    // `song.cartwave.tmp` (or `song.chipdaw.tmp`): next to the target.
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or(EXTENSION);
+    let tmp = path.with_extension(format!("{ext}.tmp"));
     std::fs::write(&tmp, text).map_err(|e| format!("Can't write {}: {e}", tmp.display()))?;
     std::fs::rename(&tmp, path).map_err(|e| format!("Can't save {}: {e}", path.display()))
 }
@@ -1095,7 +1111,7 @@ pub fn load(path: &Path) -> Result<Project, String> {
     from_str(&text)
 }
 
-/// Adds `.chipdaw` when the path has no extension.
+/// Adds `.cartwave` when the path has no extension.
 pub fn with_extension(path: &str) -> PathBuf {
     let p = PathBuf::from(path.trim().trim_matches('"'));
     if p.extension().is_none() {
@@ -1283,26 +1299,150 @@ pub fn save_settings(s: &Settings) {
 
 // ───────────────────────────── Recovery ─────────────────────────────
 
-/// Where the recovery file and the session marker live: `CHIPDAW_DATA_DIR`,
-/// else `%APPDATA%\ChipDAW` (Windows), `~/Library/Application Support/ChipDAW`
-/// (macOS), `$XDG_DATA_HOME/chipdaw` or `~/.local/share/chipdaw`.
+/// Where settings, presets, the recovery file and the session marker live:
+/// `CARTWAVE_DATA_DIR`, else `%APPDATA%\Cartwave` (Windows),
+/// `~/Library/Application Support/Cartwave` (macOS), `$XDG_DATA_HOME/cartwave`
+/// or `~/.local/share/cartwave`.
 pub fn data_dir() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os("CHIPDAW_DATA_DIR") {
+    if let Some(d) = engine::env::var_os("CARTWAVE_DATA_DIR") {
         return Some(PathBuf::from(d));
     }
+    platform_data_dir("Cartwave", "cartwave")
+}
+
+/// The app-data folder before the rename (`%APPDATA%\ChipDAW`, ...).
+pub fn legacy_data_dir() -> Option<PathBuf> {
+    platform_data_dir("ChipDAW", "chipdaw")
+}
+
+fn platform_data_dir(name: &str, unix_name: &str) -> Option<PathBuf> {
     let env = |k| std::env::var_os(k).map(PathBuf::from);
     if cfg!(target_os = "windows") {
-        env("APPDATA").map(|d| d.join("ChipDAW"))
+        env("APPDATA").map(|d| d.join(name))
     } else if cfg!(target_os = "macos") {
-        env("HOME").map(|d| d.join("Library/Application Support/ChipDAW"))
+        env("HOME").map(|d| d.join("Library/Application Support").join(name))
     } else {
         env("XDG_DATA_HOME")
-            .map(|d| d.join("chipdaw"))
-            .or_else(|| env("HOME").map(|d| d.join(".local/share/chipdaw")))
+            .map(|d| d.join(unix_name))
+            .or_else(|| env("HOME").map(|d| d.join(".local/share").join(unix_name)))
     }
 }
 
-/// Autosave every 2 minutes (and on quit) to `recovery.chipdaw`. A session
+// ───────────────────────── The app-data move ─────────────────────────
+//
+// RENAME.md: on the first launch after the rename, the old app-data folder is
+// copied to the new one (only if the new one doesn't exist yet). The old
+// folder stays as a backup until a later launch has succeeded: the launch
+// that moved it marks the move "launched" once it is up, and the next launch
+// to come up removes the old folder.
+
+/// The marker in the new folder while the old one is kept as a backup. Its
+/// first line is the old folder; the second the state (`pending`, `launched`).
+pub const MIGRATION_MARKER: &str = "migrated-from-chipdaw.txt";
+
+/// What [`migrate_data_dir`] did.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DataMove {
+    /// Nothing to move (no old folder, the new one exists, or an explicit
+    /// `CARTWAVE_DATA_DIR`).
+    Nothing,
+    /// The old folder was copied to the new one; the old one is kept.
+    Moved,
+    /// The copy failed: the new folder was not created, the old one is
+    /// untouched. The message is for the log.
+    Failed(String),
+}
+
+/// Call once at start, before anything reads the data folder.
+pub fn migrate_data_dir() -> DataMove {
+    if engine::env::var_os("CARTWAVE_DATA_DIR").is_some() {
+        return DataMove::Nothing;
+    }
+    match (legacy_data_dir(), data_dir()) {
+        (Some(old), Some(new)) => migrate_dir(&old, &new),
+        _ => DataMove::Nothing,
+    }
+}
+
+/// Copies `old` to `new` when `new` doesn't exist and `old` does (through a
+/// staging folder, so a half-finished copy never looks like a real folder),
+/// renames a `recovery.chipdaw` to the new recovery name, and leaves the
+/// marker.
+pub fn migrate_dir(old: &Path, new: &Path) -> DataMove {
+    if new.exists() || !old.is_dir() {
+        return DataMove::Nothing;
+    }
+    let staging = new.with_file_name(format!(
+        "{}.moving",
+        new.file_name().and_then(|n| n.to_str()).unwrap_or("data")
+    ));
+    let _ = std::fs::remove_dir_all(&staging);
+    let result = copy_dir(old, &staging)
+        .and_then(|()| {
+            let rec_old = staging.join(format!("recovery.{LEGACY_EXTENSION}"));
+            let rec_new = staging.join(format!("recovery.{EXTENSION}"));
+            if rec_old.exists() && !rec_new.exists() {
+                std::fs::rename(&rec_old, &rec_new)?;
+            }
+            std::fs::write(staging.join(MIGRATION_MARKER), format!("{}\npending\n", old.display()))
+        })
+        .and_then(|()| std::fs::rename(&staging, new));
+    match result {
+        Ok(()) => DataMove::Moved,
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&staging);
+            DataMove::Failed(format!("Can't move {} to {}: {e}", old.display(), new.display()))
+        }
+    }
+}
+
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// Call once the app is up (settings read, the window built). The launch
+/// that moved the folder marks the move "launched"; the next launch to come
+/// up removes the old folder and the marker. Returns the removed folder.
+pub fn confirm_data_migration() -> Option<PathBuf> {
+    confirm_dir(&data_dir()?)
+}
+
+/// [`confirm_data_migration`] for a given new folder.
+pub fn confirm_dir(new: &Path) -> Option<PathBuf> {
+    let marker = new.join(MIGRATION_MARKER);
+    let text = std::fs::read_to_string(&marker).ok()?;
+    let mut lines = text.lines();
+    let old = PathBuf::from(lines.next()?.trim());
+    match lines.next().map(str::trim) {
+        Some("pending") => {
+            let _ = std::fs::write(&marker, format!("{}\nlaunched\n", old.display()));
+            None
+        }
+        Some("launched") => {
+            // Never remove the folder in use (a marker copied by hand).
+            if old.as_os_str().is_empty() || old == new {
+                let _ = std::fs::remove_file(&marker);
+                return None;
+            }
+            let _ = std::fs::remove_dir_all(&old);
+            let _ = std::fs::remove_file(&marker);
+            Some(old)
+        }
+        _ => None,
+    }
+}
+
+/// Autosave every 2 minutes (and on quit) to `recovery.cartwave`. A session
 /// marker (`session.lock`) exists while the app runs and is removed on a clean
 /// quit; finding it at start means the last session didn't close cleanly.
 pub struct Recovery {
@@ -1325,11 +1465,22 @@ impl Recovery {
     pub fn new() -> Option<Self> {
         let dir = data_dir()?;
         std::fs::create_dir_all(&dir).ok()?;
-        Some(Self { dir })
+        let r = Self { dir };
+        r.adopt_legacy_file();
+        Some(r)
     }
 
     pub fn file(&self) -> PathBuf {
-        self.dir.join("recovery.chipdaw")
+        self.dir.join(format!("recovery.{EXTENSION}"))
+    }
+
+    /// A recovery file a pre-rename build left in this folder (an explicit
+    /// `CARTWAVE_DATA_DIR` that build used too) takes the new name.
+    fn adopt_legacy_file(&self) {
+        let old = self.dir.join(format!("recovery.{LEGACY_EXTENSION}"));
+        if old.exists() && !self.file().exists() {
+            let _ = std::fs::rename(old, self.file());
+        }
     }
 
     fn marker(&self) -> PathBuf {
@@ -1437,12 +1588,17 @@ mod tests {
         let q = from_str(&text).expect("loads");
         assert_eq!(saved_parts(&p), saved_parts(&q));
         // And through the file system (atomic save).
-        let dir = std::env::temp_dir().join(format!("chipdaw-test-{}", std::process::id()));
+        // Both extensions: `.cartwave` (new) and `.chipdaw` (opens forever,
+        // Save keeps it), byte for byte the same text.
+        let dir = std::env::temp_dir().join(format!("cartwave-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("round.chipdaw");
-        save(&p, &path).unwrap();
-        assert_eq!(saved_parts(&load(&path).unwrap()), saved_parts(&p));
-        assert!(!path.with_extension("chipdaw.tmp").exists());
+        for ext in EXTENSIONS {
+            let path = dir.join(format!("round.{ext}"));
+            save(&p, &path).unwrap();
+            assert_eq!(saved_parts(&load(&path).unwrap()), saved_parts(&p), ".{ext}");
+            assert!(!path.with_extension(format!("{ext}.tmp")).exists());
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), to_string(&p));
+        }
         let _ = std::fs::remove_dir_all(dir);
         // Empty project too.
         let e = Project::new_empty();
@@ -1466,14 +1622,14 @@ mod tests {
     fn newer_version_fails_with_a_clear_message() {
         let text = to_string(&sample_project()).replacen("\"version\": 8,", "\"version\": 9,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 9"), "{err}");
+        assert!(err.contains("newer Cartwave") && err.contains("version 9"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);
         let err = from_str(&fx).unwrap_err();
         assert!(err.contains("damaged") && err.contains("arp"), "{err}");
-        assert!(from_str("{\"hello\": 1}").unwrap_err().contains("Not a ChipDAW project"));
-        assert!(from_str("not json").unwrap_err().contains("Not a ChipDAW project"));
+        assert!(from_str("{\"hello\": 1}").unwrap_err().contains("Not a Cartwave project"));
+        assert!(from_str("not json").unwrap_err().contains("Not a Cartwave project"));
     }
 
     #[test]
@@ -1546,8 +1702,81 @@ mod tests {
     }
 
     #[test]
+    fn extensions() {
+        assert_eq!(with_extension("C:/songs/a"), PathBuf::from("C:/songs/a.cartwave"));
+        assert_eq!(with_extension("C:/songs/a.chipdaw"), PathBuf::from("C:/songs/a.chipdaw"));
+        assert!(is_project_extension("cartwave") && is_project_extension("CHIPDAW"));
+        assert!(!is_project_extension("mid"));
+    }
+
+    /// RENAME.md: the old app-data folder moves to the new one on the first
+    /// launch, and stays as a backup until the next launch has come up.
+    #[test]
+    fn app_data_folder_moves_and_old_one_is_kept_until_next_launch() {
+        let root = std::env::temp_dir().join(format!("cartwave-move-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (old, new) = (root.join("ChipDAW"), root.join("Cartwave"));
+        // No old folder: nothing happens.
+        assert_eq!(migrate_dir(&old, &new), DataMove::Nothing);
+        assert!(!new.exists());
+        // An old folder with settings, presets, a recovery file and a subfolder.
+        std::fs::create_dir_all(old.join("sub")).unwrap();
+        let mut st = Settings::default();
+        st.add_recent("C:/songs/old.chipdaw");
+        std::fs::write(old.join("settings.json"), serde_json::to_string_pretty(&st).unwrap()).unwrap();
+        std::fs::write(old.join("user_presets.json"), "[]").unwrap();
+        std::fs::write(old.join("recovery.chipdaw"), to_string(&sample_project())).unwrap();
+        std::fs::write(old.join("session.lock"), "1234").unwrap();
+        std::fs::write(old.join("sub").join("x.bin"), [1u8, 2, 3]).unwrap();
+        // Launch 1: copied, old kept.
+        assert_eq!(migrate_dir(&old, &new), DataMove::Moved);
+        assert!(old.join("settings.json").exists(), "the old folder is the backup");
+        assert!(!root.join("Cartwave.moving").exists(), "no staging folder left");
+        let read: Settings = serde_json::from_str(&std::fs::read_to_string(new.join("settings.json")).unwrap()).unwrap();
+        assert_eq!(read.recent, vec!["C:/songs/old.chipdaw".to_string()]);
+        assert_eq!(std::fs::read(new.join("sub").join("x.bin")).unwrap(), vec![1u8, 2, 3]);
+        assert_eq!(std::fs::read_to_string(new.join("user_presets.json")).unwrap(), "[]");
+        // The recovery file takes the new name and still offers itself.
+        assert!(!new.join("recovery.chipdaw").exists());
+        let rec = Recovery { dir: new.clone() };
+        assert_eq!(rec.file(), new.join("recovery.cartwave"));
+        assert_eq!(saved_parts(&load(&rec.file()).unwrap()), saved_parts(&sample_project()));
+        assert_eq!(rec.start_session(), Some(LastSession::Crashed), "the old session's marker came along");
+        // A second start before launch 1 came up moves nothing again.
+        assert_eq!(migrate_dir(&old, &new), DataMove::Nothing);
+        // Launch 1 comes up: the old folder stays.
+        assert_eq!(confirm_dir(&new), None);
+        assert!(old.exists());
+        // Launch 2 comes up: the backup goes, and so does the marker.
+        assert_eq!(confirm_dir(&new), Some(old.clone()));
+        assert!(!old.exists() && !new.join(MIGRATION_MARKER).exists());
+        assert!(new.join("settings.json").exists());
+        // Later launches: nothing to do.
+        assert_eq!(confirm_dir(&new), None);
+        assert_eq!(migrate_dir(&old, &new), DataMove::Nothing);
+        // The new folder exists already: an old folder found later is left alone.
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("settings.json"), "{}").unwrap();
+        assert_eq!(migrate_dir(&old, &new), DataMove::Nothing);
+        assert!(old.join("settings.json").exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recovery_takes_a_legacy_file_in_its_folder() {
+        let dir = std::env::temp_dir().join(format!("cartwave-legacy-rec-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("recovery.chipdaw"), to_string(&sample_project())).unwrap();
+        let r = Recovery { dir: dir.clone() };
+        r.adopt_legacy_file();
+        assert!(r.file().exists() && !dir.join("recovery.chipdaw").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn recovery_marks_unclean_sessions() {
-        let dir = std::env::temp_dir().join(format!("chipdaw-rec-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cartwave-rec-{}", std::process::id()));
         let r = Recovery { dir: dir.clone() };
         std::fs::create_dir_all(&dir).unwrap();
         assert!(r.start_session().is_none(), "first run");
@@ -1590,7 +1819,7 @@ mod tests {
         let back: Settings = serde_json::from_str(&text).unwrap();
         assert_eq!(back, off, "turning it off is kept");
         // Through the real file functions, in a scratch data dir.
-        let dir = std::env::temp_dir().join(format!("chipdaw-dark-menus-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("cartwave-dark-menus-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(dir.join("settings.json"), &text).unwrap();
         let read: Settings = serde_json::from_str(&std::fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();

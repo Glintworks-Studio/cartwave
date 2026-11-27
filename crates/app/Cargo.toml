@@ -2,9 +2,24 @@
 name = "app"
 version = "0.1.0"
 edition = "2021"
+description = "Cartwave, a chiptune music workstation, by Glintworks: the standalone app."
 license = "MIT OR Apache-2.0"
+authors = ["Glintworks"]
+homepage = "https://glintworks.studio"
 
 [dependencies]
 vizia = { workspace = true }
 ui = { path = "../ui" }
 engine = { path = "../engine" }
+
+# The executable is `cartwave` (`cartwave.exe` on Windows, where names are
+# case-insensitive). The package keeps the name `app` (`cargo build -p app`).
+[[bin]]
+name = "cartwave"
+path = "src/main.rs"
+
+# For the macOS bundle when there is one (RENAME.md): its identifier, the same
+# string as the Windows app id (`ui::identity::APP_ID`).
+[package.metadata.bundle]
+name = "Cartwave"
+identifier = "studio.glintworks.cartwave"

@@ -2,10 +2,10 @@
 # Runs the ENGINE.md §5 stress matrix against the release build. Each run
 # writes <Work>\<test>_<buffer>.csv (one line per second + a summary at the
 # end, see crates/ui/src/testing.rs). Ground truth for dropouts is WASAPI
-# loopback of a 19 kHz pilot tone (CHIPDAW_PILOT=1).
+# loopback of a 19 kHz pilot tone (CARTWAVE_PILOT=1).
 param(
     [string]$Repo = (Resolve-Path "$PSScriptRoot\..\..\.."),
-    [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { "$env:TEMP\chipdaw-engine" }),
+    [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { "$env:TEMP\chipdaw-engine" }),
     [string[]]$Tests = @('A', 'B', 'C', 'D', 'G', 'E'),
     [string[]]$Buffers = @('128', '256', '512'),
     [int]$LongSecs = 600,
@@ -13,13 +13,13 @@ param(
     # A frozen copy of the build, so the repo can be rebuilt while the matrix runs.
     [string]$AppExe = ''
 )
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = 'Stop'
 # `pwsh -File` passes "A,B" as one string: split comma lists.
 $Tests = $Tests | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 $Buffers = $Buffers | ForEach-Object { $_ -split ',' } | Where-Object { $_ }
 New-Item -ItemType Directory -Force $Work | Out-Null
-$app = if ($AppExe) { $AppExe } else { Join-Path $Repo 'target\release\app.exe' }
+$app = if ($AppExe) { $AppExe } else { Join-Path $Repo 'target\release\cartwave.exe' }
 
 Add-Type @"
 using System;
@@ -33,8 +33,8 @@ public class ChipdawWin {
 function Run-App([string]$name, [hashtable]$envs, [int]$secs, [scriptblock]$during) {
     $log = Join-Path $Work "$name.csv"
     $base = @{
-        CHIPDAW_AUDIOLOG = $log; CHIPDAW_QUIT_AFTER = "$secs"; CHIPDAW_PILOT = '1';
-        CHIPDAW_GAIN = "$Gain"
+        CARTWAVE_AUDIOLOG = $log; CARTWAVE_QUIT_AFTER = "$secs"; CARTWAVE_PILOT = '1';
+        CARTWAVE_GAIN = "$Gain"
     }
     $all = $base + $envs
     foreach ($k in $all.Keys) { Set-Item "Env:$k" $all[$k] }
@@ -94,13 +94,13 @@ $devSwitch = {
 
 foreach ($t in $Tests) {
     switch ($t) {
-        'A' { foreach ($b in $Buffers) { Run-App "A_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AUTOPLAY = '1' } $LongSecs $null } }
-        'B' { foreach ($b in $Buffers) { Run-App "B_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_STRESS = '1'; CHIPDAW_AUTO_EDIT = '1' } $LongSecs $null } }
-        'C' { foreach ($b in $Buffers) { Run-App "C_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AUTOPLAY = '1'; CHIPDAW_UI_STALL = '1' } 120 $null } }
-        'D' { foreach ($b in $Buffers) { Run-App "D_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AVSYNC = '1' } 120 $churn } }
-        'G' { foreach ($b in $Buffers) { Run-App "G_$b" @{ CHIPDAW_BUFFER = "$b"; CHIPDAW_AVSYNC = '1' } 120 $null } }
+        'A' { foreach ($b in $Buffers) { Run-App "A_$b" @{ CARTWAVE_BUFFER = "$b"; CARTWAVE_AUTOPLAY = '1' } $LongSecs $null } }
+        'B' { foreach ($b in $Buffers) { Run-App "B_$b" @{ CARTWAVE_BUFFER = "$b"; CARTWAVE_STRESS = '1'; CARTWAVE_AUTO_EDIT = '1' } $LongSecs $null } }
+        'C' { foreach ($b in $Buffers) { Run-App "C_$b" @{ CARTWAVE_BUFFER = "$b"; CARTWAVE_AUTOPLAY = '1'; CARTWAVE_UI_STALL = '1' } 120 $null } }
+        'D' { foreach ($b in $Buffers) { Run-App "D_$b" @{ CARTWAVE_BUFFER = "$b"; CARTWAVE_AVSYNC = '1' } 120 $churn } }
+        'G' { foreach ($b in $Buffers) { Run-App "G_$b" @{ CARTWAVE_BUFFER = "$b"; CARTWAVE_AVSYNC = '1' } 120 $null } }
         # H: the macro worst case (every lane runs all four macros + vibrato, long notes).
-        'H' { Run-App "H" @{ CHIPDAW_AUTOPLAY = '1'; CHIPDAW_SONG = 'heavy' } $LongSecs $null }
-        'E' { Run-App "E" @{ CHIPDAW_AUTOPLAY = '1' } 50 $devSwitch }
+        'H' { Run-App "H" @{ CARTWAVE_AUTOPLAY = '1'; CARTWAVE_SONG = 'heavy' } $LongSecs $null }
+        'E' { Run-App "E" @{ CARTWAVE_AUTOPLAY = '1' } 50 $devSwitch }
     }
 }

@@ -9,7 +9,7 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $Base = (Resolve-Path (Join-Path $Repo "..\before-batch4b")).Path
 New-Item -ItemType Directory -Force $Work | Out-Null
 Copy-Item "$env:TEMP\chipdaw-perf-dp\piano_bench.chipdaw" $Work -Force
-$env:CHIPDAW_PERF_WORK = $Work
+$env:CARTWAVE_PERF_WORK = $Work
 for ($i = 1; $i -le $Rounds; $i++) {
   # Alternate which build goes first, so a drift within a round favours neither.
   $order = if ($i % 2) { @(@("base", $Base), @("b4b", $Repo)) } else { @(@("b4b", $Repo), @("base", $Base)) }

@@ -1,20 +1,20 @@
 //! Stress-test hooks (ENGINE.md §5). All off unless their env var is set,
-//! and only in dev mode (`CHIPDAW_DEV=1` or a debug build; see `dev.rs`).
+//! and only in dev mode (`CARTWAVE_DEV=1` or a debug build; see `dev.rs`).
 //!
-//! - `CHIPDAW_AUTO_EDIT=1`  test B: continuous random edits through the same
+//! - `CARTWAVE_AUTO_EDIT=1`  test B: continuous random edits through the same
 //!   model paths as the mouse (drag with live overlap resolution, drop,
 //!   resize, duplicate, delete), dial turns, mute/solo toggles.
-//! - `CHIPDAW_UI_STALL=1`   test C: busy-wait 250 ms on the UI thread every 2 s.
-//! - `CHIPDAW_AUDIOLOG=path` one CSV line of engine stats per second, plus a
+//! - `CARTWAVE_UI_STALL=1`   test C: busy-wait 250 ms on the UI thread every 2 s.
+//! - `CARTWAVE_AUDIOLOG=path` one CSV line of engine stats per second, plus a
 //!   summary at exit.
-//! - `CHIPDAW_PILOT=1`      mix a 23 kHz pilot (`CHIPDAW_PILOT_HZ` to change) and watch it via WASAPI loopback
+//! - `CARTWAVE_PILOT=1`      mix a 23 kHz pilot (`CARTWAVE_PILOT_HZ` to change) and watch it via WASAPI loopback
 //!   (ground-truth dropout count).
-//! - `CHIPDAW_AVSYNC=1`     test G: 1-bar loop, music muted, a click at mid-bar;
+//! - `CARTWAVE_AVSYNC=1`     test G: 1-bar loop, music muted, a click at mid-bar;
 //!   loopback click times vs the presented playhead crossing.
-//! - `CHIPDAW_QUIT_AFTER=secs` exit (after the summary) when the time is up.
-//! - `CHIPDAW_SONG=heavy` start on the macro worst case (every lane runs all macros).
-//! - `CHIPDAW_STRESS=1` start on the 200-clip set; `CHIPDAW_AUTOPLAY=1` start playing.
-//! - `CHIPDAW_BUFFER=frames` requested buffer size; `CHIPDAW_FILTER=off|nes|440|fc`.
+//! - `CARTWAVE_QUIT_AFTER=secs` exit (after the summary) when the time is up.
+//! - `CARTWAVE_SONG=heavy` start on the macro worst case (every lane runs all macros).
+//! - `CARTWAVE_STRESS=1` start on the 200-clip set; `CARTWAVE_AUTOPLAY=1` start playing.
+//! - `CARTWAVE_BUFFER=frames` requested buffer size; `CARTWAVE_FILTER=off|nes|440|fc`.
 
 use std::fs::File;
 use std::io::Write;
@@ -77,7 +77,7 @@ pub struct Tests {
     pub avsync: bool,
     pub pilot: bool,
     pub stress: bool,
-    /// `CHIPDAW_SONG=heavy`: start on the macro worst case (`mock::heavy_arrangement`).
+    /// `CARTWAVE_SONG=heavy`: start on the macro worst case (`mock::heavy_arrangement`).
     pub heavy: bool,
     pub autoplay: bool,
     pub buffer: Option<u32>,
@@ -120,9 +120,9 @@ pub struct Tests {
 
 impl Tests {
     pub fn from_env() -> Self {
-        let log_path = crate::dev::var("CHIPDAW_AUDIOLOG");
+        let log_path = crate::dev::var("CARTWAVE_AUDIOLOG");
         let log = log_path.as_ref().and_then(|p| File::create(p).ok());
-        let filter = crate::dev::var("CHIPDAW_FILTER").and_then(|v| match v.as_str() {
+        let filter = crate::dev::var("CARTWAVE_FILTER").and_then(|v| match v.as_str() {
             "off" => Some(engine::FilterMode::Off),
             "nes" => Some(engine::FilterMode::Nes),
             "440" => Some(engine::FilterMode::NesWith440),
@@ -130,18 +130,18 @@ impl Tests {
             _ => None,
         });
         let mut t = Self {
-            auto_edit: env_on("CHIPDAW_AUTO_EDIT"),
-            ui_stall: env_on("CHIPDAW_UI_STALL"),
-            avsync: env_on("CHIPDAW_AVSYNC"),
-            pilot: env_on("CHIPDAW_PILOT"),
-            stress: env_on("CHIPDAW_STRESS"),
-            heavy: crate::dev::var("CHIPDAW_SONG").is_some_and(|v| v == "heavy"),
-            autoplay: env_on("CHIPDAW_AUTOPLAY"),
-            buffer: crate::dev::var("CHIPDAW_BUFFER").and_then(|v| v.parse().ok()),
+            auto_edit: env_on("CARTWAVE_AUTO_EDIT"),
+            ui_stall: env_on("CARTWAVE_UI_STALL"),
+            avsync: env_on("CARTWAVE_AVSYNC"),
+            pilot: env_on("CARTWAVE_PILOT"),
+            stress: env_on("CARTWAVE_STRESS"),
+            heavy: crate::dev::var("CARTWAVE_SONG").is_some_and(|v| v == "heavy"),
+            autoplay: env_on("CARTWAVE_AUTOPLAY"),
+            buffer: crate::dev::var("CARTWAVE_BUFFER").and_then(|v| v.parse().ok()),
             filter,
             log,
             log_path,
-            quit_after: crate::dev::var("CHIPDAW_QUIT_AFTER").and_then(|v| v.parse().ok()),
+            quit_after: crate::dev::var("CARTWAVE_QUIT_AFTER").and_then(|v| v.parse().ok()),
             start: Instant::now(),
             next_stall: 2.0,
             next_log: 1.0,
@@ -152,7 +152,7 @@ impl Tests {
             pending_shown: None,
             edits: 0,
             stalls: 0,
-            gain: crate::dev::var("CHIPDAW_GAIN").and_then(|v| v.parse().ok()),
+            gain: crate::dev::var("CARTWAVE_GAIN").and_then(|v| v.parse().ok()),
             audio_clock: None,
             last_audio: None,
             last_ui: None,
@@ -167,7 +167,7 @@ impl Tests {
             tick_gap_max: Duration::ZERO,
         };
         // F-02: every harness proves it reached its scenario from this line
-        // (stderr), since a release build without CHIPDAW_DEV ignores the hooks.
+        // (stderr), since a release build without CARTWAVE_DEV ignores the hooks.
         if crate::dev::enabled() {
             let on: Vec<&str> = [
                 ("auto_edit", t.auto_edit),
@@ -548,7 +548,7 @@ impl Tests {
 
     /// Writes the marker crossings as host-clock ns (`mach_absolute_time` in
     /// ns, the clock of `Instant` and of tapmon's events) to
-    /// `<CHIPDAW_AUDIOLOG>.crossings.csv`, for pairing with clicks captured
+    /// `<CARTWAVE_AUDIOLOG>.crossings.csv`, for pairing with clicks captured
     /// outside the app (macOS).
     fn write_crossings(&self) -> String {
         let (Some(path), Some(now_host)) = (self.log_path.as_ref(), host_ns_now()) else {

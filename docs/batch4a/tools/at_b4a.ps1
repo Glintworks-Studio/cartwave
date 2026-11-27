@@ -1,9 +1,9 @@
-# usage: at_b4a.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only B4A-01,B4A-05]
+# usage: at_b4a.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only B4A-01,B4A-05]
 # Batch 4a scenarios (BATCH4A_PROMPT.md §3–7, UX.md AT-13), the Batch 3 harness method:
 # synthetic input into the real app, saved files, settings.json and dev-mode stderr lines,
 # checked by check_b4a.py. Client px at 100%: top bar 76, Overview 76..108, ruler 108..136,
 # rows from 136 every 73 px; browser 0..241; headers 241..621; lanes 621.. at 92 px per bar.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-b4a-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
 $global:Work = $Work
@@ -13,7 +13,7 @@ Set-Location $Repo
 $global:Exe = (Resolve-Path $Exe).Path
 python "$Repo\docs\batch3\tools\fixtures.py" $Work | Out-Null
 python "$Repo\docs\batch4a\tools\fixtures_b4a.py" $Work | Out-Null
-foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $obs = [ordered]@{ work = $Work }
 # Shot moves the window to the top-left: place it there right after each launch, so a later
 # shot never moves the window under the cursor mid-gesture.
@@ -170,7 +170,7 @@ if (Want "B4A-05") {
 if (Want "B4A-06") {
   foreach ($ans in @("unlock", "fit", "cancel")) {
     $p = Fx "fx4_studio" "b406w_$ans"; $d = Join-Path $Work "d406$ans"
-    $env:CHIPDAW_WARN_ANSWER = $ans
+    $env:CARTWAVE_WARN_ANSWER = $ans
     Launch -Project $p -Data $d; Place
     Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
     $obs."b406_click_$ans" = Click-Text "NES (2A03)"
@@ -180,7 +180,7 @@ if (Want "B4A-06") {
     Save; Keep $p "b406_$ans"
     $obs."b406_warn_$ans" = @(DevLines $d "^dev: warning")
     Stop-App
-    Remove-Item Env:CHIPDAW_WARN_ANSWER
+    Remove-Item Env:CARTWAVE_WARN_ANSWER
   }
 }
 
@@ -188,7 +188,7 @@ if (Want "B4A-06") {
 if (Want "B4A-07") {
   foreach ($ans in @("fit", "unlock", "cancel")) {
     $p = Fx "fx4_chord" "b407w_$ans"; $d = Join-Path $Work "d407$ans"
-    $env:CHIPDAW_WARN_ANSWER = $ans
+    $env:CARTWAVE_WARN_ANSWER = $ans
     Launch -Project $p -Data $d; Place
     $cl = @(((BarX 1) + 40), ((RowY 0) + 40)); DblL $cl[0] $cl[1]; Start-Sleep -Milliseconds 800   # open the clip
     K 0x42; Start-Sleep -Milliseconds 300                         # B: draw mode
@@ -204,7 +204,7 @@ if (Want "B4A-07") {
     Save; Keep $p "b407_$ans"
     $obs."b407_warn_$ans" = @(DevLines $d "^dev: warning")
     Stop-App
-    Remove-Item Env:CHIPDAW_WARN_ANSWER
+    Remove-Item Env:CARTWAVE_WARN_ANSWER
   }
 }
 
@@ -251,7 +251,7 @@ if (Want "B4A-09") {
 
 # ─────────── SHOTS (opt-in: -Only SHOTS): the report's fixups.png and profile-warning.png ───────────
 # Not in the default run: the profile warning here is the real Windows dialog (no
-# CHIPDAW_WARN_ANSWER), which waits for an answer. Shots land in <Work>; screen_*.png is the whole
+# CARTWAVE_WARN_ANSWER), which waits for an answer. Shots land in <Work>; screen_*.png is the whole
 # screen (the dialog is its own window), cut to the app and the dialog afterwards.
 if ($Only -contains "SHOTS") {
   # The fixups: Ctrl-click toggles a clip into the selection, Shift-click extends it (R28); the
@@ -266,7 +266,7 @@ if ($Only -contains "SHOTS") {
   K 0x1B; Stop-App
   # The profile warning: a studio project with a chord, switched to NES.
   $p = Fx "fx4_studio" "shot_warn"; $d = Join-Path $Work "dshot2"
-  Remove-Item Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
+  Remove-Item Env:CARTWAVE_WARN_ANSWER -ErrorAction SilentlyContinue
   Launch -Project $p -Data $d; Place
   Invoke-Menu "File" 8; Start-Sleep -Milliseconds 400
   $null = Click-Text "NES (2A03)"

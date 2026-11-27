@@ -93,10 +93,10 @@ pub fn baseline_for_center(font: &vg::Font, cy: f32) -> f32 {
 }
 
 /// Gradient dithering (design pass §3.8): on, except with
-/// `CHIPDAW_NO_DITHER=1` in dev mode (the banding A/B in DESIGNPASS.md).
+/// `CARTWAVE_NO_DITHER=1` in dev mode (the banding A/B in DESIGNPASS.md).
 pub fn dither_on() -> bool {
     thread_local! {
-        static ON: bool = !crate::dev::var("CHIPDAW_NO_DITHER").is_some_and(|v| v == "1");
+        static ON: bool = !crate::dev::var("CARTWAVE_NO_DITHER").is_some_and(|v| v == "1");
     }
     ON.with(|o| *o)
 }

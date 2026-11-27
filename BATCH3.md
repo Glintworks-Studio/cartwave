@@ -1,5 +1,7 @@
 # BATCH3: Ableton-parity fixes and the Windows backlog
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · unattended run of BATCH3_PROMPT.md · branch `app-shell/batch-3` from `main` @ fb2d632 ·
 Windows 11, RTX 4070 SUPER, 59.951 Hz display, MOTU M Series connected · decisions B3-D1…D23 in
 [docs/RUNLOG.md](docs/RUNLOG.md)*

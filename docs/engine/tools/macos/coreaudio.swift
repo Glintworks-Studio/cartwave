@@ -1,4 +1,4 @@
-// CoreAudio device tool for the ChipDAW engine tests (macOS). No dependencies.
+// CoreAudio device tool for the Cartwave engine tests (macOS). No dependencies.
 //
 //   swiftc -O coreaudio.swift -o coreaudio
 //   coreaudio list                  every device: transport, channels, rates, buffer

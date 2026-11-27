@@ -1,4 +1,4 @@
-# usage: scenario_v11.ps1 [-Exe .\target\release\app.exe] [-Work <dir>]
+# usage: scenario_v11.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>]
 # Scripted UI scenario for the v1.1 features (STABILIZE.md §A3), synthetic input as in
 # docs/pianoroll/tools/scenario.ps1. Window 1440x900 at 100%, browser open (the default).
 # It opens a copy of docs/songs/v2/demo_band.chipdaw (a version-2 file, so it also exercises
@@ -10,17 +10,17 @@
 #      (refused: Cello can't play noise), onto the VRC6 Pulse 2 header (lane default); save.
 #   4. Double-click Cello: it loads on the selected lane (Pulse 1); save.
 #   5. Click the "Chamber Strings" layout; save.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-scenario-v11"))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 New-Item -ItemType Directory -Force $Work | Out-Null
 Get-ChildItem $Work -Filter "s*.chipdaw" -ErrorAction SilentlyContinue | Remove-Item
 Copy-Item docs\songs\v2\demo_band.chipdaw "$Work\scen.chipdaw" -Force
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-$env:CHIPDAW_PROJECT = "$Work\scen.chipdaw"; $env:CHIPDAW_DATA_DIR = "$Work\data"; $env:CHIPDAW_AUDIO = "0"
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$env:CARTWAVE_PROJECT = "$Work\scen.chipdaw"; $env:CARTWAVE_DATA_DIR = "$Work\data"; $env:CARTWAVE_AUDIO = "0"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"
@@ -68,5 +68,5 @@ Start-Sleep -Milliseconds 300
 Save 6
 Shot "4_layout"
 Stop-Process -Id $p.Id -Force
-Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_DATA_DIR, Env:CHIPDAW_AUDIO
+Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_DATA_DIR, Env:CARTWAVE_AUDIO
 python -I "$PSScriptRoot\check_v11.py" $Work

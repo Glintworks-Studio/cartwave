@@ -2,13 +2,15 @@
 
 > **Start here:** [PRODUCT.md](PRODUCT.md) is the current rundown: features, screenshots, history and next steps.
 
-> **Prototype.** The app is **Cartwave**, by **Glintworks** (decided 2026-11-26, VISION.md); "ChipDAW"
-> was its working title, and the code, crates and `.chipdaw` files keep it until a planned rename. This repository started as a GUI bake-off: it
+**Cartwave** is made by **Glintworks**: [glintworks.studio](https://glintworks.studio).
+
+> **Prototype.** "ChipDAW" was the app's working title (renamed 2026-11-27: RENAME.md; `.chipdaw`
+> projects from before open forever). This repository started as a GUI bake-off: it
 > tests whether [Vizia](https://github.com/vizia/vizia) can deliver a fully custom,
 > premium-looking DAW interface drawn entirely with stylesheets and procedural drawing (no
 > bitmap images). It now plays the arrangement in real time through a clean-room NES 2A03 +
 > VRC6 emulator (`crates/chip`, `crates/engine`; see [ENGINE.md](ENGINE.md)), and has a
-> piano roll, global undo and `.chipdaw` save/load, so songs can be written in it (see
+> piano roll, global undo and `.cartwave` save/load, so songs can be written in it (see
 > [PIANOROLL.md](PIANOROLL.md), including the full keyboard and mouse map).
 
 ![Arrangement view, prototype redesign, playing](docs/screens/redesign/main-playing-100.png)
@@ -26,7 +28,7 @@ lighting, rotary dials, inset text fields, level meters and a channel visualizer
 Requires a recent stable Rust toolchain (built with rustc 1.100).
 
 ```sh
-cargo run --release -p app
+cargo run --release -p app                      # builds and runs target/release/cartwave(.exe)
 cargo run --release -p app -- --size 1200x800   # initial logical window size
 ```
 
@@ -42,7 +44,7 @@ Layout:
 - `crates/chip`: the emulator and sound driver (`no_std`, no dependencies).
 - `crates/engine`: the real-time host (cpal output, lock-free queues, song snapshots).
 - `crates/ui`: the library (views, theme, state; reusable in a plugin host).
-- `crates/app`: the standalone window. `--render-demo DIR` renders the demo offline to WAV.
+- `crates/app`: the standalone window (the `cartwave` executable). `--render-demo DIR` renders the demo offline to WAV.
 
 ## Controls
 
@@ -70,8 +72,9 @@ Layout:
 | BPM / Pos fields | Drag, wheel | Scrub value (`Shift`: fine, BPM) |
 | | Double-click | Reset (150 BPM / start) |
 
-Set `CHIPDAW_FRAMELOG=<path>` to write a per-frame CSV log (frame timings by phase), and
-`CHIPDAW_FPS_CAP=60|120|off` to choose the starting frame-rate cap (default `60`; `display` is an
+Environment variables are `CARTWAVE_*`; the pre-rename `CARTWAVE_*` names still work (a debug
+build or `CARTWAVE_DEV=1` prints a note when one is used). Set `CARTWAVE_FRAMELOG=<path>` to write a per-frame CSV log (frame timings by phase), and
+`CARTWAVE_FPS_CAP=60|120|off` to choose the starting frame-rate cap (default `60`; `display` is an
 alias for `off`; see [PERF-macos.md](PERF-macos.md) §6). On macOS the modifier mappings follow Mac conventions; they are
 defined in `crates/ui/src/input.rs`.
 

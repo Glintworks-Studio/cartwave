@@ -191,7 +191,7 @@ pub struct Shortcut {
     pub ctx: &'static [Ctx],
     /// The operating system handles the key (Alt+F4); shown, never matched.
     pub system: bool,
-    /// Only in dev mode (`CHIPDAW_DEV=1` or a debug build).
+    /// Only in dev mode (`CARTWAVE_DEV=1` or a debug build).
     pub dev: bool,
 }
 
@@ -219,7 +219,7 @@ pub static TABLE: &[Shortcut] = &[
     Shortcut {
         action: Action::Quit,
         id: "file.quit",
-        name: if MACOS { "Quit ChipDAW" } else { "Exit" },
+        name: if MACOS { "Quit Cartwave" } else { "Exit" },
         group: "File",
         win: &[Chord { code: Code::F4, cmd: false, shift: false, alt: true }],
         mac: &[cmd(Code::KeyQ)],

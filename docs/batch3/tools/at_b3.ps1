@@ -1,4 +1,4 @@
-# usage: at_b3.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only AT-07,AT-11] [-Scale 100]
+# usage: at_b3.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only AT-07,AT-11] [-Scale 100]
 # Acceptance tests for Batch 3 (UX.md §6): AT-07..12, 14, 22 and AT-23..AT-31 (the other M/S
 # lines this batch implemented). Synthetic input into the real app (lib.ps1); every test
 # saves the project it edited, and check_b3.py checks the saved files, the dev-mode stderr
@@ -7,7 +7,7 @@
 # Coordinates are logical client px at 100% (Option D layout, design pass): bar b starts at
 # x = 621 + (b-1)*92, lane i is centred at y = 141 + 73*i, the ruler is y 76..103, the track
 # headers at x 241..620 (their S keys at x 597), the browser's rows 16 px lower than before.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-b3-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @(), [int]$Scale = 100)
 $global:Work = $Work
@@ -88,9 +88,9 @@ if (Want "AT-08") {
 # ─────────── AT-09 (F-09, F-23, P1–P4): double-click and Draw Mode ───────────
 if (Want "AT-09") {
   $p = Fx "fx_empty_clip" "at09"; $d = Join-Path $Work "d09"
-  $env:CHIPDAW_OPEN_CLIP = "1"
+  $env:CARTWAVE_OPEN_CLIP = "1"
   Launch -Project $p -Data $d -Scale $Scale
-  Remove-Item Env:CHIPDAW_OPEN_CLIP
+  Remove-Item Env:CARTWAVE_OPEN_CLIP
   $pr = PianoAt $d; $obs.t09_piano = [bool]$pr
   if ($pr) {
     # C4 sits 11 rows below the grid top (open_piano centres middle C); bar 1 after the keys.
@@ -109,9 +109,9 @@ if (Want "AT-09") {
 # ─────────── AT-10 (F-10): right-click menus (dev lines list their items) ───────────
 if (Want "AT-10") {
   $p = Fx "fx_basic" "at10"; $d = Join-Path $Work "d10"
-  $env:CHIPDAW_OPEN_CLIP = "1"
+  $env:CARTWAVE_OPEN_CLIP = "1"
   Launch -Project $p -Data $d -Scale $Scale
-  Remove-Item Env:CHIPDAW_OPEN_CLIP
+  Remove-Item Env:CARTWAVE_OPEN_CLIP
   RightL 300 ((Ly 1) - 10); Shot "at10_track"; K 0x1B
   RightL 900 90; Shot "at10_ruler"; K 0x1B
   $pr = PianoAt $d
@@ -240,9 +240,9 @@ if (Want "AT-26") {
 # ─────────── AT-27 (P7, P9, P11): Shift+→, chop, join, zoom in the piano roll ───────────
 if (Want "AT-27") {
   $p = Fx "fx_basic" "at27"; $d = Join-Path $Work "d27"
-  $env:CHIPDAW_OPEN_CLIP = "1"
+  $env:CARTWAVE_OPEN_CLIP = "1"
   Launch -Project $p -Data $d -Scale $Scale
-  Remove-Item Env:CHIPDAW_OPEN_CLIP
+  Remove-Item Env:CARTWAVE_OPEN_CLIP
   $pr = PianoAt $d
   if ($pr) {
     ClickL ($pr.X / $global:S + 400) ($pr.Y / $global:S + 40)  # focus the piano roll (empty space)
@@ -258,7 +258,7 @@ if (Want "AT-27") {
 # ─────────── AT-28 (E1–E4): the export dialog ───────────
 if (Want "AT-28") {
   $p = Fx "fx_basic" "at28"; $d = Join-Path $Work "d28"
-  $env:CHIPDAW_EXPORT_TO = (Join-Path $Work "at28_export.wav")
+  $env:CARTWAVE_EXPORT_TO = (Join-Path $Work "at28_export.wav")
   Launch -Project $p -Data $d -Scale $Scale
   CtrlShift 0x52; Start-Sleep -Milliseconds 400; Shot "at28_dialog"
   $obs.t28_open = [bool]((Ui-Texts) -contains "EXPORT")
@@ -271,7 +271,7 @@ if (Want "AT-28") {
   K 0x0D; Start-Sleep -Seconds 4                                # Enter: export
   $obs.t28_wav = Test-Path (Join-Path $Work "at28_export.wav")
   Copy-Item (Join-Path $d "settings.json") (Join-Path $Work "at28_settings.json") -ErrorAction SilentlyContinue
-  Remove-Item Env:CHIPDAW_EXPORT_TO
+  Remove-Item Env:CARTWAVE_EXPORT_TO
   Stop-App
 }
 

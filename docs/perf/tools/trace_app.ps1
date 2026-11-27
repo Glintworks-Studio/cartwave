@@ -1,16 +1,16 @@
-# usage: trace_app.ps1 -Name <name> [-Scenario demo|stress|drag] [-Secs 12] [-Exe .\target\profiling\app.exe] [-Repo <repo>] [-Work <dir>]
+# usage: trace_app.ps1 -Name <name> [-Scenario demo|stress|drag] [-Secs 12] [-Exe .\target\profiling\cartwave.exe] [-Repo <repo>] [-Work <dir>]
 # Runs the profiling build (cargo build --profile profiling -p app) through a scenario while the
 # elevated capture_server.ps1 (same -Work) records an xperf trace, then runs prof.sh on it.
-# Defaults: -Repo = this script's repo; -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf.
+# Defaults: -Repo = this script's repo; -Work = $env:CARTWAVE_PERF_WORK or %TEMP%\chipdaw-perf.
 # Needs Git Bash (bash on PATH or in Program Files\Git), samply, inferno and python.
 param([string]$Name, [ValidateSet("demo", "stress", "drag")][string]$Scenario = "demo", [int]$Secs = 12,
-  [string]$Exe = ".\target\profiling\app.exe",
+  [string]$Exe = ".\target\profiling\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
-  [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+  [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }))
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 $p = Start-Process $Exe -PassThru -RedirectStandardError "$Work\trace_err.txt"
 Start-Sleep -Seconds 3
 . "$PSScriptRoot\input.ps1"
@@ -34,5 +34,5 @@ $ok = ($err -match "dev: mode on") -and ($Scenario -eq "demo" -or $err -match "d
 "scenario $Scenario " + $(if ($ok) { "reached" } else { "NOT REACHED (dev-mode lines missing on stderr)" })
 $bash = (Get-Command bash -ErrorAction SilentlyContinue).Source
 if (-not $bash) { $bash = Join-Path $env:ProgramFiles "Git\bin\bash.exe" }
-$env:CHIPDAW_PERF_WORK = $Work; $env:CHIPDAW_REPO = $Repo
+$env:CARTWAVE_PERF_WORK = $Work; $env:CARTWAVE_REPO = $Repo
 & $bash "$PSScriptRoot/prof.sh" $Name

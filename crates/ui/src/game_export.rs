@@ -512,7 +512,7 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
         let (ls, le) = loop_ticks(p);
         let names: Vec<String> = rendered.iter().map(|(n, _, _)| stem(n)).collect();
         let j = serde_json::json!({
-            "format": "chipdaw-loop",
+            "format": "cartwave-loop",
             "version": 1,
             "sample_rate": o.rate,
             "bits": o.bits,

@@ -10,8 +10,8 @@ W="${MC_WORK:-${TMPDIR:-/tmp}/chipdaw-mac-catchup}"
 mkdir -p "$OUT"
 D="$W/data-thermal"; rm -rf "$D"; mkdir -p "$D"; echo '{"audio_device":"Mac mini Speakers"}' > "$D/settings.json"
 pkill -x app; sleep 0.5
-CHIPDAW_DEV=1 CHIPDAW_DATA_DIR="$D" CHIPDAW_AUTOPLAY=1 CHIPDAW_QUIT_AFTER="$SECS" CHIPDAW_AUDIOLOG="$OUT/thermal.audio.csv" \
-  "$REPO/target/release/app" > "$OUT/thermal.app.log" 2>&1 &
+CARTWAVE_DEV=1 CARTWAVE_DATA_DIR="$D" CARTWAVE_AUTOPLAY=1 CARTWAVE_QUIT_AFTER="$SECS" CARTWAVE_AUDIOLOG="$OUT/thermal.audio.csv" \
+  "$REPO/target/release/cartwave" > "$OUT/thermal.app.log" 2>&1 &
 APPPID=$!
 sleep 3
 [ "$POS" != "-" ] && "$W/bin/winctl" "$APPPID" move ${POS/,/ } > /dev/null

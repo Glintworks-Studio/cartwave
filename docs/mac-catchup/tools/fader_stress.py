@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MAC_CATCHUP §5: the per-track dB fader (Polish 2) under stress, automation-free. The demo
 plays at a 64-frame buffer while every track's fader is dragged in turn (real mouse events) for
-the whole run; the app's audio log (CHIPDAW_AUDIOLOG) gives CoreAudio overloads, late callbacks,
+the whole run; the app's audio log (CARTWAVE_AUDIOLOG) gives CoreAudio overloads, late callbacks,
 the largest callback gap and the audio thread's allocation violations (NoAllocGuard).
 
 usage: fader_stress.py <device name> <secs> <out.csv>
@@ -15,7 +15,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mclib import *  # noqa: E402,F401,F403
 
 device, secs, out = sys.argv[1], int(sys.argv[2]), pathlib.Path(sys.argv[3])
-env = {"CHIPDAW_AUDIOLOG": str(out), "CHIPDAW_QUIT_AFTER": str(secs + 4), "CHIPDAW_BUFFER": "64", "CHIPDAW_AUTOPLAY": "1"}
+env = {"CARTWAVE_AUDIOLOG": str(out), "CARTWAVE_QUIT_AFTER": str(secs + 4), "CARTWAVE_BUFFER": "64", "CARTWAVE_AUTOPLAY": "1"}
 os.environ["MC_DEVICE"] = device
 a = App("fader", env=env)
 FADER_X = 241 + 380 - 132 + 8 + 56 + 16 + 20   # the column B well's centre (header x 241, 380 wide)

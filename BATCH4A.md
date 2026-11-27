@@ -1,5 +1,7 @@
 # BATCH4A.md: tracks are instruments, hardware profiles and locks, the Main track
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Branch **`batch4a/model`** (from `main` 0e669ac), pushed. Prompt: `BATCH4A_PROMPT.md`. Decisions:
 [`docs/RUNLOG.md`](docs/RUNLOG.md) **B4A-D1…D27**. Spec: [`VISION.md`](VISION.md),
 [`UX.md`](UX.md); [`docs/design/VISUAL-SPEC.md`](docs/design/VISUAL-SPEC.md) §4b.

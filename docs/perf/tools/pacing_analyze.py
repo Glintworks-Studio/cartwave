@@ -1,7 +1,7 @@
 """Frame pacing report: app-side submit intervals + display-side update gaps.
 
 usage: pacing_analyze.py <framelog.csv> <ddagrab pts.txt> <secs> <cpu%> <label>
-Display period P is 1000 / $CHIPDAW_REFRESH_HZ (default 59.951, the DWM rate of
+Display period P is 1000 / $CARTWAVE_REFRESH_HZ (default 59.951, the DWM rate of
 the machine PERF.md was measured on). Use the exact rate of the display under test.
 """
 import csv
@@ -10,7 +10,7 @@ import statistics
 import sys
 
 log, pts_path, secs, cpu, label = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4], sys.argv[5]
-P = 1000.0 / float(os.environ.get("CHIPDAW_REFRESH_HZ", "59.951"))
+P = 1000.0 / float(os.environ.get("CARTWAVE_REFRESH_HZ", "59.951"))
 
 rows = list(csv.DictReader(open(log)))
 iv = [float(r['interval_ms']) for r in rows if float(r['interval_ms']) > 0]

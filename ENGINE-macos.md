@@ -1,5 +1,7 @@
 # ENGINE-macos: the real-time chip engine on macOS (Apple M1, MOTU M2)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Companion to [ENGINE.md](ENGINE.md) (Windows) and [PERF-macos.md](PERF-macos.md). This pass
 **verifies** the engine on macOS. It adds no features.
 

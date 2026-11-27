@@ -1,8 +1,10 @@
 # CLAUDE.md: Cartwave
 
-> **Cartwave** by **Glintworks** (decided 2026-11-26; trademark checks pending, VISION.md) · Rust ·
-> GUI: Vizia (our fork) · MIT OR Apache-2.0 (the open core). The code, crates, repo and `.chipdaw`
-> files keep the working title "ChipDAW" until a separate, planned rename: don't rename them here.
+> **Cartwave** by **Glintworks** (glintworks.studio; decided 2026-11-26, trademarks cleared,
+> renamed in the code 2026-11-27: RENAME.md) · Rust · GUI: Vizia (our fork) · MIT OR Apache-2.0
+> (the open core). New projects save as `.cartwave`; `.chipdaw` files open forever; environment
+> variables are `CARTWAVE_*` (the old `CARTWAVE_*` names stay as aliases). "ChipDAW" was the
+> working title: historical reports and RUNLOG entries keep it.
 
 ## 0. Read VISION.md first
 

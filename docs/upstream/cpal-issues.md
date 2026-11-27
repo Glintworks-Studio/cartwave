@@ -1,5 +1,7 @@
 # cpal issue write-ups (cpal 0.18.2)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Found while building ChipDAW's real-time engine (ENGINE.md, ENGINE-macos.md). Each is written as
 it would be filed. Evidence is from our probes (`crates/engine/examples/probe.rs`, `probe_mac.rs`).
 

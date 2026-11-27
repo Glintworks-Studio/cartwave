@@ -30,9 +30,9 @@ Shot-Layout "rows" '"show_overview": false' "$songs\rows.chipdaw"
 # shot_layout.ps1 -Keep: a child pwsh would wait on the app's inherited output handles).
 . (Join-Path $Repo "docs\batch3\tools\lib.ps1")
 $global:Work = $Out
-$global:Exe = (Resolve-Path (Join-Path $Repo "target\release\app.exe")).Path
-$env:CHIPDAW_FAKE_PROBLEM = "Audio dropouts: 3 buffer underruns so far. A larger buffer (Settings > Audio) helps."
-$env:CHIPDAW_FROZEN_METERS = "1"
+$global:Exe = (Resolve-Path (Join-Path $Repo "target\release\cartwave.exe")).Path
+$env:CARTWAVE_FAKE_PROBLEM = "Audio dropouts: 3 buffer underruns so far. A larger buffer (Settings > Audio) helps."
+$env:CARTWAVE_FROZEN_METERS = "1"
 $sp = Join-Path $Out "status.chipdaw"; Copy-Item "$songs\mockup.chipdaw" $sp -Force
 Launch -Project $sp -Data (Join-Path $Out "dstatus")
 MoveL 1300 860; Start-Sleep -Milliseconds 500
@@ -43,11 +43,11 @@ Shot "status_msg_help"
 ClickL 22 908; Start-Sleep -Milliseconds 600
 Shot "status_problems"
 Key 0x1B
-Remove-Item Env:CHIPDAW_FAKE_PROBLEM
+Remove-Item Env:CARTWAVE_FAKE_PROBLEM
 # The ruler zoom: a frame sequence while dragging down on bar 5.
 MoveL 990 122; Start-Sleep -Milliseconds 200; Down
 for ($i = 0; $i -le 6; $i++) { MoveL 990 (122 + 12 * $i); Start-Sleep -Milliseconds 250; Shot ("ruler_zoom_{0}" -f $i) }
 Up
 Stop-App
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 "shots -> $Out"

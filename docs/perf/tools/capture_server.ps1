@@ -3,15 +3,15 @@
 # Request files in <Work>\capq: "<id>.req" containing "start|<name>" or "stop|<name>"
 # (written by TraceCmd in input.ps1). Output: <Work>\etl\<name>.etl (merged, with
 # image/symbol rundown). A bare "stop.req" exits. Use the same -Work as the caller.
-# Defaults: -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf; -Xperf = Windows Performance Toolkit.
+# Defaults: -Work = $env:CARTWAVE_PERF_WORK or %TEMP%\chipdaw-perf; -Xperf = Windows Performance Toolkit.
 param(
-  [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }),
+  [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }),
   [string]$Xperf = (Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Windows Performance Toolkit\xperf.exe"))
 $ErrorActionPreference = "Continue"
 $Q = Join-Path $Work "capq"
 $Out = Join-Path $Work "etl"
 New-Item -ItemType Directory -Force $Q, $Out | Out-Null
-$Host.UI.RawUI.WindowTitle = "ChipDAW capture helper v2 (elevated) - xperf start/stop only"
+$Host.UI.RawUI.WindowTitle = "Cartwave capture helper v2 (elevated) - xperf start/stop only"
 "ready" | Set-Content "$Q\server.ready"
 while ($true) {
   if (Test-Path "$Q\stop.req") { Remove-Item "$Q\stop.req"; Remove-Item "$Q\server.ready" -ErrorAction SilentlyContinue; & $Xperf -stop 2>$null | Out-Null; break }

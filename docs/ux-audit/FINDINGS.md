@@ -1,5 +1,7 @@
 # UX audit, part 2: findings against VISION.md
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · build `stabilize/v1.1` @ `c0037d3` · the inventory is [INVENTORY.md](INVENTORY.md),
 screenshots are in [screens/](screens/), and the reference behaviours are in
 [manual-refs.md](manual-refs.md).*

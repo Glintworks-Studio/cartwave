@@ -1,5 +1,7 @@
 # DESIGNPASS.md: the Option D design pass
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 Branch **`design/option-d`** (from `main` 23b5da9), pushed, **not merged**: the CEO approves the
 comparison screenshots first (§7 has the merge commands). Prompt: `DESIGN_PASS_PROMPT.md`. The
 approved mockup is committed as [`docs/design/mockup-D.dc.html`](docs/design/mockup-D.dc.html);

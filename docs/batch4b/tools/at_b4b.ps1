@@ -1,11 +1,11 @@
-# usage: at_b4b.ps1 [-Exe .\target\release\app.exe] [-Work <dir>] [-Only B4B-M1,B4B-M2]
+# usage: at_b4b.ps1 [-Exe .\target\release\cartwave.exe] [-Work <dir>] [-Only B4B-M1,B4B-M2]
 # Batch 4b scenarios (BATCH4B_PROMPT.md §3–7, UX.md AT-17): synthetic input into the real app,
 # real OS file drags (drag_midi.ps1: OLE DoDragDrop, as from Explorer), saved files,
 # settings.json and dev-mode stderr lines, checked by check_b4b.py. Client px at 100 %: top bar
 # 76, Overview 76..108, ruler 108..136, rows from 136 every 73 px; browser 0..241; headers
 # 241..621; lanes 621.. at 92 px per bar. Dark menus off (Settings > Display): the native menu's
 # keyboard path (Alt+F, I, M) needs the system-drawn items.
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Work = (Join-Path $env:TEMP ("chipdaw-at-b4b-" + (Get-Date -Format "MMdd-HHmmss"))),
   [string[]]$Only = @())
 $global:Work = $Work
@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
 $global:Exe = (Resolve-Path $Exe).Path
 python "$Repo\docs\batch4b\tools\fixtures_b4b.py" $Work | Out-Null
-foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM", "CHIPDAW_WARN_ANSWER", "CHIPDAW_IMPORT_FROM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM", "CARTWAVE_WARN_ANSWER", "CARTWAVE_IMPORT_FROM") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $obs = [ordered]@{ work = $Work }
 $Mid = (Resolve-Path "$Repo\docs\songs\showcase.mid").Path
 function Place { pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out "$global:Work\_place.png" | Out-Null; Start-Sleep -Milliseconds 300 }
@@ -45,7 +45,7 @@ function DragMid($pts, [switch]$Cancel, [string]$ShotName = "", [int]$ShotAt = -
 # ─────────── B4B-M1 / AT-17: File > Import > MIDI File… adds tracks, the old clips unchanged ───────────
 if (Want "B4B-M1") {
   $p = Fx "fx_board" "m1"; $d = Join-Path $Work "dm1"; NoDark $d
-  $env:CHIPDAW_IMPORT_FROM = $Mid; $env:CHIPDAW_WARN_ANSWER = "unlock"
+  $env:CARTWAVE_IMPORT_FROM = $Mid; $env:CARTWAVE_WARN_ANSWER = "unlock"
   Launch -Project $p -Data $d; Place
   [In]::SetForegroundWindow($global:AppH) | Out-Null; Start-Sleep -Milliseconds 400
   KeyDown 0x12; Key 0x46; KeyUp 0x12; Start-Sleep -Milliseconds 800   # Alt+F: File
@@ -57,7 +57,7 @@ if (Want "B4B-M1") {
   $obs.m1_import = DevLines $d "midi import"
   $obs.m1_warn = DevLines $d "dev: warning"
   Stop-App
-  Remove-Item Env:CHIPDAW_IMPORT_FROM, Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
+  Remove-Item Env:CARTWAVE_IMPORT_FROM, Env:CARTWAVE_WARN_ANSWER -ErrorAction SilentlyContinue
 }
 
 # ─────────── B4B-M2: a drop on empty space with no profile: new studio tracks, no dialog; the preview follows the cursor ───────────
@@ -76,7 +76,7 @@ if (Want "B4B-M2") {
 # ─────────── B4B-M3: a drop onto track 2 at bar 3 that conflicts: Fit, chords as arpeggios ───────────
 if (Want "B4B-M3") {
   $p = Fx "fx_board" "m3"; $d = Join-Path $Work "dm3"
-  $env:CHIPDAW_WARN_ANSWER = "fitarp"
+  $env:CARTWAVE_WARN_ANSWER = "fitarp"
   Launch -Project $p -Data $d; Place
   DragMid ("{0},{1};{2},{3};{4},{5}" -f (BarX 6), (RowY 1 + 30), (BarX 3 + 10), (RowY 1 + 30), (BarX 3 + 20), (RowY 1 + 30))
   Save; Keep $p "m3_after"
@@ -84,20 +84,20 @@ if (Want "B4B-M3") {
   $obs.m3_import = DevLines $d "midi import"
   $obs.m3_warn = DevLines $d "dev: warning"
   Stop-App
-  Remove-Item Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
+  Remove-Item Env:CARTWAVE_WARN_ANSWER -ErrorAction SilentlyContinue
 }
 
 # ─────────── B4B-M4: a drag that leaves (Esc) changes nothing and asks nothing ───────────
 if (Want "B4B-M4") {
   $p = Fx "fx_board" "m4"; $d = Join-Path $Work "dm4"
-  $env:CHIPDAW_WARN_ANSWER = "unlock"
+  $env:CARTWAVE_WARN_ANSWER = "unlock"
   Launch -Project $p -Data $d; Place
   DragMid ("{0},{1};{2},{3}" -f (BarX 5), (RowY 1 + 30), (BarX 4), (RowY 1 + 30)) -Cancel
   Save; Keep $p "m4_after"
   $obs.m4_drag = DevLines $d "midi drag at"
   $obs.m4_import = DevLines $d "midi import"
   Stop-App
-  Remove-Item Env:CHIPDAW_WARN_ANSWER -ErrorAction SilentlyContinue
+  Remove-Item Env:CARTWAVE_WARN_ANSWER -ErrorAction SilentlyContinue
 }
 
 # The mixer (Tab) at 1440 × 900 with the browser open: strips from x 241 + 24, every 160 px,
@@ -171,9 +171,9 @@ if (Want "B4B-U1") {
 if (Want "B4B-C1") {
   $p = Fx "fx_clip" "c1"; $d = Join-Path $Work "dc1"
   # Launch with audio (lib.ps1's Launch turns it off): the meters need the engine.
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 300
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 300
   New-Item -ItemType Directory -Force $d | Out-Null
-  $env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_AUDIO = "1"; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_PROJECT = $p
+  $env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_AUDIO = "1"; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_PROJECT = $p
   $script:proc = Start-Process $global:Exe -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
   for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $script:proc.Id).MainWindowHandle -ne 0) { break } }
   Start-Sleep -Milliseconds 1500
@@ -181,7 +181,7 @@ if (Want "B4B-C1") {
   [In]::SetForegroundWindow($global:AppH) | Out-Null
   $global:S = 1.0
   Place
-  $env:CHIPDAW_AUDIO = "0"
+  $env:CARTWAVE_AUDIO = "0"
   K 0x20; Start-Sleep -Milliseconds 2500; K 0x20; Start-Sleep -Milliseconds 1500   # play 2.5 s, stop, wait (the hold)
   Shot "c1_lit"
   ClickL 589 138; Start-Sleep -Milliseconds 400                                     # the mark of track 1 (241 + 328 + 18, row top + 2)

@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 args = sys.argv[1:]
 trace = args[0]
-proc_name = args[args.index("--process") + 1] if "--process" in args else "app"
+proc_name = args[args.index("--process") + 1] if "--process" in args else "cartwave"
 
 xml = subprocess.run(
     ["xctrace", "export", "--input", trace, "--xpath",

@@ -1,19 +1,19 @@
-# usage: screens.ps1 [-Exe .\target\release\app.exe] [-Repo <repo>]
+# usage: screens.ps1 [-Exe .\target\release\cartwave.exe] [-Repo <repo>]
 # Writes the piano-roll screenshots in docs/screens/pianoroll/ (1440x900, 100%).
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path)
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 Set-Location $Repo
 $out = Join-Path $Repo "docs\screens\pianoroll"
 New-Item -ItemType Directory -Force $out | Out-Null
 # Relative, so the FILE field shows no user folder in the screenshots.
 $song = "docs\songs\scale_test.chipdaw"
-$env:CHIPDAW_DATA_DIR = Join-Path $env:TEMP "chipdaw-screens"
-$env:CHIPDAW_AUDIO = "0"
+$env:CARTWAVE_DATA_DIR = Join-Path $env:TEMP "chipdaw-screens"
+$env:CARTWAVE_AUDIO = "0"
 function Open-App($project, $clip) {
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-  if ($project) { $env:CHIPDAW_PROJECT = $project } else { Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue }
-  $env:CHIPDAW_OPEN_CLIP = "$clip"
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+  if ($project) { $env:CARTWAVE_PROJECT = $project } else { Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue }
+  $env:CARTWAVE_OPEN_CLIP = "$clip"
   $script:p = Start-Process $Exe -PassThru
   Start-Sleep -Seconds 3
 }
@@ -49,5 +49,5 @@ Open-App $song 9
 Move-To 50 500; Start-Sleep -Milliseconds 400
 Shot "dpcm-rows"
 Stop-Process -Id $p.Id -Force
-Remove-Item Env:CHIPDAW_PROJECT, Env:CHIPDAW_OPEN_CLIP, Env:CHIPDAW_AUDIO, Env:CHIPDAW_DATA_DIR -ErrorAction SilentlyContinue
+Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_OPEN_CLIP, Env:CARTWAVE_AUDIO, Env:CARTWAVE_DATA_DIR -ErrorAction SilentlyContinue
 Get-ChildItem $out | Select-Object Name, Length

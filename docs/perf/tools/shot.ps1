@@ -1,6 +1,6 @@
 # usage: shot.ps1 [-ProcName app] [-Out shot.png] [-Delay <ms>]
 # Moves the process's main window to the top-left and saves a PNG of it (DWM frame bounds).
-param([string]$ProcName = "app", [string]$Out = "shot.png", [int]$Delay = 0)
+param([string]$ProcName = "cartwave", [string]$Out = "shot.png", [int]$Delay = 0)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;
@@ -29,7 +29,7 @@ public class Ew { public delegate bool P(IntPtr h, IntPtr l);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
   public static IntPtr Find(uint pid) { IntPtr found = IntPtr.Zero;
     EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); var sb = new StringBuilder(256);
-      if (p == pid && IsWindowVisible(h) && GetWindowText(h, sb, 256) > 0 && sb.ToString().Contains("ChipDAW")) { found = h; return false; } return true; }, IntPtr.Zero);
+      if (p == pid && IsWindowVisible(h) && GetWindowText(h, sb, 256) > 0 && (sb.ToString().Contains("Cartwave") || sb.ToString().Contains("ChipDAW"))) { found = h; return false; } return true; }, IntPtr.Zero);
     return found; } }
 "@
   $t = [Ew]::Find([uint32]$p.Id)

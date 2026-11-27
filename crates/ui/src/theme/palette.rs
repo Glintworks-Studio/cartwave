@@ -1,4 +1,4 @@
-//! ChipDAW's own colour palette (polish pass) and the material recipes every
+//! Cartwave's own colour palette (polish pass) and the material recipes every
 //! coloured surface uses.
 //!
 //! - 70 base colours, a 5 × 14 grid: columns are OKLCh hues from red round

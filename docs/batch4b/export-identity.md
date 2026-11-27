@@ -1,5 +1,7 @@
 # Gate 1: the game export without pan, byte for byte (Batch 4b §9.1)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 `crates/ui/examples/game_export.rs` run by the baseline (main d4f1afd, ../before-batch4b) and
 this branch on the same inputs; every file compared byte for byte.
 

@@ -127,7 +127,7 @@ mod tests {
         assert!(s.iter().all(|x| x.is_finite()));
         let peak = s.iter().fold(0f32, |m, x| m.max(x.abs()));
         assert!(peak > 0.05, "peak {peak}");
-        let dir = std::env::temp_dir().join("chipdaw-export-test.wav");
+        let dir = std::env::temp_dir().join("cartwave-export-test.wav");
         write_wav(&s[..4800], &dir).unwrap();
         let bytes = std::fs::read(&dir).unwrap();
         assert_eq!(&bytes[..4], b"RIFF");

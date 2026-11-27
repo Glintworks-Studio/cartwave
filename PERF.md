@@ -1,5 +1,7 @@
 # PERF — ChipDAW GUI playback CPU: findings and fixes
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 **Machine:** Windows 11 Pro 26200 · RTX 4070 SUPER (driver 610.88), OpenGL via glutin/winit ·
 ViewSonic VX3211-2K, 2560×1440 at **59.951 Hz** · release builds, 1440×900 window, 100% scaling.
 

@@ -1,16 +1,16 @@
 # usage: probe_textfocus.ps1 — do global shortcuts fire while typing in a text field?
 # 1) Type "A B" into the browser search: does Space start playback?  2) Rename a clip in the
 # inspector, then Ctrl+Z inside the field: does the global undo run?
-param([string]$Exe = ".\target\release\app.exe",
+param([string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
   [string]$Work = (Join-Path $env:TEMP "chipdaw-ux"))
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 $ErrorActionPreference = "Stop"
 Set-Location $Repo
 $Out = Join-Path $Repo "docs\ux-audit\screens"
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 Remove-Item "$Work\data\*" -ErrorAction SilentlyContinue
-$env:CHIPDAW_DATA_DIR = "$Work\data"; $env:CHIPDAW_AUDIO = "0"
+$env:CARTWAVE_DATA_DIR = "$Work\data"; $env:CARTWAVE_AUDIO = "0"
 $p = Start-Process (Resolve-Path $Exe).Path -PassThru
 Start-Sleep -Seconds 3
 . "$Repo\docs\perf\tools\input.ps1"

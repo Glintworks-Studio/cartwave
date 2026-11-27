@@ -1,4 +1,4 @@
-//! ChipDAW's user interface. A library crate so the same UI can later be hosted
+//! Cartwave's user interface. A library crate so the same UI can later be hosted
 //! inside a plugin window (baseview) as well as the standalone app.
 
 pub mod dev;
@@ -8,6 +8,7 @@ pub mod dpcm;
 pub mod export;
 pub mod game_export;
 pub mod history;
+pub mod identity;
 pub mod menus;
 pub mod midi;
 pub mod midi_tracks;
@@ -231,7 +232,7 @@ pub struct AppState {
     cap: FrameCap,
     /// The (cap, display rate) last applied to the backend and the pump.
     applied: Option<(FrameCap, Option<f64>)>,
-    /// The real-time audio engine (`None` if `CHIPDAW_AUDIO=0`).
+    /// The real-time audio engine (`None` if `CARTWAVE_AUDIO=0`).
     engine: Option<Engine>,
     /// UI copy of every lane's hardware parameters.
     /// What the engine last got: the console's channel controls and mute
@@ -258,7 +259,7 @@ pub struct AppState {
     song_key: u64,
     song_version: u64,
     filter: FilterMode,
-    /// The user picked the filter (F7 or `CHIPDAW_FILTER`); it no longer
+    /// The user picked the filter (F7 or `CARTWAVE_FILTER`); it no longer
     /// follows the chip.
     filter_manual: bool,
     /// The last note-on counts seen: per console channel, and per studio
@@ -1031,7 +1032,7 @@ impl Model for AppState {
                 if self.ask_save(cx, "opening another project") == Proceed::Stop {
                     return;
                 }
-                let Some(path) = self.file_dialog().pick_file() else { return };
+                let Some(path) = self.file_dialog(false).pick_file() else { return };
                 self.open_project_file(&path);
             }
             // Only on a real change: the field is bound to this signal, and setting
@@ -1090,7 +1091,7 @@ impl Model for AppState {
                 let replaces = path
                     .extension()
                     .and_then(|e| e.to_str())
-                    .is_some_and(|e| [file::EXTENSION].contains(&e.to_ascii_lowercase().as_str()));
+                    .is_some_and(file::is_project_extension);
                 if replaces && self.ask_save(cx, "opening the dropped file") == Proceed::Stop {
                     return;
                 }
@@ -1237,9 +1238,9 @@ impl AppState {
                     );
                 }
             }
-            // `CHIPDAW_PLAYHEAD=<ticks>` (dev): the playhead stays put while
+            // `CARTWAVE_PLAYHEAD=<ticks>` (dev): the playhead stays put while
             // playing (the polish pass's regression screenshots).
-            if let Some(p) = dev::var("CHIPDAW_PLAYHEAD").and_then(|v| v.parse::<f64>().ok()) {
+            if let Some(p) = dev::var("CARTWAVE_PLAYHEAD").and_then(|v| v.parse::<f64>().ok()) {
                 tr.playhead_ticks = p;
             }
             self.s.transport.set(tr);
@@ -1337,9 +1338,9 @@ impl AppState {
             });
         }
         // Only notify (and so redraw) when something actually moved.
-        // `CHIPDAW_FROZEN_METERS=1` (dev): levels, lights and the spectrum stay
+        // `CARTWAVE_FROZEN_METERS=1` (dev): levels, lights and the spectrum stay
         // at rest (regression screenshots, performance attribution).
-        if !dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") {
+        if !dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") {
             meters.set_if_changed(m);
         }
 
@@ -1841,7 +1842,7 @@ impl AppState {
         // MEM: the process's private memory, once a second (idle stays idle).
         if self.last_mem.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) {
             self.last_mem = Some(Instant::now());
-            let frozen = dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1");
+            let frozen = dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1");
             self.s.mem_mb.set_if_changed(if frozen { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) });
         }
         // Selected lane follows the first selected clip.
@@ -1979,9 +1980,9 @@ impl AppState {
             }
             let dropouts = self.underruns_seen.1.is_some_and(|t| now.duration_since(t) < DROPOUT_HOLD);
             let mut problems = Vec::new();
-            // Dev hook: `CHIPDAW_FAKE_PROBLEM=text` shows a persistent problem
+            // Dev hook: `CARTWAVE_FAKE_PROBLEM=text` shows a persistent problem
             // (the status bar's screenshots and tests).
-            if let Some(t) = dev::var("CHIPDAW_FAKE_PROBLEM") {
+            if let Some(t) = dev::var("CARTWAVE_FAKE_PROBLEM") {
                 problems.push(t);
             }
             if !msg.is_empty() {
@@ -2210,9 +2211,9 @@ pub fn build_ui(cx: &mut Context) {
     // The default chip; the default output filter follows it.
     let chip = SoundChip::WithVrc6;
     let mut settings = file::load_settings();
-    // Dev hook: `CHIPDAW_OVERVIEW=0` starts with the Overview hidden (the
+    // Dev hook: `CARTWAVE_OVERVIEW=0` starts with the Overview hidden (the
     // earlier scenario suites' coordinates; not saved unless changed).
-    if dev::var("CHIPDAW_OVERVIEW").is_some_and(|v| v == "0") {
+    if dev::var("CARTWAVE_OVERVIEW").is_some_and(|v| v == "0") {
         settings.show_overview = false;
     }
     let s = Signals {
@@ -2286,12 +2287,12 @@ pub fn build_ui(cx: &mut Context) {
         hover_help: Signal::new(String::new()),
         problems: Signal::new(Vec::new()),
         project_format: Signal::new((file::DEFAULT_PROJECT_RATE, file::DEFAULT_BIT_DEPTH)),
-        mem_mb: Signal::new(if dev::var("CHIPDAW_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
+        mem_mb: Signal::new(if dev::var("CARTWAVE_FROZEN_METERS").is_some_and(|v| v == "1") { Some(100) } else { perf::process_memory().map(|b| (b / (1024 * 1024)) as u32) }),
     };
 
     // Dev hook: a persistent problem shown from the start (also kept while
     // the engine reports its own; see `sync_engine`).
-    if let Some(t) = dev::var("CHIPDAW_FAKE_PROBLEM") {
+    if let Some(t) = dev::var("CARTWAVE_FAKE_PROBLEM") {
         s.problems.set(vec![t]);
     }
 
@@ -2505,12 +2506,18 @@ pub fn build_ui(cx: &mut Context) {
 
     StatsOverlay::new(cx, s);
     DragGhost::new(cx, s);
+
+    // The app is up: the pre-rename app-data folder kept as a backup goes
+    // after the launch following its move (RENAME.md, `file::migrate_data_dir`).
+    if let Some(old) = file::confirm_data_migration() {
+        eprintln!("Removed the old app-data folder {} (moved to {})", old.display(), file::data_dir().map(|d| d.display().to_string()).unwrap_or_default());
+    }
 }
 
 impl AppState {
     /// Starts the audio engine and sends it the initial state.
     fn start_engine(&mut self) {
-        if std::env::var("CHIPDAW_AUDIO").is_ok_and(|v| v == "0") {
+        if engine::env::var("CARTWAVE_AUDIO").is_some_and(|v| v == "0") {
             return;
         }
         let e = Engine::start(self.engine_config());
@@ -2583,10 +2590,10 @@ pub fn chrome_bands(s: &Signals) -> f32 {
     (if st { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 }) + if status_bar_shown() { theme::tokens::STATUS_BAR_HEIGHT } else { 0.0 }
 }
 
-/// The status bar is shown unless the dev hook `CHIPDAW_HIDE_STATUS=1`
+/// The status bar is shown unless the dev hook `CARTWAVE_HIDE_STATUS=1`
 /// hides it (the regression gate's screenshots only).
 pub fn status_bar_shown() -> bool {
-    !dev::var("CHIPDAW_HIDE_STATUS").is_some_and(|v| v == "1")
+    !dev::var("CARTWAVE_HIDE_STATUS").is_some_and(|v| v == "1")
 }
 
 /// The minimum window height (logical px, on the 4 px grid).
@@ -3192,7 +3199,7 @@ impl AppState {
         match ext.as_str() {
             "mid" | "midi" => self.import_midi(path),
             "wav" => self.import_sample(path),
-            e if e == file::EXTENSION => self.open_project_file(path),
+            e if file::is_project_extension(e) => self.open_project_file(path),
             _ => self.set_status(format!("Drop a .mid, .wav or .{} file.", file::EXTENSION)),
         }
     }
@@ -3250,8 +3257,8 @@ impl AppState {
         if let Some(dir) = cur.parent().filter(|d| d.is_dir()) {
             d = d.set_directory(dir);
         }
-        // `CHIPDAW_EXPORT_TO=path.wav` (scripted UI tests): no native dialog.
-        let path = match crate::dev::var_os("CHIPDAW_EXPORT_TO") {
+        // `CARTWAVE_EXPORT_TO=path.wav` (scripted UI tests): no native dialog.
+        let path = match crate::dev::var_os("CARTWAVE_EXPORT_TO") {
             Some(p) => std::path::PathBuf::from(p),
             None => match d.save_file() {
                 Some(p) => p,
@@ -3315,9 +3322,21 @@ impl AppState {
         });
     }
 
-    fn file_dialog(&self) -> rfd::FileDialog {
-        let mut d = rfd::FileDialog::new().add_filter("ChipDAW project", &[file::EXTENSION]);
-        let cur = file::with_extension(&self.s.file_path.get_untracked());
+    /// The native Open (`save` false) or Save / Save As dialog. Open lists
+    /// both extensions; Save offers `.cartwave` (a `.chipdaw` project's name
+    /// comes back as `.cartwave`) and still lists the old one.
+    fn file_dialog(&self, save: bool) -> rfd::FileDialog {
+        let mut d = if save {
+            rfd::FileDialog::new()
+                .add_filter("Cartwave project", &[file::EXTENSION])
+                .add_filter("Cartwave project, old extension", &[file::LEGACY_EXTENSION])
+        } else {
+            rfd::FileDialog::new().add_filter("Cartwave project", &file::EXTENSIONS)
+        };
+        let mut cur = file::with_extension(&self.s.file_path.get_untracked());
+        if save {
+            cur.set_extension(file::EXTENSION);
+        }
         if let Some(dir) = cur.parent().filter(|d| d.is_dir()) {
             d = d.set_directory(dir);
         }
@@ -3331,7 +3350,7 @@ impl AppState {
     /// whether the project was saved.
     fn save_project(&mut self) -> bool {
         if self.s.file_path.get_untracked().trim().is_empty() {
-            match self.file_dialog().save_file() {
+            match self.file_dialog(true).save_file() {
                 Some(path) => self.s.file_path.set(path.display().to_string()),
                 None => return false,
             }
@@ -3357,7 +3376,7 @@ impl AppState {
 
     /// Save As: a native save dialog, then save there.
     fn save_project_as(&mut self) -> bool {
-        match self.file_dialog().save_file() {
+        match self.file_dialog(true).save_file() {
             Some(path) => {
                 self.s.file_path.set(path.display().to_string());
                 self.save_project()
@@ -3671,8 +3690,8 @@ impl AppState {
         }
     }
 
-    /// `CHIPDAW_PROJECT=path` opens a project at start (tests, benchmarks);
-    /// `CHIPDAW_OPEN_CLIP=id` then opens that clip in the piano roll.
+    /// `CARTWAVE_PROJECT=path` opens a project at start (tests, benchmarks);
+    /// `CARTWAVE_OPEN_CLIP=id` then opens that clip in the piano roll.
     fn apply_test_project(&mut self) {
         // Files on the command line (Open With, or a double-clicked file):
         // projects, MIDI and WAV files, in order.
@@ -3683,17 +3702,17 @@ impl AppState {
             }
         }
         let opened_arg = std::env::args_os().skip(1).any(|a| std::path::Path::new(&a).is_file());
-        if self.settings.open_last && !opened_arg && crate::dev::var("CHIPDAW_PROJECT").is_none() {
+        if self.settings.open_last && !opened_arg && crate::dev::var("CARTWAVE_PROJECT").is_none() {
             if let Some(last) = self.settings.recent.first().cloned().filter(|p| std::path::Path::new(p).is_file()) {
                 self.open_project_file(std::path::Path::new(&last));
             }
         }
-        if let Some(path) = crate::dev::var("CHIPDAW_PROJECT") {
+        if let Some(path) = crate::dev::var("CARTWAVE_PROJECT") {
             match file::load(std::path::Path::new(&path)) {
                 Ok(p) => {
                     let n = p.arrangement.clips.len();
                     self.load_project(p);
-                    eprintln!("dev: CHIPDAW_PROJECT {path} ({n} clips)");
+                    eprintln!("dev: CARTWAVE_PROJECT {path} ({n} clips)");
                     self.s.file_path.set(path);
                     self.mark_saved();
                     // Loading stops the transport: the test hooks that play start
@@ -3703,30 +3722,30 @@ impl AppState {
                         self.s.transport.update(|t| t.playing = true);
                     }
                 }
-                Err(e) => eprintln!("CHIPDAW_PROJECT: {e}"),
+                Err(e) => eprintln!("CARTWAVE_PROJECT: {e}"),
             }
         }
-        if let Some(id) = crate::dev::var("CHIPDAW_OPEN_CLIP").and_then(|v| v.parse().ok()) {
+        if let Some(id) = crate::dev::var("CARTWAVE_OPEN_CLIP").and_then(|v| v.parse().ok()) {
             self.open_piano(id);
-            eprintln!("dev: CHIPDAW_OPEN_CLIP {id} (piano roll open: {})", self.s.piano_open.get_untracked());
+            eprintln!("dev: CARTWAVE_OPEN_CLIP {id} (piano roll open: {})", self.s.piano_open.get_untracked());
         }
-        // `CHIPDAW_PIANO_ZOOM=px per bar` (the piano-roll benchmark shows
+        // `CARTWAVE_PIANO_ZOOM=px per bar` (the piano-roll benchmark shows
         // all 2,000 notes at 32).
-        if let Some(ppb) = crate::dev::var("CHIPDAW_PIANO_ZOOM").and_then(|v| v.parse::<f64>().ok()) {
+        if let Some(ppb) = crate::dev::var("CARTWAVE_PIANO_ZOOM").and_then(|v| v.parse::<f64>().ok()) {
             let ppb = ppb.clamp(PianoState::MIN_PX_PER_BAR, PianoState::MAX_PX_PER_BAR);
             self.s.piano.update(|p| p.px_per_tick = ppb / TICKS_PER_BAR as f64);
         }
-        // `CHIPDAW_PX_PER_BAR=100`: the arrangement's zoom (the design pass's
+        // `CARTWAVE_PX_PER_BAR=100`: the arrangement's zoom (the design pass's
         // pixel comparison uses the mockup's 100 px per bar).
         if dev::enabled() {
             eprintln!("dev: spectrum style {} (settings)", views::chrome::SpectrumStyle::from_key(&self.settings.spectrum_style).key());
         }
-        if let Some(ppb) = crate::dev::var("CHIPDAW_PX_PER_BAR").and_then(|v| v.parse::<f64>().ok()) {
+        if let Some(ppb) = crate::dev::var("CARTWAVE_PX_PER_BAR").and_then(|v| v.parse::<f64>().ok()) {
             self.s.arrangement.update(|a| {
                 a.view.px_per_tick = ppb / TICKS_PER_BAR as f64;
                 a.view.scroll_ticks = 0.0;
             });
-            eprintln!("dev: CHIPDAW_PX_PER_BAR {ppb}");
+            eprintln!("dev: CARTWAVE_PX_PER_BAR {ppb}");
         }
     }
 }
@@ -3734,7 +3753,7 @@ impl AppState {
 // ───────────────────────────── App shell (Batches 1 and 2) ─────────────────────────────
 
 impl AppState {
-    /// The audio configuration from Settings (a dev-mode `CHIPDAW_BUFFER`
+    /// The audio configuration from Settings (a dev-mode `CARTWAVE_BUFFER`
     /// overrides the buffer for the benchmarks).
     fn engine_config(&self) -> EngineConfig {
         EngineConfig {
@@ -3811,7 +3830,7 @@ impl AppState {
         };
         let mut d = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Warning)
-            .set_title("ChipDAW")
+            .set_title("Cartwave")
             .set_description(text)
             .set_buttons(buttons);
         if let Some(w) = cx.window() {
@@ -4366,7 +4385,7 @@ impl AppState {
     /// state, and the audio switch measurement.
     fn sync_shell(&mut self, cx: &mut EventContext) {
         let mark = if self.s.dirty.get_untracked() { "*" } else { "" };
-        let title = format!("{mark}{} — ChipDAW", self.project_name());
+        let title = format!("{mark}{} — Cartwave", self.project_name());
         if title != self.title {
             self.title = title.clone();
             cx.emit(WindowEvent::SetTitle(title));

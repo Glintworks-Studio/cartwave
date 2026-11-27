@@ -1,5 +1,7 @@
 # FINDINGS — Vizia GUI bake-off report
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 **Stack:** vizia 0.4.0 (crates.io) · Skia via `skia-safe 0.93.1` · winit + OpenGL · Rust 1.100 · Windows 11, RTX 4070 SUPER, 2560×1440 @ 59.951 Hz.
 
 > **Update (performance pass, see [PERF.md](PERF.md)).** Several statements below were corrected

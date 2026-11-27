@@ -1,4 +1,4 @@
-# usage: lime_scenes_b4b.ps1 -Out <dir> [-Exe .\target\release\app.exe]
+# usage: lime_scenes_b4b.ps1 -Out <dir> [-Exe .\target\release\cartwave.exe]
 # Batch 4b gate 7: the scenes for lime_audit_b4b.py. Projects with no lime in their track
 # colours (VISUAL-SPEC §13: lime is only for toggle on-states and the display), so any lime found
 # is the interface's own:
@@ -8,7 +8,7 @@
 #   studio_mixer_play  Tab: the mixer playing (strip meters, budget bar, Main strip)
 #   s64_mixer_play     fx_s64u (64 studio tracks, unison 2) in the mixer, playing, loop on
 #   new_arr / new_mixer  File > New (Ctrl+N; nothing edited, so no prompt): its default tracks
-param([string]$Out, [string]$Exe = ".\target\release\app.exe")
+param([string]$Out, [string]$Exe = ".\target\release\cartwave.exe")
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 $d = Join-Path $env:TEMP ("chipdaw-lime-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
@@ -18,10 +18,10 @@ python "$Repo\docs\batch4b\tools\fixtures_b4b.py" $d | Out-Null
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
 function Shot($name) { pwsh -NoProfile -File "$Repo\docs\perf\tools\shot.ps1" -Out (Join-Path $Out "$name.png") | Out-Null }
 function Start-App($proj) {
-  Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-  $env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_AUDIO = "1"
-  Remove-Item Env:CHIPDAW_FROZEN_METERS -ErrorAction SilentlyContinue
-  $env:CHIPDAW_PROJECT = (Join-Path $d $proj)
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+  $env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_AUDIO = "1"
+  Remove-Item Env:CARTWAVE_FROZEN_METERS -ErrorAction SilentlyContinue
+  $env:CARTWAVE_PROJECT = (Join-Path $d $proj)
   $script:p = Start-Process (Resolve-Path $Exe).Path -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
   Start-Sleep -Milliseconds 3000
   $global:AppH = (Get-Process -Id $script:p.Id).MainWindowHandle
@@ -48,6 +48,6 @@ Start-App "fx_s64u.chipdaw"
 Key 0x09; Start-Sleep -Milliseconds 800
 Key 0x20; Start-Sleep -Milliseconds 2000
 Shot "s64_mixer_play"
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
-Remove-Item Env:CHIPDAW_PROJECT -ErrorAction SilentlyContinue
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+Remove-Item Env:CARTWAVE_PROJECT -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $d "stderr.txt") (Join-Path $Out "stderr_last.txt") -ErrorAction SilentlyContinue

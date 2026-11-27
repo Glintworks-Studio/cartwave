@@ -7,13 +7,13 @@ $global:Work = $Work
 New-Item -ItemType Directory -Force $Work | Out-Null
 . (Join-Path $PSScriptRoot "lib.ps1")
 Set-Location $Repo
-$global:Exe = (Resolve-Path ".\target\release\app.exe").Path
+$global:Exe = (Resolve-Path ".\target\release\cartwave.exe").Path
 $p = Join-Path $Work "demo.chipdaw"; Copy-Item "$Repo\docs\songs\v3\demo_band.chipdaw" $p -Force
 $d = Join-Path $Work "d"
 New-Item -ItemType Directory -Force $d | Out-Null
 # Audio on this time (Launch turns it off for the UI tests).
-Remove-Item Env:CHIPDAW_AUDIO -ErrorAction SilentlyContinue
-$env:CHIPDAW_DATA_DIR = $d; $env:CHIPDAW_DEV = "1"; $env:CHIPDAW_PROJECT = $p
+Remove-Item Env:CARTWAVE_AUDIO -ErrorAction SilentlyContinue
+$env:CARTWAVE_DATA_DIR = $d; $env:CARTWAVE_DEV = "1"; $env:CARTWAVE_PROJECT = $p
 $script:proc = Start-Process $global:Exe -PassThru -RedirectStandardError (Join-Path $d "stderr.txt")
 for ($i = 0; $i -lt 50; $i++) { Start-Sleep -Milliseconds 100; if ((Get-Process -Id $script:proc.Id).MainWindowHandle -ne 0) { break } }
 Start-Sleep -Seconds 2

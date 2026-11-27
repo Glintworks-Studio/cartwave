@@ -9,6 +9,7 @@
 
 pub mod alloc_check;
 pub mod command;
+pub mod env;
 pub mod core;
 pub mod cpu;
 mod host;
@@ -77,7 +78,7 @@ impl Engine {
         let host = {
             let (shared, stop, info, reconfig, cfg) = (shared.clone(), stop.clone(), info.clone(), reconfig.clone(), cfg.clone());
             std::thread::Builder::new()
-                .name("chipdaw-audio-host".into())
+                .name("cartwave-audio-host".into())
                 .spawn(move || host::run(cell, shared, cfg, stop, info, reconfig))
                 .expect("spawn audio host thread")
         };

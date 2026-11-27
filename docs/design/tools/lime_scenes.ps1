@@ -1,8 +1,8 @@
-# usage: lime_scenes.ps1 [-Exe .\target\release\app.exe] [-Out <dir>]
+# usage: lime_scenes.ps1 [-Exe .\target\release\cartwave.exe] [-Out <dir>]
 # Screenshots for the lime audit (DESIGN_PASS_PROMPT.md §4.3): stopped, playing,
 # loop off, loop on, solo, mute, a clip selected (inspector), the browser open,
 # Project Settings open. lime_audit.py scans them.
-param([string]$Exe = ".\target\release\app.exe", [string]$Out = (Join-Path $env:TEMP "chipdaw-lime"))
+param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = (Join-Path $env:TEMP "chipdaw-lime"))
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 $global:Work = $Out

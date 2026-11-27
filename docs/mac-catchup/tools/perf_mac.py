@@ -6,7 +6,7 @@ Builds are interleaved per round (CPU % on Apple Silicon is only comparable with
 instructions per presented frame is the stable measure, PERF-macos.md §5).
 
 usage: perf_mac.py --label L --rounds N --display 320|60 [--only a,b] build=path ... > results.jsonl
-  build: "new=target/release/app" or "base=../perf-macos-base/target/release/app:old" (":old" =
+  build: "new=target/release/cartwave" or "base=../perf-macos-base/target/release/cartwave:old" (":old" =
   the pre-design layout: 1440 x 900 window, the clip grab at 300,160, no Overview/E1 gestures).
 """
 import argparse
@@ -40,7 +40,7 @@ if not piano.exists():
     subprocess.run(["cargo", "run", "--release", "-q", "-p", "ui", "--example", "make_songs", "--", str(WORK / "songs")], cwd=REPO, check=True, capture_output=True)
 
 POS = {"320": None, "60": "560,-1312"}[a.display]
-PIANO_ENV = [f"CHIPDAW_PROJECT={piano}", "CHIPDAW_OPEN_CLIP=1", "CHIPDAW_PIANO_ZOOM=32"]
+PIANO_ENV = [f"CARTWAVE_PROJECT={piano}", "CARTWAVE_OPEN_CLIP=1", "CARTWAVE_PIANO_ZOOM=32"]
 # name: (scenario, extra chipbench args, env, new-layout only)
 NEW = {
     "idle": ("idle", [], [], False),
@@ -77,12 +77,12 @@ def run(build, path, old, name):
     fl = WORK / f"fl_{a.label}_{build}_{name}.csv"
     args = [str(cb), "--app", path, "--scenario", sc, "--secs", str(a.secs), "--content-height", "900" if old else "920",
             "--park", "1300,800" if not old else "700,40", "--framelog", str(fl),
-            "--env", "CHIPDAW_DEV=1", "--env", f"CHIPDAW_DATA_DIR={data}"] + extra
+            "--env", "CARTWAVE_DEV=1", "--env", f"CARTWAVE_DATA_DIR={data}"] + extra
     for e in env:
         args += ["--env", e]
     if POS:
         args += ["--pos", POS]
-    subprocess.run(["pkill", "-x", "app"], capture_output=True)
+    subprocess.run(["pkill", "-x", "cartwave"], capture_output=True)
     time.sleep(0.5)
     out = subprocess.run(args, capture_output=True, text=True, timeout=a.secs + 60).stdout.strip().splitlines()
     res = json.loads(out[-1]) if out else {}

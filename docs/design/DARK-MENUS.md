@@ -1,5 +1,7 @@
 # Dark dropdown menus (Windows)
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · BATCH3.md §5 option (c) · setting **Settings ▸ Display ▸ Dark menus**, default **Off***
 
 ![File and View menus, light left, dark right](../screens/design-pass/menus-light-vs-dark.png)

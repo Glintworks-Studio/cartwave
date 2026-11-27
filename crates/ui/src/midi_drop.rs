@@ -164,8 +164,8 @@ impl AppState {
     /// File ▸ Import ▸ MIDI File…: new tracks after the last one, at the
     /// insert marker's bar.
     pub(crate) fn import_midi_menu(&mut self) {
-        // `CHIPDAW_IMPORT_FROM=file.mid` (dev, scripted UI tests): no native dialog.
-        let path = match crate::dev::var_os("CHIPDAW_IMPORT_FROM") {
+        // `CARTWAVE_IMPORT_FROM=file.mid` (dev, scripted UI tests): no native dialog.
+        let path = match crate::dev::var_os("CARTWAVE_IMPORT_FROM") {
             Some(p) => PathBuf::from(p),
             None => match rfd::FileDialog::new().add_filter("MIDI file", &["mid", "midi"]).pick_file() {
                 Some(p) => p,

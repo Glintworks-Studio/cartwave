@@ -1,14 +1,14 @@
-# usage: lime_scenes_p2.ps1 [-Exe .\target\release\app.exe] [-Out <dir>]
+# usage: lime_scenes_p2.ps1 [-Exe .\target\release\cartwave.exe] [-Out <dir>]
 # Screenshots for the polish 2 lime audit (lime_audit_p2.py): stopped, playing (strips lit,
 # meters moving), loop off, loop on, solo, mute, a clip selected (inspector), Project Settings,
 # the headers on the right with the strip by the clips, and the browser on the right.
-param([string]$Exe = ".\target\release\app.exe", [string]$Out = (Join-Path $env:TEMP "chipdaw-lime-p2"))
+param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = (Join-Path $env:TEMP "chipdaw-lime-p2"))
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 New-Item -ItemType Directory -Force $Out | Out-Null
 $global:Work = $Out
 . "$Repo\docs\batch3\tools\lib.ps1"
 $global:Exe = (Resolve-Path $Exe).Path
-foreach ($k in "CHIPDAW_OVERVIEW", "CHIPDAW_HIDE_STATUS", "CHIPDAW_FAKE_PROBLEM", "CHIPDAW_FROZEN_METERS") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM", "CARTWAVE_FROZEN_METERS") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 $d = Join-Path $Out "data"
 Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
 Launch -Data $d

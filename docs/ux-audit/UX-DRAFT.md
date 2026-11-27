@@ -1,5 +1,7 @@
 # UX-DRAFT: starting point for UX.md
 
+> *Historical report, kept as written under the working title ChipDAW. Since the rename (2026-11-27, [RENAME.md](../../RENAME.md)) the app is Cartwave by Glintworks: projects save as `.cartwave`, the executable is `cartwave`, and environment variables are `CARTWAVE_*` (the `CHIPDAW_*` names still work).*
+
 *2026-11-25 · from the UX audit ([FINDINGS.md](FINDINGS.md), [FEASIBILITY.md](FEASIBILITY.md)) ·
 for Design (Sam) to turn into UX.md, with the CEO marking each line.*
 

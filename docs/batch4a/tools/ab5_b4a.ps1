@@ -7,7 +7,7 @@ $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $Base = (Resolve-Path (Join-Path $Repo "..\before-batch4a")).Path
 New-Item -ItemType Directory -Force $Work | Out-Null
 Copy-Item "$env:TEMP\chipdaw-perf-dp\piano_bench.chipdaw" $Work -Force
-$env:CHIPDAW_PERF_WORK = $Work
+$env:CARTWAVE_PERF_WORK = $Work
 for ($i = 1; $i -le $Rounds; $i++) {
   pwsh -NoProfile -File "$PSScriptRoot\bench_b4a.ps1" -Label "base-$i" -Repo $Base -Work $Work | Out-Null
   pwsh -NoProfile -File "$PSScriptRoot\bench_b4a.ps1" -Label "b4a-$i" -Repo $Repo -Work $Work -Main | Out-Null

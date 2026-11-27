@@ -1,7 +1,7 @@
-# usage: pacing.ps1 [-Label run] [-Scenario demo|stress|drag|pr|prdrag] [-Secs 30] [-Env "K=V;..."] [-Exe .\target\release\app.exe] [-Repo <repo>] [-Work <dir>]
+# usage: pacing.ps1 [-Label run] [-Scenario demo|stress|drag|pr|prdrag] [-Secs 30] [-Env "K=V;..."] [-Exe .\target\release\cartwave.exe] [-Repo <repo>] [-Work <dir>]
 # Needs ffmpeg (with ddagrab) and python on PATH. -Exe is relative to -Repo.
-# Defaults: -Repo = this script's repo; -Work = $env:CHIPDAW_PERF_WORK or %TEMP%\chipdaw-perf.
-# Set $env:CHIPDAW_REFRESH_HZ to the display refresh rate (default 59.951) for pacing_analyze.py.
+# Defaults: -Repo = this script's repo; -Work = $env:CARTWAVE_PERF_WORK or %TEMP%\chipdaw-perf.
+# Set $env:CARTWAVE_REFRESH_HZ to the display refresh rate (default 59.951) for pacing_analyze.py.
 param(
   [string]$Label = "run",
   [ValidateSet("demo", "stress", "drag", "pr", "prdrag")][string]$Scenario = "demo",
@@ -11,21 +11,21 @@ param(
   # same grab is 760,140 (720,130 there is a clip's left resize zone).
   [int]$DragX = 720, [int]$DragY = 130,
   [string]$Env = "",
-  [string]$Exe = ".\target\release\app.exe",
+  [string]$Exe = ".\target\release\cartwave.exe",
   [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path,
-  [string]$Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" })
+  [string]$Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" })
 )
-$env:CHIPDAW_DEV = "1"   # F-02: test hooks (CHIPDAW_PROJECT, _STRESS, …) and F3-F7 need dev mode
+$env:CARTWAVE_DEV = "1"   # F-02: test hooks (CARTWAVE_PROJECT, _STRESS, …) and F3-F7 need dev mode
 # 30 s frame-pacing run: app frame log (submit intervals, per-phase timings) +
 # DXGI desktop-duplication capture (ffmpeg ddagrab, dup_frames=0, no encode) to
 # count display refreshes that showed no new frame.
 New-Item -ItemType Directory -Force $Work | Out-Null
 Set-Location $Repo
 $S = $Work
-Get-Process -Name app -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
 if ($Env) { foreach ($kv in $Env.Split(';')) { $k, $v = $kv.Split('='); Set-Item "Env:$k" $v } }
 $log = "$S\pace_$Label`_$Scenario.csv"
-$env:CHIPDAW_FRAMELOG = $log
+$env:CARTWAVE_FRAMELOG = $log
 "exe: $Exe"
 $p = Start-Process $Exe -PassThru -RedirectStandardError "$S\pace_err.txt"
 Start-Sleep -Seconds 3
@@ -62,7 +62,7 @@ if ($Scenario -eq "prdrag") {
 $ff.WaitForExit()
 $p.Refresh(); $cpu = ($p.TotalProcessorTime - $c0).TotalMilliseconds / $t0.Elapsed.TotalMilliseconds * 100
 Stop-Process -Id $p.Id -Force
-$env:CHIPDAW_FRAMELOG = ""
+$env:CARTWAVE_FRAMELOG = ""
 if ($Env) { foreach ($kv in $Env.Split(';')) { $k = $kv.Split('=')[0]; Remove-Item "Env:$k" -ErrorAction SilentlyContinue } }
 Select-String -Path "$S\pace_showinfo.txt" -Pattern "pts_time:\s*([0-9.]+)" | ForEach-Object { $_.Matches[0].Groups[1].Value } | Set-Content "$S\pace_pts.txt"
 python -I "$PSScriptRoot\pacing_analyze.py" $log "$S\pace_pts.txt" $Secs ("{0:N1}" -f $cpu) "$Label/$Scenario"
@@ -70,5 +70,5 @@ python -I "$PSScriptRoot\pacing_analyze.py" $log "$S\pace_pts.txt" $Secs ("{0:N1
 $err = Get-Content "$S\pace_err.txt" -Raw -ErrorAction SilentlyContinue
 $ok = $focused -and ($err -match "dev: mode on") -and (Test-Path $log) -and ((Get-Content $log | Measure-Object -Line).Lines -gt 100)
 if ($Scenario -in "stress", "drag") { $ok = $ok -and ($err -match "dev: F4 stress set on") }
-if ($Scenario -in "pr", "prdrag") { $ok = $ok -and ($err -match "dev: CHIPDAW_OPEN_CLIP \d+ \(piano roll open: true\)") }
+if ($Scenario -in "pr", "prdrag") { $ok = $ok -and ($err -match "dev: CARTWAVE_OPEN_CLIP \d+ \(piano roll open: true\)") }
 "scenario $Scenario " + $(if ($ok) { "reached" } else { "NOT REACHED (dev-mode lines missing on stderr, or no frame log)" })

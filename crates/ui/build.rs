@@ -1,4 +1,4 @@
-//! Records the git commit for Help > About (`CHIPDAW_COMMIT`), and links the
+//! Records the git commit for Help > About (`CARTWAVE_COMMIT`), and links the
 //! Windows manifest the save prompt needs. Falls back to
 //! "unknown" outside a git checkout (a source tarball), so the build never
 //! depends on git being installed.
@@ -13,7 +13,7 @@ fn main() {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "unknown".into());
-    println!("cargo:rustc-env=CHIPDAW_COMMIT={commit}");
+    println!("cargo:rustc-env=CARTWAVE_COMMIT={commit}");
     // Every commit and checkout appends to the HEAD reflog.
     println!("cargo:rerun-if-changed=../../.git/logs/HEAD");
     println!("cargo:rerun-if-changed=build.rs");

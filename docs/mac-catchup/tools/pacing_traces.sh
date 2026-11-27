@@ -11,7 +11,7 @@ REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 OUT="$1"; CASES="${2:-d320 drag320 d60 move}"
 W="${MC_WORK:-${TMPDIR:-/tmp}/chipdaw-mac-catchup}"
 B="$W/bin/chipbench"; WC="$W/bin/winctl"
-APP="${APP:-$REPO/target/release/app}"
+APP="${APP:-$REPO/target/release/cartwave}"
 mkdir -p "$OUT"
 D="$W/data-pacing"; rm -rf "$D"; mkdir -p "$D"; echo '{"audio_device":"Mac mini Speakers"}' > "$D/settings.json"
 TOOLS="$REPO/docs/perf/tools/macos"
@@ -23,7 +23,7 @@ run() {  # name secs pos scenario [extra chipbench args...]
   [ "$(free_gb)" -lt 20 ] && { echo "$name: less than 20 GB free, skipped"; return; }
   local posarg=(); [ "$pos" != "-" ] && posarg=(--pos "$pos")
   "$B" --app "$APP" --scenario "$sc" --secs "$secs" --content-height 920 --park 1300,800 \
-    --framelog "$OUT/$name.fl.csv" --trace "$OUT/$name.trace" --env CHIPDAW_DEV=1 --env CHIPDAW_DATA_DIR="$D" \
+    --framelog "$OUT/$name.fl.csv" --trace "$OUT/$name.trace" --env CARTWAVE_DEV=1 --env CARTWAVE_DATA_DIR="$D" \
     ${posarg[@]+"${posarg[@]}"} "$@" > "$OUT/$name.json" 2>/dev/null
   echo "== $name"; cat "$OUT/$name.json"
   python3 "$TOOLS/pacing_mac.py" "$OUT/$name.fl.csv" "$secs" | head -2
@@ -42,7 +42,7 @@ for c in $CASES; do
       # Play on the 320 Hz display, then move the window 320 -> 60 -> 320 -> 60 Hz every ~10 s.
       [ "$(free_gb)" -lt 20 ] && { echo "move: low disk"; continue; }
       "$B" --app "$APP" --scenario demo --secs 45 --content-height 920 --park 1300,800 --framelog "$OUT/move.fl.csv" \
-        --trace "$OUT/move.trace" --env CHIPDAW_DEV=1 --env CHIPDAW_DATA_DIR="$D" --env CHIPDAW_AUDIOLOG="$OUT/move.audio.csv" > "$OUT/move.json" 2>/dev/null &
+        --trace "$OUT/move.trace" --env CARTWAVE_DEV=1 --env CARTWAVE_DATA_DIR="$D" --env CARTWAVE_AUDIOLOG="$OUT/move.audio.csv" > "$OUT/move.json" 2>/dev/null &
       bp=$!
       sleep 9
       pid=$(pgrep -x app | head -1)

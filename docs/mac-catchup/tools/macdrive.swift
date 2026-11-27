@@ -1,4 +1,4 @@
-// macdrive: drives a running ChipDAW window with real (HID-level) input events and
+// macdrive: drives a running Cartwave window with real (HID-level) input events and
 // reads its macOS menu bar through the Accessibility API. MAC_CATCHUP §4.
 //
 //   swiftc -O macdrive.swift -o macdrive

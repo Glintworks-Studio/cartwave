@@ -2,7 +2,7 @@
 //! import as DPCM samples) to a WAV file, through the same emulation the app
 //! plays and exports with.
 //!
-//! cargo run --release -p ui --example render -- song.chipdaw out.wav
+//! cargo run --release -p ui --example render -- song.cartwave out.wav
 //! cargo run --release -p ui --example render -- tune.mid hey.wav out.wav
 
 use std::path::Path;
@@ -11,7 +11,7 @@ use ui::{dpcm, export, file, midi};
 
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (out, inputs) = args.split_last().ok_or("usage: render <song.chipdaw | tune.mid> [sample.wav ...] <out.wav>")?;
+    let (out, inputs) = args.split_last().ok_or("usage: render <song.cartwave | song.chipdaw | tune.mid> [sample.wav ...] <out.wav>")?;
     let first = inputs.first().ok_or("no input file")?;
     let mut p = if first.ends_with(".mid") || first.ends_with(".midi") {
         let song = midi::parse(&std::fs::read(first).map_err(|e| e.to_string())?)?;

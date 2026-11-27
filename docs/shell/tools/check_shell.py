@@ -67,8 +67,8 @@ if "t01_start" in obs:
 b, a = load("at02_before.chipdaw"), load("at02_after.chipdaw")
 if b is not None:
     A = "AT-02"
-    check(A, a == b, "F3-F7 without CHIPDAW_DEV: the saved project is identical")
-    check(A, o("t02_diff_pixels", -1) == 0, f"F3-F7 without CHIPDAW_DEV: no overlay, the window is pixel-identical ({o('t02_diff_pixels')} px differ)")
+    check(A, a == b, "F3-F7 without CARTWAVE_DEV: the saved project is identical")
+    check(A, o("t02_diff_pixels", -1) == 0, f"F3-F7 without CARTWAVE_DEV: no overlay, the window is pixel-identical ({o('t02_diff_pixels')} px differ)")
     check(A, o("t02_dev_f3_diff", 0) > 1000, f"control: in dev mode F3 does show the overlay ({o('t02_dev_f3_diff')} px differ)")
     dev = load("at02_dev_after.chipdaw")
     check(A, dev is not None and len(dev["clips"]) != len(b["clips"]), f"control: in dev mode F4 does swap in the stress set ({len(dev['clips']) if dev else '?'} clips)")
@@ -128,7 +128,7 @@ if s18 is not None:
     after = load("at18_settings_after.chipdaw.json") or {}
     check(A, not any(p.endswith("gone.chipdaw") for p in after.get("recent", [])), "and it is gone from settings.json")
     check(A, o("t18_opened").startswith("second"), f"Open Recent opens it: {o('t18_opened')!r}")
-    check(A, "ABOUT CHIPDAW" in o("t18_about_texts") and "MIT OR Apache-2.0" in o("t18_about_texts"), "Help > About: version, licence, credits")
+    check(A, "ABOUT CARTWAVE" in o("t18_about_texts") and "MIT OR Apache-2.0" in o("t18_about_texts"), "Help > About: version, licence, credits")
     sheet = o("t18_sheet_texts")
     check(A, "KEYBOARD SHORTCUTS" in sheet and "Ctrl+Shift+S" in sheet and "Ctrl+U" in sheet, "Help > Keyboard Shortcuts lists the table")
 

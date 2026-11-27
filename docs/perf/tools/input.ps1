@@ -1,8 +1,8 @@
 # usage: . .\input.ps1   (dot-source once the app window is open)
 # Helpers to drive the app with synthetic input (client coords, physical px).
 # Capture/TraceCmd talk to capture_server.ps1 through <Work>\capq, where Work is the
-# caller's $Work, else $env:CHIPDAW_PERF_WORK, else %TEMP%\chipdaw-perf.
-if (-not $Work) { $Work = $(if ($env:CHIPDAW_PERF_WORK) { $env:CHIPDAW_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }) }
+# caller's $Work, else $env:CARTWAVE_PERF_WORK, else %TEMP%\chipdaw-perf.
+if (-not $Work) { $Work = $(if ($env:CARTWAVE_PERF_WORK) { $env:CARTWAVE_PERF_WORK } else { Join-Path $env:TEMP "chipdaw-perf" }) }
 $global:CapQ = Join-Path $Work "capq"
 Add-Type @"
 using System;
@@ -19,7 +19,7 @@ public class In {
 }
 "@
 [In]::SetProcessDPIAware() | Out-Null
-$global:AppH = (Get-Process -Name app | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).MainWindowHandle
+$global:AppH = (Get-Process -Name cartwave | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1).MainWindowHandle
 [In]::SetForegroundWindow($global:AppH) | Out-Null
 function Pt($x, $y) { $p = New-Object In+POINT; $p.X = $x; $p.Y = $y; [In]::ClientToScreen($global:AppH, [ref]$p) | Out-Null; $p }
 function Move-To($x, $y) { $p = Pt $x $y; [In]::SetCursorPos($p.X, $p.Y) | Out-Null; Start-Sleep -Milliseconds 30 }

@@ -15,7 +15,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
 foreach ($sc in "demo", "stress", "drag") {
   pwsh -NoProfile -File "$Repo\docs\perf\tools\pacing.ps1" -Label "b4a-$sc" -Scenario $sc -Secs 30 -DragX 760 -DragY 172 -Repo $Repo -Work $Work *>> "$Work\pace_out.txt"
 }
-$env:CHIPDAW_PERF_WORK = $Work
+$env:CARTWAVE_PERF_WORK = $Work
 for ($i = 1; $i -le $Rounds; $i++) {
   pwsh -NoProfile -File "$Repo\docs\pianoroll\tools\bench_pr.ps1" -Label "pr-base-$i" -Repo $Base -Work $Work -NoteY 623 | Out-Null
   pwsh -NoProfile -File "$Repo\docs\pianoroll\tools\bench_pr.ps1" -Label "pr-b4a-$i" -Repo $Repo -Work $Work -NoteY 623 | Out-Null
