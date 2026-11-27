@@ -1,0 +1,49 @@
+//! Writes docs/songs/v7 (version 7 files) and their hashes, run on the build
+//! before Batch 4b (main d4f1afd): the v7 -> v8 migration corpus.
+use ui::{export, file, render};
+
+fn secs(p: &file::Project) -> f64 {
+    p.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / p.bpm as f64 + 1.0
+}
+
+fn main() {
+    let src = std::path::Path::new("../chipdaw/docs/songs/v6");
+    let dst = std::path::Path::new("../chipdaw/docs/songs/v7");
+    let mut out = Vec::new();
+    let mut put = |name: &str, p: &file::Project| {
+        let text = file::to_string(p);
+        assert!(text.contains("\"version\": 7"));
+        std::fs::write(dst.join(format!("{name}.chipdaw")), &text).unwrap();
+        let q = file::from_str(&text).unwrap();
+        let r = render::hash(&render::render(&q, secs(&q)));
+        let e = render::hash(&export::render(&q));
+        out.push(format!("    (\"{name}\", {r:#018x}, {e:#018x}),"));
+    };
+    for name in ["demo_band", "showcase", "layout_2", "v6_rows_pan_mute", "v6_vrc6_unused", "scale_test"] {
+        let p = file::load(&src.join(format!("{name}.chipdaw"))).unwrap();
+        put(name, &p);
+    }
+    // Studio tracks (Batch 4a): the demo band unlocked, every track a studio
+    // track; one at -4.5 dB.
+    let mut p = file::load(&src.join("demo_band.chipdaw")).unwrap();
+    for i in 0..p.arrangement.lanes.len() {
+        p.arrangement.unlock_track(i);
+    }
+    put("v7_studio_demo", &p);
+    p.arrangement.lanes[1].vol_db = -4.5;
+    p.arrangement.lanes[0].voices = 2;
+    put("v7_studio_fader_voices", &p);
+    // The showcase unlocked (chords and every voice type), at Main -2 dB.
+    let mut s = file::load(&src.join("showcase.chipdaw")).unwrap();
+    for i in 0..s.arrangement.lanes.len() {
+        s.arrangement.unlock_track(i);
+    }
+    s.master_db = -2.0;
+    put("v7_studio_showcase", &s);
+    // A studio track panned 20L: saved but not heard in version 7.
+    let mut q = file::load(&src.join("demo_band.chipdaw")).unwrap();
+    q.arrangement.unlock_track(0);
+    q.arrangement.lanes[0].pan = -20;
+    put("v7_studio_panned", &q);
+    println!("{}", out.join("\n"));
+}

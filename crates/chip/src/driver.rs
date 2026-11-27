@@ -293,6 +293,10 @@ pub struct Driver {
     /// transport is stopped, regardless of mute/solo. `start` is a serial
     /// number: a new serial retriggers even on the same pitch.
     pub preview: [Option<Note>; LANES],
+    /// A fixed pitch offset per lane in semitones, added to the instrument's
+    /// fine pitch: a studio voice's unison detune and drift (Batch 4b §5).
+    /// 0.0 everywhere on the console, so its periods are unchanged.
+    pub detune: [f64; LANES],
 }
 
 impl Driver {
@@ -309,6 +313,7 @@ impl Driver {
             sounding: 0,
             ticks: 0,
             preview: [None; LANES],
+            detune: [0.0; LANES],
         }
     }
 
@@ -574,10 +579,13 @@ impl Driver {
     fn period(&self, lane: usize, f: &Frame) -> Option<u16> {
         let osc = Self::osc(lane)?;
         let st = &self.lanes[lane];
-        if f.arp == 0 && f.fine == 0.0 {
+        let detune = self.detune[lane];
+        if f.arp == 0 && f.fine == 0.0 && detune == 0.0 {
             return pitch::period_for(osc, st.play_pitch);
         }
-        pitch::period_for_f(osc, st.play_pitch as f64 + f.arp as f64 + f.fine)
+        // Without a detune the sum is exactly the old one (bit-identical).
+        let fine = if detune == 0.0 { f.fine } else { f.fine + detune };
+        pitch::period_for_f(osc, st.play_pitch as f64 + f.arp as f64 + fine)
     }
 
     /// Writes the period: low byte when it changed, high byte only when its

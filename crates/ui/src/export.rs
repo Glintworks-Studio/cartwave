@@ -47,6 +47,46 @@ pub fn render_limited(p: &Project, max_seconds: f64) -> Vec<f32> {
     out
 }
 
+/// `render` with both channels: (interleaved samples, channels). A project
+/// with no panned studio track is mono (`tracks::channels`): then this is
+/// `render` exactly, one channel.
+pub fn render_channels(p: &Project) -> (Vec<f32>, u16) {
+    let ch = crate::tracks::channels(&p.arrangement);
+    if ch == 1 {
+        return (render(p), 1);
+    }
+    let heard = crate::tracks::audible(&p.arrangement, &p.mute, &p.solo);
+    let (mut m, snap) = crate::tracks::offline_mixdown(p, SAMPLE_RATE, &heard, true);
+    m.player.set_loop_end(1.0e12);
+    let seconds = p.loop_end_ticks as f64 / (crate::state::PPQ as f64) * 60.0 / p.bpm as f64;
+    let frames = ((seconds + TAIL_SECONDS).min(MAX_SECONDS) * SAMPLE_RATE as f64) as usize;
+    let song_frames = (seconds * SAMPLE_RATE as f64) as usize;
+    let mut out = Vec::with_capacity(frames * 2);
+    let (mut l, mut r) = (vec![0f32; BLOCK], vec![0f32; BLOCK]);
+    m.player.play();
+    let mut done = 0;
+    while done < frames {
+        let n = BLOCK.min(frames - done);
+        if done >= song_frames && m.player.playing() {
+            m.player.stop();
+        }
+        m.render_stereo(&snap, &mut l[..n], &mut r[..n]);
+        out.extend(l[..n].iter().zip(&r[..n]).flat_map(|(a, b)| [*a, *b]));
+        done += n;
+    }
+    (out, 2)
+}
+
+/// Writes 16-bit PCM, `channels` interleaved.
+pub fn write_wav_ch(samples: &[f32], channels: u16, path: &Path) -> Result<(), String> {
+    let b = crate::game_export::wav_bytes_ch(samples, SAMPLE_RATE, 16, channels, None);
+    let tmp = path.with_extension("wav.tmp");
+    std::fs::File::create(&tmp)
+        .and_then(|mut f| f.write_all(&b))
+        .map_err(|e| format!("Can't write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("Can't save {}: {e}", path.display()))
+}
+
 /// Writes 16-bit mono PCM.
 pub fn write_wav(samples: &[f32], path: &Path) -> Result<(), String> {
     let data_len = (samples.len() * 2) as u32;

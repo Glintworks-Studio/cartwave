@@ -9,10 +9,24 @@
 //! is `Player::render` exactly: no hook, no studio bus, no multiply. So every
 //! project from before the model change renders as it did (the golden render
 //! and the migration hashes).
+//!
+//! **Stereo (Batch 4b §4).** Studio tracks pan (`studio::pan_gains`); the
+//! console and locked tracks stay centred, as the hardware is mono. The bus
+//! keeps three step buffers (centre, left only, right only): until a studio
+//! track is panned off centre only the centre has steps and the render is the
+//! mono one, bit for bit. `render_stereo` reports whether the sides are in use.
+//!
+//! **Gain staging (Batch 4b §5, RUNLOG B4B-D*).** A studio voice plays at the
+//! console's level (one note: +0.000 dB). Unison voices are trimmed by
+//! `1/√n` (`studio::unison_trim`). The studio bus then has a safety limiter:
+//! a linked peak limiter at −1 dBFS with an instant attack and a 150 ms
+//! release, so chords, unison and many tracks can't drive the output past
+//! full scale. It does nothing (gain exactly 1.0, no multiply) while the bus
+//! stays under its ceiling, which a single note always does.
 
 use crate::song::SongSnapshot;
-use crate::studio::Rack;
-use chip::blep::{Blep, MAX_FRAMES};
+use crate::studio::{Rack, Steps};
+use chip::blep::MAX_FRAMES;
 use chip::dmc::ROM_SIZE;
 use chip::driver::Song;
 use chip::filter::{FilterMode, OutputFilter};
@@ -20,19 +34,55 @@ use chip::player::{Player, TickHook};
 use chip::samples::{SampleRef, USER_SLOTS};
 use chip::tables::CPU_HZ_NTSC;
 
-/// The studio tracks' shared step buffer and output filter.
+/// The safety limiter's ceiling: −1 dBFS.
+pub const LIMIT_CEIL: f32 = 0.891_250_9;
+/// Its release time constant (seconds).
+const LIMIT_RELEASE_S: f64 = 0.150;
+
+/// The studio tracks' shared step buffers (centre, left only, right only),
+/// their output filters and the safety limiter.
 #[derive(Clone)]
 pub struct Bus {
-    blep: Blep,
+    steps: Steps,
     filter: OutputFilter,
+    filter_l: OutputFilter,
+    filter_r: OutputFilter,
     scratch: Box<[f32; MAX_FRAMES]>,
+    /// The sides of the last chunk (left only, right only), after the limiter.
+    side_l: Box<[f32; MAX_FRAMES]>,
+    side_r: Box<[f32; MAX_FRAMES]>,
+    /// The limiter's gain now (exactly 1.0 when it isn't working) and its
+    /// per-sample release step.
+    limit: f32,
+    release: f32,
     /// The bus follows the console's buffer timing (set on first use).
     synced: bool,
 }
 
 impl Bus {
     fn new(sample_rate: f64, mode: FilterMode) -> Self {
-        Self { blep: Blep::new(CPU_HZ_NTSC, sample_rate), filter: OutputFilter::new(mode, sample_rate), scratch: Box::new([0.0; MAX_FRAMES]), synced: false }
+        Self {
+            steps: Steps::new(CPU_HZ_NTSC, sample_rate),
+            filter: OutputFilter::new(mode, sample_rate),
+            filter_l: OutputFilter::new(mode, sample_rate),
+            filter_r: OutputFilter::new(mode, sample_rate),
+            scratch: Box::new([0.0; MAX_FRAMES]),
+            side_l: Box::new([0.0; MAX_FRAMES]),
+            side_r: Box::new([0.0; MAX_FRAMES]),
+            limit: 1.0,
+            release: (1.0 - (-1.0 / (LIMIT_RELEASE_S * sample_rate)).exp()) as f32,
+            synced: false,
+        }
+    }
+
+    /// The limiter's gain for a sample whose louder channel is `peak`: drops
+    /// at once to keep it at the ceiling, recovers over the release; snaps
+    /// back to exactly 1.0.
+    fn limiter(limit: &mut f32, release: f32, peak: f32) -> f32 {
+        let want = if peak > LIMIT_CEIL { LIMIT_CEIL / peak } else { 1.0 };
+        let g = if want < *limit { want } else { *limit + (1.0 - *limit) * release };
+        *limit = if g > 0.999_99 { 1.0 } else { g };
+        limit.min(want)
     }
 }
 
@@ -46,6 +96,9 @@ pub struct Mixdown {
     master_now: f32,
     /// The imported DPCM samples' places (for voices added later).
     user: [SampleRef; USER_SLOTS],
+    /// The studio bus limiter's smallest gain since the last
+    /// `take_limiter` (1.0: it didn't work).
+    limiter_min: f32,
 }
 
 struct Hook<'a> {
@@ -53,20 +106,43 @@ struct Hook<'a> {
     bus: &'a mut Bus,
     song: &'a Song<'a>,
     snap: &'a SongSnapshot,
+    /// The limiter's smallest gain this chunk (for the meters and tests).
+    min_gain: f32,
 }
 
 impl TickHook for Hook<'_> {
     fn tick(&mut self, rom: &[u8; ROM_SIZE], cycle: u64, prev: Option<f64>, pos: f64, playing: bool) {
-        self.rack.tick(self.song, &self.snap.studio, cycle, prev, pos, playing, rom, &mut self.bus.blep);
+        self.rack.tick(self.song, &self.snap.studio, cycle, prev, pos, playing, rom, &mut self.bus.steps);
     }
 
     fn chunk(&mut self, rom: &[u8; ROM_SIZE], end: u64, out: &mut [f32]) {
-        self.rack.chunk(end, rom, &mut self.bus.blep);
+        let bus = &mut *self.bus;
+        self.rack.chunk(end, rom, &mut bus.steps);
         let n = out.len();
-        let buf = &mut self.bus.scratch[..n];
-        self.bus.blep.read(buf, end);
-        for (o, v) in out.iter_mut().zip(buf.iter()) {
-            *o += self.bus.filter.process(*v);
+        let buf = &mut bus.scratch[..n];
+        bus.steps.c.read(buf, end);
+        if !bus.steps.side {
+            // Mono (no track panned yet): the centre only, as before.
+            for (o, v) in out.iter_mut().zip(buf.iter()) {
+                let c = bus.filter.process(*v);
+                let g = if c.abs() > LIMIT_CEIL || bus.limit != 1.0 { Bus::limiter(&mut bus.limit, bus.release, c.abs()) } else { 1.0 };
+                self.min_gain = self.min_gain.min(g);
+                *o += if g == 1.0 { c } else { c * g };
+            }
+            return;
+        }
+        let (sl, sr) = (&mut bus.side_l[..n], &mut bus.side_r[..n]);
+        bus.steps.l.read(sl, end);
+        bus.steps.r.read(sr, end);
+        for i in 0..n {
+            let c = bus.filter.process(buf[i]);
+            let (l, r) = (bus.filter_l.process(sl[i]), bus.filter_r.process(sr[i]));
+            let peak = (c + l).abs().max((c + r).abs());
+            let g = if peak > LIMIT_CEIL || bus.limit != 1.0 { Bus::limiter(&mut bus.limit, bus.release, peak) } else { 1.0 };
+            self.min_gain = self.min_gain.min(g);
+            out[i] += c * g;
+            sl[i] = l * g;
+            sr[i] = r * g;
         }
     }
 }
@@ -80,7 +156,20 @@ impl Mixdown {
             master: 1.0,
             master_now: 1.0,
             user: [SampleRef::default(); USER_SLOTS],
+            limiter_min: 1.0,
         }
+    }
+
+    /// The studio bus limiter's smallest gain since the last call (1.0 = it
+    /// didn't work), and resets it.
+    pub fn take_limiter(&mut self) -> f32 {
+        std::mem::replace(&mut self.limiter_min, 1.0)
+    }
+
+    /// Whether a studio track has been panned off centre (the output is
+    /// stereo from then on).
+    pub fn stereo(&self) -> bool {
+        self.bus.steps.side
     }
 
     /// The master gain (linear, the Main track's fader): applied after the
@@ -96,7 +185,10 @@ impl Mixdown {
     pub fn set_filter(&mut self, mode: FilterMode) {
         self.player.synth.set_filter(mode);
         if mode != self.bus.filter.mode {
-            self.bus.filter = OutputFilter::new(mode, self.player.synth.sample_rate());
+            let sr = self.player.synth.sample_rate();
+            self.bus.filter = OutputFilter::new(mode, sr);
+            self.bus.filter_l = OutputFilter::new(mode, sr);
+            self.bus.filter_r = OutputFilter::new(mode, sr);
         }
     }
 
@@ -124,24 +216,76 @@ impl Mixdown {
     }
 
     /// Renders mono samples: console + studio bus, times the master gain.
+    /// (A panned track's side share isn't in it: use `render_stereo` once a
+    /// project can be stereo.)
     pub fn render(&mut self, snap: &SongSnapshot, out: &mut [f32]) {
+        self.render_parts(snap, out, None);
+        self.apply_master(out, None);
+    }
+
+    /// Renders both channels: `l` and `r` get the console and the studio
+    /// bus, a panned track's sides, times the master gain. Returns whether
+    /// the output is stereo (a studio track has been panned): if not, `r` is
+    /// a copy of `l`, which is exactly `render`'s output.
+    pub fn render_stereo(&mut self, snap: &SongSnapshot, l: &mut [f32], r: &mut [f32]) -> bool {
+        debug_assert_eq!(l.len(), r.len());
+        self.render_parts(snap, l, Some(r));
+        let stereo = self.bus.steps.side;
+        if stereo {
+            self.apply_master(l, Some(r));
+        } else {
+            self.apply_master(l, None);
+            r.copy_from_slice(l);
+        }
+        stereo
+    }
+
+    /// The mix before the master gain: the centre into `out`; with `right`,
+    /// the right channel there and the left side added into `out`.
+    fn render_parts(&mut self, snap: &SongSnapshot, out: &mut [f32], mut right: Option<&mut [f32]>) {
         let song = snap.view();
         if self.rack.is_empty() {
             self.bus.synced = false;
             self.player.render(&song, out);
-        } else {
-            if !self.bus.synced {
-                // Start the bus on the console's sample grid.
-                self.bus.blep.sync_timing(self.player.synth.blep());
-                self.bus.synced = true;
+            if let Some(r) = right {
+                r.copy_from_slice(out);
             }
-            let mut hook = Hook { rack: &mut self.rack, bus: &mut self.bus, song: &song, snap };
-            self.player.render_with(&song, out, &mut hook);
+            return;
         }
-        self.apply_master(out);
+        if !self.bus.synced {
+            // Start the bus on the console's sample grid (all three buffers).
+            let b = self.player.synth.blep();
+            self.bus.steps.c.sync_timing(b);
+            self.bus.steps.l.sync_timing(b);
+            self.bus.steps.r.sync_timing(b);
+            self.bus.synced = true;
+        }
+        // Pieces of at most one chunk (the player's own chunking), so each
+        // piece's sides are the bus's last chunk.
+        let mut at = 0;
+        while at < out.len() {
+            let n = (out.len() - at).min(MAX_FRAMES);
+            let piece = &mut out[at..at + n];
+            let mut hook = Hook { rack: &mut self.rack, bus: &mut self.bus, song: &song, snap, min_gain: 1.0 };
+            self.player.render_with(&song, piece, &mut hook);
+            let min_gain = hook.min_gain;
+            self.limiter_min = self.limiter_min.min(min_gain);
+            if let Some(r) = right.as_deref_mut() {
+                let r = &mut r[at..at + n];
+                if self.bus.steps.side {
+                    for i in 0..n {
+                        r[i] = piece[i] + self.bus.side_r[i];
+                        piece[i] += self.bus.side_l[i];
+                    }
+                } else {
+                    r.copy_from_slice(piece);
+                }
+            }
+            at += n;
+        }
     }
 
-    fn apply_master(&mut self, out: &mut [f32]) {
+    fn apply_master(&mut self, out: &mut [f32], mut right: Option<&mut [f32]>) {
         if self.master == 1.0 && self.master_now == 1.0 {
             return;
         }
@@ -150,11 +294,21 @@ impl Mixdown {
             for v in out.iter_mut() {
                 *v *= g1;
             }
+            if let Some(r) = right.as_deref_mut() {
+                for v in r.iter_mut() {
+                    *v *= g1;
+                }
+            }
         } else {
             // De-zippered: a linear ramp across this block.
             let n = out.len().max(1) as f32;
             for (i, v) in out.iter_mut().enumerate() {
                 *v *= g0 + (g1 - g0) * (i + 1) as f32 / n;
+            }
+            if let Some(r) = right.as_deref_mut() {
+                for (i, v) in r.iter_mut().enumerate() {
+                    *v *= g0 + (g1 - g0) * (i + 1) as f32 / n;
+                }
             }
         }
         self.master_now = g1;

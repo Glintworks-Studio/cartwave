@@ -129,6 +129,36 @@ pub struct Lane {
     /// The track volume in dB, −inf … +`VOL_DB_MAX`: a gain after the chip
     /// (polish 2 §3; format v6). 0 dB = unity.
     pub vol_db: f32,
+    /// Unison, Detune and Drift (Batch 4b §5; format v8): studio tracks only
+    /// (a locked track ignores and hides them).
+    pub unison: Unison,
+}
+
+/// A studio track's unison voices per note (1–4), their detune spread
+/// (0–50 cents) and per-voice drift (0–10 cents). The default is one voice,
+/// no detune, no drift: exactly the sound from before Batch 4b.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Unison {
+    pub voices: u8,
+    pub detune: u8,
+    pub drift: u8,
+}
+
+impl Default for Unison {
+    fn default() -> Self {
+        Self { voices: 1, detune: 0, drift: 0 }
+    }
+}
+
+impl Unison {
+    /// Clamped to the engine's ranges.
+    pub fn clamped(self) -> Self {
+        Self {
+            voices: self.voices.clamp(1, engine::studio::UNISON_MAX),
+            detune: self.detune.min(engine::studio::DETUNE_MAX),
+            drift: self.drift.min(engine::studio::DRIFT_MAX),
+        }
+    }
 }
 
 impl Lane {
@@ -148,6 +178,7 @@ impl Lane {
             height: ROW_H_MIN,
             pan: 0,
             vol_db: 0.0,
+            unison: Unison::default(),
         }
     }
 
@@ -166,6 +197,7 @@ impl Lane {
             height: ROW_H_MIN,
             pan: 0,
             vol_db: 0.0,
+            unison: Unison::default(),
         }
     }
 

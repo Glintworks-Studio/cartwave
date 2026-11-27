@@ -96,6 +96,34 @@ fn fixed(amp: f64) -> i32 {
     (amp * (1u64 << AMP_BITS) as f64) as i32
 }
 
+/// Where a voice's output steps go (Batch 4b §4, stereo). A voice's
+/// contribution is split three ways: **centre** (heard in both channels),
+/// **left only** and **right only**. A centred voice puts everything in the
+/// centre, so with one step buffer (`Blep`) nothing changes from the mono
+/// build; a panned voice puts the quieter side's share in the centre and the
+/// difference in its louder side (two steps per change, not three).
+pub trait StepOut {
+    /// Band-limited steps of `d` (centre, left only, right only) at `cycle`.
+    fn step(&mut self, cycle: u64, d: [i32; 3]);
+}
+
+/// One mono step buffer: the centre only (a voice that is never panned).
+impl StepOut for Blep {
+    fn step(&mut self, cycle: u64, d: [i32; 3]) {
+        debug_assert!(d[1] == 0 && d[2] == 0, "a panned voice needs a stereo output");
+        self.add(cycle, d[0]);
+    }
+}
+
+/// The share of a voice's output in (centre, left only, right only) for a
+/// track's channel gains `(l, r)` (the pan law): the quieter side's gain goes
+/// to the centre, the rest to the louder side. Centred (`l == r == 1`): all
+/// centre, exactly `[1, 0, 0]`.
+pub fn pan_split(l: f64, r: f64) -> [f64; 3] {
+    let c = l.min(r);
+    [c, l - c, r - c]
+}
+
 #[derive(Clone)]
 pub struct Voice {
     pub kind: VoiceKind,
@@ -112,9 +140,12 @@ pub struct Voice {
     /// The DAC value now, and at power-up (the zero of the contribution).
     dac: u8,
     dac0: u8,
-    /// The contribution fed to the step buffer (fixed point, gain applied).
-    amp: i32,
+    /// The contribution fed to the step buffers (fixed point, gain and pan
+    /// applied): centre, left only, right only.
+    amp: [i32; 3],
     gain: f64,
+    /// The pan split (`pan_split`): `[1, 0, 0]` centred.
+    pan: [f64; 3],
     /// Peak DAC value since the last `take_peak`.
     peak: u8,
     /// The note this voice was given (start, pitch), kept while it sounds or
@@ -143,8 +174,9 @@ impl Voice {
             cycle,
             dac: 0,
             dac0: 0,
-            amp: 0,
+            amp: [0; 3],
             gain: 1.0,
+            pan: [1.0, 0.0, 0.0],
             peak: 0,
             held: None,
             note_ons: 0,
@@ -167,33 +199,65 @@ impl Voice {
         }
     }
 
-    /// The fixed-point contribution for the current DAC value and gain.
-    fn amp_now(&self) -> i32 {
-        fixed((level_of(self.kind, self.dac) - level_of(self.kind, self.dac0)) * self.gain)
+    /// The fixed-point contribution for the current DAC value, gain and pan.
+    /// Centred, the centre share is `fixed(x * 1.0)`: exactly the mono
+    /// build's `fixed(x)`.
+    fn amp_now(&self) -> [i32; 3] {
+        let x = (level_of(self.kind, self.dac) - level_of(self.kind, self.dac0)) * self.gain;
+        [fixed(x * self.pan[0]), fixed(x * self.pan[1]), fixed(x * self.pan[2])]
     }
 
-    fn refresh(&mut self, blep: &mut Blep) {
+    fn emit<S: StepOut>(&mut self, out: &mut S) {
+        let a = self.amp_now();
+        out.step(self.cycle, [a[0] - self.amp[0], a[1] - self.amp[1], a[2] - self.amp[2]]);
+        self.amp = a;
+    }
+
+    fn refresh<S: StepOut>(&mut self, out: &mut S) {
         let o = self.output();
         if o == self.dac {
             return;
         }
         self.dac = o;
         self.peak = self.peak.max(o);
-        let a = self.amp_now();
-        blep.add(self.cycle, a - self.amp);
-        self.amp = a;
+        self.emit(out);
     }
 
     /// Changes the voice's gain at the current cycle (a band-limited step of
     /// the difference).
-    pub fn set_gain(&mut self, g: f64, blep: &mut Blep) {
+    pub fn set_gain<S: StepOut>(&mut self, g: f64, out: &mut S) {
         if g == self.gain {
             return;
         }
         self.gain = g;
-        let a = self.amp_now();
-        blep.add(self.cycle, a - self.amp);
-        self.amp = a;
+        self.emit(out);
+    }
+
+    /// Changes the voice's pan split (`pan_split`) at the current cycle: its
+    /// contribution moves between the centre and the sides as one step.
+    pub fn set_pan<S: StepOut>(&mut self, p: [f64; 3], out: &mut S) {
+        if p == self.pan {
+            return;
+        }
+        self.pan = p;
+        self.emit(out);
+    }
+
+    pub fn pan(&self) -> [f64; 3] {
+        self.pan
+    }
+
+    /// The voice's pitch offset in semitones (unison detune and drift; 0.0 =
+    /// the note's own pitch). Heard from the next frame tick.
+    pub fn set_detune(&mut self, semitones: f64) {
+        self.driver.detune[self.kind.lane()] = semitones;
+    }
+
+    /// The voice's output (gain applied, no pan) at its peak DAC value since
+    /// the last `take_peak`, in the mix's units (full scale 1.0): the track's
+    /// clip mark adds these up (an upper bound of the track's own peak).
+    pub fn peak_out(&self) -> f64 {
+        ((level_of(self.kind, self.peak) - level_of(self.kind, self.dac0)) * self.gain).abs()
     }
 
     pub fn gain(&self) -> f64 {
@@ -205,6 +269,15 @@ impl Voice {
         let silent = self.dac == self.dac0;
         if silent {
             self.gain = g;
+        }
+        silent
+    }
+
+    /// Sets the pan split of a silent voice (nothing to move).
+    pub fn set_pan_silently(&mut self, p: [f64; 3]) -> bool {
+        let silent = self.dac == self.dac0;
+        if silent {
+            self.pan = p;
         }
         silent
     }
@@ -277,7 +350,7 @@ impl Voice {
 
     /// Emulates up to (excluding) CPU cycle `target`, feeding output changes
     /// into `blep`.
-    pub fn run(&mut self, target: u64, rom: &[u8; ROM_SIZE], blep: &mut Blep) {
+    pub fn run<S: StepOut>(&mut self, target: u64, rom: &[u8; ROM_SIZE], blep: &mut S) {
         while self.cycle < target {
             let asleep = self.can_sleep();
             let mut dt = (target - self.cycle).min(u32::MAX as u64) as u32;
@@ -373,7 +446,7 @@ impl Voice {
     /// (the note the allocator gave this voice, `None`: release), then its
     /// writes. `params` is the track's channel controls (the driver's lane row).
     #[allow(clippy::too_many_arguments)]
-    pub fn tick(&mut self, song: &Song, want: Option<Note>, base: u8, audible: bool, params: &[i8; crate::driver::ParamId::ALL.len()], tick: u64, rom: &[u8; ROM_SIZE], blep: &mut Blep) {
+    pub fn tick<S: StepOut>(&mut self, song: &Song, want: Option<Note>, base: u8, audible: bool, params: &[i8; crate::driver::ParamId::ALL.len()], tick: u64, rom: &[u8; ROM_SIZE], blep: &mut S) {
         let lane = self.kind.lane();
         self.driver.params.values[lane] = *params;
         let before = self.driver.note_ons[lane];
@@ -460,7 +533,7 @@ mod tests {
             let mut v = Voice::new(kind, samples, 0);
             let mut blep = Box::new(Blep::new(CPU_HZ_NTSC, 48_000.0));
             let rom = Box::new([0u8; ROM_SIZE]);
-            v.tick(&Song::EMPTY, Some(notes[0]), crate::instrument::NONE, true, &console.params.values[lane], 0, &rom, &mut blep);
+            v.tick(&Song::EMPTY, Some(notes[0]), crate::instrument::NONE, true, &console.params.values[lane], 0, &rom, &mut *blep);
             // The console's writes for this lane (plus the shared power-up ones)
             // are the voice's writes.
             assert!(!v.writes.as_slice().is_empty(), "{kind:?}");
@@ -495,7 +568,7 @@ mod tests {
             while next_x2 / 2 < end {
                 let t = next_x2 / 2;
                 syn.run_until(t);
-                v.run(t, &rom, &mut blep);
+                v.run(t, &rom, &mut *blep);
                 let mut w = Writes::default();
                 let pos = t as f64 / CPU_HZ_NTSC * 2.5 * 960.0; // 150 BPM
                 drv.tick(&song, Some(pos - 1.0), pos, true, &mut w);
@@ -503,11 +576,11 @@ mod tests {
                     syn.write(ad, val);
                 }
                 let want = (pos < n.end as f64).then_some(n);
-                v.tick(&song, want, crate::instrument::NONE, true, &drv.params.values[0], 0, &rom, &mut blep);
+                v.tick(&song, want, crate::instrument::NONE, true, &drv.params.values[0], 0, &rom, &mut *blep);
                 next_x2 += CPU_CYCLES_PER_FRAME_X2;
             }
             syn.render(ca);
-            v.run(end, &rom, &mut blep);
+            v.run(end, &rom, &mut *blep);
             blep.read(cb, end);
             for x in cb.iter_mut() {
                 *x = filt.process(*x);

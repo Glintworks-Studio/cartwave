@@ -489,7 +489,9 @@ impl Arrangement {
             .iter()
             .filter(|l| l.lock.is_none())
             .map(|l| {
-                let need = snap.iter().find(|s| s.id == l.id).map_or(0, |s| engine::studio::max_polyphony(&s.notes));
+                // Unison voices come from the track's pool (and count against
+                // its Voices cap): each note needs `unison` of them.
+                let need = snap.iter().find(|s| s.id == l.id).map_or(0, |s| engine::studio::max_polyphony(&s.notes)) * l.unison.voices.max(1) as usize;
                 RackSlot { id: l.id, kind: l.voice, pool: engine::studio::pool_size(need, l.voices) }
             })
             .collect()
@@ -555,6 +557,19 @@ impl Arrangement {
     }
 }
 
+/// How many channels the project's audio has (Batch 4b §4, RUNLOG B4B-D*):
+/// 2 once a studio track is panned off centre, else 1. Locked tracks and
+/// the console are always centred (the hardware is mono), so a project of
+/// locked tracks only is mono. Exports follow it: a mono WAV (byte-identical
+/// to before) or a stereo one, the mix and every stem alike.
+pub fn channels(a: &Arrangement) -> u16 {
+    if a.lanes.iter().any(|l| l.lock.is_none() && l.pan != 0) {
+        2
+    } else {
+        1
+    }
+}
+
 /// The engine's rack for `shape` (UI thread): one `TrackCtl` per track,
 /// reused from `ctls` when the track already has one.
 pub fn build_rack(shape: &[RackSlot], ctls: &mut Vec<(u32, Arc<engine::TrackCtl>)>, a: &Arrangement, heard: &[bool]) -> Box<engine::Rack> {
@@ -569,6 +584,8 @@ pub fn build_rack(shape: &[RackSlot], ctls: &mut Vec<(u32, Arc<engine::TrackCtl>
                 Some((_, c)) => c.clone(),
                 None => {
                     let c = Arc::new(engine::TrackCtl::new(db_to_gain(l.vol_db), heard.get(i).copied().unwrap_or(true), l.voices, l.params));
+                    c.set_pan(l.pan);
+                    c.set_unison(l.unison.voices, l.unison.detune, l.unison.drift);
                     ctls.push((s.id, c.clone()));
                     c
                 }
@@ -586,6 +603,8 @@ pub fn sync_ctls(ctls: &[(u32, Arc<engine::TrackCtl>)], a: &Arrangement, heard: 
         let Some(i) = a.track_index(*id) else { continue };
         let l = &a.lanes[i];
         c.set_gain(db_to_gain(l.vol_db));
+        c.set_pan(l.pan);
+        c.set_unison(l.unison.voices, l.unison.detune, l.unison.drift);
         c.set_audible(heard.get(i).copied().unwrap_or(true));
         c.set_cap(l.voices);
         for (k, &v) in l.params.iter().enumerate() {

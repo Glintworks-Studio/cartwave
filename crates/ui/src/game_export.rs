@@ -109,6 +109,9 @@ pub struct Layout {
     pub loop_: Option<(usize, usize)>,
     /// Where the loop region musically starts (the end of the intro proper).
     pub musical_loop_start: usize,
+    /// 1 (mono) or 2 (stereo, interleaved): `tracks::channels`. Every
+    /// position above counts frames.
+    pub channels: u16,
 }
 
 /// Progress (0..=1000) and cancel flag, shared with the UI thread.
@@ -153,6 +156,9 @@ pub fn render(p: &Project, rate: u32, solo: u8, range: Range, passes: usize, ctl
 pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes: usize, ctl: Option<(&Control, f64, f64)>) -> Result<(Vec<f32>, Layout), String> {
     let (mut m, snap) = crate::tracks::offline_mixdown(p, rate, heard, true);
     let bpm = p.bpm as f64;
+    // Stereo once a studio track is panned (the mix and every stem alike, so
+    // stems still line up with the mix); mono otherwise, exactly as before.
+    let channels = crate::tracks::channels(&p.arrangement);
     // Progress within this track's share of the whole export.
     let report = |done: usize, total: usize| -> Result<(), String> {
         if let Some((c, from, span)) = ctl {
@@ -166,11 +172,17 @@ pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes
     };
     let run = |pl: &mut engine::Mixdown, out: &mut Vec<f32>, n: usize, base: usize, total: usize| -> Result<(), String> {
         let mut done = 0;
+        let (mut l, mut r) = (vec![0f32; CHUNK], vec![0f32; CHUNK]);
         while done < n {
             let k = CHUNK.min(n - done);
-            let at = out.len();
-            out.resize(at + k, 0.0);
-            pl.render(&snap, &mut out[at..]);
+            if channels == 1 {
+                let at = out.len();
+                out.resize(at + k, 0.0);
+                pl.render(&snap, &mut out[at..]);
+            } else {
+                pl.render_stereo(&snap, &mut l[..k], &mut r[..k]);
+                out.extend(l[..k].iter().zip(&r[..k]).flat_map(|(a, b)| [*a, *b]));
+            }
             done += k;
             report(base + done, total)?;
         }
@@ -186,7 +198,7 @@ pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes
             m.player.set_loop_start(ls as f64);
             m.player.set_loop_end(le as f64);
             m.player.play();
-            let mut out = Vec::with_capacity(total);
+            let mut out = Vec::with_capacity(total * channels as usize);
             run(&mut m, &mut out, intro + len, 0, total)?;
             // The latch: the whole emulator (console, studio voices, Main) at
             // the start of the second pass.
@@ -195,7 +207,7 @@ pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes
                 let mut q = latch.clone();
                 run(&mut q, &mut out, len, intro + k * len, total)?;
             }
-            Ok((out, Layout { total, loop_: Some((intro + len, intro + 2 * len)), musical_loop_start: intro }))
+            Ok((out, Layout { total, loop_: Some((intro + len, intro + 2 * len)), musical_loop_start: intro, channels }))
         }
         Range::Song | Range::Selection { .. } => {
             let (start, end) = match range {
@@ -208,12 +220,12 @@ pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes
             m.player.set_loop_end(1.0e12);
             m.player.seek(start as f64);
             m.player.play();
-            let mut out = Vec::with_capacity(total);
+            let mut out = Vec::with_capacity(total * channels as usize);
             run(&mut m, &mut out, body, 0, total)?;
             // Stop so held notes release and their tails ring out.
             m.player.stop();
             run(&mut m, &mut out, tail, body, total)?;
-            Ok((out, Layout { total, loop_: None, musical_loop_start: 0 }))
+            Ok((out, Layout { total, loop_: None, musical_loop_start: 0, channels }))
         }
     }
 }
@@ -222,11 +234,21 @@ pub fn render_heard(p: &Project, rate: u32, heard: &[bool], range: Range, passes
 
 /// (integrated LUFS, true peak dBTP, sample peak dBFS) of mono audio.
 pub fn measure(x: &[f32], rate: u32) -> Result<(f64, f64, f64), String> {
+    measure_ch(x, rate, 1)
+}
+
+/// `measure` for `channels` interleaved channels (the true peak is the
+/// louder channel's).
+pub fn measure_ch(x: &[f32], rate: u32, channels: u16) -> Result<(f64, f64, f64), String> {
     use ebur128::{EbuR128, Mode};
-    let mut m = EbuR128::new(1, rate, Mode::I | Mode::TRUE_PEAK).map_err(|e| format!("{e:?}"))?;
+    let ch = channels.max(1) as u32;
+    let mut m = EbuR128::new(ch, rate, Mode::I | Mode::TRUE_PEAK).map_err(|e| format!("{e:?}"))?;
     m.add_frames_f32(x).map_err(|e| format!("{e:?}"))?;
     let lufs = m.loudness_global().map_err(|e| format!("{e:?}"))?;
-    let tp = m.true_peak(0).map_err(|e| format!("{e:?}"))?;
+    let mut tp = 0f64;
+    for c in 0..ch {
+        tp = tp.max(m.true_peak(c).map_err(|e| format!("{e:?}"))?);
+    }
     let peak = x.iter().fold(0f32, |a, v| a.max(v.abs())) as f64;
     Ok((lufs, 20.0 * tp.max(1e-12).log10(), 20.0 * peak.max(1e-12).log10()))
 }
@@ -234,6 +256,11 @@ pub fn measure(x: &[f32], rate: u32) -> Result<(f64, f64, f64), String> {
 /// The gain the loudness option asks for, measured on the mix. Returns
 /// (gain, note for the report).
 pub fn loudness_gain(mix: &[f32], rate: u32, l: Loudness) -> Result<(f32, String), String> {
+    loudness_gain_ch(mix, rate, 1, l)
+}
+
+/// `loudness_gain` for `channels` interleaved channels.
+pub fn loudness_gain_ch(mix: &[f32], rate: u32, channels: u16, l: Loudness) -> Result<(f32, String), String> {
     match l {
         Loudness::Authentic => Ok((1.0, "authentic chip level (no gain)".into())),
         Loudness::Peak { dbfs } => {
@@ -242,7 +269,7 @@ pub fn loudness_gain(mix: &[f32], rate: u32, l: Loudness) -> Result<(f32, String
             Ok((g, format!("peak normalised to {dbfs:.1} dBFS (gain {:+.2} dB)", 20.0 * (g as f64).log10())))
         }
         Loudness::Lufs { lufs, ceiling_dbtp } => {
-            let (l0, tp0, _) = measure(mix, rate)?;
+            let (l0, tp0, _) = measure_ch(mix, rate, channels)?;
             if !l0.is_finite() {
                 return Ok((1.0, "silent: no gain".into()));
             }
@@ -284,13 +311,19 @@ fn chunk(out: &mut Vec<u8>, id: &[u8; 4], body: &[u8]) {
 /// inclusive as the format defines it, infinite) plus `cue ` points and
 /// `LIST/adtl` labels "Loop Start" / "Loop End".
 pub fn wav_bytes(x: &[f32], rate: u32, bits: u16, loop_: Option<(usize, usize)>) -> Vec<u8> {
+    wav_bytes_ch(x, rate, bits, 1, loop_)
+}
+
+/// `wav_bytes` for `channels` interleaved channels; the loop is in frames.
+pub fn wav_bytes_ch(x: &[f32], rate: u32, bits: u16, channels: u16, loop_: Option<(usize, usize)>) -> Vec<u8> {
     let width = (bits / 8) as usize;
+    let ch = channels.max(1);
     let mut fmt = Vec::new();
     fmt.extend_from_slice(&1u16.to_le_bytes());
-    fmt.extend_from_slice(&1u16.to_le_bytes());
+    fmt.extend_from_slice(&ch.to_le_bytes());
     fmt.extend_from_slice(&rate.to_le_bytes());
-    fmt.extend_from_slice(&(rate * width as u32).to_le_bytes());
-    fmt.extend_from_slice(&(width as u16).to_le_bytes());
+    fmt.extend_from_slice(&(rate * width as u32 * ch as u32).to_le_bytes());
+    fmt.extend_from_slice(&((width * ch as usize) as u16).to_le_bytes());
     fmt.extend_from_slice(&bits.to_le_bytes());
     let mut data = Vec::with_capacity(x.len() * width);
     for &s in x {
@@ -433,7 +466,8 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
         rendered.push((name.clone(), x, layout));
     }
     let layout = rendered[0].2;
-    let (gain, note) = loudness_gain(&rendered[0].1, o.rate, o.loudness)?;
+    let ch = layout.channels.max(1);
+    let (gain, note) = loudness_gain_ch(&rendered[0].1, o.rate, ch, o.loudness)?;
     let mut report = Report { layout: Some(layout), ..Default::default() };
     report.notes.push(note);
     if gain != 1.0 {
@@ -455,20 +489,21 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
             Some((a, b)) => {
                 if o.single {
                     let f = dir.join(format!("{n}.wav"));
-                    write(&f, &wav_bytes(&x[..b], o.rate, o.bits, Some((a, b))))?;
+                    write(&f, &wav_bytes_ch(&x[..b * ch as usize], o.rate, o.bits, ch, Some((a, b))))?;
                     report.files.push(f);
                 }
                 if o.split {
-                    for (suffix, part) in [("intro", &x[..a]), ("loop", &x[a..b])] {
+                    let k = ch as usize;
+                    for (suffix, part) in [("intro", &x[..a * k]), ("loop", &x[a * k..b * k])] {
                         let f = dir.join(format!("{n}_{suffix}.wav"));
-                        write(&f, &wav_bytes(part, o.rate, o.bits, None))?;
+                        write(&f, &wav_bytes_ch(part, o.rate, o.bits, ch, None))?;
                         report.files.push(f);
                     }
                 }
             }
             None => {
                 let f = dir.join(format!("{n}.wav"));
-                write(&f, &wav_bytes(x, o.rate, o.bits, None))?;
+                write(&f, &wav_bytes_ch(x, o.rate, o.bits, ch, None))?;
                 report.files.push(f);
             }
         }
@@ -481,7 +516,7 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
             "version": 1,
             "sample_rate": o.rate,
             "bits": o.bits,
-            "channels": 1,
+            "channels": ch,
             "loop_start_sample": a,
             "loop_end_sample": b,
             "loop_length_samples": b - a,

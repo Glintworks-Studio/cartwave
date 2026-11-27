@@ -37,7 +37,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// The `format` field of every project file.
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 7;
+pub const VERSION: u32 = 8;
 /// A new project's format (the display's indicators, the export default).
 pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
 pub const DEFAULT_BIT_DEPTH: u16 = 24;
@@ -202,6 +202,14 @@ struct TrackV7 {
     volume_db: Option<DbValue>,
     /// The track's instrument (an id in `instruments`).
     inst: u32,
+    /// Version 8 (Batch 4b §5): unison voices per note, detune and drift
+    /// (cents), when not the defaults (1, 0, 0). A version 7 file has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    unison: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    detune: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    drift: Option<u8>,
 }
 
 const VOICE_KEYS: [(VoiceKind, &str); 6] = [
@@ -517,6 +525,9 @@ pub fn to_string(p: &Project) -> String {
             pan: Some(l.pan).filter(|v| *v != 0),
             volume_db: DbValue::of(l.vol_db),
             inst: a.instruments.lane_id(i),
+            unison: Some(l.unison.voices).filter(|v| *v != 1),
+            detune: Some(l.unison.detune).filter(|v| *v != 0),
+            drift: Some(l.unison.drift).filter(|v| *v != 0),
         })
         .collect();
     let clips = a
@@ -624,7 +635,8 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         Some(v) => return Err(format!("Unsupported file format version {v}.")),
         None => return Err("The project file has no format version.".into()),
     }
-    if h.version == Some(7) {
+    // Version 8 is version 7 plus optional unison fields (same reader).
+    if matches!(h.version, Some(7 | 8)) {
         return from_v7(text);
     }
     let f: FileV1 = serde_json::from_str(text).map_err(|e| format!("The project file is damaged: {e}"))?;
@@ -937,6 +949,8 @@ fn from_v7(text: &str) -> Result<Project, String> {
             l.height = crate::state::clamp_row_h(hgt);
         }
         l.pan = t.pan.unwrap_or(0).clamp(-crate::state::PAN_MAX, crate::state::PAN_MAX);
+        let d = crate::state::Unison::default();
+        l.unison = crate::state::Unison { voices: t.unison.unwrap_or(d.voices), detune: t.detune.unwrap_or(d.detune), drift: t.drift.unwrap_or(d.drift) }.clamped();
         if let Some(v) = &t.volume_db {
             l.vol_db = v.db()?;
         }
@@ -1438,7 +1452,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 7,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 8,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -1450,9 +1464,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 7,", "\"version\": 8,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 8,", "\"version\": 9,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer ChipDAW") && err.contains("version 8"), "{err}");
+        assert!(err.contains("newer ChipDAW") && err.contains("version 9"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

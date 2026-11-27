@@ -1,0 +1,18 @@
+Version 7 corpus, written by the build before Batch 4b (main d4f1afd) with
+v7corpus.rs.txt (run as an example of crates/ui). (file, render::render hash,
+export::render hash) from that build; tests/migration.rs checks them in v8.
+
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd),
+    ("v6_rows_pan_mute", 0x73345965db691eee, 0xe88cde08b31d97df),
+    ("v6_vrc6_unused", 0xa3faf8f55fe930af, 0xb5afeb969a8693ec),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7),
+    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c),
+    ("v7_studio_fader_voices", 0xb6fe5013dffff23b, 0xd1ea1ac50678eab3),
+    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7),
+    ("v7_studio_panned", 0xd2da3d1df3ad37b4, 0x1b1742f7c9b4dd4d),
+
+v7_studio_panned has a studio track at 20L: version 7 saved the pan without
+hearing it; from version 8 it is heard (stereo), so only its pan-reset copy
+keeps the hash (migration.rs says which).

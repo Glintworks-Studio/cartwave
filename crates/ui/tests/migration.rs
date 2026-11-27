@@ -318,7 +318,7 @@ fn version_6_files_render_bit_identically_in_version_7() {
         }
         // Saved as version 7 and reloaded: still the same sound and tracks.
         let v7 = file::to_string(&p);
-        assert!(v7.contains("\"version\": 7") && v7.contains("\"tracks\""), "{name}");
+        assert!(v7.contains(&format!("\"version\": {}", file::VERSION)) && v7.contains("\"tracks\""), "{name}");
         let again = file::from_str(&v7).unwrap();
         assert_eq!(again.arrangement.lanes, p.arrangement.lanes, "{name}");
         assert_eq!((again.chip, again.filter, again.filter_auto), (p.chip, p.filter, p.filter_auto), "{name}");
@@ -356,4 +356,75 @@ fn a_v6_fader_is_reported_and_restored_on_unlock() {
     let mut q = p.clone();
     q.arrangement.unlock_track(0);
     assert_eq!(q.arrangement.lanes[0].vol_db, -3.0);
+}
+
+/// Version 7 files (docs/songs/v7, written by the build before Batch 4b,
+/// hashes from it): (file, render::render hash, export::render hash).
+const V7: &[(&str, u64, u64)] = &[
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd),
+    ("v6_rows_pan_mute", 0x73345965db691eee, 0xe88cde08b31d97df),
+    ("v6_vrc6_unused", 0xa3faf8f55fe930af, 0xb5afeb969a8693ec),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7),
+    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c),
+    ("v7_studio_fader_voices", 0xb6fe5013dffff23b, 0xd1ea1ac50678eab3),
+    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7),
+];
+
+fn v7_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v7")
+}
+
+/// B4B (format v8): version 7 files open with one unison voice, no detune
+/// or drift, and every file with no panned studio track renders exactly as
+/// the build before Batch 4b did, through the mono path (studio tracks
+/// included); saved as version 8 and reloaded, still the same.
+#[test]
+fn version_7_files_render_bit_identically_in_version_8() {
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e) in V7 {
+        let text = std::fs::read_to_string(v7_dir().join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 7"), "{name} is a version 7 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.arrangement.lanes.iter().all(|l| l.unison == ui::state::Unison::default()), "{name}");
+        assert_eq!(ui::tracks::channels(&p.arrangement), 1, "{name}: mono");
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let e = render::hash(&export::render(&p));
+        if (r, e) != (want_r, want_e) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x})"));
+        }
+        // The two-channel render of a mono project is the mono render.
+        let (x, ch) = export::render_channels(&p);
+        assert_eq!((ch, render::hash(&x)), (1, e), "{name}: render_channels");
+        let v8 = file::to_string(&p);
+        assert!(v8.contains("\"version\": 8") && !v8.contains("\"unison\""), "{name}: defaults aren't written");
+        let again = file::from_str(&v8).unwrap();
+        assert_eq!(again.arrangement.lanes, p.arrangement.lanes, "{name}");
+        assert_eq!(render::hash(&export::render(&again)), e, "{name}: v8 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A version 7 studio track at 20L: the pan was saved, not heard; from
+/// version 8 it is heard. Centred again it is the version 7 sound exactly.
+#[test]
+fn a_v7_panned_studio_track_is_heard_now() {
+    let p = file::load(&v7_dir().join("v7_studio_panned.chipdaw")).unwrap();
+    assert_eq!((p.arrangement.lanes[0].pan, ui::tracks::channels(&p.arrangement)), (-20, 2));
+    let (x, ch) = export::render_channels(&p);
+    assert_eq!(ch, 2);
+    let (l, r): (Vec<f32>, Vec<f32>) = x.chunks_exact(2).map(|f| (f[0], f[1])).unzip();
+    assert_ne!(render::hash(&l), render::hash(&r), "panned: the channels differ");
+    // Version 7 rendered the panned file as if centred: centred again, it
+    // is that sound exactly (the hash from the old build).
+    let mut q = p.clone();
+    q.arrangement.lanes[0].pan = 0;
+    assert_eq!(render::hash(&export::render(&q)), 0x1b1742f7c9b4dd4d);
+    // A v8 file keeps unison, detune and drift.
+    let mut u = p.clone();
+    u.arrangement.lanes[0].unison = ui::state::Unison { voices: 3, detune: 15, drift: 4 };
+    let again = file::from_str(&file::to_string(&u)).unwrap();
+    assert_eq!(again.arrangement.lanes[0].unison, u.arrangement.lanes[0].unison);
+    assert!(file::to_string(&u).contains("\"unison\": 3"));
 }

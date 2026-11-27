@@ -43,6 +43,8 @@ pub struct Core {
     shared: Arc<Shared>,
     epoch: Instant,
     scratch: Box<[f32; SCRATCH_FRAMES]>,
+    /// The right channel (a copy of `scratch` until a studio track is panned).
+    scratch_r: Box<[f32; SCRATCH_FRAMES]>,
     sample_rate: u32,
     gain: f32,
     /// Version of the DPCM bank in the sample ROM.
@@ -84,6 +86,7 @@ impl Core {
             shared,
             epoch,
             scratch: Box::new([0.0; SCRATCH_FRAMES]),
+            scratch_r: Box::new([0.0; SCRATCH_FRAMES]),
             sample_rate,
             gain: 1.0,
             dpcm_version: 0,
@@ -211,6 +214,42 @@ impl Core {
         }
     }
 
+    /// The test click and pilot (harness hooks) on the left channel
+    /// (`left`) or the right one, `n` frames from song position `p0`.
+    #[allow(clippy::too_many_arguments)]
+    fn test_signals(&mut self, left: bool, p0: f64, tpf: f64, playing: bool, sr: u64, n: usize) {
+        let buf = if left { &mut self.scratch[..n] } else { &mut self.scratch_r[..n] };
+        // Test: click when the song position crosses `click_at`.
+        if self.click_at >= 0.0 && playing && self.click_left == 0 {
+            let k = ((self.click_at - p0) / tpf).ceil();
+            if k >= 0.0 && (k as usize) < n {
+                self.click_left = CLICK_FRAMES;
+                for v in &mut buf[k as usize..] {
+                    if self.click_left == 0 {
+                        break;
+                    }
+                    *v = 0.9;
+                    self.click_left -= 1;
+                }
+            }
+        } else if self.click_left > 0 {
+            for v in buf.iter_mut() {
+                if self.click_left == 0 {
+                    break;
+                }
+                *v = 0.9;
+                self.click_left -= 1;
+            }
+        }
+        if self.pilot_hz > 0.0 {
+            let inc = self.pilot_hz as f64 / sr as f64;
+            for v in buf.iter_mut() {
+                self.pilot_phase = (self.pilot_phase + inc).fract();
+                *v += 0.01 * (self.pilot_phase * std::f64::consts::TAU).sin() as f32;
+            }
+        }
+    }
+
     /// Fills an interleaved output buffer. `ahead_ns` is cpal's
     /// playback - callback time for this buffer.
     pub fn process(&mut self, out: &mut [f32], channels: usize, ahead_ns: u64) {
@@ -287,43 +326,44 @@ impl Core {
         while done < frames as usize {
             let n = (frames as usize - done).min(SCRATCH_FRAMES);
             let buf = &mut self.scratch[..n];
-            self.mix.render(&self.song, buf);
-            // Test: click when the song position crosses `click_at`.
-            if self.click_at >= 0.0 && playing && self.click_left == 0 {
-                let p = pos0 + done as f64 * tpf;
-                let k = ((self.click_at - p) / tpf).ceil();
-                if k >= 0.0 && (k as usize) < n {
-                    self.click_left = CLICK_FRAMES;
-                    for v in &mut buf[k as usize..] {
-                        if self.click_left == 0 {
-                            break;
-                        }
-                        *v = 0.9;
-                        self.click_left -= 1;
-                    }
-                }
-            } else if self.click_left > 0 {
-                for v in buf.iter_mut() {
-                    if self.click_left == 0 {
-                        break;
-                    }
-                    *v = 0.9;
-                    self.click_left -= 1;
-                }
+            let right = &mut self.scratch_r[..n];
+            // Stereo once a studio track is panned; until then `right` is a
+            // copy and the output is the mono build's (every channel the same).
+            let stereo = self.mix.render_stereo(&self.song, buf, right);
+            // The test click and pilot go into both channels (the same
+            // samples: the state is replayed for the right one).
+            let (click_left, pilot_phase) = (self.click_left, self.pilot_phase);
+            self.test_signals(true, pos0 + done as f64 * tpf, tpf, playing, sr, n);
+            if stereo {
+                let after = (self.click_left, self.pilot_phase);
+                (self.click_left, self.pilot_phase) = (click_left, pilot_phase);
+                self.test_signals(false, pos0 + done as f64 * tpf, tpf, playing, sr, n);
+                debug_assert!(after == (self.click_left, self.pilot_phase));
             }
-            if self.pilot_hz > 0.0 {
-                let inc = self.pilot_hz as f64 / sr as f64;
-                for v in buf.iter_mut() {
-                    self.pilot_phase = (self.pilot_phase + inc).fract();
-                    *v += 0.01 * (self.pilot_phase * std::f64::consts::TAU).sin() as f32;
-                }
-            }
+            let (buf, right) = (&self.scratch[..n], &self.scratch_r[..n]);
             // The Main track's peak (after the master gain; the test click and
             // pilot are in it when a harness turns them on).
             sh.merge_out_peak(buf.iter().fold(0f32, |m, v| m.max(v.abs())));
             let dst = &mut out[done * channels..(done + n) * channels];
-            for (frame, &v) in dst.chunks_exact_mut(channels).zip(buf.iter()) {
-                frame.fill(v * self.gain);
+            if stereo && channels >= 2 {
+                sh.merge_out_peak(right.iter().fold(0f32, |m, v| m.max(v.abs())));
+                // Left, right; any further channels get the centre (L+R)/2.
+                for ((frame, &l), &r) in dst.chunks_exact_mut(channels).zip(buf.iter()).zip(right.iter()) {
+                    frame[0] = l * self.gain;
+                    frame[1] = r * self.gain;
+                    for v in frame[2..].iter_mut() {
+                        *v = 0.5 * (l + r) * self.gain;
+                    }
+                }
+            } else if stereo {
+                // A mono device: the two channels folded.
+                for (frame, (&l, &r)) in dst.iter_mut().zip(buf.iter().zip(right.iter())) {
+                    *frame = 0.5 * (l + r) * self.gain;
+                }
+            } else {
+                for (frame, &v) in dst.chunks_exact_mut(channels).zip(buf.iter()) {
+                    frame.fill(v * self.gain);
+                }
             }
             done += n;
         }
