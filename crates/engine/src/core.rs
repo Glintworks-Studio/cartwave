@@ -65,6 +65,8 @@ pub struct Core {
     pilot_phase: f64,
     click_at: f64,
     click_left: u32,
+    marker: bool,
+    marker_state: u32,
     commands_seen: u64,
     /// Serial numbers for audition notes (each one retriggers).
     preview_serial: u32,
@@ -100,6 +102,8 @@ impl Core {
             pilot_phase: 0.0,
             click_at: -1.0,
             click_left: 0,
+            marker: false,
+            marker_state: 0x9E37_79B9,
             commands_seen: 0,
             preview_serial: 0,
         })
@@ -210,6 +214,7 @@ impl Core {
                 Command::TestStall(us) => self.stall_us = us,
                 Command::TestPilot(hz) => self.pilot_hz = hz,
                 Command::TestClickAt(t) => self.click_at = t,
+                Command::TestMarker(on) => self.marker = on,
             }
         }
     }
@@ -246,6 +251,11 @@ impl Core {
             for v in buf.iter_mut() {
                 self.pilot_phase = (self.pilot_phase + inc).fract();
                 *v += 0.01 * (self.pilot_phase * std::f64::consts::TAU).sin() as f32;
+            }
+        }
+        if self.marker {
+            for v in buf.iter_mut() {
+                *v += crate::testkit::marker_next(&mut self.marker_state);
             }
         }
     }
@@ -332,13 +342,13 @@ impl Core {
             let stereo = self.mix.render_stereo(&self.song, buf, right);
             // The test click and pilot go into both channels (the same
             // samples: the state is replayed for the right one).
-            let (click_left, pilot_phase) = (self.click_left, self.pilot_phase);
+            let saved = (self.click_left, self.pilot_phase, self.marker_state);
             self.test_signals(true, pos0 + done as f64 * tpf, tpf, playing, sr, n);
             if stereo {
-                let after = (self.click_left, self.pilot_phase);
-                (self.click_left, self.pilot_phase) = (click_left, pilot_phase);
+                let after = (self.click_left, self.pilot_phase, self.marker_state);
+                (self.click_left, self.pilot_phase, self.marker_state) = saved;
                 self.test_signals(false, pos0 + done as f64 * tpf, tpf, playing, sr, n);
-                debug_assert!(after == (self.click_left, self.pilot_phase));
+                debug_assert!(after == (self.click_left, self.pilot_phase, self.marker_state));
             }
             let (buf, right) = (&self.scratch[..n], &self.scratch_r[..n]);
             // The Main track's peak (after the master gain; the test click and
@@ -370,6 +380,10 @@ impl Core {
                 for (frame, &v) in dst.chunks_exact_mut(channels).zip(buf.iter()) {
                     frame.fill(v * self.gain);
                 }
+            }
+            // Test only: the reference match's copy of what the device gets.
+            if let Some(tap) = sh.tap.get() {
+                tap.write(&out[done * channels..(done + n) * channels], channels);
             }
             done += n;
         }
@@ -451,6 +465,29 @@ mod tests {
         tx.push(Command::Play).ok().unwrap();
         c.process(&mut out, 2, 30_000_000);
         assert!(c.mix.player.driver.preview.iter().all(|p| p.is_none()));
+    }
+
+    /// Batch 4c's audio gate: with the tap set and the marker on, `process`
+    /// (under the allocation checker) copies exactly the first output
+    /// channel, and the marker is the only change to the sound.
+    #[test]
+    fn the_output_tap_copies_the_first_channel() {
+        let (mut c, mut tx, _grx, shared) = core();
+        let tap = Arc::new(crate::testkit::OutputTap::new(1 << 14));
+        assert!(shared.tap.set(tap.clone()).is_ok());
+        let mut plain = vec![0f32; 480 * 2];
+        c.process(&mut plain, 2, 30_000_000);
+        assert!(plain.iter().all(|&v| v == 0.0), "silent while stopped, no marker");
+        tx.push(Command::TestMarker(true)).ok().unwrap();
+        let mut out = vec![0f32; 480 * 2];
+        c.process(&mut out, 2, 30_000_000);
+        let mut d = std::collections::VecDeque::new();
+        let (next, lost) = tap.read(0, &mut d);
+        assert_eq!((next, lost), (960, 0));
+        let left: Vec<f32> = out.chunks(2).map(|f| f[0]).collect();
+        assert_eq!(d.iter().skip(480).copied().collect::<Vec<_>>(), left);
+        assert!(left.iter().all(|v| v.abs() <= crate::testkit::MARKER_AMP && *v != 0.0));
+        assert!(out.chunks(2).all(|f| f[0] == f[1]), "the marker is in both channels");
     }
 
     #[test]

@@ -109,6 +109,10 @@ pub struct Shared {
     /// Overload reports from the audio API (CoreAudio's
     /// `kAudioDeviceProcessorOverload`, which cpal reports as `Xrun`).
     pub overloads: AtomicU64,
+    /// Test only (Batch 4c's audio gate): a copy of the first output channel
+    /// as handed to the device, for the loopback reference match. Set once by
+    /// a harness before it turns the marker on; the audio thread only reads it.
+    pub tap: std::sync::OnceLock<std::sync::Arc<crate::testkit::OutputTap>>,
 }
 
 pub mod device_error {

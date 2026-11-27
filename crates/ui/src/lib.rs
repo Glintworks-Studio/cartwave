@@ -1162,6 +1162,9 @@ impl AppState {
         // The lane viewport follows the window and the inspector.
         self.clamp_lane_scroll();
         self.tests.maybe_stall();
+        if let Some(us) = self.tests.maybe_inject() {
+            self.send(Command::TestStall(us));
+        }
         self.idle_housekeeping();
         self.install_menus(cx);
         self.sync_shell(cx);
@@ -2538,15 +2541,29 @@ impl AppState {
         let vrc6 = self.s.chip.get_untracked() == SoundChip::WithVrc6;
         self.send(Command::Vrc6(vrc6));
         self.send_all_params();
-        if self.tests.pilot || self.tests.avsync {
-            match engine::testkit::Loopback::start(
+        if self.tests.pilot || self.tests.avsync || self.tests.matching {
+            // Batch 4c's audio gate: the engine's copy of its output, for the
+            // reference match (ENGINE.md §7a).
+            let tap = self.tests.matching.then(|| self.engine.as_ref()).flatten().map(|e| {
+                let tap = std::sync::Arc::new(engine::testkit::OutputTap::new(1 << 20));
+                let _ = e.shared().tap.set(tap.clone());
+                (tap, e.sample_rate())
+            });
+            match engine::testkit::Loopback::start_with(
                 self.tests.pilot.then_some(engine::testkit::pilot_hz()),
+                tap,
             ) {
-                Ok(lb) => self.tests.loopback = Some(lb),
+                Ok(lb) => {
+                    self.tests.loopback = Some(lb);
+                    self.tests.match_t0 = self.tests.elapsed();
+                }
                 Err(err) => eprintln!("loopback: {err}"),
             }
             if self.tests.pilot {
                 self.send(Command::TestPilot(engine::testkit::pilot_hz()));
+            }
+            if self.tests.matching {
+                self.send(Command::TestMarker(true));
             }
         }
         if self.tests.avsync {

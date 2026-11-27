@@ -1,0 +1,5 @@
+device Ok("VX3211-2K (NVIDIA High Definition Audio)") config SupportedStreamConfig { channels: 2, sample_rate: 48000, buffer_size: Range { min: 480, max: 480 }, sample_format: F32 }
+in error A buffer underrun or overrun occurred.
+sent 193056 frames, captured 192480
+offset capture - sent = 480 frames, probe residual 0.000e0
+compared 187200 frames: bit-exact 187200 (100.0000%), max |diff| 0.000e0, gain 1.000000, residual -inf dB re signal

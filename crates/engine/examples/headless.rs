@@ -16,6 +16,9 @@
 //!     --pilot             mix the pilot without in-process loopback (for an
 //!                         external capture such as tapmon on macOS)
 //!     --block N           loopback analysis block in frames (default 128)
+//!     --match             Batch 4c's gate: the reference match (the engine's copy
+//!                         of its output vs the loopback capture, sample for
+//!                         sample; ENGINE.md §7a), scored per injected stall
 //!
 //! The "UI" here is the main thread running at ~60 Hz.
 
@@ -164,9 +167,10 @@ fn host_ns() -> u64 {
 }
 
 /// Records the detector counters and takes (resets) the largest gap.
-fn snap(e: &Engine, v: &mut Vec<[u64; 4]>) {
+fn snap(e: &Engine, v: &mut Vec<[u64; 5]>) {
     let sh = e.shared();
     v.push([
+        sh.xrun_starved.load(Ordering::Relaxed),
         sh.overloads.load(Ordering::Relaxed),
         sh.xrun_late.load(Ordering::Relaxed),
         sh.xrun_overrun.load(Ordering::Relaxed),
@@ -192,6 +196,15 @@ fn main() {
     });
     let epoch = Instant::now();
     let lb = has("--loopback").then(|| start_loopback(epoch, block));
+    // The reference match (Batch 4c): tap + marker + its own loopback capture.
+    let matcher = has("--match").then(|| {
+        let tap = Arc::new(engine::testkit::OutputTap::new(1 << 20));
+        assert!(e.shared().tap.set(tap.clone()).is_ok());
+        e.send(Command::TestMarker(true));
+        let t = epoch.elapsed().as_secs_f64();
+        let m = engine::testkit::Loopback::start_with(None, Some((tap, e.sample_rate()))).expect("loopback for the match");
+        (m, t)
+    });
     let mut rng = Rng(0x1234_5678_9ABC);
     let mut version = 1;
     e.send_song(song(&mut rng, version));
@@ -214,7 +227,7 @@ fn main() {
     let mut inject_i = 0;
     let mut injected: Vec<(f64, f64)> = Vec::new();
     // Detector counters at each injection: (overloads, late, overrun, max gap ns).
-    let mut per_stall: Vec<[u64; 4]> = Vec::new();
+    let mut per_stall: Vec<[u64; 5]> = Vec::new();
     let mut injected_host: Vec<u64> = Vec::new();
     let mut frames = 0u64;
     let mut edits = 0u64;
@@ -301,19 +314,53 @@ fn main() {
         sh.device_error.load(Ordering::Relaxed)
     );
     if !injected.is_empty() {
-        println!("per stall: ms, overloads, late, overrun, largest gap ms, host ns");
-        for (i, (_, ms)) in injected.iter().enumerate() {
+        let pilot: Vec<f64> = lb.as_ref().map(|l| l.dropouts.lock().unwrap().clone()).unwrap_or_default();
+        let jumps: Vec<(f64, i64)> = matcher
+            .as_ref()
+            .and_then(|(m, t0)| m.matched.as_ref().map(|s| s.lock().unwrap().jumps.iter().map(|(t, j)| (t + t0, *j)).collect()))
+            .unwrap_or_default();
+        println!("per stall: ms, starved, overloads, late, overrun, largest gap ms, pilot dropouts, match jumps (ms), host ns");
+        for (i, (t, ms)) in injected.iter().enumerate() {
             let (a, b) = (per_stall[i], per_stall[i + 1]);
+            // Attribute loopback events to the stall they follow (stalls are
+            // `every` s apart; the capture clock starts within ~0.1 s of `t0`).
+            let (lo, hi) = (t - 0.5, t + every - 0.5);
+            let p = pilot.iter().filter(|x| **x >= lo && **x < hi).count();
+            let j: Vec<String> = jumps
+                .iter()
+                .filter(|(x, _)| *x >= lo && *x < hi)
+                .map(|(_, f)| format!("{:.2}", *f as f64 * 1000.0 / e.sample_rate() as f64))
+                .collect();
             println!(
-                "  stall {ms:7.3}  {:2}  {:2}  {:2}  {:7.3}  {}",
+                "  stall {ms:7.3}  {:2}  {:2}  {:2}  {:2}  {:7.3}  {:2}  [{}]  {}",
                 b[0] - a[0],
                 b[1] - a[1],
                 b[2] - a[2],
-                b[3] as f64 / 1e6,
+                b[3] - a[3],
+                b[4] as f64 / 1e6,
+                p,
+                j.join(" "),
                 injected_host[i]
             );
         }
         println!("injected stalls (t s, ms): {:?}", injected.iter().map(|(t, m)| (format!("{t:.2}"), *m)).collect::<Vec<_>>());
+    }
+    if let Some((m, _)) = &matcher {
+        let s = m.matched.as_ref().unwrap().lock().unwrap().clone();
+        println!(
+            "match: {} blocks matched, {} before lock, {} mismatched; {} mismatch runs: {} dropouts (max {:.2} ms), {} capture gaps, {} foreign; tap lost {}; {} locks; {} samples compared",
+            s.matched_blocks,
+            s.unlocked_blocks,
+            s.mismatched_blocks,
+            s.mismatch_events,
+            s.dropouts,
+            s.max_jump as f64 * 1000.0 / e.sample_rate() as f64,
+            s.capture_gaps,
+            s.foreign,
+            s.tap_lost,
+            s.locks,
+            s.samples_compared
+        );
     }
     if let Some(lb) = lb {
         let d = lb.dropouts.lock().unwrap().clone();

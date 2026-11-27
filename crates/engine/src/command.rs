@@ -46,4 +46,7 @@ pub enum Command {
     /// Test only: a short full-scale click at the next frame that crosses this
     /// song position (ticks), for A/V sync measurement. Negative = off.
     TestClickAt(f64),
+    /// Test only (Batch 4c): mix the reference-match marker, a -60 dBFS
+    /// pseudo-random sequence that makes every stretch of output unique.
+    TestMarker(bool),
 }

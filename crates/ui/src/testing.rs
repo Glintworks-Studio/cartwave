@@ -9,6 +9,12 @@
 //!   summary at exit.
 //! - `CARTWAVE_PILOT=1`      mix a 23 kHz pilot (`CARTWAVE_PILOT_HZ` to change) and watch it via WASAPI loopback
 //!   (ground-truth dropout count).
+//! - `CARTWAVE_MATCH=1`      Batch 4c's audio gate: the reference match (the
+//!   engine's copy of its output against the loopback capture, sample for
+//!   sample, with a -60 dBFS marker; ENGINE.md §7a). Music can't mask it.
+//! - `CARTWAVE_INJECT_STALLS=ms,ms,...` busy-wait the audio callback this long,
+//!   one stall every `CARTWAVE_INJECT_EVERY` s (default 3), cycling the list:
+//!   validates the dropout detectors in the app itself.
 //! - `CARTWAVE_AVSYNC=1`     test G: 1-bar loop, music muted, a click at mid-bar;
 //!   loopback click times vs the presented playhead crossing.
 //! - `CARTWAVE_QUIT_AFTER=secs` exit (after the summary) when the time is up.
@@ -76,6 +82,16 @@ pub struct Tests {
     pub ui_stall: bool,
     pub avsync: bool,
     pub pilot: bool,
+    /// `CARTWAVE_MATCH`: the reference match (Batch 4c).
+    pub matching: bool,
+    /// When the match's capture started (s on `elapsed`).
+    pub match_t0: f64,
+    /// `CARTWAVE_INJECT_STALLS` (ms) and `CARTWAVE_INJECT_EVERY` (s).
+    inject: Vec<f64>,
+    inject_every: f64,
+    next_inject: f64,
+    /// (elapsed s, ms) of every injected stall.
+    injected: Vec<(f64, f64)>,
     pub stress: bool,
     /// `CARTWAVE_SONG=heavy`: start on the macro worst case (`mock::heavy_arrangement`).
     pub heavy: bool,
@@ -134,6 +150,14 @@ impl Tests {
             ui_stall: env_on("CARTWAVE_UI_STALL"),
             avsync: env_on("CARTWAVE_AVSYNC"),
             pilot: env_on("CARTWAVE_PILOT"),
+            matching: env_on("CARTWAVE_MATCH"),
+            match_t0: 0.0,
+            inject: crate::dev::var("CARTWAVE_INJECT_STALLS")
+                .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+                .unwrap_or_default(),
+            inject_every: crate::dev::var("CARTWAVE_INJECT_EVERY").and_then(|v| v.parse().ok()).unwrap_or(3.0),
+            next_inject: 0.0,
+            injected: Vec::new(),
             stress: env_on("CARTWAVE_STRESS"),
             heavy: crate::dev::var("CARTWAVE_SONG").is_some_and(|v| v == "heavy"),
             autoplay: env_on("CARTWAVE_AUTOPLAY"),
@@ -174,6 +198,8 @@ impl Tests {
                 ("ui_stall", t.ui_stall),
                 ("avsync", t.avsync),
                 ("pilot", t.pilot),
+                ("match", t.matching),
+                ("inject_stalls", !t.inject.is_empty()),
                 ("stress", t.stress),
                 ("heavy", t.heavy),
                 ("autoplay", t.autoplay),
@@ -188,10 +214,31 @@ impl Tests {
         if let Some(f) = t.log.as_mut() {
             let _ = writeln!(
                 f,
-                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame,audio_kinstr_per_cb,audio_uj_per_cb,audio_p_share,ui_kinstr_per_frame,ui_uj_per_frame,ui_p_share,proc_minstr_per_s,proc_mw,proc_p_share,overloads,silent_callbacks,ui_tick_gap_max_ms,playhead_local_frames,display_hz,max_gap_ms"
+                "t_s,callbacks,starved,late,overrun,cb_mean_pct,cb_p99_pct,cb_max_pct,edits_applied,ui_edits,edit_to_tick_max_ms,send_to_engine_max_ms,driver_ticks,alloc_violations,pending,dropped,device_error,generation,frames_per_cb,ahead_ms,loopback_dropouts,ui_stalls,audio_kcycles_per_cb,ui_kcycles_per_frame,audio_kinstr_per_cb,audio_uj_per_cb,audio_p_share,ui_kinstr_per_frame,ui_uj_per_frame,ui_p_share,proc_minstr_per_s,proc_mw,proc_p_share,overloads,silent_callbacks,ui_tick_gap_max_ms,playhead_local_frames,display_hz,max_gap_ms,match_dropouts,match_mismatch_runs,match_blocks,match_samples"
             );
         }
+        t.next_inject = t.inject_every;
         t
+    }
+
+    /// The next injected audio stall (µs), when one is due.
+    pub fn maybe_inject(&mut self) -> Option<u32> {
+        if self.inject.is_empty() {
+            return None;
+        }
+        let t = self.elapsed();
+        if t < self.next_inject {
+            return None;
+        }
+        self.next_inject += self.inject_every;
+        let ms = self.inject[self.injected.len() % self.inject.len()];
+        self.injected.push((t, ms));
+        Some((ms * 1000.0) as u32)
+    }
+
+    fn match_stats(&self) -> Option<engine::testkit::MatchStats> {
+        let m = self.loopback.as_ref()?.matched.as_ref()?;
+        m.lock().ok().map(|s| s.clone())
     }
 
     pub fn elapsed(&self) -> f64 {
@@ -410,6 +457,10 @@ impl Tests {
             self.display_hz.map_or(String::new(), |h| format!("{h:.3}")),
             sh.max_gap_ns.load(Relaxed) as f64 / 1e6,
         );
+        let extra = match self.match_stats() {
+            Some(m) => format!("{extra},{},{},{},{}", m.dropouts, m.mismatch_events, m.matched_blocks, m.samples_compared),
+            None => format!("{extra},,,,"),
+        };
         self.tick_gap_max = Duration::ZERO;
         self.playhead_local_frames = 0;
         if let Some(f) = self.log.as_mut() {
@@ -515,6 +566,51 @@ impl Tests {
         }
         if self.avsync {
             s += &self.write_crossings();
+        }
+        if let Some(m) = self.match_stats() {
+            let ms = |f: i64| f as f64 * 1000.0 / e.sample_rate() as f64;
+            s += &format!(
+                "# match: {} blocks matched, {} before lock, {} mismatched; {} mismatch runs: {} dropouts (max {:.2} ms), {} capture gaps, {} foreign; tap lost {}; {} locks; {} samples compared\n",
+                m.matched_blocks,
+                m.unlocked_blocks,
+                m.mismatched_blocks,
+                m.mismatch_events,
+                m.dropouts,
+                ms(m.max_jump),
+                m.capture_gaps,
+                m.foreign,
+                m.tap_lost,
+                m.locks,
+                m.samples_compared
+            );
+            let jumps: Vec<String> = m.jumps.iter().map(|(t, j)| format!("{:.2}s:{:.2}ms", t + self.match_t0, ms(*j))).collect();
+            s += &format!("# match jumps (app s: gap): {}\n", jumps.join(" "));
+            if !self.injected.is_empty() {
+                // Each stall's loopback events: from 0.5 s before it to 0.5 s
+                // before the next (the capture clock starts at `match_t0`).
+                let pilot: Vec<f64> = self
+                    .loopback
+                    .as_ref()
+                    .and_then(|l| {
+                        l.dropout_times
+                            .lock()
+                            .ok()
+                            .map(|d| d.iter().map(|i| i.saturating_duration_since(self.start).as_secs_f64()).collect())
+                    })
+                    .unwrap_or_default();
+                s += "# injected stalls (app s, ms -> pilot dropouts, match gaps ms):\n";
+                for (t, msv) in &self.injected {
+                    let (lo, hi) = (t - 0.5, t + self.inject_every - 0.5);
+                    let p = pilot.iter().filter(|x| **x >= lo && **x < hi).count();
+                    let g: Vec<String> = m
+                        .jumps
+                        .iter()
+                        .filter(|(x, _)| x + self.match_t0 >= lo && x + self.match_t0 < hi)
+                        .map(|(_, j)| format!("{:.2}", ms(*j)))
+                        .collect();
+                    s += &format!("#   {t:8.2} {msv:6.2} -> {p} [{}]\n", g.join(" "));
+                }
+            }
         }
         if let Some(lb) = &self.loopback {
             s += &format!(
