@@ -121,6 +121,9 @@ if (Want "B4B-X1") {
   ClickL ((StripX 0) + 60) ($MixY0 + 130)                                   # M on track 1
   ClickL ((StripX 1) + 92) ($MixY0 + 130)                                   # S on track 2
   Save; Keep $p "x1_pan_ms"
+  # PB (RUNLOG PB-D16): the clicks above selected a track, and the bottom pane (356 px now)
+  # covers the readouts: Esc clears the selection (the pane goes) first.
+  K 0x1B; Start-Sleep -Milliseconds 300
   DblL ((StripX 0) + 76) ($MixY0 + 527); Start-Sleep -Milliseconds 300      # the readout: type a value
   K 0xBD; TypeText "3"; K 0x0D; Start-Sleep -Milliseconds 300            # "-3" (VK_OEM_MINUS, then 3)
   Save; Keep $p "x1_typed"
@@ -152,8 +155,10 @@ if (Want "B4B-U1") {
   $p = Fx "fx_studio" "u1"; $d = Join-Path $Work "du1"
   Launch -Project $p -Data $d; Place
   ClickL 700 170; Start-Sleep -Milliseconds 600                            # a clip on track 1: the inspector
-  MoveL 1000 857; Start-Sleep -Milliseconds 200; Wheel 1; Wheel 1; Start-Sleep -Milliseconds 300   # UNISON 1 -> 3
-  MoveL 1130 857; Start-Sleep -Milliseconds 200
+  # PB (RUNLOG PB-D16): Unison and Detune are the device panel's knobs now (OSCILLATOR's first
+  # row: x 364 and 448, y 770 with the device at (224, 552)).
+  MoveL 364 770; Start-Sleep -Milliseconds 200; Wheel 1; Wheel 1; Start-Sleep -Milliseconds 300   # UNISON 1 -> 3
+  MoveL 448 770; Start-Sleep -Milliseconds 200
   for ($i = 0; $i -lt 15; $i++) { Wheel 1; Start-Sleep -Milliseconds 30 }                             # DETUNE 0 -> 15
   Start-Sleep -Milliseconds 300
   Shot "u1_inspector"

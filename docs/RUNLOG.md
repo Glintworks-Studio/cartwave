@@ -1819,3 +1819,16 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   the project's imported ones and Import audio. **User Library**: the user presets. **Current
   Project**: the presets and samples the project's tracks use. Audio Effects, MIDI Effects and
   Imported Projects aren't shown (nothing pretends).
+- **PB-D16 (harness changes, gate 4).** The earlier suites, adjusted only where a control moved
+  (each change marked "PB (PB-D16)" in the script): **AT-10** right-clicks empty space on lane 3,
+  not lane 5 (the 356 px bottom pane puts lane 5 under the Main row while a clip is selected);
+  **AT-14** deselects before Help ▸ Getting Started (the pane shrank the guide's area under the
+  luma probe); **AT-25** reads the device panel's dev line (the instrument is drawn, not UI text);
+  **AT-29** finds the layouts at Hardware ▸ NES (2A03) / Famicom + VRC6 ▸ Bands; **AT-31** saves
+  through the picker's Save Preset As… and opens the user preset's menu in User Library (the check
+  accepts the new item menu, collections first); **DP-03** previews Sounds ▸ Leads ▸ Square's
+  first two presets and finds the Preview key at the new header's x 216. Format 9 in the fixtures'
+  version checks: `unlock_all.py` (it refused format 9, so P2-01/02/03/11 ran on locked tracks)
+  and P2-01's "saved by this build". One behaviour fixed on the way: a right-click on a track
+  header (its menu) no longer closes the open piano roll; only a click shows the Device view (AT-10
+  caught it).
