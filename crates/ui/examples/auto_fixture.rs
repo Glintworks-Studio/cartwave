@@ -10,7 +10,9 @@
 //!   breakpoints** (track 0, unlocked: its fader, a point every 1/16 for 125
 //!   bars), shown in Automation Mode (the drawing scenario).
 //! - `*_plain.cartwave`: the same songs and lanes without envelopes (the
-//!   performance gate's like-for-like baseline: `main` can't open format 10).
+//!   performance gate's like-for-like baseline: `main` can't open format 10),
+//!   except one flat envelope on auto32's track 0 first lane, so the
+//!   time-selection drag selects time there too.
 //!
 //! usage: cargo run --release -p ui --example auto_fixture -- <out dir>
 
@@ -58,6 +60,17 @@ fn main() {
     file::save(&p, &out.join("auto32.cartwave")).unwrap();
     let mut plain = p.clone();
     plain.arrangement.automation.envs.clear();
+    // One flat envelope, track 0's first lane at its low value: in an empty
+    // lane a press adds a breakpoint, so without it the time-selection
+    // scenario's baseline would drag a new point instead (B5-D14).
+    {
+        let a = &mut plain.arrangement;
+        let owner = AutoOwner::Track(a.lanes[0].id);
+        let prm = ui::automation::registry_for(&a.lanes, owner).unwrap_or_default().into_iter().next().expect("a parameter");
+        let lo = if prm.min.is_finite() { prm.min } else { -24.0 };
+        let v = lo + (prm.max - lo) * 0.2;
+        *a.automation.edit(&(owner, prm.id.to_string())) = Envelope::new(vec![Pt::new(0, v), Pt::new(end, v)]);
+    }
     file::save(&plain, &out.join("auto32_plain.cartwave")).unwrap();
     println!("auto32: {n} automated track parameters (+ Main), {} points, loop 0..{}", p.arrangement.automation.point_count(), p.loop_end_ticks);
 

@@ -93,14 +93,21 @@ pub fn shape(x: f32, curve: f32) -> f32 {
 
 /// The envelope's value at song position `pos` (ticks).
 pub fn eval(points: &[AutoPoint], pos: f64) -> Option<f32> {
-    let first = points.first()?;
+    eval_by(points, pos, |p| *p)
+}
+
+/// [`eval`] over any point type (`get` reads one as an [`AutoPoint`]): the
+/// editor's own points, evaluated in place (no copy) with the same arithmetic.
+#[inline]
+pub fn eval_by<P>(points: &[P], pos: f64, get: impl Fn(&P) -> AutoPoint) -> Option<f32> {
+    let first = get(points.first()?);
     // The last point at or before `pos`.
-    let i = points.partition_point(|p| (p.tick as f64) <= pos);
+    let i = points.partition_point(|p| (get(p).tick as f64) <= pos);
     if i == 0 {
         return Some(first.value);
     }
-    let a = points[i - 1];
-    let Some(b) = points.get(i) else { return Some(a.value) };
+    let a = get(&points[i - 1]);
+    let Some(b) = points.get(i).map(&get) else { return Some(a.value) };
     let span = b.tick as f64 - a.tick as f64;
     if span <= 0.0 {
         return Some(b.value);

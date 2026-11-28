@@ -54,8 +54,10 @@ Move-To 400 500
 $global:Res["auto_scroll"] = Measure-Cpu { param($i) $d = if (($i % 40) -lt 20) { -120 } else { 120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }; Note "auto_scroll"
 for ($k = 0; $k -lt 80; $k++) { [In]::mouse_event(0x0800, 0, 0, 120, [UIntPtr]::Zero); Start-Sleep -Milliseconds 5 }
 Start-Sleep -Milliseconds 400
-# Track 0's first lane: 209..282; above its line (a time selection, not a breakpoint).
-CpuDrag "auto_timesel" 1000 214 160 0
+# Track 0's first lane (Duty, stepped 0..3): 209..282. Pressed in its step-0 band, below the line
+# in both songs (their values stay at 1 or more), so the drag selects time. y 214 hit the automated
+# song's line and dragged a new breakpoint instead (its proof line caught it; B5-D14).
+CpuDrag "auto_timesel" 1000 276 160 0
 Stop-Process -Id $script:p.Id -Force
 # One lane of 2,000 breakpoints: Draw Mode drawing on it.
 Start-App (Join-Path $Fixtures "auto2000$suffix.cartwave") "a2000"
@@ -65,6 +67,7 @@ Stop-Process -Id $script:p.Id -Force
 $e1 = Get-Content (Join-Path $Work "err-$Label-a32.txt") -Raw -ErrorAction SilentlyContinue
 $e2 = Get-Content (Join-Path $Work "err-$Label-a2000.txt") -Raw -ErrorAction SilentlyContinue
 $proof = if ($e1 -match "dev: automation mode true lanes (\d+)") { "a32 lanes $($Matches[1])" } else { "a32 Automation Mode NOT REACHED" }
+$proof += if ($e1 -match "dev: automation time selection (\d+) (\d+)") { "; time selection $($Matches[1])..$($Matches[2])" } else { "; time selection NOT REACHED" }
 $proof += if ($e2 -match "dev: automation points (\d+)") { "; a2000 points after drawing $($Matches[1])" } else { "; a2000 drawing NOT REACHED" }
 $line = "{0,-16} " -f $Label + (($Res.Keys | ForEach-Object { "{0} {1,5}%" -f $_, $Res[$_] }) -join "  ") + "  $proof" + $(if ($global:FocusLost) { "  FOCUS LOST x$($global:FocusLost): INVALID" } else { "  focus held" })
 Add-Content (Join-Path $Work "bench_b5_log.txt") $line

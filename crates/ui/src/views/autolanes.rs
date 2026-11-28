@@ -177,8 +177,24 @@ pub fn draw(canvas: &vg::Canvas, a: &Arrangement, (master_db, bpm): (f32, f32), 
             }
             continue;
         };
-        let mut path = vg::PathBuilder::new();
         let (left_t, right_t) = (t_of(rect.left), t_of(rect.right));
+        let r = AUTO_POINT_D * 0.5 * s;
+        // Band-local y (the cached paths move with the band: scrolling
+        // rebuilds nothing).
+        let sy = |v: f32| sy(v) - top;
+        let ck = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            env.points_hash().hash(&mut h);
+            for f in [x_of(0.0), x_of(960_000.0), rect.left, rect.right, g.h, s, bpm, r] {
+                f.to_bits().hash(&mut h);
+            }
+            g.stepped.hash(&mut h);
+            h.finish()
+        };
+        let mut cache = ed.cache.borrow_mut();
+        if cache.get(&g.key).is_none_or(|c| c.0 != ck) {
+        let mut path = vg::PathBuilder::new();
         if g.stepped {
             // What the chip plays: the value quantised per frame tick (one
             // sample per pixel column at least).
@@ -233,32 +249,49 @@ pub fn draw(canvas: &vg::Canvas, a: &Arrangement, (master_db, bpm): (f32, f32), 
                 path.line_to((rect.right, sy(pts.last().unwrap().v)));
             }
         }
-        canvas.save();
-        canvas.clip_rect(band, None, None);
-        let mut paint = gfx::stroke(col, w);
-        paint.set_anti_alias(true);
-        canvas.draw_path(&path.detach(), &paint);
-        // Breakpoints: 6 px dots (cull to the visible range).
-        let r = AUTO_POINT_D * 0.5 * s;
+        // Breakpoints: 6 px dots (cull to the visible range). When zoomed far
+        // out, dots closer than 3 px are skipped (the line shows them).
+        let mut dots = vg::PathBuilder::new();
         let lo = env.points.partition_point(|p| (p.t as f64) < left_t);
         let hi = env.points.partition_point(|p| (p.t as f64) <= right_t);
-        // When zoomed far out, dots closer than 3 px are skipped (the line shows them).
         let mut last_x = f32::NEG_INFINITY;
-        for (i, p) in env.points[lo..hi].iter().enumerate() {
-            let i = lo + i;
-            let (x, y) = (x_of(p.t as f64), sy(p.v));
-            let picked = ed.point_selected(&g.key, i);
-            if !picked && x - last_x < 3.0 * s {
+        for p in &env.points[lo..hi] {
+            let x = x_of(p.t as f64);
+            if x - last_x < 3.0 * s {
                 continue;
             }
             last_x = x;
-            let hot = ed.hover.as_ref().is_some_and(|h| h.0 == g.key && h.1 == Some(i));
-            if picked {
+            dots.add_circle((x, sy(p.v)), r, None);
+        }
+        cache.insert(g.key.clone(), (ck, path.detach(), dots.detach()));
+        }
+        let (_, line, dots) = &cache[&g.key];
+        canvas.save();
+        canvas.clip_rect(band, None, None);
+        canvas.translate((0.0, top));
+        let mut paint = gfx::stroke(col, w);
+        paint.set_anti_alias(true);
+        canvas.draw_path(line, &paint);
+        let mut fill = gfx::fill(col);
+        fill.set_anti_alias(true);
+        canvas.draw_path(dots, &fill);
+        // The picked and hovered breakpoints over the cached dots.
+        let marks = [
+            (ed.picked.as_ref().filter(|(k, _)| *k == g.key).map(|(_, i)| *i), false),
+            (ed.moving(&g.key), false),
+            (ed.hover.as_ref().filter(|(k, _)| *k == g.key).and_then(|(_, i)| *i), true),
+        ];
+        for (i, hot) in marks.into_iter().filter_map(|(i, hot)| i.map(|i| (i, hot))) {
+            let Some(p) = env.points.get(i) else { continue };
+            let (x, y) = (x_of(p.t as f64), sy(p.v));
+            if hot {
+                canvas.draw_circle((x, y), r + 1.0 * s, &gfx::fill(col));
+            } else {
                 // Neutral selection: a white outline with a soft glow.
                 canvas.draw_circle((x, y), r + 4.0 * s, &gfx::fill(Rgba::white(0.10)));
                 canvas.draw_circle((x, y), r + 1.5 * s, &gfx::fill(Rgba::white(1.0)));
+                canvas.draw_circle((x, y), r, &gfx::fill(col));
             }
-            canvas.draw_circle((x, y), if hot { r + 1.0 * s } else { r }, &gfx::fill(col));
         }
         canvas.restore();
     }
@@ -374,6 +407,11 @@ pub struct Editor {
     pub hover: Option<(AutoKey, Option<usize>)>,
     /// The breakpoint last pressed (drawn selected).
     pub picked: Option<(AutoKey, usize)>,
+    /// Each lane's line and dots as paths in band-local coordinates, rebuilt
+    /// only when the envelope, the view or the geometry changes: the
+    /// arrangement redraws every frame while it plays, and rebuilt paths cost
+    /// their building and Skia's tessellation each time (B5-D14).
+    cache: std::cell::RefCell<std::collections::HashMap<AutoKey, (u64, vg::Path, vg::Path)>>,
 }
 
 impl Editor {
@@ -381,8 +419,12 @@ impl Editor {
         self.gesture.is_some()
     }
 
-    fn point_selected(&self, key: &AutoKey, i: usize) -> bool {
-        self.picked.as_ref().is_some_and(|(k, j)| k == key && *j == i) || self.gesture.as_ref().is_some_and(|g| matches!(g, Gesture::Point { key: k, i: j, moved: true, .. } | Gesture::Added { key: k, i: j, moved: true, .. } if k == key && *j == i))
+    /// The breakpoint a gesture is moving on lane `key`.
+    fn moving(&self, key: &AutoKey) -> Option<usize> {
+        match self.gesture.as_ref()? {
+            Gesture::Point { key: k, i, moved: true, .. } | Gesture::Added { key: k, i, moved: true, .. } if k == key => Some(*i),
+            _ => None,
+        }
     }
 
     /// The breakpoint of `env` near screen-space (x, y) (lane-space px).
@@ -606,6 +648,11 @@ impl Editor {
                     // the clip area.
                     let lane = s.arrangement.with_untracked(|a| a.insert.1);
                     cx.emit(crate::AppEvent::SetInsert(t0, lane));
+                } else if crate::dev::enabled() {
+                    // The bench's proof that a time selection was dragged.
+                    if let Some(sel) = self.sel.as_ref() {
+                        eprintln!("dev: automation time selection {} {} on {}", sel.t0, sel.t1, sel.key.1);
+                    }
                 }
             }
         }

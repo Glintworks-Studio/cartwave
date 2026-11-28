@@ -72,6 +72,19 @@ fn to_auto(p: &[Pt]) -> Vec<AutoPoint> {
 }
 
 impl Envelope {
+    /// The points folded by a multiply-hash (about 1 ns each; every field
+    /// counts). `content_hash` and the lanes' draw cache use it: both run
+    /// often (every arrangement change, every drawn frame; B5-D14).
+    pub fn points_hash(&self) -> u64 {
+        let mut f: u64 = 0xcbf2_9ce4_8422_2325 ^ self.points.len() as u64;
+        for p in &self.points {
+            for w in [p.t as u64, p.v.to_bits() as u64, p.c.to_bits() as u64] {
+                f = (f ^ w).wrapping_mul(0x0100_0000_01b3).rotate_left(29);
+            }
+        }
+        f
+    }
+
     pub fn new(points: Vec<Pt>) -> Self {
         let mut e = Self { points };
         e.sort();
@@ -89,7 +102,8 @@ impl Envelope {
 
     /// The value at tick `t` (`None`: no points).
     pub fn value_at(&self, t: f64) -> Option<f32> {
-        chip::auto::eval(&to_auto(&self.points), t)
+        // In place: the lanes draw ask once per pixel column (B5-D14).
+        chip::auto::eval_by(&self.points, t, |p| AutoPoint { tick: p.t, value: p.v, curve: p.c })
     }
 
     /// Adds a point; returns its index. On a tick that already has points
@@ -379,9 +393,8 @@ impl Automation {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         for ((o, id), e) in &self.envs {
             (o, id, e.points.len()).hash(&mut h);
-            for p in &e.points {
-                (p.t, p.v.to_bits(), p.c.to_bits()).hash(&mut h);
-            }
+            // Not SipHash per point: it runs on every arrangement change.
+            e.points_hash().hash(&mut h);
         }
         self.overridden.hash(&mut h);
         h.finish()

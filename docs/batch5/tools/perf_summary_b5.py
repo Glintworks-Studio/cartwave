@@ -130,6 +130,33 @@ for u in unproven:
         cpu[name][b].pop(int(r), None)
 
 
+# Runs whose proof failed (B5-D14): their cycles leave the verdict too, scenario by scenario
+# (the first gate run dropped them only from the CPU % columns). A lost focus or INVALID drops
+# every scenario of that run; a missing scenario proof drops that scenario's.
+S64 = ("s64_playing", "s64_scroll", "s64_insert_delete", "s64_header_drag")
+PROOFS = [("64-track scenario NOT REACHED", S64), ("a32 Automation Mode NOT REACHED", ("auto_scroll", "auto_timesel")),
+          ("time selection NOT REACHED", ("auto_timesel",)), ("a2000 drawing NOT REACHED", ("auto_draw_2000",))]
+dropped = []
+for log in ("bench_b4a_log.txt", "bench_mixer_log.txt", "bench_b5_log.txt", "bench_log.txt"):
+    p = os.path.join(work, log)
+    if not os.path.exists(p):
+        continue
+    for line in open(p, encoding="utf-8", errors="replace"):
+        m = re.match(r"(new-|mixer-|auto-|pr-)?(main|b5)-(\d+)\s", line)
+        if not m:
+            continue
+        kind, b, r = m.group(1) or "", m.group(2), int(m.group(3))
+        if kind == "pr-":
+            gone = ("pr_playing", "pr_dragging") if "scenario reached" not in line else ()
+        elif "INVALID" in line or "FOCUS LOST" in line:
+            gone = [n for n, d in cyc.items() if r in d.get(b, {}) and (kind in ("auto-",) and n.startswith("auto_") or kind == "mixer-" and n.startswith("s64_m") or kind == "mixer-" and n == "s64_arrangement" or kind in ("", "new-") and not n.startswith(("auto_", "pr_", "s64_m", "s64_arr")))]
+        else:
+            gone = [n for text, names in PROOFS if text in line for n in names]
+        for n in gone:
+            if cyc[n][b].pop(r, None) is not None:
+                dropped.append(f"{n} {b}-{r}")
+
+
 def paired(d):
     rounds = sorted(set(d.get("main", {})) & set(d.get("b5", {})))
     return rounds
@@ -194,6 +221,7 @@ head = (
 )
 verdict = f"**{'PASS' if not fails else 'FAIL: ' + ', '.join(fails)}**" + (f"; runs left out (focus lost or scenario not reached): {', '.join(invalid)}" if invalid else "; 0 runs left out")
 verdict += (f"; left out of single scenarios for want of proof: {'; '.join(unproven)}" if unproven else "")
+verdict += (f"; cycle samples left out for want of proof ({len(dropped)}): {', '.join(dropped)}" if dropped else "")
 text = head + verdict + "\n\n" + "\n".join(lines) + "\n"
 open(os.path.join(work, "perf_summary.md"), "w", encoding="utf-8").write(text)
 print(text)
