@@ -85,6 +85,10 @@ pub struct Signals {
     /// keys; Batch 4b §7), and how far its strips are scrolled (logical px).
     pub view_mixer: Signal<bool>,
     pub mixer_scroll: Signal<f32>,
+    /// The mixer view's Detail View (Batch 5 A1): hidden by default so the
+    /// strips' PEAK / VOICES row shows; Shift+Tab shows or hides it there.
+    /// Remembered for the session; the arrangement's pane is unaffected.
+    pub mixer_detail: Signal<bool>,
     /// The output device's name ("No output" without one): the Main track's
     /// OUT badge.
     pub out_device: Signal<String>,
@@ -2342,6 +2346,7 @@ pub fn build_ui(cx: &mut Context) {
         midi_drag: Signal::new(None),
         view_mixer: Signal::new(false),
         mixer_scroll: Signal::new(0.0),
+        mixer_detail: Signal::new(false),
         track_drag: Signal::new(None),
         out_device: Signal::new("No output".into()),
         audio: Signal::new(AudioStats::default()),
@@ -2575,7 +2580,7 @@ pub fn build_ui(cx: &mut Context) {
             })
             .class("main")
             .height(Memo::new(move |_| {
-                if s.piano_open.get() {
+                if s.piano_open.get() && !(s.view_mixer.get() && !s.mixer_detail.get()) {
                     // Piano roll open: the arrangement gets the height the split
                     // handle sets (its lanes scroll) and the piano roll the rest.
                     let ov = if s.settings.with(|st| st.show_overview) { theme::tokens::OVERVIEW_HEIGHT } else { 0.0 };
@@ -2589,8 +2594,15 @@ pub fn build_ui(cx: &mut Context) {
         // Bottom panel: the piano roll while a clip is open, else the device
         // inspector while a clip is selected, else nothing (the prototype's
         // full-height arrangement).
-        Binding::new(cx, s.piano_open, move |cx| {
-            if s.piano_open.get() {
+        // In the mixer view the pane shows only while its Detail View is on
+        // (Batch 5 A1).
+        let pane = Memo::new(move |_| (s.piano_open.get(), s.view_mixer.get() && !s.mixer_detail.get()));
+        Binding::new(cx, pane, move |cx| {
+            let (piano, hidden) = pane.get();
+            if hidden {
+                return;
+            }
+            if piano {
                 SplitHandle::new(cx, s);
                 piano_panel(cx, s);
             } else {
@@ -3531,6 +3543,18 @@ impl AppState {
     /// Device view (the selected track's instrument). Back to the Clip view
     /// it reopens the clip the Device view replaced, else the selected clip.
     fn toggle_detail(&mut self) {
+        // The mixer view: Shift+Tab shows or hides its Detail View (A1).
+        if self.s.view_mixer.get_untracked() {
+            let on = !self.s.mixer_detail.get_untracked();
+            self.s.mixer_detail.set(on);
+            if crate::dev::enabled() {
+                eprintln!("dev: mixer detail {}", if on { "shown" } else { "hidden" });
+            }
+            if on && !self.s.piano_open.get_untracked() && !self.s.inspector.get_untracked() {
+                self.set_status("Detail View shown: select a track's strip to see its device.".into());
+            }
+            return;
+        }
         if self.s.piano_open.get_untracked() {
             self.detail_clip = self.s.piano.with_untracked(|p| p.clip);
             self.close_piano();

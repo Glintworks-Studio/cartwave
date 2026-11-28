@@ -1,0 +1,3 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: view mixer
