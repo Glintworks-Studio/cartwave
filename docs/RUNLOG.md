@@ -1891,3 +1891,29 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   After the device's GPU cache: mockup 47/47, lime 0, contrast 4.61, PB 13/13, 4b 43/43,
   `cargo test` 299 passed in release and debug, clippy clean, 0 warnings. All gates pass:
   `pre-presets` tags the old main; main fast-forwarded.
+
+## Batch 5: automation, plus four fixes from the Presets review (BATCH5_PROMPT.md, branch `batch5/automation`, Windows PC), 2026-11-28
+
+- **B5-D1 (pre-flight).** `main` = `origin/main` = `presets/browser` = 4529f1e (the Presets +
+  Browser batch merged; `pre-presets` exists). Branch `batch5/automation` from it. Baseline: `main`
+  exported with `git archive` to `../before-batch5` and built there (release, with examples).
+  Machine: Windows 11 Pro 26200 (not macOS).
+- **B5-D2 (conflicts between the prompt and VISION.md; VISION.md wins).**
+  (a) **Deleting a breakpoint.** The prompt (B3.1) says "double-click or Delete"; VISION.md
+  ("Automation", decided 2026-11-25) and UX.md L4 say a **single click** on a breakpoint deletes it,
+  as the reference does (manual 26.7.1, R108). Built: a click on a breakpoint deletes it (and joins
+  its neighbours), Delete removes the selected breakpoints / the time selection's envelope, and a
+  double-click away from the line adds a point (R106).
+  (b) **The private folder.** The prompt (A4) says `private/`; VISION.md ("Reference listening")
+  says the fan MIDI lives in **`reference-private/`**, git-ignored. The files go there; both names
+  are in `.gitignore` (so a stray `private/` can't be committed either).
+- **B5-D3 (A1: the mixer and the bottom pane).** In the mixer view the bottom pane (the Detail
+  View) is hidden by default; **Shift+Tab** shows or hides it there (`AppState::mixer_detail`,
+  remembered for the session); in the arrangement Shift+Tab still switches the Clip and Device
+  views (unchanged). Shown with nothing selected, the status bar says to select a strip.
+  Gate (`docs/batch5/tools/regress_b5.ps1`, `diff_b5.py`): the mixer at 100 % and 150 % against
+  `pre-presets` (`../before-presets`): **PASS** at both; the only change outside the browser at
+  100 % is the strips' scrollbar thumb, shorter because the strips' viewport is 180 px narrower
+  (labelled); 150 % has none. A strip clicked in the mixer now leaves the strips' PEAK / VOICES /
+  readout row visible (`docs/screens/batch5/mixer-pane-hidden.png`; `pre-presets` opened its
+  232 px inspector over them). Reports: `docs/batch5/regression/a1-diff-*/`.

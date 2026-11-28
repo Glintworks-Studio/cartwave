@@ -1,0 +1,6 @@
+dev: mode on; test hooks: []; buffer None; filter None
+dev: spectrum style bars (settings)
+dev: view mixer
+dev: help Pan: centred while locked to the 2A03 Pulse 1 (the console's output is mono)
+dev: help Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)
+dev: help Drag across a graph to draw the macro. Shift-click sets the loop point, Alt-click the release point; double-click a marker to remove it. Drag the vibrato values up or down.
