@@ -149,7 +149,7 @@ if (Want "PB-10") {
   Ctrl 0x5A; Start-Sleep -Milliseconds 600
   $undo = Last $d "^dev: device "
   $u = @($steps | ForEach-Object { if ($_ -match "undo steps \((\d+), 0\)") { $Matches[1] } }) | Select-Object -Unique
-  Check "PB-10" ($steps.Count -eq 3 -and $u.Count -eq 1 -and $after -notmatch 'preset "Square Lead"' -and $undo -match 'preset \("Square Lead", false\)') "steps $($steps.Count) undo positions [$($u -join ',')]; after [$after]; one undo [$undo]"
+  Check "PB-10" ($steps.Count -eq 3 -and $u.Count -eq 1 -and $after -notmatch 'preset "Square Lead"' -and $undo -match 'preset "Square Lead"') "steps $($steps.Count) undo positions [$($u -join ',')]; after [$after]; one undo [$undo]"
   Stop-App
 }
 
@@ -167,7 +167,7 @@ if (Want "PB-11") {
   Press-Button "Unlock track" | Out-Null; Start-Sleep -Milliseconds 800
   $u = Last $d "^dev: device "
   $q = Last $d "^dev: warning A studio preset on a locked track"
-  Check "PB-11" ($dlg -and $q -and $c -match "Pulse locked" -and $dlg2 -and $u -match "Pulse studio preset \(`"Supersquare`"") "asked [$q]; Cancel [$c]; Unlock [$u]"
+  Check "PB-11" ($dlg -and $q -and $c -match "Pulse locked" -and $dlg2 -and $u -match "Pulse studio preset `"Supersquare`"") "asked [$q]; Cancel [$c]; Unlock [$u]"
   Stop-App
 }
 

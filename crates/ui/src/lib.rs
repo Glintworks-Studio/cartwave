@@ -362,6 +362,8 @@ pub struct AppState {
     preset_step: Option<(usize, (usize, usize))>,
     /// Shift+Tab back to the Clip view: the clip the Device view replaced.
     detail_clip: Option<u32>,
+    /// The `CARTWAVE_AUTO_STEP` hook: when it started, steps made.
+    auto_steps: Option<(Instant, u32)>,
     /// Where the BPM field opens (window logical x, y, width).
     bpm_rename_at: (f32, f32, f32),
     /// The track gains the engine has (it starts at unity).
@@ -1268,6 +1270,7 @@ impl AppState {
         self.sync_shell(cx);
         self.sync_header_layout();
         self.midi_drag_tick();
+        self.auto_step(cx);
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -2495,6 +2498,7 @@ pub fn build_ui(cx: &mut Context) {
         tap_step: None,
         preset_step: None,
         detail_clip: None,
+        auto_steps: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
         sent_gains: [1.0; 8],
         underruns_seen: (0, None),
@@ -3497,6 +3501,27 @@ impl AppState {
         }
         self.clamp_lane_scroll();
         self.sync_loop();
+    }
+
+    /// Dev hook `CARTWAVE_AUTO_STEP=<s>` (the audio gate, PRESETS_PROMPT.md
+    /// §8.5): every that many seconds, ▶ on the first track (selected for
+    /// it), as a user stepping through its folder while the song plays;
+    /// `CARTWAVE_AUTO_STEP_MAX` stops after that many steps (default 30).
+    fn auto_step(&mut self, cx: &mut EventContext) {
+        let Some(every) = dev::var("CARTWAVE_AUTO_STEP").and_then(|v| v.parse::<f64>().ok()) else { return };
+        let max = dev::var("CARTWAVE_AUTO_STEP_MAX").and_then(|v| v.parse::<u32>().ok()).unwrap_or(30);
+        let now = Instant::now();
+        let (start, done) = *self.auto_steps.get_or_insert((now, 0));
+        if done >= max || now.duration_since(start).as_secs_f64() < every * (done + 1) as f64 {
+            return;
+        }
+        self.auto_steps = Some((start, done + 1));
+        if self.s.lane_sel.get_untracked() != 0 {
+            self.s.lane_sel.set(0);
+            self.s.dials.set(self.dial_values(0));
+        }
+        self.step_preset(cx, 1);
+        eprintln!("dev: auto step {} of {max}", done + 1);
     }
 
     /// Shift+Tab (§3.1): the Clip view (the open clip's piano roll) ⇄ the

@@ -259,8 +259,10 @@ if (Want "P2-11") {
     $nx = if ($L.mir) { $L.hl + 160 } else { $L.hl + 90 }
     # Batch 4a (B4A-D27): track 6, the last row above the Main row with the inspector open
     # (track 7 now sits under it; the lanes are 73 px shorter, BATCH4A §7).
-    DblL $nx ((RowY 5) + 22); SelectAllType "Hit"; K 0x0D; Gap
-    $c = Edge $L 5; DragL $c[0] $c[1] $c[0] ($c[1] + 24); Gap
+    # PB (RUNLOG PB-D16): the bottom pane is 356 px now, so the last whole row above the Main row
+    # with it open is track 4 (index 3; its pan was typed above, its name and height are free).
+    DblL $nx ((RowY 3) + 22); SelectAllType "Hit"; K 0x0D; Gap
+    $c = Edge $L 3; DragL $c[0] $c[1] $c[0] ($c[1] + 24); Gap
     Save; Keep $p "p211_${tag}_after"
     $dir = if ($right) { -40 } else { 40 }
     DragL $L.edge 500 ($L.edge + $dir) 500; Gap; KeepSettings $d "p211_$tag"

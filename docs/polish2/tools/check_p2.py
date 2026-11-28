@@ -154,8 +154,9 @@ for tag in ("lo", "lc", "rc", "ro"):
     check(S, lane(f, 3, "pan") == 10, f"{tag}: the pan value of track 4 ({lane(f, 3, 'pan')})")
     v = lane(f, 4, "volume_db")
     check(S, isinstance(v, (int, float)) and v < -10.0, f"{tag}: the fader of track 5 ({v})")
-    check(S, lane(f, 5, "height") == 96.0, f"{tag}: the bottom edge of track 6 ({lane(f, 5, 'height')})")
-    check(S, lane(f, 5, "name") == "Hit", f"{tag}: the name of track 6 ({lane(f, 5, 'name')}; track 7 is under the Main row since Batch 4a)")
+    # PB (PB-D16): track 4 since the Presets batch (the 356 px bottom pane covers tracks 5..7).
+    check(S, lane(f, 3, "height") == 96.0, f"{tag}: the bottom edge of track 4 ({lane(f, 3, 'height')})")
+    check(S, lane(f, 3, "name") == "Hit", f"{tag}: the name of track 4 ({lane(f, 3, 'name')}; tracks 5-7 are under the bottom pane since the Presets batch)")
     st = settings(f"p211_{tag}")
     check(S, st is not None and st.get("header_width") == 420.0, f"{tag}: the width boundary ({st and st.get('header_width')})")
     d = lst(f"p211_{tag}_dev")

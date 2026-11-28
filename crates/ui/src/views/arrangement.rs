@@ -1017,6 +1017,7 @@ impl View for Arrangement {
         let rect: vg::Rect = b.into();
         ARRANGEMENT_AT.with(|a| a.set(Some((rect.left, rect.right, s))));
         super::browser::register_lanes_area(rect.left, rect.top, rect.right, rect.bottom);
+        super::browser::register_track_count(self.s.arrangement.with_untracked(|a| a.lanes.len()));
 
         let dt = gfx::frame_dt(&self.last_draw);
 

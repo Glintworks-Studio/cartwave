@@ -83,6 +83,14 @@ thread_local! {
     static LANE_ROWS: RefCell<Vec<Option<BoundingBox>>> = const { RefCell::new(Vec::new()) };
     /// The arrangement's lanes area (physical px), for drops on empty space.
     static LANES_AREA: Cell<Option<(f32, f32, f32, f32)>> = const { Cell::new(None) };
+    /// The project's track count when the arrangement last drew: rows past
+    /// it are stale (a project with fewer tracks; PB-08 caught it).
+    static TRACKS: Cell<usize> = const { Cell::new(usize::MAX) };
+}
+
+/// Called by the arrangement when it draws: how many tracks there are.
+pub fn register_track_count(n: usize) {
+    TRACKS.with(|c| c.set(n));
 }
 
 /// Called by the track rows when they draw.
@@ -106,8 +114,9 @@ pub fn register_lanes_area(left: f32, top: f32, right: f32, bottom: f32) {
 /// right of the lanes).
 pub fn lane_at(x: f32, y: f32) -> Option<usize> {
     let lanes = super::arrangement::arrangement_at();
+    let n = TRACKS.with(|c| c.get());
     LANE_ROWS.with(|r| {
-        r.borrow().iter().position(|b| {
+        r.borrow().iter().take(n).position(|b| {
             b.is_some_and(|b| {
                 let over_header = x >= b.x && x < b.x + b.w;
                 let over_lane = lanes.is_some_and(|(l, rt, _)| x >= l && x < rt);
