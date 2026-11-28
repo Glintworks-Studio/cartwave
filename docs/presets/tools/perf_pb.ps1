@@ -22,31 +22,32 @@ if (-not (Test-Path (Join-Path $Work "piano_bench.chipdaw"))) {
   else { Push-Location $Repo; & "$env:USERPROFILE\.cargo\bin\cargo.exe" run --release -q -p ui --example make_songs -- $Work | Out-Null; Pop-Location }
 }
 $env:CARTWAVE_PERF_WORK = $Work
-$builds = @(@("main", $Main, 0), @("pb", $Repo, 240))
+$builds = @(@("main", $Main, 0, 0), @("pb", $Repo, 240, 124))
 function Logs($tag) { $env:CARTWAVE_AUDIOLOG = Join-Path $Work "$tag.csv"; $env:CARTWAVE_FRAMELOG = Join-Path $Work "$tag.frames" }
 function Clear-Logs { Remove-Item Env:CARTWAVE_AUDIOLOG, Env:CARTWAVE_FRAMELOG, Env:CARTWAVE_BROWSER_W -ErrorAction SilentlyContinue }
 for ($i = 1; $i -le $Rounds; $i++) {
   $order = if ($i % 2) { @($builds[0], $builds[1]) } else { @($builds[1], $builds[0]) }
   foreach ($o in $order) {
-    $name, $root, $bw = $o
-    pwsh -NoProfile -File "$PSScriptRoot\bench_pb.ps1" -Label "$name-$i" -Repo $root -Work $Work -Main -BrowserW $bw | Out-Null
+    $name, $root, $bw, $grow = $o
+    $shots = if ($i -eq 1) { @("-ShotBeforeScroll", (Join-Path $Work "proof-$name-scrollbar.png"), "-ShotHeader", (Join-Path $Work "proof-$name-header.png")) } else { @() }
+    pwsh -NoProfile -File "$PSScriptRoot\bench_pb.ps1" -Label "$name-$i" -Repo $root -Work $Work -Main -BrowserW $bw -PaneGrow $grow @shots | Out-Null
   }
   foreach ($o in $order) {
-    $name, $root, $bw = $o
+    $name, $root, $bw, $grow = $o
     if ($bw) { $env:CARTWAVE_BROWSER_W = "$bw" }
     Logs "pr-$name-$i"
     pwsh -NoProfile -File "$Repo\docs\pianoroll\tools\bench_pr.ps1" -Label "pr-$name-$i" -Repo $root -Work $Work -Exe (Join-Path $root "target\release\cartwave.exe") -NoteY 623 | Out-Null
     Clear-Logs
   }
   foreach ($o in $order) {
-    $name, $root, $bw = $o
+    $name, $root, $bw, $grow = $o
     if ($bw) { $env:CARTWAVE_BROWSER_W = "$bw" }
     Logs "mixer-$name-$i"
     pwsh -NoProfile -File "$Repo\docs\batch4b\tools\bench_mixer.ps1" -Label "mixer-$name-$i" -Repo $root -Work $Work | Out-Null
     Clear-Logs
   }
   foreach ($o in $order) {
-    $name, $root, $bw = $o
+    $name, $root, $bw, $grow = $o
     $pbArgs = @("-Label", "new-$name-$i", "-Repo", $root, "-Work", $Work, "-NewOnly")
     if ($name -eq "pb") { $pbArgs += "-Pb" }
     pwsh -NoProfile -File "$PSScriptRoot\bench_pb.ps1" @pbArgs | Out-Null

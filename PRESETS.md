@@ -1,7 +1,7 @@
 # PRESETS.md: Chip Synth, the browser, the in-instrument picker, the first preset bank
 
 Branch **`presets/browser`** (from `main` 1b8a288, Batch 4c merged), pushed. Prompt: `PRESETS_PROMPT.md`.
-Decisions: [`docs/RUNLOG.md`](docs/RUNLOG.md) **PB-D1…D__**. Spec: [`VISION.md`](VISION.md) ("Instruments",
+Decisions: [`docs/RUNLOG.md`](docs/RUNLOG.md) **PB-D1…D21**. Spec: [`VISION.md`](VISION.md) ("Instruments",
 "Presets and the browser"), [`UX.md`](UX.md) §4g. Baseline: `main` exported to `../before-presets`.
 Machine: Windows 11 Pro 26200, Ryzen 7 9800X3D, RTX 4070 SUPER, 2560 × 1440.
 
@@ -14,8 +14,8 @@ Machine: Windows 11 Pro 26200, Ryzen 7 9800X3D, RTX 4070 SUPER, 2560 × 1440.
 | 1 | Bit-identical audio | **PASS**: golden render, every migration hash v2…v8 → 9 (a new v8 corpus written by `main`, 9 files), the stereo golden (`cargo test`); **299** project files in the repository render and export identically in `main` and this branch (render hash, export hash, channels); **101** game-export files byte-identical over 5 inputs ([identity](docs/presets/identity/)). Presets are content: no engine path changed (Arp Speed defaults to every frame) |
 | 2 | Visual regression 100 % / 150 % vs `main` | **PASS** at both scales ([100](docs/presets/regression/report-100.md), [150](docs/presets/regression/report-150.md)): every changed pixel is in the browser, the bottom pane, or a named consequence of the two (the arrangement moved 180 px right with the 420 px browser: the lanes' and mixer's scrollbar thumbs are shorter, the right edge shows 180 px less of the song; the taller pane moves the Main row and the lanes' scrollbar up 124 px; panels and menus over the moved app; the shortcut sheet's new row). With the browser closed the window is identical to `main` (0 px at 100 %; at 150 % only the taskbar band below the work area). The gate found a real bug on the way (PB-D18) |
 | 3 | Mockup match (`workflow-chip-synth`) | **PASS: 47 of 47** board parts within 2 px in the studio and locked layouts (header, ◀ ▶, the preset field's ends, the sections' corners and titles, the displays' corners, every knob the board draws, the meter), measured by normalised cross-correlation of board patches ([report](docs/presets/mockup-match/report-100.md), [image](docs/screens/presets/device-mockup-match.png)); the display colour `#E8DCC0` exact (841 px in the studio displays) |
-| 4 | Tests | **PASS**: every earlier suite (shell 49, Batch 3 79, design 23, polish 14, polish 2 92, Batch 4a 53, Batch 4b 43; harness changes where controls moved, PB-D16); **PB 13/13** scenarios (`docs/presets/tools/at_pb.ps1`) and the offline PB-B1…B5 (`tests/presets.rs`); `cargo test` **299 passed, 0 failed, 2 ignored** in release and debug; clippy clean; release build 0 warnings |
-| 5 | Audio (10 min, ◀ ▶ through 30 presets) | __G5__ |
+| 4 | Tests | **PASS**: every earlier suite on the final build (shell 49, Batch 3 79 (one run lost one input event in AT-29, then 3/3 alone and 79/79 again: PB-D20), design 23, polish 14, polish 2 92, Batch 4a 53, Batch 4b 43; harness changes where controls moved, PB-D16); **PB 13/13** scenarios (`docs/presets/tools/at_pb.ps1`) and the offline PB-B1…B5 (`tests/presets.rs`); `cargo test` **299 passed, 0 failed, 2 ignored** in release and debug; clippy clean; release build 0 warnings |
+| 5 | Audio (10 min, ◀ ▶ through 30 presets) | **PASS**: the demo 600 s at 256 frames with ▶ every 19 s through **30 presets** while playing: **0 dropouts** (224,974 blocks matched against the offline render, 0 mismatched, 0 capture gaps; 28.8 M samples compared), starved 0, late 0, **0 allocation violations**, 0 dropped commands; the 30 steps are **one undo step** ([summary](docs/presets/audio/summary.txt), [steps](docs/presets/audio/steps.txt)) |
 | 6 | Performance (the §2 rule) | __G6__ |
 | 7 | Lime audit, contrast | **PASS**: lime 0 violations in 18 scenes of the new UI (the DPCM Sampler's LOOP key while on is the only new lime: a toggle on-state) ([report](docs/presets/lime/report.md)); the new text ≥ **4.61 : 1** everywhere, the locked device's labels 4.77–5.34 ([contrast](docs/presets/lime/contrast.md)) |
 
@@ -69,7 +69,7 @@ lists the bank's ten phrases; Samples the built-in DPCM samples and the project'
 
 ## 3. Decisions taken alone
 
-All in RUNLOG **PB-D1…D19**; the ones that shape what the owner sees:
+All in RUNLOG **PB-D1…D21**; the ones that shape what the owner sees:
 
 1. **The board wins where it and the prompt differ** (PB-D2): the Voice selector in the
    OSCILLATOR title (the board), not the header; no dashed MIDI-effects / device-chain boxes

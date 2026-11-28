@@ -23,7 +23,12 @@
 # bar, so its rows start 32 px lower: the clip grab moves from (760, 140) to (760, 172)).
 # Appends one line per run to <Work>\bench_p2_log.txt with proof the 200-clip set was on.
 param([string]$Label = "run", [int]$Secs = 12, [string]$Repo, [switch]$Main, [string]$Only = "", [string]$ShotBeforeScroll = "",
-  [string]$Work = (Join-Path $env:TEMP "chipdaw-b4a-perf"), [int]$BrowserW = 0, [switch]$NewOnly, [switch]$Pb)
+  [string]$Work = (Join-Path $env:TEMP "chipdaw-b4a-perf"), [int]$BrowserW = 0, [switch]$NewOnly, [switch]$Pb,
+  [int]$PaneGrow = 0, [string]$ShotHeader = "")
+# -PaneGrow: how much taller this build's bottom pane is (the branch: 356 - 232 = 124). 200drag
+# opens the pane, and the gestures after it that aim at the lanes' bottom (the time scrollbar,
+# a header's edge) move up by that much; a first gate run aimed at main's places and dragged
+# across the device instead (RUNLOG PB-D21). -ShotHeader <png>: proof of the header drag's start.
 $New = $true
 $env:CARTWAVE_DEV = "1"
 foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM", "CARTWAVE_PROJECT", "CARTWAVE_FROZEN_METERS", "CARTWAVE_BROWSER_W", "CARTWAVE_AUDIOLOG", "CARTWAVE_FRAMELOG") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
@@ -135,7 +140,7 @@ KeyUp 0x11; Start-Sleep -Milliseconds 300
 # window bottom, inside the inspector, so its "scrollbar drag" dragged across the inspector).
 # Without the inspector the lanes end above the status bar. The Main row takes 73 px more.
 $lanesBottom = if (Want "200drag") { 663 } else { 920 - 24 }
-$sb = $lanesBottom - 5 - $(if ($Main) { 73 } else { 0 })
+$sb = $lanesBottom - 5 - $(if ($Main) { 73 } else { 0 }) - $(if (Want "200drag") { $PaneGrow } else { 0 })
 # -ShotBeforeScroll <png>: proof of what the scrollbar drag starts from (B4A-D24).
 if ($ShotBeforeScroll) { Move-To 650 $sb; Start-Sleep -Milliseconds 400; pwsh -NoProfile -File "$PSScriptRoot\..\..\perf\tools\shot.ps1" -Out $ShotBeforeScroll | Out-Null }
 if (Want "scrollbar_drag") { CpuDrag "scrollbar_drag" 650 $sb 160 0 }
@@ -147,13 +152,15 @@ if (Want "window_resize") { $global:Res["window_resize"] = Measure-Cpu { param($
 [P2.Win]::SetWindowPos($global:AppH, [IntPtr]::Zero, $wr.L, $wr.T, $W0, $H0, 0x0014) | Out-Null; Start-Sleep -Milliseconds 500 }
 if ($New -and -not $Only) {
   CpuDrag "row_resize" 441 (136 + 71) 0 60
-  CpuDrag "header_width" 619 600 100 0
+  if ($ShotHeader) { Move-To 619 (600 - $PaneGrow); Start-Sleep -Milliseconds 400; pwsh -NoProfile -File "$PSScriptRoot\..\..\perf\tools\shot.ps1" -Out $ShotHeader | Out-Null }
+  CpuDrag "header_width" 619 (600 - $PaneGrow) 100 0
   CpuDrag "ruler_zoom" 900 122 6 70
   CpuDrag "overview_drag" 680 92 160 0
   CpuDrag "overview_zoom" 680 92 4 50
 }
 Stop-Process -Id $p.Id -Force
 $err = Get-Content "$Work\bench_p2_err.txt" -Raw -ErrorAction SilentlyContinue
+Copy-Item "$Work\bench_p2_err.txt" "$Work\err-$Label-main.txt" -ErrorAction SilentlyContinue   # kept per run: an outlier can be read later
 # The 64-studio-track project (this branch only: the baseline can't open format 7).
 if ($Main -and -not $Only) {
   Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -180,6 +187,7 @@ if ($Main -and -not $Only) {
   CpuDrag "s64_header_drag" 420 283 0 140
   Stop-Process -Id $p.Id -Force
   $e2 = Get-Content "$Work\bench_s64_err.txt" -Raw -ErrorAction SilentlyContinue
+  Copy-Item "$Work\bench_s64_err.txt" "$Work\err-$Label-s64.txt" -ErrorAction SilentlyContinue
   $proof64 = if ($e2 -match "stress64.chipdaw \(64 clips\)" -and $e2 -match "insert track" -and $e2 -match "move track") { "64 tracks reached, inserts and moves seen" } else { "64-track scenario NOT REACHED" }
   $err += "`n" + $proof64
 }

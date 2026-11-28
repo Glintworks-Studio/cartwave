@@ -21,6 +21,7 @@ import os
 import re
 import statistics
 import sys
+sys.stdout.reconfigure(encoding="utf-8")
 from collections import defaultdict
 
 work = sys.argv[1]
@@ -122,7 +123,7 @@ def stats(main, pb, rounds):
 order = ["idle", "demo", "200", "200drag", "zoom_wheel", "scrollbar_drag", "window_resize", "row_resize", "header_width", "ruler_zoom", "overview_drag", "overview_zoom",
          "s64_playing", "s64_scroll", "s64_insert_delete", "s64_header_drag", "pr_playing", "pr_dragging", "s64_arrangement", "s64_mixer", "s64_mixer_scroll",
          "device_playing", "browser_search", "browser_scroll", "step"]
-names = [n for n in order if n in cyc or n in cpu] + sorted(set(cyc) | set(cpu) - set(order))
+names = [n for n in order if n in cyc or n in cpu] + sorted((set(cyc) | set(cpu)) - set(order))
 lines = ["| scenario | n | UI k/frame main | this | Δ (SE) | Audio k/cb main | this | Δ (SE) | verdict | CPU % main | this | Δ (SE) |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
 fails = []
 for n in names:

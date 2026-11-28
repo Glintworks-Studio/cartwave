@@ -1865,3 +1865,20 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   the passing runs (screenshots compared). AT-29 alone 3/3 PASS, then the whole Batch 3 suite
   79/79 PASS on the same build. Recorded as one unexplained input miss in the harness, not hidden:
   both logs are in `docs/presets/suites/`.
+- **PB-D21 (perf gate, first run: FAIL, and a bench fault).** The first 10 rounds failed idle
+  (+1008 k/frame, SE 276), overview_drag (+3570), overview_zoom (+2836) and s64_insert_delete
+  (+1545). Two causes, one in the bench and one in the build:
+  1. **The bench aimed at main's places.** 200drag opens the bottom pane, 124 px taller here;
+     the scrollbar drag (y 585) then pressed the device's preset field and the header-width drag
+     (y 600) dragged inside the device: their -3218 and -9117 meant "nothing scrolled", and the
+     overview drags after them ran in that state. `bench_pb.ps1 -PaneGrow 124` moves both up on
+     this branch; screenshots of both starts per build in round 1; per-run stderr kept
+     (`err-<label>-*.txt`). Two check rounds: scrollbar_drag 13.9 / 13.3 % CPU, header_width
+     22.1 / 23.1 %, overview_drag's frames 472 / 491 µs draw: like for like.
+  2. **The device's cached image was a CPU raster** of the whole board (912 × 364 px, text,
+     gradients): 13–35 ms the frame the selected track changed (main's inspector: 5–7 ms), so
+     insert / delete dropped a frame or two each time. Now a GPU surface from the window's canvas,
+     as the arrangement's, the Overview's and the piano roll's layers: s64_insert_delete +56 k
+     (SE 74) in the check rounds. clippy clean, `cargo test` 299 passed.
+  The summary printed its table twice (`set(cyc) | set(cpu) - set(order)`: precedence); fixed.
+  The gate reruns in full.

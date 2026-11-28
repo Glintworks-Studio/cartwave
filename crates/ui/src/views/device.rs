@@ -766,7 +766,7 @@ impl View for DeviceView {
         }
         let mut cache = self.cache.borrow_mut();
         if cache.as_ref().map(|c| c.0) != Some(key) {
-            *cache = render(&d, tab, &preset, self.hover, b.w, b.h, s).map(|img| (key, img));
+            *cache = render(canvas, &d, tab, &preset, self.hover, b.w, b.h, s).map(|img| (key, img));
         }
         if let Some((_, img)) = cache.as_ref() {
             // The image has room for the panel's shadow around the box.
@@ -1030,10 +1030,14 @@ fn waveform(d: &Dev, w: f32, h: f32) -> Vec<(f32, f32)> {
     pts
 }
 
-/// Draws the whole device but the meter's lit segments into an image.
-fn render(d: &Dev, tab: usize, preset: &(String, bool), hover: Part, bw: f32, bh: f32, s: f32) -> Option<vg::Image> {
+/// Draws the whole device but the meter's lit segments into an image: a GPU surface made from
+/// the window's canvas, as the arrangement's, the Overview's and the piano roll's layers (a CPU
+/// raster of the whole board took 13–35 ms whenever the selected track changed: PB-D21).
+#[allow(clippy::too_many_arguments)]
+fn render(canvas: &Canvas, d: &Dev, tab: usize, preset: &(String, bool), hover: Part, bw: f32, bh: f32, s: f32) -> Option<vg::Image> {
     let pad = (16.0 * s).ceil();
-    let mut surface = vg::surfaces::raster_n32_premul(((bw + 0.5) as i32 + 2 * pad as i32, (bh + 0.5) as i32 + 2 * pad as i32))?;
+    let size = ((bw + 0.5) as i32 + 2 * pad as i32, (bh + 0.5) as i32 + 2 * pad as i32);
+    let mut surface = canvas.new_surface(&vg::ImageInfo::new_n32_premul(size, None), None)?;
     let c = surface.canvas();
     c.clear(vg::Color::TRANSPARENT);
     c.translate((pad, pad));
