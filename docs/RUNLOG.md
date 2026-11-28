@@ -2066,3 +2066,44 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   manual value plays (the envelope is left out of the snapshot). *Markers*: a 4 px white dot on
   automated device knobs (channel controls, Unison / Detune / Drift) and the header's fader and
   pan; grey when overridden.
+- **B5-D12 (harness changes, gate 3).** Every earlier suite runs with a new dev hook,
+  `CARTWAVE_NO_AUTO_KEYS=1`: the transport's two automation keys are left out, so the top bar's
+  coordinates (the display, TAP) are the ones those suites were written for (`run_suites_b5.ps1`;
+  the PB batch did the same for the browser's width, PB-D12). Format 10 in two fixture checks:
+  `docs/batch4a/tools/unlock_all.py` refused format 10 (so polish 2's fixtures stayed locked and
+  P2-01's "−3 dB" on a pinned fader failed) and `docs/polish2/tools/check_p2.py`'s "saved by this
+  build". Results on the final UI: shell 49, Batch 3 79, design 23, polish 14, polish 2 **92** (69
+  before the two fixes), Batch 4a 53, Batch 4b 43, PB 13, and the new **AU 18 scenarios**
+  (`docs/batch5/tools/at_b5.ps1`: AU-11 … AU-18 in the app: add / move / curve / delete, Draw
+  Mode, a lane's time selection, clips carrying their automation with Lock Envelopes off and on,
+  arm and touch recording with one undo, override and Re-Enable, locked lanes without fader / pan
+  and stepped, the mixer's Shift+Tab), all passing. The AU unit tests (AU-01 … AU-10) are cargo tests.
+- **B5-D13 (gates 1, 2, 4, 6).** Gate 1 (`identity_b5.sh`, the final build against `main`): 308
+  project files, 242 identical; the 66 that differ all have studio tracks (A3's 63 + the v9
+  corpus's 3 studio files); **every file with its studio tracks muted is identical** (locked tracks
+  bit-identical everywhere); game export 101 files, all byte-identical to the A3 build (68 to
+  `main`, the rest studio stems changed by A3 only). Gate 2 (`regress_b5.ps1`, `diff_b5.py`, 17
+  states, 100 % and 150 %, Automation Mode off): **PASS**; the only changes are the top bar (the two
+  new keys shift the display, TAP and the meters box), the Edit and View menus' new items, the About
+  panel's build line, and the window's frame (its accent colour follows focus; left out); `main`'s
+  own 150 % `mixer_selected` capture differed by 2 px from its re-shoot (baseline noise; the
+  re-shot pair is identical). Gate 4 (`audio_b5.ps1`, 600 s of `auto32`: the demo band with 32
+  automated parameters on 8 tracks, 4 studio and 4 locked, plus Main; a studio fader overridden
+  and re-enabled every 19 s, 16 + 15 times): **0 dropouts**, 224,981 blocks matched, 0 mismatched,
+  28.8 M samples compared, starved 0, late 0, **0 allocation violations**. Gate 6: lime **0** in 8
+  automation scenes (`lime_scenes_b5.ps1`), the new labels **7.94 : 1** (overridden value 4.98).
+- **B5-D14 (gate 5, performance: a regression found and fixed; a harness bug).** The first 10-round
+  run (`perf_b5.ps1`) **failed** 7 scenarios on the UI thread, all in the arrangement: the 64-track
+  ones +513 … +1,217 k cycles/frame (SE 43 … 58), `ruler_zoom` +255 (96), `pr_dragging` +363 (39);
+  audio no worse anywhere (−55 … +2). Cause: every track row built an `AutoLaneHeaders` view even
+  outside Automation Mode (zero height, but bound to the arrangement and to the transport, so 64
+  views redrew on every playhead frame, each with its own height memo), and `automation::mark`
+  built a `String` key for every row's draw. Fix: the rows' rebuild key is now (track count,
+  Automation Mode) and the lane headers exist only in the mode (outside it the row views are
+  `main`'s); `mark` returns at once when the song has no envelopes. One pair after the fix:
+  `s64_playing` −64, `s64_scroll` −23, `s64_insert_delete` +117, `s64_header_drag` −373,
+  `ruler_zoom` −52. The full 10 rounds were run again on the fixed build (results in BATCH5.md).
+  Harness bug: `$plain = if (…) { @("-Plain") }` unrolls to a string and splatting it passed
+  "-", "P", … as positional arguments, so the first run's plain (unautomated) automation baselines
+  never ran; `[string[]]$plain` fixes it, and `perf_auto_b5.ps1` runs the automation scenarios' 10
+  plain-vs-automated rounds on their own.

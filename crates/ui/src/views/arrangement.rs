@@ -1827,14 +1827,19 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
                 VStack::new(cx, |cx| {
                     // Rebuilt when tracks are added or removed (Batch 4a); a
                     // move or an edit only redraws the rows.
-                    let count = Memo::new(move |_| s.arrangement.with(|a| a.lanes.len()));
+                    // Batch 5: and when Automation Mode turns on or off. The
+                    // lane headers exist only in the mode, so outside it the
+                    // rows are main's views (each header redraws with the
+                    // transport: 64 of them cost +0.6 M cycles a frame; B5-D14).
+                    let count = Memo::new(move |_| s.arrangement.with(|a| (a.lanes.len(), a.auto_mode)));
                     Binding::new(cx, count, move |cx| {
-                        for i in 0..count.get() {
+                        let (n, auto_mode) = count.get();
+                        for i in 0..n {
                             TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes.get(i).map_or(state::ROW_H_MIN + state::ROW_HAIRLINE, |l| l.pitch()))).map(|h| Pixels(*h)));
-                            // Batch 5: the track's automation lane headers
-                            // (none outside Automation Mode).
-                            super::autolanes::AutoLaneHeaders::new(cx, s, i)
-                                .height(Memo::new(move |_| s.arrangement.with(|a| a.row_pitch(i) - a.lanes.get(i).map_or(0.0, |l| l.pitch()))).map(|h| Pixels(*h)));
+                            if auto_mode {
+                                super::autolanes::AutoLaneHeaders::new(cx, s, i)
+                                    .height(Memo::new(move |_| s.arrangement.with(|a| a.row_pitch(i) - a.lanes.get(i).map_or(0.0, |l| l.pitch()))).map(|h| Pixels(*h)));
+                            }
                         }
                     });
                 })

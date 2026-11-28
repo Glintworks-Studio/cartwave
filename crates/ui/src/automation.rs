@@ -430,6 +430,10 @@ pub fn chip_param_id(p: ParamId) -> &'static str {
 /// The automated-control marker's state: `None` (no automation), or
 /// whether it is overridden.
 pub fn mark(a: &crate::state::Arrangement, owner: AutoOwner, id: &str) -> Option<bool> {
+    // No envelopes (most songs): no key built (rows ask on every draw).
+    if a.automation.envs.is_empty() {
+        return None;
+    }
     let k = (owner, id.to_string());
     a.automation.get(&k).map(|_| a.automation.overridden.contains(&k))
 }

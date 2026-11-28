@@ -50,7 +50,7 @@ for ($i = 1; $i -le $Rounds; $i++) {
   # The automation scenarios: plain ("main") and automated ("b5"), this build, alternating.
   foreach ($o in $order) {
     $name = $o[0]
-    $plain = if ($name -eq "main") { @("-Plain") } else { @() }
+    [string[]]$plain = if ($name -eq "main") { @("-Plain") } else { @() }   # typed: an if unrolls a 1-item array (B5-D14)
     pwsh -NoProfile -File "$PSScriptRoot\bench_b5.ps1" -Label "auto-$name-$i" -Work $Work -Fixtures $Fix @plain | Out-Null
   }
   "round $i done"
