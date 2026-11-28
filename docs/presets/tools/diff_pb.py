@@ -74,6 +74,22 @@ def regions(points):
     return res
 
 
+MODALS = ("about", "settings", "look_feel", "settings_files", "shortcuts")
+
+
+def panel_box(img):
+    """The modal panel: the bounding box of its #141414 fill (rows with a long run of it)."""
+    px = img.load()
+    w, h = img.size
+    rows = [y for y in range(h) if sum(1 for x in range(0, w, 4) if px[x, y][:3] == (0x14, 0x14, 0x14)) > 60]
+    if not rows:
+        return None
+    y0, y1 = min(rows), max(rows)
+    mid = (y0 + y1) // 2
+    cols = [x for x in range(w) if px[x, mid][:3] == (0x14, 0x14, 0x14)]
+    return (min(cols), y0, max(cols), y1) if cols else None
+
+
 def main():
     before, after, out, scale = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
     labels = json.load(open(sys.argv[5])) if len(sys.argv) > 5 else {}
@@ -101,23 +117,46 @@ def main():
         # Window geometry: the client area is at the bottom of the frame capture.
         ct = b.height - round(920 * S)
         cl = (b.width - round(1440 * S)) // 2
+        top = ct + round(76 * S)
         browser_r = cl + round(421 * S)
-        pane_top = b.height - round(356 * S)
+        # A selection shows the bottom pane (356 px; it was 232) with the Main row (72 px)
+        # right above it: from where main's Main row began (client 616) down, the pane's growth.
         has_pane = state in ("inspector",)
-        browser, pane, other = 0, 0, []
-        for box, n in regions(pts):
-            x0, y0, x1, y1 = box
-            if x1 <= browser_r and y0 >= ct + round(76 * S):
-                browser += n
-            elif has_pane and y0 >= pane_top - CELL:
-                pane += n
+        grow_top = ct + round((920 - 232 - 72) * S - (356 - 232) * S)
+        # A modal panel is drawn in place over the moved app.
+        panel = panel_box(b) if state in MODALS else None
+        named = labels.get(state, []) + labels.get("*", []) + labels.get(f"*@{scale}", [])
+        browser = pane = 0
+        rest = []
+        for x, y in pts:
+            in_panel = panel and panel[0] <= x <= panel[2] and panel[1] <= y <= panel[3]
+            if in_panel:
+                rest.append((x, y))
+            elif x < browser_r and y >= top:
+                browser += 1
+            elif has_pane and y >= grow_top:
+                pane += 1
             else:
-                lab = ""
-                for lx0, ly0, lx1, ly1, what in labels.get(state, []) + labels.get("*", []):
-                    if x0 >= lx0 * S - CELL and y0 >= ly0 * S - CELL and x1 <= lx1 * S + CELL and y1 <= ly1 * S + CELL:
-                        lab = what
-                        break
-                other.append((box, n, lab))
+                rest.append((x, y))
+        other = []
+        for box, n in regions(rest):
+            x0, y0, x1, y1 = box
+            inside_panel = panel and x0 >= panel[0] - CELL and y0 >= panel[1] - CELL and x1 <= panel[2] + CELL and y1 <= panel[3] + CELL
+            # A region that reaches past the panel's edge is the app behind it (its shadow).
+            if panel and (y1 > panel[3] + 2 or y0 < panel[1] - 2 or x0 < panel[0] - 2 or x1 > panel[2] + 2):
+                inside_panel = False
+            lab = ""
+            for lx0, ly0, lx1, ly1, what in named:
+                if x0 >= cl + lx0 * S - CELL and y0 >= ct + ly0 * S - CELL and x1 <= cl + lx1 * S + CELL and y1 <= ct + ly1 * S + CELL:
+                    lab = what
+                    break
+            if not lab and panel and inside_panel and min(abs(x0 - panel[0]), abs(x1 - panel[2])) <= 2 * CELL and min(abs(y0 - panel[1]), abs(y1 - panel[3])) <= 2 * CELL and n <= 64 * 2 * S * S:
+                lab = "a corner of the panel (rounded: the moved app shows behind it)"
+            if not lab and panel and not inside_panel:
+                lab = "the dimmed app behind the panel: moved 180 px, with the panel's shadow over it"
+            if not lab and state.startswith("menu_") and x0 < browser_r + round(120 * S) and y0 < ct + round(560 * S):
+                lab = "the menu's dropdown (in place) and its shadow over the browser and the moved headers"
+            other.append((box, n, lab))
         unl = [o for o in other if not o[2]]
         if unl:
             bad_states.append(state)
@@ -127,10 +166,12 @@ def main():
         if pts:
             m = b.copy()
             d = ImageDraw.Draw(m)
-            for box, n in regions(pts):
-                x0, y0, x1, y1 = box
-                inside = (x1 <= browser_r and y0 >= ct + round(76 * S)) or (has_pane and y0 >= pane_top - CELL)
-                d.rectangle(box, outline=(60, 140, 255) if inside else (255, 40, 40), width=2)
+            if browser:
+                d.rectangle((cl, top, browser_r, b.height - 1), outline=(60, 140, 255), width=2)
+            if pane:
+                d.rectangle((cl, grow_top, b.width - 1, b.height - 1), outline=(60, 140, 255), width=2)
+            for box, n, lab in other:
+                d.rectangle(box, outline=(255, 200, 40) if lab else (255, 40, 40), width=2)
             m.save(os.path.join(out, f"{state}.marked.png"))
     lines += ["", f"**{'PASS' if not bad_states else 'FAIL'}**: " + ("every change is in the browser, the bottom pane or a named region" if not bad_states else "unlabelled changes in " + ", ".join(bad_states))]
     open(os.path.join(out, f"report-{scale}.md"), "w", encoding="utf-8").write("\n".join(lines + detail) + "\n")

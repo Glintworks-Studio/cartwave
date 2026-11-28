@@ -1,0 +1,79 @@
+{
+ "*": [
+  [
+   1424,
+   896,
+   1448,
+   930,
+   "the window's rounded corner (outside the client area; RN-D14)"
+  ],
+  [
+   801,
+   820,
+   1440,
+   850,
+   "the lanes' time scrollbar: the lanes are 180 px narrower, so its thumb is shorter"
+  ],
+  [
+   1420,
+   100,
+   1440,
+   900,
+   "the lanes' right edge: the window ends 180 px earlier in the song"
+  ]
+ ],
+ "mixer": [
+  [
+   801,
+   900,
+   1440,
+   920,
+   "the mixer's sideways scrollbar: 180 px narrower, its thumb shorter"
+  ]
+ ],
+ "piano_roll": [
+  [
+   801,
+   290,
+   1440,
+   330,
+   "the lanes' time scrollbar above the piano roll's split: 180 px narrower"
+  ]
+ ],
+ "about": [
+  [
+   520,
+   135,
+   720,
+   172,
+   "About's build stamp (the baseline is a git archive build: \"build unknown\")"
+  ]
+ ],
+ "shortcuts": [
+  [
+   400,
+   100,
+   1050,
+   860,
+   "the shortcut sheet: its new View row (Clip / Device View, Shift+Tab), the rows after it one line lower"
+  ]
+ ],
+ "inspector": [
+  [
+   421,
+   330,
+   1440,
+   492,
+   "the lanes above the taller bottom pane: the time scrollbar and the row the Main row cuts, 124 px higher"
+  ]
+ ],
+ "*@150": [
+  [
+   0,
+   892,
+   1440,
+   921,
+   "the taskbar over the window's bottom: at 150 % the window is taller than the work area (screen y >= 1392); browser_closed shows only this"
+  ]
+ ]
+}
