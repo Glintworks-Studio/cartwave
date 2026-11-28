@@ -25,3 +25,7 @@ only when the CEO picks it for a build. Keep entries to a line or two.
 | Optional classic green / yellow / red meter theme in Settings | Marcus | Not now. The mixer's meters are the warm palette (VISUAL-SPEC.md §13); `meter-colours` option 3 is superseded |
 | Hardware A/B recordings of a real Famicom and a VRC6 cart | Mika | Once the hardware is funded; feeds the authenticity method (VISION.md "Sound systems") |
 | Mika's own showcase song, for demos and A/B tests | Mika | Ours, listed in ASSETS.md; never a cover of game music |
+| A draggable browser width (as the headers' edge), remembered per user | Presets batch | The browser is the board's 420 px; the lanes are 180 px narrower (PRESETS.md §4) |
+| Renamable collections (and more than seven) | Presets batch | Today: Favourites and six fixed colours (RUNLOG PB-D15) |
+| The mixer's strips fit the room the bottom pane leaves (or the pane hides in the mixer until Shift+Tab) | Presets batch | The 356 px pane covers the strips' readouts while a track is selected (PRESETS.md §4) |
+| Studio noise / DPCM voices at the console's level | Presets batch | 2.3–3.6 LU louder than through the console's mixer (RUNLOG PB-D7); after 4c's tnd calibration |

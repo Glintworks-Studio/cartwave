@@ -1847,3 +1847,13 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   with an empty element (the display updated), fixed (one save or layer, one restore). The suites
   had passed: their checks read dev lines and saved files, and the screenshot tool moves the
   window, which repaints it.
+- **PB-D19 (gates 1, 4, 5, 7).** Gate 1 (`identity_pb.sh`): 299 project files, render, export
+  and channels identical to `main`; 101 game-export files byte-identical (a first run listed 299
+  "can't open" lines, MSYS paths the Windows binaries can't read: identical and useless; caught by
+  reading the file, fixed with `pwd -W`). Gate 4: `cargo test` 299 passed, 0 failed, 2 ignored in
+  release and debug, clippy clean, 0 warnings. Gate 5 (`audio_pb.ps1`, the demo 600 s at 256
+  frames, ▶ every 19 s through 30 presets via the dev hook `CARTWAVE_AUTO_STEP`): 0 match
+  dropouts, 0 mismatch runs, 0 capture gaps / foreign / tap lost, 28,798,230 samples compared,
+  starved 0, late 0, 0 allocation violations; the 30 steps one undo step. Gate 7: lime 0 in 18
+  scenes (a lime-free locked fixture: `fx_board`'s track colours hold lime, so its first run
+  counted the project's colours), contrast ≥ 4.61.
