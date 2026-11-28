@@ -31,8 +31,8 @@ def dim(locked, studio):
     la = max(max(c) for c in region(a, 250, 644, 478, 736))
     lb = max(max(c) for c in region(b, 250, 644, 478, 736))
     ratio = la / lb if lb else 0
-    # The locked Duty label: centred at x 364, its line 744..756 (client).
-    px = region(a, 340, 742, 388, 758)
+    # The locked Duty label: centred at x 364, its line 796..808 (client: the knob centre 770).
+    px = region(a, 340, 794, 388, 810)
     ink = max(lum(c) for c in px)
     bg = min(lum(c) for c in px)
     contrast = (ink + 0.05) / (bg + 0.05)

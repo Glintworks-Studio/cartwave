@@ -111,7 +111,10 @@ function CapY($db) { $MixY0 + 166 + [math]::Round((1 - ($db + 48) / 54) * 260) }
 # ─────────── B4B-X1: the mixer's controls are the headers' (values, one undo step each, typed values) ───────────
 if (Want "B4B-X1") {
   $p = Fx "fx_studio" "x1"; $d = Join-Path $Work "dx1"
-  Launch -Project $p -Data $d; Place
+  # PB (RUNLOG PB-D16): a click on a strip selects its track and the bottom pane (356 px since
+  # the Presets batch, 232 before) covers the strips' readouts: the window is 124 px taller (the
+  # pane's growth), so the pane ends where it did and the strips keep their places.
+  Launch -Project $p -Data $d -AppArgs @("--size", "1440x1044"); Place
   K 0x09; Start-Sleep -Milliseconds 600                                   # Tab: the mixer
   Shot "x1_mixer"
   DragL ((StripX 0) + 67) (CapY 0) ((StripX 0) + 67) ((CapY 0) + 58)        # fader: down 58 px (about -12 dB)
@@ -121,9 +124,6 @@ if (Want "B4B-X1") {
   ClickL ((StripX 0) + 60) ($MixY0 + 130)                                   # M on track 1
   ClickL ((StripX 1) + 92) ($MixY0 + 130)                                   # S on track 2
   Save; Keep $p "x1_pan_ms"
-  # PB (RUNLOG PB-D16): the clicks above selected a track, and the bottom pane (356 px now)
-  # covers the readouts: Esc clears the selection (the pane goes) first.
-  K 0x1B; Start-Sleep -Milliseconds 300
   DblL ((StripX 0) + 76) ($MixY0 + 527); Start-Sleep -Milliseconds 300      # the readout: type a value
   K 0xBD; TypeText "3"; K 0x0D; Start-Sleep -Milliseconds 300            # "-3" (VK_OEM_MINUS, then 3)
   Save; Keep $p "x1_typed"
