@@ -321,7 +321,8 @@ impl Arrangement {
             return false;
         }
         self.clips.retain(|c| c.lane != i);
-        self.lanes.remove(i);
+        let gone = self.lanes.remove(i);
+        self.automation.remove_owner(crate::automation::AutoOwner::Track(gone.id));
         self.instruments.remove_lane(i);
         self.shift_lanes(i + 1, -1);
         let ids: Vec<u32> = self.clips.iter().map(|c| c.id).collect();
@@ -568,11 +569,35 @@ impl Arrangement {
                 lane_inst[c] = b.of(self.instruments.lane_id(i));
             }
         }
-        let studio = self.studio_lanes(&clips, &b);
+        let mut studio = self.studio_lanes(&clips, &b);
+        // Batch 5: automation. Locked tracks on their channels, studio tracks
+        // by id, the Main gain.
+        let mut auto: [Vec<chip::auto::AutoEnv>; engine::LANES] = Default::default();
+        let mut auto_points = Vec::new();
+        for l in &self.lanes {
+            let (envs, pts) = self.automation.engine_track(l);
+            if envs.is_empty() {
+                continue;
+            }
+            match l.lock {
+                Some(c) => {
+                    let base = auto_points.len() as u32;
+                    auto[c] = envs.into_iter().map(|e| chip::auto::AutoEnv { start: e.start + base, ..e }).collect();
+                    auto_points.extend(pts);
+                }
+                None => {
+                    if let Some(s) = studio.iter_mut().find(|s| s.id == l.id) {
+                        s.auto = envs;
+                        s.auto_points = pts;
+                    }
+                }
+            }
+        }
         SongSnapshot::build(console, version)
             .with_instruments(b.bank, lane_inst, b.preview)
             .with_dpcm(crate::dpcm::bank(&self.samples))
             .with_studio(studio)
+            .with_auto(auto, auto_points, self.automation.engine_main())
     }
 }
 

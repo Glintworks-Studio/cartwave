@@ -1,0 +1,64 @@
+//! Writes docs/songs/v9 (version 9 files) and prints their hashes. Run on the
+//! build before Batch 5 (main 4529f1e, exported to ../before-batch5): the
+//! v9 -> v10 migration corpus (format 10 adds automation, BATCH5_PROMPT.md
+//! B5.2). Run as an example of crates/ui in ../before-batch5:
+//!   cargo run --release -p ui --example v9corpus -- <dst dir>
+//! With `--hashes` it only prints the hashes of the files already in <dst dir>
+//! (run that way on the Batch 5 build before the format bump too: studio
+//! tracks sound different there, by A3's re-baseline).
+use ui::{export, file, render};
+
+fn secs(p: &file::Project) -> f64 {
+    p.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / p.bpm as f64 + 1.0
+}
+
+const NAMES: [&str; 9] = ["demo_band", "showcase", "layout_2", "scale_test", "v7_studio_demo", "v8_studio_unison_panned", "v9_arp_speed", "v9_vrc6_presets", "v9_studio_presets"];
+
+fn hash_line(name: &str, q: &file::Project) -> String {
+    let r = render::hash(&render::render(q, secs(q)));
+    let (x, ch) = export::render_channels(q);
+    format!("    (\"{name}\", {r:#018x}, {:#018x}, {ch}),", render::hash(&x))
+}
+
+fn main() {
+    let dst = std::path::PathBuf::from(std::env::args().nth(1).expect("dst dir"));
+    if std::env::args().any(|a| a == "--hashes") {
+        for name in NAMES {
+            let q = file::load(&dst.join(format!("{name}.chipdaw"))).unwrap();
+            println!("{}", hash_line(name, &q));
+        }
+        return;
+    }
+    let put = |name: &str, p: &file::Project| {
+        let text = file::to_string(p);
+        assert!(text.contains("\"version\": 9"));
+        std::fs::write(dst.join(format!("{name}.chipdaw")), &text).unwrap();
+        let q = file::from_str(&text).unwrap();
+        println!("{}", hash_line(name, &q));
+    };
+    let v8 = std::path::Path::new("docs/songs/v8");
+    for name in ["demo_band", "showcase", "layout_2", "scale_test", "v7_studio_demo", "v8_studio_unison_panned"] {
+        put(name, &file::load(&v8.join(format!("{name}.chipdaw"))).unwrap());
+    }
+    // Format 9's own feature: an arpeggio speed.
+    let mut a = file::load(&v8.join("v8_arps.chipdaw")).unwrap();
+    let id = a.arrangement.instruments.lane_id(0);
+    a.arrangement.instruments.get_mut(id).unwrap().inst.arp_speed = 3;
+    put("v9_arp_speed", &a);
+    // The Presets batch's bank: authentic presets on locked tracks (Famicom +
+    // VRC6), and studio presets with unison on studio tracks.
+    let mut v = file::load(&v8.join("demo_band.chipdaw")).unwrap();
+    for (lane, name) in [(0, "Duty Lead"), (5, "VRC6 Reed Lead"), (7, "Saw Brass")] {
+        if let Some(p) = ui::bank::find(name) {
+            ui::bank::apply(&mut v.arrangement, lane, p);
+        }
+    }
+    put("v9_vrc6_presets", &v);
+    let mut s = file::load(&v8.join("v7_studio_demo.chipdaw")).unwrap();
+    for (lane, name) in [(0, "Supersquare"), (1, "Round Triangle Bass")] {
+        if let Some(p) = ui::bank::find(name) {
+            ui::bank::apply(&mut s.arrangement, lane, p);
+        }
+    }
+    put("v9_studio_presets", &s);
+}

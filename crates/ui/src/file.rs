@@ -15,7 +15,11 @@
 //! lock to a console channel, a Voices setting, its channel controls and
 //! instrument; the hardware profile; the Main track's gain. Older files open
 //! with every track locked to its channel (`legacy_tracks`)). Older files are
-//! migrated on load so they sound exactly as before (`migrate_v2`).
+//! migrated on load so they sound exactly as before (`migrate_v2`). 8
+//! (Batch 4b: unison, detune, drift), 9 (the Presets batch: the arpeggio
+//! speed), 10 (Batch 5: **automation**: envelopes per track parameter and
+//! the Main gain, and the lanes each track shows; a version 9 file has none
+//! and sounds exactly as before).
 //!
 //! JSON via serde: human-readable, diffable, and easy to migrate. The
 //! in-memory model is converted to and from the file structs below, so the
@@ -40,7 +44,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// (RENAME.md, RN-D).
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 9;
+pub const VERSION: u32 = 10;
 /// A new project's format (the display's indicators, the export default).
 pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
 pub const DEFAULT_BIT_DEPTH: u16 = 24;
@@ -180,6 +184,43 @@ struct FileV7 {
     samples: Vec<SampleV2>,
     rate: u32,
     bits: u16,
+    /// Version 10: automation envelopes, and the lanes shown per track.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    automation: Vec<AutoV10>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    auto_lanes: Vec<AutoLanesV10>,
+}
+
+/// Version 10: one envelope. `track`: the track's id (missing: Main).
+/// Points are `[tick, value, curve]` (the value in the parameter's units;
+/// the fader's −inf as −70).
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AutoV10 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    track: Option<u32>,
+    param: String,
+    points: Vec<(u32, f32, f32)>,
+}
+
+/// Version 10: the automation lanes a track (or Main) shows.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AutoLanesV10 {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    track: Option<u32>,
+    params: Vec<String>,
+}
+
+fn owner_of(track: Option<u32>) -> crate::automation::AutoOwner {
+    track.map_or(crate::automation::AutoOwner::Main, crate::automation::AutoOwner::Track)
+}
+
+fn track_of(o: crate::automation::AutoOwner) -> Option<u32> {
+    match o {
+        crate::automation::AutoOwner::Track(id) => Some(id),
+        crate::automation::AutoOwner::Main => None,
+    }
 }
 
 /// Version 7: one track.
@@ -594,6 +635,14 @@ pub fn to_string(p: &Project) -> String {
             .collect(),
         rate: p.rate,
         bits: p.bits,
+        automation: a
+            .automation
+            .envs
+            .iter()
+            .filter(|(_, e)| !e.is_empty())
+            .map(|((o, id), e)| AutoV10 { track: track_of(*o), param: id.clone(), points: e.points.iter().map(|p| (p.t, p.v, p.c)).collect() })
+            .collect(),
+        auto_lanes: a.automation.shown.iter().filter(|(_, v)| !v.is_empty()).map(|(o, v)| AutoLanesV10 { track: track_of(*o), params: v.clone() }).collect(),
     };
     compact_notes(&serde_json::to_string_pretty(&f).expect("project serialises"))
 }
@@ -664,7 +713,7 @@ pub fn from_str(text: &str) -> Result<Project, String> {
     }
     // Version 8 is version 7 plus optional unison fields, version 9 plus the
     // instruments' optional arpeggio speed (same reader).
-    if matches!(h.version, Some(7..=9)) {
+    if matches!(h.version, Some(7..=10)) {
         return from_v7(text);
     }
     let f: FileV1 = serde_json::from_str(text).map_err(|e| format!("The project file is damaged: {e}"))?;
@@ -996,6 +1045,26 @@ fn from_v7(text: &str) -> Result<Project, String> {
     arrangement.next_id = arrangement.clips.iter().map(|c| c.id + 1).max().unwrap_or(1);
     arrangement.samples = load_samples(&f.samples)?;
     arrangement.insert = (0, 0);
+    // Version 10: automation (an envelope of a track that isn't there, or of
+    // a parameter the registry doesn't know, is a damaged file).
+    for a in &f.automation {
+        let owner = owner_of(a.track);
+        if let Some(id) = a.track {
+            if !arrangement.lanes.iter().any(|l| l.id == id) {
+                return Err(format!("Automation refers to track {id}, which the file doesn't have."));
+            }
+        }
+        if crate::automation::target_of(&a.param, chip::voice::VoiceKind::Pulse).is_none() && !a.param.starts_with("chip.") {
+            return Err(format!("Unknown automation parameter \"{}\".", a.param));
+        }
+        let pts: Vec<crate::automation::Pt> = a.points.iter().map(|&(t, v, c)| crate::automation::Pt { t: t.min(crate::state::MAX_SONG_TICKS), v: if v.is_finite() { v } else { crate::automation::DB_FLOOR }, c: c.clamp(-0.95, 0.95) }).collect();
+        if !pts.is_empty() {
+            *arrangement.automation.edit(&(owner, a.param.clone())) = crate::automation::Envelope::new(pts);
+        }
+    }
+    for l in &f.auto_lanes {
+        arrangement.automation.shown.insert(owner_of(l.track), l.params.clone());
+    }
     let loop_end_ticks = f.loop_end.clamp(crate::state::PPQ, crate::state::MAX_SONG_TICKS);
     Ok(Project {
         arrangement,
@@ -1630,7 +1699,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 9,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 10,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -1642,9 +1711,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 9,", "\"version\": 10,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 10,", "\"version\": 11,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer Cartwave") && err.contains("version 10"), "{err}");
+        assert!(err.contains("newer Cartwave") && err.contains("version 11"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

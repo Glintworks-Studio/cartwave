@@ -697,6 +697,11 @@ pub struct Arrangement {
     /// Imported DPCM samples (user slots, played from DPCM rows 5..8).
     /// Index = user slot (DPCM row 5 + i); `None` = empty slot.
     pub samples: Vec<Option<crate::dpcm::UserSample>>,
+    /// Batch 5: the song's automation (envelopes: document; shown lanes and
+    /// overrides: not undoable).
+    pub automation: crate::automation::Automation,
+    /// Automation Mode (A): each track shows its lanes under it (view state).
+    pub auto_mode: bool,
 }
 
 impl Arrangement {
@@ -724,14 +729,38 @@ impl Arrangement {
             instruments: default_instruments(),
             audition: None,
             samples: Vec::new(),
+            automation: Default::default(),
+            auto_mode: false,
         }
+    }
+
+    /// The automation lanes shown under track `i` now (Automation Mode on;
+    /// only parameters the track has).
+    pub fn auto_lanes(&self, i: usize) -> Vec<String> {
+        if !self.auto_mode {
+            return Vec::new();
+        }
+        let Some(l) = self.lanes.get(i) else { return Vec::new() };
+        let owner = crate::automation::AutoOwner::Track(l.id);
+        let reg = crate::automation::registry_for(&self.lanes, owner).unwrap_or_default();
+        self.automation.shown.get(&owner).map_or_else(Vec::new, |v| v.iter().filter(|id| reg.iter().any(|p| p.id == id.as_str())).cloned().collect())
+    }
+
+    /// Row `i`'s full pitch: the track's row plus its automation lanes (each
+    /// as tall as the row: the headers' row heights, Batch 5).
+    pub fn row_pitch(&self, i: usize) -> f32 {
+        let Some(l) = self.lanes.get(i) else { return 0.0 };
+        l.pitch() * (1 + self.auto_lanes(i).len()) as f32
     }
 
     /// The top of row `i` in lane space (logical px from the first row's top);
     /// rows have their own heights (polish 2 §4). `i == lanes.len()` is the
     /// bottom of the last row.
     pub fn lane_top(&self, i: usize) -> f32 {
-        self.lanes.iter().take(i).map(Lane::pitch).sum()
+        if !self.auto_mode {
+            return self.lanes.iter().take(i).map(Lane::pitch).sum();
+        }
+        (0..i.min(self.lanes.len())).map(|k| self.row_pitch(k)).sum()
     }
 
     /// Every row's pitch together.
@@ -745,13 +774,21 @@ impl Arrangement {
             return None;
         }
         let mut top = 0.0;
-        for (i, l) in self.lanes.iter().enumerate() {
-            top += l.pitch();
+        for i in 0..self.lanes.len() {
+            top += if self.auto_mode { self.row_pitch(i) } else { self.lanes[i].pitch() };
             if y < top {
                 return Some(i);
             }
         }
         None
+    }
+
+    /// In Automation Mode: which automation lane of row `i` lane-space `y`
+    /// is in (`None`: the track's own row, or another row).
+    pub fn auto_lane_at(&self, i: usize, y: f32) -> Option<usize> {
+        let l = self.lanes.get(i)?;
+        let k = ((y - self.lane_top(i)) / l.pitch()).floor();
+        (k >= 1.0 && (k as usize) <= self.auto_lanes(i).len()).then(|| k as usize - 1)
     }
 
     /// The row at lane-space `y`, clamped to the first and last.

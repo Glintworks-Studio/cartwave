@@ -2000,3 +2000,41 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   track takes its channel's voice, and a part that still can't lock says so. Test
   `midi_tracks::tests::fit_puts_extra_pulse_parts_on_the_vrc6`. Before every push: `git status
   --ignored` shows `reference-private/` ignored and `git ls-files` lists nothing under it.
+- **B5-D8 (automation: the engine).** `chip::auto`: points (tick, value in the target's units,
+  the curve of the segment after it), evaluation (hold before the first and after the last; two
+  points on one tick make a jump), a rational bias curve `x / (x + (1 − x)k)` (no `pow`: the
+  same on every machine) and quantising to register steps. The driver evaluates each console
+  lane's envelopes **once per frame tick** into `LaneAuto` (channel controls in place of
+  `params`, macros in place of the instrument's: volume or the triangle's gate, arpeggio, duty,
+  pitch, vibrato depth); with no envelope every path is the old one (all goldens unchanged).
+  Studio voices get the same `LaneAuto` from the rack. **Studio fader and pan**: evaluated at the
+  frame tick, then a **4-step ramp at fixed CPU cycles** (1861 cycles, about 1 ms apart), so a
+  render is identical with any audio block size (the prompt says "per block"; a device block
+  would make renders depend on the buffer size, which the determinism rule forbids; the frame
+  tick is the fixed block). **Main gain**: evaluated at the frame tick, applied from the sample
+  that tick falls on (its absolute index) with a fixed 200-sample ramp. Tests: block sizes 64,
+  333, 480, 1000 and 4096 give bit-identical renders; `process` with automation on every kind of
+  target runs under the allocation checker (debug aborts on any allocation).
+- **B5-D9 (automation: the model and format 10).** `ui::automation`: envelopes keyed by owner
+  (a track's id, or Main) and the registry id (the one list; `track.active`, "Track On", added
+  for studio tracks: the prompt's track activator). Values in the parameter's units (the fader's
+  −inf stored as −70 dB). Envelopes are document (undo: `Doc` holds them, shared); the lanes
+  each track shows are saved but not undoable (as the reference); overrides are session state.
+  What reaches the engine: only parameters the owner has now (a locked track's fader / pan
+  envelope is kept, unheard, until it is unlocked; parameters the channel lacks are skipped) and
+  never an overridden one. **Format 10**: `automation` (track id or Main, param, points
+  `[tick, value, curve]`) and `auto_lanes`; nothing written when empty, so a version 9 file saved
+  as 10 differs only in its version. v9 corpus (`docs/songs/v9`, written by `main`'s build in
+  `../before-batch5`, `v9corpus.rs.txt`); its hashes from `main` and from this branch differ only
+  for the three files with studio tracks (A3), `HASHES.txt` lists both; `migration.rs`
+  `version_9_files_render_bit_identically_in_version_10`, `au10_format_10_round_trip`.
+- **B5-D10 (the game export: a conflict noted).** The prompt (B5.4) asks for locked-track
+  automation as "per-frame register writes" in game exports and a warning for studio lanes.
+  Cartwave's game export is **audio** (seamless WAV loops, stems, a JSON sidecar); exporting to
+  hardware music formats is out of the first build (VISION.md "Not in the first build"). So:
+  locked-track automation reaches the audio *as* the chip's per-frame register writes (the
+  console's driver plays them: `au07_locked_lanes_play_the_quantised_envelope_frame_by_frame`
+  checks the written registers frame by frame from a project's snapshot), studio automation is
+  rendered too, and the export's report (`Report.notes`, the existing pattern) names every
+  studio track and lane whose automation has no hardware equivalent (`au09`). The loop stays
+  seamless with automation (intro + loop × 3 = a continuous render).

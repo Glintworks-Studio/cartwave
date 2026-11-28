@@ -59,6 +59,13 @@ pub struct Doc {
     /// Track names and colours (Batch 3: rename, Colour ▸).
     pub lanes: Vec<Lane>,
     pub song: SongState,
+    /// Batch 5: the envelopes (shared: a pointer each).
+    pub auto: std::collections::BTreeMap<crate::automation::AutoKey, std::sync::Arc<crate::automation::Envelope>>,
+}
+
+/// Equal envelopes (shared ones by pointer, else by value).
+fn same_auto(a: &std::collections::BTreeMap<crate::automation::AutoKey, std::sync::Arc<crate::automation::Envelope>>, b: &std::collections::BTreeMap<crate::automation::AutoKey, std::sync::Arc<crate::automation::Envelope>>) -> bool {
+    a.len() == b.len() && a.iter().zip(b.iter()).all(|((ka, ea), (kb, eb))| ka == kb && (std::sync::Arc::ptr_eq(ea, eb) || ea == eb))
 }
 
 impl Doc {
@@ -72,6 +79,7 @@ impl Doc {
             samples: a.samples.clone(),
             lanes: a.lanes.clone(),
             song: SongState::default(),
+            auto: a.automation.envs.clone(),
         }
     }
 
@@ -89,6 +97,8 @@ impl Doc {
         a.instruments = self.instruments.clone();
         a.samples = self.samples.clone();
         a.lanes = self.lanes.clone();
+        a.automation.envs = self.auto.clone();
+        a.automation.prune();
         a.editing.clear();
         a.editing_notes = None;
         let ids: Vec<u32> = a.clips.iter().map(|c| c.id).collect();
@@ -112,6 +122,7 @@ impl Doc {
             && self.samples == a.samples
             && self.lanes == a.lanes
             && self.song == song
+            && same_auto(&self.auto, &a.automation.envs)
             && self.clips.len() == a.clips.len()
             && (self.clips.iter().zip(&a.clips).all(|(x, y)| same(x, y)) || {
                 let by_id = |v: &[Arc<Clip>]| {
@@ -132,6 +143,7 @@ impl Doc {
             && self.samples == o.samples
             && self.lanes == o.lanes
             && self.song == o.song
+            && same_auto(&self.auto, &o.auto)
             && self.clips.len() == o.clips.len()
             && (self.clips.iter().zip(&o.clips).all(|(a, b)| same(a, b)) || {
                 let by_id = |v: &[Arc<Clip>]| {

@@ -501,11 +501,80 @@ fn version_8_files_render_bit_identically_in_version_9() {
             bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x}), {ch} channels"));
         }
         let v9 = file::to_string(&p);
-        assert!(v9.contains("\"version\": 9") && !v9.contains("\"arp_speed\""), "{name}: the default isn't written");
+        assert!(v9.contains(&format!("\"version\": {}", file::VERSION)) && !v9.contains("\"arp_speed\""), "{name}: the default isn't written");
         let again = file::from_str(&v9).unwrap();
         assert_eq!(render::hash(&export::render_channels(&again).0), e, "{name}: v9 round trip");
     }
     assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// Version 9 files (docs/songs/v9, written by main before Batch 5, with
+/// v9corpus.rs.txt; HASHES.txt there): (file, render hash, export hash,
+/// channels) from the Batch 5 build before format 10 (main's own, except the
+/// three files with studio tracks: A3's re-baseline).
+const V9: &[(&str, u64, u64, u16)] = &[
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64, 1),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
+    ("v7_studio_demo", 0x22285f6d9072481c, 0x8a6792789e9b2cbe, 1),
+    ("v8_studio_unison_panned", 0x4b5e115b1b2cc7be, 0x96af9360943984cb, 2),
+    ("v9_arp_speed", 0x6a91efc5f85cd3ed, 0x792f1b045f7c92e8, 1),
+    ("v9_vrc6_presets", 0x46f06620c5da356b, 0x9fbc48ceb2fd9300, 1),
+    ("v9_studio_presets", 0xfaf19d5de9c0a845, 0x0db96bdab3606058, 1),
+];
+
+/// B5 (format 10): version 9 files open with no automation and render exactly
+/// as before the format bump; saved as version 10 (nothing new written) and
+/// reloaded, still the same.
+#[test]
+fn version_9_files_render_bit_identically_in_version_10() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v9");
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e, want_ch) in V9 {
+        let text = std::fs::read_to_string(dir.join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 9"), "{name} is a version 9 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.arrangement.automation.envs.is_empty(), "{name}");
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let (x, ch) = export::render_channels(&p);
+        let e = render::hash(&x);
+        if (r, e, ch) != (want_r, want_e, want_ch) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x}), {ch} channels"));
+        }
+        let v10 = file::to_string(&p);
+        assert!(v10.contains("\"version\": 10") && !v10.contains("\"automation\"") && !v10.contains("\"auto_lanes\""), "{name}: nothing new written");
+        let again = file::from_str(&v10).unwrap();
+        assert_eq!(render::hash(&export::render_channels(&again).0), e, "{name}: v10 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// AU-10: a format 10 file keeps its automation (every point, value and
+/// curve, the Main gain, the shown lanes) and sounds the same reloaded; the
+/// automation is heard (the render differs from the same song without it).
+#[test]
+fn au10_format_10_round_trip() {
+    use ui::automation::{AutoOwner, Envelope, Pt};
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v9");
+    let mut p = file::load(&dir.join("v9_vrc6_presets.chipdaw")).unwrap();
+    let plain = render::hash(&export::render_channels(&p).0);
+    let id0 = p.arrangement.lanes[0].id;
+    let a = &mut p.arrangement.automation;
+    *a.edit(&(AutoOwner::Track(id0), "chip.duty".into())) = Envelope::new(vec![Pt::new(0, 0.0), Pt { t: 3840, v: 3.0, c: 0.4 }]);
+    *a.edit(&(AutoOwner::Main, "main.gain".into())) = Envelope::new(vec![Pt::new(0, 0.0), Pt::new(7680, ui::automation::DB_FLOOR)]);
+    a.shown.insert(AutoOwner::Track(id0), vec!["chip.duty".into(), "macro.volume".into()]);
+    let text = file::to_string(&p);
+    assert!(text.contains("\"automation\"") && text.contains("\"main.gain\"") && text.contains("\"auto_lanes\""));
+    let q = file::from_str(&text).unwrap();
+    assert_eq!(q.arrangement.automation.envs, p.arrangement.automation.envs);
+    assert_eq!(q.arrangement.automation.shown, p.arrangement.automation.shown);
+    let h = render::hash(&export::render_channels(&q).0);
+    assert_eq!(h, render::hash(&export::render_channels(&p).0), "the same sound reloaded");
+    assert_ne!(h, plain, "the automation is heard");
+    // A file naming a track that isn't there is refused with a clear message.
+    let bad = text.replacen(&format!("\"track\": {id0}"), "\"track\": 999", 1);
+    assert!(file::from_str(&bad).unwrap_err().contains("track 999"));
 }
 
 /// A version 9 instrument keeps its arpeggio speed, and the speed is heard.

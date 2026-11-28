@@ -422,6 +422,32 @@ pub struct Report {
     pub layout: Option<Layout>,
 }
 
+/// The export note for studio-track automation (Batch 5): which tracks and
+/// lanes are rendered into the audio but have no hardware equivalent.
+/// `None` when no studio track is automated.
+pub fn studio_automation_note(p: &Project) -> Option<String> {
+    let a = &p.arrangement;
+    let mut parts = Vec::new();
+    for l in a.lanes.iter().filter(|l| l.lock.is_none()) {
+        let owner = crate::automation::AutoOwner::Track(l.id);
+        let names: Vec<String> = a
+            .automation
+            .automated(owner)
+            .iter()
+            .filter_map(|id| crate::automation::Automation::param_of(&a.lanes, owner, id).map(|p| p.name.to_string()))
+            .collect();
+        if !names.is_empty() {
+            parts.push(format!("{} ({})", l.name, names.join(", ")));
+        }
+    }
+    (!parts.is_empty()).then(|| {
+        format!(
+            "Studio-track automation is rendered into the audio but has no hardware equivalent (it can't play on a console): {}. Locked tracks' automation plays as the chip's per-frame register writes.",
+            parts.join("; ")
+        )
+    })
+}
+
 /// File-name text: lower case, anything but letters and digits as "_".
 fn file_word(s: &str) -> String {
     s.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect()
@@ -470,6 +496,12 @@ pub fn export(p: &Project, o: &Options, dir: &Path, base: &str, ctl: &Control) -
     let (gain, note) = loudness_gain_ch(&rendered[0].1, o.rate, ch, o.loudness)?;
     let mut report = Report { layout: Some(layout), ..Default::default() };
     report.notes.push(note);
+    // Batch 5: automation is in the audio. A locked track's plays as the
+    // chip's per-frame register writes (as a game's sound driver would);
+    // a studio track's has no hardware equivalent: said, never dropped.
+    if let Some(n) = studio_automation_note(p) {
+        report.notes.push(n);
+    }
     if gain != 1.0 {
         for (_, x, _) in rendered.iter_mut() {
             for v in x.iter_mut() {

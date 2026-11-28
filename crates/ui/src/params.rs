@@ -94,6 +94,9 @@ pub fn registry(o: Owner) -> Vec<Param> {
             if !locked {
                 v.push(Param { id: "track.gain", name: "Volume", unit: "dB", min: f32::NEG_INFINITY, max: crate::state::VOL_DB_MAX, default: 0.0, stepped: false, rate: Rate::Smooth });
                 v.push(Param { id: "track.pan", name: "Pan", unit: "L/R", min: -(crate::state::PAN_MAX as f32), max: crate::state::PAN_MAX as f32, default: 0.0, stepped: false, rate: Rate::Smooth });
+                // Batch 5: the track's on/off (the mixer's track switch), read
+                // at the frame tick.
+                v.push(Param { id: "track.active", name: "Track On", unit: "on/off", min: 0.0, max: 1.0, default: 1.0, stepped: true, rate: Rate::FrameTick });
             }
             v.extend(ParamId::for_lane(lane).iter().map(|&p| chip_param(p, lane)));
             v.extend(macros(kind));
@@ -211,7 +214,7 @@ mod doc {
     #[test]
     #[ignore]
     fn write_parameters_md() {
-        let head = "# Automatable parameters (Batch 4a §6)\n\nThe registry Batch 5's automation builds on: `crates/ui/src/params.rs` (unit-tested). No UI yet.\n\n**Rate classes.** *frame-tick*: stepped at the driver's frame tick (60.0988 Hz), as game sound drivers did: on locked tracks the chip registers and the instrument macros (values quantised to the register's real steps, VISION.md \"Automation\"). A studio track's channel controls and macros are frame-tick too (RUNLOG B4A-D11): a studio voice runs the same driver code, which reads them once per frame tick, so automation there sounds like the chip's own macros. *smooth*: per audio block with de-zippering (a ramp over the block, as the engine does for track gains and the Main gain today): a studio track's volume and pan, and the Main gain.\n\nA locked track has no volume or pan parameters: its fader is pinned at 0 dB and its pan at centre (BATCH4A_PROMPT.md §5.3); its level comes from the chip's Volume register (`chip.volume`) and the volume macro.\n";
+        let head = "# Automatable parameters (Batch 4a §6)\n\nThe registry automation is built on (`crates/ui/src/params.rs`, unit-tested): Batch 5's lanes, chooser and engine targets all read it (Batch 5 added `track.active`).\n\n**Rate classes.** *frame-tick*: stepped at the driver's frame tick (60.0988 Hz), as game sound drivers did: on locked tracks the chip registers and the instrument macros (values quantised to the register's real steps, VISION.md \"Automation\"). A studio track's channel controls and macros are frame-tick too (RUNLOG B4A-D11): a studio voice runs the same driver code, which reads them once per frame tick, so automation there sounds like the chip's own macros. *smooth*: per audio block with de-zippering (a ramp over the block, as the engine does for track gains and the Main gain today): a studio track's volume and pan, and the Main gain.\n\nA locked track has no volume or pan parameters: its fader is pinned at 0 dB and its pan at centre (BATCH4A_PROMPT.md §5.3); its level comes from the chip's Volume register (`chip.volume`) and the volume macro.\n";
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/batch4a/parameters.md");
         std::fs::write(path, format!("{head}{}", super::markdown())).unwrap();
     }

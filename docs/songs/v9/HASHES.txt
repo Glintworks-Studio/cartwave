@@ -1,0 +1,27 @@
+Version 9 corpus, written by the build before Batch 5 (main 4529f1e, exported to ../before-batch5) with
+v9corpus.rs.txt (run as an example of crates/ui). (file, render::render hash, export::render_channels hash,
+channels). From main:
+
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64, 1),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
+    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c, 1),
+    ("v8_studio_unison_panned", 0x1f4b716b2b275954, 0x66de0d77b635b17a, 2),
+    ("v9_arp_speed", 0x6a91efc5f85cd3ed, 0x792f1b045f7c92e8, 1),
+    ("v9_vrc6_presets", 0x46f06620c5da356b, 0x9fbc48ceb2fd9300, 1),
+    ("v9_studio_presets", 0x2f7433826818ece0, 0x8795f9623906f486, 1),
+
+From the Batch 5 build before format 10 (d95797b + the automation model, no format change): the same except the
+three files with studio tracks, re-baselined by A3 (docs/batch5/a3-rebaseline.md). tests/migration.rs checks
+these in format 10:
+
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64, 1),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
+    ("v7_studio_demo", 0x22285f6d9072481c, 0x8a6792789e9b2cbe, 1),
+    ("v8_studio_unison_panned", 0x4b5e115b1b2cc7be, 0x96af9360943984cb, 2),
+    ("v9_arp_speed", 0x6a91efc5f85cd3ed, 0x792f1b045f7c92e8, 1),
+    ("v9_vrc6_presets", 0x46f06620c5da356b, 0x9fbc48ceb2fd9300, 1),
+    ("v9_studio_presets", 0xfaf19d5de9c0a845, 0x0db96bdab3606058, 1),

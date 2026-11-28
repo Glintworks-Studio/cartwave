@@ -1,6 +1,6 @@
 # Automatable parameters (Batch 4a §6)
 
-The registry Batch 5's automation builds on: `crates/ui/src/params.rs` (unit-tested). No UI yet.
+The registry automation is built on (`crates/ui/src/params.rs`, unit-tested): Batch 5's lanes, chooser and engine targets all read it (Batch 5 added `track.active`).
 
 **Rate classes.** *frame-tick*: stepped at the driver's frame tick (60.0988 Hz), as game sound drivers did: on locked tracks the chip registers and the instrument macros (values quantised to the register's real steps, VISION.md "Automation"). A studio track's channel controls and macros are frame-tick too (RUNLOG B4A-D11): a studio voice runs the same driver code, which reads them once per frame tick, so automation there sounds like the chip's own macros. *smooth*: per audio block with de-zippering (a ramp over the block, as the engine does for track gains and the Main gain today): a studio track's volume and pan, and the Main gain.
 
@@ -18,6 +18,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `chip.duty` | Duty | step | 0 … 3 | 2 | frame-tick |
 | `chip.volume` | Volume | register (0–15) | 0 … 15 | 12 | frame-tick |
 | `chip.envelope` | Envelope | mode | 0 … 2 | 0 | frame-tick |
@@ -53,6 +54,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `macro.arpeggio` | Arpeggio | semitones | -12 … 12 | 0 | frame-tick |
 | `macro.pitch` | Pitch | cents | -100 … 100 | 0 | frame-tick |
 | `macro.vibrato` | Vibrato depth | cents | 0 … 100 | 0 | frame-tick |
@@ -76,6 +78,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `chip.noise_mode` | Noise mode | mode | 0 … 1 | 0 | frame-tick |
 | `chip.noise_period` | Noise period | index | -1 … 15 | -1 | frame-tick |
 | `chip.volume` | Volume | register (0–15) | 0 … 15 | 12 | frame-tick |
@@ -109,6 +112,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `chip.sample` | Sample | slot | -1 … 7 | -1 | frame-tick |
 | `chip.rate` | Rate | index | 0 … 15 | 15 | frame-tick |
 | `chip.loop` | Loop | on/off | 0 … 1 | 0 | frame-tick |
@@ -138,6 +142,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `chip.duty` | Duty | step | 0 … 8 | 7 | frame-tick |
 | `chip.volume` | Volume | register (0–15) | 0 … 15 | 12 | frame-tick |
 | `macro.volume` | Volume macro | step (0–15) | 0 … 15 | 15 | frame-tick |
@@ -167,6 +172,7 @@ A locked track has no volume or pan parameters: its fader is pinned at 0 dB and 
 |---|---|---|---|---|---|
 | `track.gain` | Volume | dB | −inf … 6 | 0 | smooth |
 | `track.pan` | Pan | L/R | -50 … 50 | 0 | smooth |
+| `track.active` | Track On | on/off | 0 … 1 | 1 | frame-tick |
 | `chip.rate` | Rate | index | 0 … 63 | 42 | frame-tick |
 | `macro.volume` | Volume macro | step (0–15) | 0 … 15 | 15 | frame-tick |
 | `macro.arpeggio` | Arpeggio | semitones | -12 … 12 | 0 | frame-tick |
