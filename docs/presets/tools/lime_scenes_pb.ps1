@@ -1,6 +1,6 @@
 # usage: lime_scenes_pb.ps1 -Out <dir> [-Exe .\target\release\cartwave.exe]
 # The Presets + Browser batch's lime scenes (gate 7, VISUAL-SPEC §13): 4b's projects with no lime
-# in their track colours (fx_studio, fx_board), so any lime found is the interface's own. The new
+# in their track colours (fx_studio, and fx_studio locked: fx_locked), so any lime found is the interface's own. The new
 # UI in every state: the device on a studio and a locked track (stopped and playing: the meter),
 # the browser's sections, a search, a folder opened with an item selected, the preset picker, the
 # Voice menu, and the DPCM Sampler with Loop on (a toggle on-state, allowed).
@@ -10,6 +10,7 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $d = Join-Path $env:TEMP ("cartwave-lime-pb-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Force $d | Out-Null
 python "$Repo\docs\batch4b\tools\fixtures_b4b.py" $d | Out-Null
+python "$Repo\docs\presets\tools\fixture_locked.py" (Join-Path $d "fx_studio.chipdaw") (Join-Path $d "fx_locked.chipdaw")
 '{ "ui_scale": 100 }' | Set-Content -Encoding ascii (Join-Path $d "settings.json")
 foreach ($k in "CARTWAVE_BROWSER_W", "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
 . "$Repo\docs\perf\tools\input.ps1" 2>$null
@@ -43,7 +44,7 @@ foreach ($sec in @(@("drums", 268), @("instruments", 292), @("hardware", 316), @
 }
 C 220 130; foreach ($ch in "kick".ToCharArray()) { Key ([int][char]::ToUpper($ch)) }; Start-Sleep -Milliseconds 400
 Shot "browser_search"; Key 0x1B
-Start-App "fx_board.chipdaw"
+Start-App "fx_locked.chipdaw"
 C 520 160                                   # a locked track
 Shot "device_locked"
 Key 0x20; Start-Sleep -Milliseconds 1500
@@ -51,8 +52,8 @@ Shot "device_locked_playing"
 Key 0x20
 C 664 572; Start-Sleep -Milliseconds 400
 Shot "picker_locked"; Key 0x1B
-# The DPCM track (the board's fifth): the Sampler, Loop on.
-C 520 (136 + 4 * 73 + 24); Start-Sleep -Milliseconds 300
+# The DPCM track (the third): the Sampler, Loop on.
+C 520 (136 + 2 * 73 + 24); Start-Sleep -Milliseconds 300
 C 776 770; Start-Sleep -Milliseconds 300            # LOOP (the key at device (520, 206))
 Shot "dpcm_loop_on"
 Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
