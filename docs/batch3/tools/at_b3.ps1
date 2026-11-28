@@ -124,8 +124,10 @@ if (Want "AT-10") {
   }
   K 0x1B                                                        # close the piano roll
   RightL (Bx 2) (Ly 0); Shot "at10_clip"; K 0x1B
-  RightL (Bx 9.5) (Ly 5); Shot "at10_empty"
-  MoveL ((Bx 9.5) + 30) ((Ly 5) + 4 + 5 * 28 + 8 + 14 - 0); Start-Sleep -Milliseconds 400; Shot "at10_grid_sub"; K 0x1B
+  # PB (RUNLOG PB-D16): the bottom pane is 356 px now, so lane 5 sits under the Main row while a
+  # clip is selected: the empty space is lane 3's (the empty noise track) at bar 9.5.
+  RightL (Bx 9.5) (Ly 3); Shot "at10_empty"
+  MoveL ((Bx 9.5) + 30) ((Ly 3) + 4 + 5 * 28 + 8 + 14 - 0); Start-Sleep -Milliseconds 400; Shot "at10_grid_sub"; K 0x1B
   $obs.t10_menus = @(DevLines $d "^dev: menu ")
   Stop-App
 }
@@ -162,6 +164,8 @@ if (Want "AT-14") {
   Ctrl 0x4E                                                     # Ctrl+N: an empty project (clean: no prompt)
   Start-Sleep -Milliseconds 500; Shot "at14_guide"
   DblL (Bx 2) (Ly 0); Shot "at14_after_clip"                    # the first clip: the guide goes
+  # PB (PB-D16): deselect first, so the bottom pane (356 px now) doesn't shrink the guide's area.
+  ClickL (Bx 6) (Ly 1); Start-Sleep -Milliseconds 300
   Invoke-Menu "Help" 1; Shot "at14_help"                        # Help > Getting Started
   K 0x1B; Shot "at14_closed"
   Stop-App
@@ -207,6 +211,8 @@ if (Want "AT-25") {
   Launch -Project $p -Data $d -Scale $Scale
   ClickL 300 ((Ly 1) - 10); Start-Sleep -Milliseconds 300       # select Pulse 2: the inspector opens
   $obs.t25_texts = @(Ui-Texts)
+  # PB (PB-D16): the instrument is the device panel now (drawn, no UI text): its dev line.
+  $obs.t25_device = @(DevLines $d "^dev: device ")
   Shot "at25_track_selected"
   $obs.t25_tip = Hover-Text "Make Unique"; Shot "at25_tooltip_disabled"
   # Polish 2 (E1): the S keys sit at header x 288..312, y 10..34 (centre 241 + 300, row + 22).
@@ -283,11 +289,15 @@ if (Want "AT-29") {
   $obs.t29_typed = @(Ui-Texts | Where-Object { $_ -like "field:*" })
   K 0x1B; Start-Sleep -Milliseconds 300
   $obs.t29_after_esc = @(Ui-Texts | Where-Object { $_ -like "field:*" })
-  ClickL 100 193                                                # "Classic 2A03 Band": select only
+  # PB (PB-D16): the layouts are Hardware > <profile> > Bands in the new browser: the sidebar's
+  # Hardware, NES (2A03), its Bands; then Famicom + VRC6 and its Bands.
+  ClickL 75 316; ClickL 200 192; ClickL 200 312                 # Hardware; NES (2A03); Bands
+  ClickL 200 336                                                # "Classic 2A03 Band": select only
   Save; Keep $p "at29_click"; Shot "at29_layout_selected"
   # Batch 4a: fx_basic opens as NES (no VRC6 clips), so the layout for another chip is the
   # 2A03 + VRC6 Band; "Load on studio tracks" keeps the profile (RUNLOG B4A-D17).
-  DblL 100 221                                                  # double-click: load (it asks: VRC6)
+  ClickL 200 360; ClickL 200 432                                # Famicom + VRC6; its Bands
+  DblL 200 456                                                  # "2A03 + VRC6 Band": load (it asks: VRC6)
   $obs.t29_dialog = Dialog-Text
   $obs.t29_keep = Press-Button "Load on studio tracks"
   Save; Keep $p "at29_dbl"; Stop-App
@@ -310,13 +320,16 @@ if (Want "AT-31") {
   $p = Fx "fx_basic" "at31"; $d = Join-Path $Work "d31"
   Launch -Project $p -Data $d -Scale $Scale
   ClickL (Bx 2) (Ly 0)
-  $obs.t31_save = Click-Text "Save as Preset"; Start-Sleep -Milliseconds 500
+  # PB (PB-D16): Save as Preset is the device's preset picker's "Save Preset As…" now (the
+  # field at (664, 596) with the status bar hidden; the picker opens above it).
+  ClickL 664 596; Start-Sleep -Milliseconds 400; ClickL 664 567; Start-Sleep -Milliseconds 500
+  $obs.t31_save = Test-Path (Join-Path $d "user_presets.json")
   $obs.t31_presets = Test-Path (Join-Path $d "user_presets.json")
-  # Find the user preset ("Square Lead 2": a unique name) with the search.
-  ClickL 120 126; TypeText "Square Lead 2"; K 0x0D
+  # The user preset is in the browser's User Library (sidebar), its first row.
+  ClickL 75 416; Start-Sleep -Milliseconds 300
   Shot "at31_search"
-  RightL 100 193; Shot "at31_preset_menu"; K 0x1B
-  $obs.t31_menu = @(DevLines $d "^dev: menu Preset")
+  RightL 200 192; Shot "at31_preset_menu"; K 0x1B
+  $obs.t31_menu = @(DevLines $d "^dev: menu (Preset|BrowserItem)")
   Stop-App
 }
 

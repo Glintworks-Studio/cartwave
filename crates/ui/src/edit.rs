@@ -526,12 +526,6 @@ impl AppState {
             self.s.dials.set(self.dial_values(lane));
             self.s.lane_sel.set(lane);
         }
-        // §3.1: selecting a track header shows its Device view (as clicking
-        // a track's title bar in the reference); Shift+Tab goes back.
-        if self.s.piano_open.get_untracked() {
-            self.detail_clip = self.s.piano.with_untracked(|p| p.clip);
-            self.close_piano();
-        }
     }
 
     // ───────────────────────────── Rename (A13, T2) ─────────────────────────────

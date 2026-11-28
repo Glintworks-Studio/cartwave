@@ -1,0 +1,190 @@
+# usage: bench_pb.ps1 -Label <run> -Repo <repo> [-Main] [-Secs 12] [-Work <dir>] [-BrowserW 240] [-NewOnly] [-Pb]
+# Presets + Browser batch (PRESETS_PROMPT.md §2, §8.6): bench_b4a.ps1 with the per-thread cycle
+# counters (CARTWAVE_AUDIOLOG / FRAMELOG: UI kcycles per presented frame, audio kcycles per
+# callback) and each scenario's window (s since the process started) in <Work>\windows.tsv, so
+# perf_summary_pb.py averages each scenario's cycles (the new primary measure) beside its process
+# CPU. -BrowserW sets the dev hook CARTWAVE_BROWSER_W (this branch at the old 240 px, so the 4c
+# scenarios' coordinates and the arrangement's width are main's). -NewOnly runs only the new
+# scenarios: the device panel (main: the inspector) open while the demo plays, the browser
+# scrolled and searched with 100+ presets listed, and (-Pb, this branch) ◀ ▶ stepping while
+# playing.
+# (Below: bench_b4a.ps1's own notes.)
+# usage: bench_b4a.ps1 -Label <run> -Repo <repo> [-Main] [-Secs 12] [-Work <dir>]
+# Batch 4a §9.6: polish 2's bench (bench_p2.ps1 -New) for both builds; -Main: this branch (its
+# Main row makes the lanes 73 px shorter, so the time scrollbar sits 73 px higher), plus the new
+# scenarios on the 64-studio-track project: playing, scrolling the lanes while it plays,
+# inserting and deleting tracks, dragging a header to reorder.
+# (Below: bench_p2.ps1's own notes.)
+# Polish 2 gate 6: bench.ps1's scenarios (idle, demo playing, 200 clips playing, 200-clip drag;
+# process CPU, % of one core) and, with -New, the new gestures on the 200-clip set while it
+# plays: a row-resize drag, a header-width drag, a ruler zoom drag, an Overview drag and an
+# Overview zoom drag. Both builds also run the baseline's own continuous-redraw gestures
+# (Ctrl+wheel zoom, a time-scrollbar drag) for a like-for-like comparison. Default settings (the polish 2 build shows the Overview and the status
+# bar, so its rows start 32 px lower: the clip grab moves from (760, 140) to (760, 172)).
+# Appends one line per run to <Work>\bench_p2_log.txt with proof the 200-clip set was on.
+param([string]$Label = "run", [int]$Secs = 12, [string]$Repo, [switch]$Main, [string]$Only = "", [string]$ShotBeforeScroll = "",
+  [string]$Work = (Join-Path $env:TEMP "chipdaw-b4a-perf"), [int]$BrowserW = 0, [switch]$NewOnly, [switch]$Pb)
+$New = $true
+$env:CARTWAVE_DEV = "1"
+foreach ($k in "CARTWAVE_OVERVIEW", "CARTWAVE_HIDE_STATUS", "CARTWAVE_FAKE_PROBLEM", "CARTWAVE_PROJECT", "CARTWAVE_FROZEN_METERS", "CARTWAVE_BROWSER_W", "CARTWAVE_AUDIOLOG", "CARTWAVE_FRAMELOG") { Remove-Item "Env:$k" -ErrorAction SilentlyContinue }
+if ($BrowserW) { $env:CARTWAVE_BROWSER_W = "$BrowserW" }
+# The cycle counters: one log per app run (the main run, the 64-track run).
+function Logs($tag) { $env:CARTWAVE_AUDIOLOG = Join-Path $Work "$Label-$tag.csv"; $env:CARTWAVE_FRAMELOG = Join-Path $Work "$Label-$tag.frames" }
+$global:LogTag = "main"; Logs "main"
+$Windows = Join-Path $Work "windows.tsv"
+if (-not (Test-Path $Windows)) { "label`tlog`tscenario`tt0`tt1" | Set-Content $Windows }
+New-Item -ItemType Directory -Force $Work | Out-Null
+$d = Join-Path $Work "data-$Label"
+Remove-Item -Recurse -Force $d -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $d | Out-Null
+$env:CARTWAVE_DATA_DIR = $d
+Set-Location $Repo
+Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+$p = Start-Process ".\target\release\cartwave.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_p2_err.txt"
+Start-Sleep -Seconds 3
+. "$PSScriptRoot\..\..\perf\tools\input.ps1"
+# Input goes to whatever window is in front: never type unless it is the app (a key sent to a
+# terminal opens tabs there). Focus-App brings the app forward (an Alt tap lifts Windows'
+# foreground lock) and says whether it worked; App-Front checks before each key.
+Add-Type -Namespace B4A -Name Fg -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);' -ErrorAction SilentlyContinue
+function App-Front { [B4A.Fg]::GetForegroundWindow() -eq $global:AppH }
+function Focus-App {
+  for ($t = 0; $t -lt 5 -and -not (App-Front); $t++) {
+    [In]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero); [In]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    [B4A.Fg]::ShowWindow($global:AppH, 5) | Out-Null; [B4A.Fg]::SetForegroundWindow($global:AppH) | Out-Null
+    Start-Sleep -Milliseconds 200
+  }
+  App-Front
+}
+$global:FocusLost = 0
+$global:AppH = $p.MainWindowHandle
+$global:Res = [ordered]@{}
+function Measure-Cpu([scriptblock]$during) {
+  $p.Refresh(); $c0 = $p.TotalProcessorTime; $t0 = [Diagnostics.Stopwatch]::StartNew(); $i = 0
+  $w0 = ((Get-Date) - $p.StartTime).TotalSeconds
+  while ($t0.Elapsed.TotalSeconds -lt $Secs) { & $during $i; $i++; Start-Sleep -Milliseconds 8 }
+  $w1 = ((Get-Date) - $p.StartTime).TotalSeconds
+  $global:LastWindow = "{0:F2}`t{1:F2}" -f $w0, $w1
+  $p.Refresh(); [math]::Round(($p.TotalProcessorTime - $c0).TotalMilliseconds / $t0.Elapsed.TotalMilliseconds * 100, 1)
+}
+# Each scenario's window, for the cycle counters.
+function Note($name) { Add-Content $Windows "$Label`t$global:LogTag`t$name`t$global:LastWindow" }
+function Want($n) { -not $Only -or ($Only.Split(",") -contains $n) }
+function Cpu($name) { $global:Res[$name] = Measure-Cpu { param($i) }; Note $name }
+# A drag held for $Secs: press at (x, y), then sway by (ax, ay).
+function CpuDrag($name, $x, $y, $ax, $ay) {
+  Move-To $x $y; Down
+  $global:Res[$name] = Measure-Cpu { param($i) Move-To ($x + [int]($ax * [Math]::Sin($i / 12.0))) ($y + [int]($ay * [Math]::Sin($i / 30.0))) }
+  Note $name
+  Up; Start-Sleep -Milliseconds 300
+}
+$dy = if ($New) { 32 } else { 0 }
+if (-not (Focus-App)) { $global:FocusLost++ }
+Move-To 1300 800
+# The new scenarios (§8.6), on the demo while it plays: -NewOnly runs these and stops.
+if ($NewOnly) {
+  if (App-Front) { Key 0x20 } else { $global:FocusLost++ }; Start-Sleep -Seconds 2
+  # The bottom pane open while playing: a track header selected (this branch: the device
+  # panel; main: its inspector). The header's name: 100 px into the headers.
+  $bw = if ($Pb) { 421 } else { 241 }
+  Move-To ($bw + 100) 180; Down; Up; Start-Sleep -Milliseconds 600; Move-To 1300 120
+  Cpu "device_playing"
+  # The browser search: a letter typed and erased every 15 ticks (each one re-lists the presets).
+  $sy = if ($Pb) { 130 } else { 126 }
+  Move-To 120 $sy; Down; Up; Start-Sleep -Milliseconds 300
+  $global:Res["browser_search"] = Measure-Cpu { param($i) if (-not (App-Front)) { return }; if (($i % 30) -eq 0) { Key 0x45 } elseif (($i % 30) -eq 15) { Key 0x08 } }
+  Note "browser_search"
+  # Scrolling the list (100+ presets on this branch: the search "e"), wheel down then up.
+  Key 0x45; Start-Sleep -Milliseconds 400
+  $lx = if ($Pb) { 300 } else { 120 }
+  Move-To $lx 420
+  $global:Res["browser_scroll"] = Measure-Cpu { param($i) $d = if (($i % 40) -lt 20) { -120 } else { 120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }
+  Note "browser_scroll"
+  Key 0x1B; Start-Sleep -Milliseconds 300
+  if ($Pb) {
+    # ◀ ▶ while playing: the header again (its device), then ▶ every 36 ticks.
+    Move-To ($bw + 100) 180; Down; Up; Start-Sleep -Milliseconds 500
+    $global:Res["step"] = Measure-Cpu { param($i) if (($i % 36) -eq 0) { Move-To 813 572; Down; Up } elseif (($i % 36) -eq 4) { Move-To 1300 120 } }
+    Note "step"
+  }
+  Stop-Process -Id $p.Id -Force
+  $err = Get-Content "$Work\bench_p2_err.txt" -Raw -ErrorAction SilentlyContinue
+  $proof = if ($err -match "dev: mode on" -and (-not $Pb -or ($err -match "dev: step preset" -and $err -match "dev: browser .* query"))) { "new scenarios reached" } else { "new scenarios NOT REACHED" }
+  $line = "{0,-16} " -f $Label + (($Res.Keys | ForEach-Object { "{0} {1,5}%" -f $_, $Res[$_] }) -join "  ") + "  $proof"
+  $line += $(if ($global:FocusLost) { "  FOCUS LOST x$($global:FocusLost): INVALID" } else { "  focus held" })
+  Add-Content "$Work\bench_b4a_log.txt" $line
+  $line
+  return
+}
+if (Want "idle") { Cpu "idle" }
+if (App-Front) { Key 0x20 } else { $global:FocusLost++ }; Start-Sleep -Seconds 2
+if (Want "demo") { Cpu "demo" }
+if (App-Front) { Key 0x73 } else { $global:FocusLost++ }; Start-Sleep -Seconds 3
+if (Want "200") { Cpu "200" }
+if (Want "200drag") { CpuDrag "200drag" 760 (140 + $dy) 120 64 }
+# The baseline's own continuous-redraw gestures (both builds): Ctrl+wheel zoom over the lanes,
+# a notch per frame in and out, and a drag of the time scrollbar (its thumb at the lanes' bottom:
+# the window's client bottom, less the status bar on this branch).
+if (Want "zoom_wheel") {
+Move-To 900 (400 + $dy); if (-not (App-Front)) { $global:FocusLost++ }; KeyDown 0x11
+$global:Res["zoom_wheel"] = Measure-Cpu { param($i) $d = if (($i % 8) -lt 4) { 120 } else { -120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }; Note "zoom_wheel"
+KeyUp 0x11; Start-Sleep -Milliseconds 300
+}
+# The time scrollbar's thumb sits 5 px above the lanes' bottom. 200drag clicks a clip and so
+# opens the inspector, which ends the lanes at client 663 (B4A-D24: polish 2's bench aimed at the
+# window bottom, inside the inspector, so its "scrollbar drag" dragged across the inspector).
+# Without the inspector the lanes end above the status bar. The Main row takes 73 px more.
+$lanesBottom = if (Want "200drag") { 663 } else { 920 - 24 }
+$sb = $lanesBottom - 5 - $(if ($Main) { 73 } else { 0 })
+# -ShotBeforeScroll <png>: proof of what the scrollbar drag starts from (B4A-D24).
+if ($ShotBeforeScroll) { Move-To 650 $sb; Start-Sleep -Milliseconds 400; pwsh -NoProfile -File "$PSScriptRoot\..\..\perf\tools\shot.ps1" -Out $ShotBeforeScroll | Out-Null }
+if (Want "scrollbar_drag") { CpuDrag "scrollbar_drag" 650 $sb 160 0 }
+# A window-width resize (the lanes' width changes every frame, as in a header-width drag).
+Add-Type -Namespace P2 -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r); [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int w, int hh, uint f); public struct RECT { public int L, T, R, B; }' -ErrorAction SilentlyContinue
+$wr = New-Object P2.Win+RECT; [P2.Win]::GetWindowRect($global:AppH, [ref]$wr) | Out-Null
+$W0 = $wr.R - $wr.L; $H0 = $wr.B - $wr.T
+if (Want "window_resize") { $global:Res["window_resize"] = Measure-Cpu { param($i) [P2.Win]::SetWindowPos($global:AppH, [IntPtr]::Zero, $wr.L, $wr.T, $W0 - 60 + [int](60 * [Math]::Sin($i / 12.0)), $H0, 0x0014) | Out-Null }; Note "window_resize"
+[P2.Win]::SetWindowPos($global:AppH, [IntPtr]::Zero, $wr.L, $wr.T, $W0, $H0, 0x0014) | Out-Null; Start-Sleep -Milliseconds 500 }
+if ($New -and -not $Only) {
+  CpuDrag "row_resize" 441 (136 + 71) 0 60
+  CpuDrag "header_width" 619 600 100 0
+  CpuDrag "ruler_zoom" 900 122 6 70
+  CpuDrag "overview_drag" 680 92 160 0
+  CpuDrag "overview_zoom" 680 92 4 50
+}
+Stop-Process -Id $p.Id -Force
+$err = Get-Content "$Work\bench_p2_err.txt" -Raw -ErrorAction SilentlyContinue
+# The 64-studio-track project (this branch only: the baseline can't open format 7).
+if ($Main -and -not $Only) {
+  Get-Process -Name cartwave -ErrorAction SilentlyContinue | Stop-Process -Force
+  $global:LogTag = "s64"; Logs "s64"
+  $env:CARTWAVE_PROJECT = (Join-Path $Repo "docs\batch4a\songs\stress64.chipdaw"); $env:CARTWAVE_AUTOPLAY = "1"
+  $p = Start-Process ".\target\release\cartwave.exe" -ArgumentList "--size", "1440x920" -PassThru -RedirectStandardError "$Work\bench_s64_err.txt"
+  Start-Sleep -Seconds 4
+  $p.Refresh(); $global:AppH = $p.MainWindowHandle
+  Remove-Item Env:CARTWAVE_PROJECT, Env:CARTWAVE_AUTOPLAY
+  if (-not (Focus-App)) { $global:FocusLost++ }
+  Move-To 1300 500
+  Cpu "s64_playing"
+  # Scrolling the lanes (wheel over the headers) while it plays: down, then up.
+  Move-To 400 500
+  $global:Res["s64_scroll"] = Measure-Cpu { param($i) $d = if (($i % 40) -lt 20) { -120 } else { 120 }; [In]::mouse_event(0x0800, 0, 0, $d, [UIntPtr]::Zero) }; Note "s64_scroll"
+  # Back to the top: the scroll step ends anywhere, and the header drag below must start on a
+  # row's name, not on a row's resize edge (two runs measured a row-height drag instead).
+  for ($k = 0; $k -lt 120; $k++) { [In]::mouse_event(0x0800, 0, 0, 120, [UIntPtr]::Zero); Start-Sleep -Milliseconds 5 }
+  Start-Sleep -Milliseconds 300
+  # Insert and delete tracks: Ctrl+Shift+T, then Delete (the new track is selected), repeatedly.
+  Move-To 420 210; Down; Up; Start-Sleep -Milliseconds 300
+  $global:Res["s64_insert_delete"] = Measure-Cpu { param($i) if (($i % 24) -eq 0 -or ($i % 24) -eq 12) { if (-not (App-Front)) { $global:FocusLost++; return } }; if (($i % 24) -eq 0) { KeyDown 0x11; KeyDown 0x10; Key 0x54; KeyUp 0x10; KeyUp 0x11 } elseif (($i % 24) -eq 12) { Key 0x2E } }; Note "s64_insert_delete"
+  # A header dragged up and down (reorder) while it plays.
+  CpuDrag "s64_header_drag" 420 283 0 140
+  Stop-Process -Id $p.Id -Force
+  $e2 = Get-Content "$Work\bench_s64_err.txt" -Raw -ErrorAction SilentlyContinue
+  $proof64 = if ($e2 -match "stress64.chipdaw \(64 clips\)" -and $e2 -match "insert track" -and $e2 -match "move track") { "64 tracks reached, inserts and moves seen" } else { "64-track scenario NOT REACHED" }
+  $err += "`n" + $proof64
+}
+$proof = if ($err -match "dev: mode on" -and $err -match "dev: F4 stress set on") { "reached" } else { "NOT REACHED" }
+$line = "{0,-16} " -f $Label + (($Res.Keys | ForEach-Object { "{0} {1,5}%" -f $_, $Res[$_] }) -join "  ") + "  stress set $proof" + $(if ($Main) { "  " + ($err -split "`n")[-1] } else { "" })
+$line += $(if ($global:FocusLost) { "  FOCUS LOST x$($global:FocusLost): INVALID" } else { "  focus held" })
+Add-Content "$Work\bench_b4a_log.txt" $line
+$line

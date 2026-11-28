@@ -7,7 +7,7 @@ import sys
 
 p = sys.argv[1]
 v = json.load(open(p, encoding="utf-8"))
-assert v.get("version") in (7, 8) and "tracks" in v, f"not a format 7 or 8 project: version {v.get('version')}"
+assert v.get("version") in (7, 8, 9) and "tracks" in v, f"not a format 7, 8 or 9 project: version {v.get('version')}"
 for t in v["tracks"]:
     t["lock"] = None
 json.dump(v, open(p, "w", encoding="utf-8"), indent=1)

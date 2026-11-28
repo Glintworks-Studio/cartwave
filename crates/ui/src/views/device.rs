@@ -190,7 +190,8 @@ fn knobs(d: &Dev) -> Vec<Knob> {
         v.extend(row);
         return v;
     }
-    // OSCILLATOR, first row: the voice's own control, then the studio trio.
+    // OSCILLATOR, first row (the board's): the voice's own control, then
+    // Unison and Detune (studio).
     let mut row = Vec::new();
     match d.voice {
         VoiceKind::Pulse | VoiceKind::Vrc6Pulse => row.push(param(ParamId::Duty, "DUTY")),
@@ -198,16 +199,19 @@ fn knobs(d: &Dev) -> Vec<Knob> {
         VoiceKind::Saw => row.push(param(ParamId::Rate, "RATE")),
         _ => {}
     }
+    let u = d.unison;
     if studio {
-        let u = d.unison;
         row.push(Knob { ctl: Ctl::Uni(0), label: "UNISON", c: (0.0, 0.0), d: KNOB_D, min: 1, max: engine::studio::UNISON_MAX as i32, def: 1, value: u.voices as i32, inert: None });
         row.push(Knob { ctl: Ctl::Uni(1), label: "DETUNE", c: (0.0, 0.0), d: KNOB_D, min: 0, max: engine::studio::DETUNE_MAX as i32, def: 0, value: u.detune as i32, inert: None });
-        row.push(Knob { ctl: Ctl::Uni(2), label: "DRIFT", c: (0.0, 0.0), d: KNOB_D, min: 0, max: engine::studio::DRIFT_MAX as i32, def: 0, value: u.drift as i32, inert: None });
     }
     place_row(&mut row, OSC.0 + PAD, OSC.1 - 2.0 * PAD, SEC_Y + KNOB_ROW_Y, KNOB_D, false);
     v.extend(row);
-    // OSCILLATOR, second row: the channel's other hardware controls.
+    // OSCILLATOR, second row (small): Drift (studio; the board leaves it
+    // out, the prompt lists it), then the channel's other hardware controls.
     let mut row2 = Vec::new();
+    if studio {
+        row2.push(Knob { ctl: Ctl::Uni(2), label: "DRIFT", c: (0.0, 0.0), d: SMALL_D, min: 0, max: engine::studio::DRIFT_MAX as i32, def: 0, value: u.drift as i32, inert: None });
+    }
     if d.has(ParamId::Sweep) {
         row2.push(Knob { d: SMALL_D, ..param(ParamId::Sweep, "SWEEP") });
         row2.push(Knob { d: SMALL_D, ..param(ParamId::SweepRate, "SWEEP RATE") });
@@ -217,17 +221,20 @@ fn knobs(d: &Dev) -> Vec<Knob> {
     }
     place_row(&mut row2, OSC.0 + PAD, OSC.1 - 2.0 * PAD, SEC_Y + SMALL_ROW_Y, SMALL_D, true);
     v.extend(row2);
-    // ENVELOPES: vibrato and the arpeggio's speed.
+    // ENVELOPES: the board's Vibrato Depth, Rate and Arp Speed; Vibrato
+    // Delay (an existing control) under them.
     if !d.inst.is_kit() {
         let vib = d.inst.inst.vibrato;
         let mut row = vec![
             Knob { ctl: Ctl::Vib(0), label: "VIB DEPTH", c: (0.0, 0.0), d: KNOB_D, min: 0, max: 100, def: 0, value: vib.depth as i32, inert: None },
             Knob { ctl: Ctl::Vib(1), label: "VIB RATE", c: (0.0, 0.0), d: KNOB_D, min: 1, max: 30, def: 6, value: vib.period.max(1) as i32, inert: None },
-            Knob { ctl: Ctl::Vib(2), label: "VIB DELAY", c: (0.0, 0.0), d: KNOB_D, min: 0, max: 60, def: 0, value: vib.delay as i32, inert: None },
             Knob { ctl: Ctl::ArpSpeed, label: "ARP SPEED", c: (0.0, 0.0), d: KNOB_D, min: 1, max: chip::instrument::ARP_SPEED_MAX as i32, def: 1, value: d.inst.inst.arp_speed.max(1) as i32, inert: None },
         ];
         place_row(&mut row, ENV.0 + PAD, ENV.1 - 2.0 * PAD, SEC_Y + KNOB_ROW_Y, KNOB_D, true);
         v.extend(row);
+        let mut row2 = vec![Knob { ctl: Ctl::Vib(2), label: "VIB DELAY", c: (0.0, 0.0), d: SMALL_D, min: 0, max: 60, def: 0, value: vib.delay as i32, inert: None }];
+        place_row(&mut row2, ENV.0 + PAD, ENV.1 - 2.0 * PAD, SEC_Y + SMALL_ROW_Y, SMALL_D, true);
+        v.extend(row2);
     }
     // OUTPUT: the chip's level control, large; the hardware envelope under it.
     if d.has(ParamId::Volume) {
@@ -1310,7 +1317,9 @@ mod tests {
     #[test]
     fn controls_follow_the_voice_and_the_lock() {
         let p = labels(&dev(VoiceKind::Pulse, None));
-        assert_eq!(&p[..4], ["DUTY", "UNISON", "DETUNE", "DRIFT"]);
+        // The board's first rows, then the small knobs.
+        assert_eq!(&p[..6], ["DUTY", "UNISON", "DETUNE", "DRIFT", "SWEEP", "SWEEP RATE"]);
+        assert_eq!(&p[6..10], ["VIB DEPTH", "VIB RATE", "ARP SPEED", "VIB DELAY"]);
         assert!(p.contains(&"SWEEP") && p.contains(&"VOLUME") && p.contains(&"ENVELOPE") && p.contains(&"ARP SPEED"));
         let t = labels(&dev(VoiceKind::Triangle, None));
         assert!(!t.contains(&"DUTY") && !t.contains(&"VOLUME") && t.contains(&"UNISON"));
@@ -1339,6 +1348,14 @@ mod tests {
         assert_eq!(duty.c, (140.0, SEC_Y + KNOB_ROW_Y + 20.0));
         let vol = k.iter().find(|k| k.label == "VOLUME").unwrap();
         assert_eq!(vol.d, BIG_D);
+        // The studio row: the board's three 64 px cells, space-between (x 0, 84, 168).
+        let st = knobs(&dev(VoiceKind::Pulse, None));
+        let xs: Vec<f32> = st.iter().filter(|k| ["DUTY", "UNISON", "DETUNE"].contains(&k.label)).map(|k| k.c.0).collect();
+        assert_eq!(xs, [24.0 + 32.0, 24.0 + 84.0 + 32.0, 24.0 + 168.0 + 32.0]);
+        // The envelope row: three cells, space-around (the board's).
+        let ex: Vec<f32> = st.iter().filter(|k| ["VIB DEPTH", "VIB RATE", "ARP SPEED"].contains(&k.label)).map(|k| k.c.0).collect();
+        let gap = (376.0 - 192.0) / 3.0;
+        assert_eq!(ex, [292.0 + gap * 0.5 + 32.0, 292.0 + gap * 1.5 + 64.0 + 32.0, 292.0 + gap * 2.5 + 128.0 + 32.0]);
     }
 
     #[test]

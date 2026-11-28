@@ -227,7 +227,9 @@ f = load("at25_out")
 if f:
     A = "AT-25"
     texts = o("t25_texts", [])
-    check(A, any("CHANNEL" in t and "PULSE 2" in t for t in texts), "a click on a track header selects it; the inspector shows it (I1)")
+    # PB (PB-D16): the device panel shows the track's instrument (its dev line).
+    dev = (o("t25_device", []) or [""])[-1]
+    check(A, "Pulse locked" in dev and '"Bright Lead"' in dev, f"a click on a track header selects it; the inspector shows it (I1): {dev}")
     check(A, [l["solo"] for l in f["lanes"][:3]] == [False, True, True], f"exclusive solo, Ctrl-click adds: {[l['solo'] for l in f['lanes'][:3]]}")
     check(A, o("t25_tip") is True and os.path.exists(os.path.join(work, "at25_tooltip_disabled.png")), "a disabled button's tooltip (screenshot)")
 
@@ -287,8 +289,13 @@ if "t30_sheet" in obs:
 if "t31_save" in obs:
     A = "AT-31"
     check(A, o("t31_save") is True and o("t31_presets") is True, "Save as Preset (a visible button, I3) wrote a user preset")
-    got, raw = menu(o("t31_menu", []), "Preset")
-    check(A, got is not None and got[:2] == ["Rename", "Delete"] and got[2].startswith("Show in"), f"a user preset's menu: {raw}")
+    # PB (PB-D16): the new browser's item menu (BrowserItem): the collections, then the user
+    # preset's Rename, Delete, Show in Explorer.
+    got, raw = menu(o("t31_menu", []), "BrowserItem(User")
+    if got is None:
+        got, raw = menu(o("t31_menu", []), "Preset")
+    i = got.index("Rename") if got and "Rename" in got else -1
+    check(A, i >= 0 and got[i:i + 2] == ["Rename", "Delete"] and got[i + 2].startswith("Show in"), f"a user preset's menu: {raw}")
 
 print()
 for at in sorted(results):

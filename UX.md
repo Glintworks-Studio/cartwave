@@ -256,7 +256,7 @@ VISION.md "The core model". Code: `tracks.rs` (model), `track_ui.rs` (commands, 
 | M5 | **Locked header**: the fader thumb at 0 dB, disabled (40% opacity); a lock glyph instead of the dB value; pan centred and disabled; hover help "Locked to the 2A03 Pulse 1: level comes from the chip's Volume register (Inspector > Volume)" | M | done |
 | M6 | **The channel budget** (`Pulse 2/2 · Triangle 1/1 · …`), red when over: in Project Settings, and compact in the TRACKS cell (`P 2/2 · T 1/1 · …`, hover help in full). One expansion chip per project | M | done |
 | M7 | **Profile warnings** ask before an action breaks the profile: a chord or overlap on a locked track (Unlock / Fit: the last note wins / Cancel), a note outside the channel's range (Fit: by octaves / Cancel), DPCM notes without a sample (Fit: removed / Cancel), a layout for another chip (Switch profile / Load on studio tracks / Cancel), a profile without a channel in use (Unlock tracks / Switch anyway / Cancel). "Don't ask again" (Settings ▸ Warnings resets it). No dialog when nothing conflicts; an old file over budget is a status-bar problem | M | done |
-| M8 | **Authentic presets** are the channel layouts: loading one puts the project under its profile and locks the tracks it fills (B4A-D14). *2026-11-26: they move to the browser's Hardware folder (Presets + Browser batch)* | L | done (layouts) |
+| M8 | **Authentic presets** are the channel layouts: loading one puts the project under its profile and locks the tracks it fills (B4A-D14). *Presets batch: 42 authentic presets in the browser's Hardware folder (by profile and channel), the layouts there as Bands (§4g W2)* | L | done |
 | M9 | **The Main track**: pinned at the bottom of the track list (Live 12 manual, ch. 18 Mixing, §18.4: "the bottom end of the Arrangement View"; never scrolling is ours), a black strip, "Main", OUT and the output device, PEAK (held; a click resets), the master fader (−inf … +6 dB) applied after the whole mix, saved in the project and the export JSON. It follows the header layouts. Its lane: the grid and the playhead (Batch 5: master automation) | M | done |
 | M10 | **Migration**: older projects open with every track locked to its channel; rendered audio is bit-identical (golden render and v2…v6 hashes) | M | done |
 
@@ -276,6 +276,30 @@ B4B-D4…D27; the rundown: BATCH4B.md.
 | S6 | **The mixer view** (Tab, View ▸ Mixer; the two view keys show which is up): a 152 px strip per track (the Main strip 176 px, pinned right), scrolling sideways; per strip the colour bar, the two-digit number and name, the pan knob (machined), M / S, the plastic fader cap on its scale, stereo LED meters (warm palette) with PEAK (held; a click resets), VOICES in use / the cap, the dB readout (double-click to type). The channel-budget bar across the top. **One model with the headers**: a change in either shows in both and is one undo step | M | done |
 | S7 | **Locked strips** follow M5: the fader parked at 0 dB and dimmed, the knob veiled, a lock instead of the readout's value, no typed values, the reason on hover | M | done |
 | S8 | **Header meters** in the pan grey with a white **clip mark** that lights past 0 dBFS and holds until clicked (VISUAL-SPEC §13) | M | done |
+
+## 4g. Presets, the browser and the device panel (Presets + Browser batch)
+
+VISION.md "Instruments", "Presets and the browser". Code: `views/device.rs` (Chip Synth, DPCM
+Sampler), `views/browser.rs`, `views/picker.rs`, `preset_ui.rs`, `bank.rs`; the bank
+`presets/bank.json` (`presets/tools/design_bank.py`). Decisions: RUNLOG PB-D1…; the rundown:
+PRESETS.md. Tests: `cargo test` (`views::device`, `bank`, `tests/presets.rs` PB-B1…B5) and the
+scenarios `docs/presets/tools/at_pb.ps1` (PB-01…PB-13).
+
+| # | Behaviour | Pri | Status |
+|---|---|---|---|
+| D1 | **The Detail View** (Live 12 manual §42.1, R78): the bottom pane shows the **Clip view** (the piano roll) or the **Device view** (the CLIP section and the selected track's instrument). **Shift+Tab** switches; a click on a track header shows its Device view; opening a clip its Clip view (PB-12) | M | done |
+| D2 | **Chip Synth** (Pulse, Triangle, Noise, VRC6 Pulse, VRC6 Saw): header (colour tab, name, STUDIO / 🔒 LOCKED, the centred preset field between ◀ ▶), OSCILLATOR (the Voice selector, the voice's real waveform in `#E8DCC0`, Duty / Mode / Rate, Unison, Detune, then Drift and the channel's other hardware controls), ENVELOPES (VOLUME / ARPEGGIO / PITCH / DUTY tabs over one editor; Vib Depth, Vib Rate, Arp Speed, then Vib Delay), OUTPUT (the chip's Volume, large; the hardware Envelope; a level meter). Controls a voice doesn't have are hidden (`views::device` tests) | M | done |
+| D3 | **The Voice selector** (studio tracks): switches the voice, one undo step (PB-01, PB-B2); a locked track shows its channel with the lock | M | done |
+| D4 | **Locked**: only the channel's controls (no Unison, Detune, Drift), the envelopes "4-BIT · PER FRAME", displays and knobs at 40 %, labels ≥ 4.5 : 1, the header at full brightness (PB-02) | M | done |
+| D5 | **DPCM Sampler**: SAMPLE (the note picks, the built-in and user slots, Import), PLAYBACK (Rate, Loop), OUTPUT; no envelopes (the DMC ignores them) | M | done |
+| D6 | **Arp Speed**: frames per arpeggio step (1–8), saved (format 9), allowed on locked tracks | M | done |
+| P1 | **The preset picker**: the field opens the browser's folders (a locked track's authentic presets first), **Show in Browser**, **Save Preset As…** (PB-13) | M | done |
+| P2 | **◀ ▶** step through the preset's folder and load at once, even while playing; a run of steps is one undo step; a locked track skips presets it can't play (PB-10, PB-B4) | M | done |
+| P3 | **A studio-only preset on a locked track** (Unison / Detune / Drift, or another voice) asks: Unlock track · Cancel (PB-11) | M | done |
+| P4 | **A preset remembers its voice**: on a studio track it switches the track's voice (PB-B3) | M | done |
+| W1 | **The browser** (Live 12 manual ch. 4): COLLECTIONS / LIBRARY (Sounds by role, Drums, Instruments by voice, 🔒 Hardware by profile, Clips, Samples) / PLACES (User Library, Current Project); folders open and close (PB-03); search across everything with tags (PB-04); select to preview (PB-05); double-click or drag to load (PB-06, PB-07); drag onto empty space for a new track (PB-08); collections from an item's context menu | M | done |
+| W2 | **Loading from Hardware** locks the track and sets the profile; another chip setup asks, no free channel asks (PB-09) | M | done |
+| W3 | **Nothing pretends**: Audio Effects, MIDI Effects and Imported Projects aren't shown; no device-chain slots | M | done |
 
 ## 5. Behaviour tables
 
@@ -339,26 +363,26 @@ B4B-D4…D27; the rundown: BATCH4B.md.
 | P12 | F / G | Fold / Fold to Scale (R68, R69) | L | ✓ |
 
 ### 5.4 Browser
-*Decided 2026-11-26:* this flat browser is **replaced, not kept alongside**, by Live's structure
-(Collections / Library / Places, folders first) in the Presets + Browser + device panel batch
-(VISION.md "The browser"). The rows below describe today's browser.
+*Decided 2026-11-26:* the flat browser is **replaced, not kept alongside**, by Live's structure
+(Collections / Library / Places, folders first). **Built in the Presets + Browser batch (§4g W1–W3).**
+The rows below keep their numbers; where the new browser changed one, it says so.
 
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
 | B1 | Typing in search | Never triggers shortcuts (F-03); Esc clears | M | ✓ · **done** (B3) |
 | B2 | Click preset | Select + hear (today); while playing: hear through the preview voice or say why not | S | ✓ · **done** (B3): no preview voice yet, so a click while playing says why |
 | B3 | Double-click / drag preset | Load (today) | M | ✓ |
-| B4 | Click layout | Select only; double-click or drag loads (F-36). A layout is a template: if it needs another hardware profile, it asks first (decision 5) | S | ✓ · **done** (B3) |
+| B4 | Click layout | Select only; double-click or drag loads (F-36). A layout is a template: if it needs another hardware profile, it asks first (decision 5). *Presets batch: the layouts are Hardware ▸ a profile ▸ Bands* | S | ✓ · **done** (B3) |
 | B5 | Right-click user preset | Rename, Delete, Show in Explorer/Finder | S | ✓ · **done** (B3) |
-| B6 | Authentic preset row | Shows 🔒 + profile; loading it locks the track (VISION) | L | ✓ |
+| B6 | Authentic preset row | Shows 🔒 + profile; loading it locks the track (VISION) | L | ✓ · **done** (Presets batch, W2) |
 | B7 | Preview on select | Selecting a preset (click or ↑/↓) auditions it while stopped; the header's Preview key (headphones) turns it off and on (on by default, remembered); while playing it says why it's silent | S | design pass · **done** |
 
 ### 5.5 Inspector
 | # | Action | Result | Pri | CEO |
 |---|---|---|---|---|
-| I1 | Select a track (no clip) | Shows the track's instrument | S | ✓ · **done** (B3) |
+| I1 | Select a track (no clip) | Shows the track's instrument (*Presets batch: the Device view, §4g D1*) | S | ✓ · **done** (B3) |
 | I2 | Controls the channel lacks | Hidden (triangle Duty/Volume macros) (F-05) | S | ✓ · **done** (B3) |
-| I3 | Instrument header | Make Unique, Use Track Instrument, Save as Preset as visible buttons | S | ✓ · **done** (B3) |
+| I3 | Instrument header | Make Unique, Use Track Instrument, Save as Preset as visible buttons (*Presets batch: Make Unique and Use Track Instrument in the CLIP section; Save Preset As… in the preset picker, §4g P1*) | S | ✓ · **done** (B3) |
 | I4 | Hover any control | Tooltip; disabled ones say why (F-34) | S | ✓ · **done** (B3) |
 
 ### 5.6 Automation lanes (later)
@@ -490,7 +514,7 @@ Batches 1 and 2 were built on `app-shell/batch-1-2` (SHELL.md).
 | **4a. The model change** | Tracks as instruments, voice pools, profiles and locks, the Main track (BATCH4A.md) | F-13, F-40, F-42, F-43, F-48 | **done** |
 | **Authenticity A/B** | Reference oracles outside the repo, register-write diffs, Mika's ear review (VISION.md "Sound systems") | | next |
 | **4b.** | Visual fixups (§8, VISUAL-SPEC.md §13, the `fixups` and `main-track` boards), the mixer view, stereo pan audible, MIDI import as tracks with the drop preview, unison and detune | F-17 (full), F-47 | **built** (BATCH4B.md) |
-| **Presets + Browser + device panel** | Chip Synth (Voice selector), DPCM Sampler, the in-instrument preset picker, the new browser, Mika's 100+ bank | | |
+| **Presets + Browser + device panel** | Chip Synth (Voice selector), DPCM Sampler, the in-instrument preset picker, the new browser, Mika's 100+ bank | | **built** (PRESETS.md) |
 | **5. Automation** | Lanes, clip envelopes, tempo automation (the registry is ready: docs/batch4a/parameters.md) | F-44 | ~3–4 weeks |
 | **Then** | The device chain (MIDI effects, then audio effects) → tracker import → recording and MIDI input → time signatures and scales (F-45, F-46) → the export polish → the Metal backend → the arcade board (ymfm) → the SNES (VISION.md roadmap, decided 2026-11-26) | | |
 

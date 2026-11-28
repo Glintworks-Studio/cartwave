@@ -77,17 +77,19 @@ if (Want "DP-02") {
 if (Want "DP-03") {
   $d = Join-Path $Work "d03"
   Launch -Data $d
-  # LEADS: "Square Lead" is the first preset row (client y 425), "Bright Lead" the next.
-  MoveL 60 425; Down; Start-Sleep -Milliseconds 300; Up; Start-Sleep -Milliseconds 300
+  # PB (RUNLOG PB-D16): the new browser: Sounds > Leads > Square (rows from 180, 24 px each),
+  # "Bright Square Lead" the first preset (client y 252), "Hollow 12.5%" the next.
+  ClickL 75 244; ClickL 200 192; ClickL 200 216
+  MoveL 200 252; Down; Start-Sleep -Milliseconds 300; Up; Start-Sleep -Milliseconds 300
   KE 0x28; Start-Sleep -Milliseconds 900                       # Down: the next preset, auditioned
   Shot "dp03_arrow"
   $obs.dp03_on = @(DevLines $d "^dev: audition")
-  ClickL 138 95; Start-Sleep -Milliseconds 300; Shot "dp03_key_off"   # the Preview key: off
-  MoveL 60 425; Down; Up; Start-Sleep -Milliseconds 300
+  ClickL 216 96; Start-Sleep -Milliseconds 300; Shot "dp03_key_off"   # the Preview key: off (PB: x 216)
+  MoveL 200 252; Down; Up; Start-Sleep -Milliseconds 300
   $obs.dp03_off = @(DevLines $d "^dev: audition")
-  ClickL 138 95                                                # back on
+  ClickL 216 96                                                # back on
   K 0x20; Start-Sleep -Milliseconds 300                        # Space: play
-  MoveL 60 425; Down; Up; Start-Sleep -Milliseconds 500
+  MoveL 200 252; Down; Up; Start-Sleep -Milliseconds 500
   $obs.dp03_playing = @(Ui-Texts | Where-Object { $_ -match "song is stopped" })
   Shot "dp03_playing"
   K 0x20

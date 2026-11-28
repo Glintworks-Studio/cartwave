@@ -503,6 +503,9 @@ pub enum AppEvent {
     InsertPhrase { phrase: usize, lane: Option<usize>, tick: Option<u32> },
     /// A DPCM sample from the browser onto a DPCM Sampler track (`None`: a new one).
     AssignSample { slot: usize, lane: Option<usize> },
+    /// A click on a track header (§3.1): its Device view (as clicking a
+    /// track's title bar in the reference); Shift+Tab goes back to the clip.
+    ShowDevice,
     /// The browser's sidebar entry (remembered in settings.json).
     BrowserSection(String),
     /// The device's ◀ ▶: the previous / next preset in the current one's folder.
@@ -796,6 +799,12 @@ impl Model for AppState {
             AppEvent::InsertPhrase { phrase, lane, tick } => self.insert_phrase(*phrase, *lane, *tick),
             AppEvent::AssignSample { slot, lane } => self.assign_sample(*slot, *lane),
             AppEvent::StepPreset(d) => self.step_preset(cx, *d),
+            AppEvent::ShowDevice => {
+                if self.s.piano_open.get_untracked() {
+                    self.detail_clip = self.s.piano.with_untracked(|p| p.clip);
+                    self.close_piano();
+                }
+            }
             AppEvent::BrowserSection(k) => {
                 if self.settings.browser_section != *k {
                     self.settings.browser_section = k.clone();

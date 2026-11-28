@@ -91,6 +91,11 @@ panel batch** (Unison and Detune come first, in 4b).
 
 *Decided 2026-11-26:* this section is new.
 
+*Built in the Presets + Browser batch (PRESETS.md):* Chip Synth with its Voice selector (one undo
+step; locked: the channel's voice) and the DPCM Sampler, in the bottom pane's Device view
+(Shift+Tab ⇄ the Clip view); the locked device dimmed with readable labels; Arp Speed added to
+the macros (format 9).
+
 ### The device chain (as in Ableton)
 Every track runs **MIDI effects → instrument → audio effects**. Devices are dragged from the
 browser onto any track, including Main.
@@ -259,6 +264,10 @@ paid Emulations after the NES.
 *Built in 4a:* the 60 presets and 5 channel layouts share one ASSETS.md row. **Per-preset
 entries to add in the Presets + Browser batch**, with Mika's bank.
 
+*Built in the Presets + Browser batch:* the first bank, 141 presets designed from scratch
+(42 authentic, in Hardware), the classic ones folded in; one provenance entry per preset
+(`presets/PROVENANCE.md`, linked from ASSETS.md); a listening pack (`docs/audio/presets/`).
+
 ### The browser (Live's structure)
 - **Sidebar:** **Collections / Library / Places**.
 - **Library:** **Sounds** (by role: Leads, Basses, Arps, Pads, Bells & Keys, FX, Game
@@ -277,6 +286,11 @@ the same folders as the browser, *Show in Browser* and *Save Preset As…*.
 Layouts") with a Preview key (UX.md §5.4), and the inspector has no preset field. **To change
 in the Presets + Browser + device panel batch.** Reference:
 `docs/design/meeting-2026-11-26/workflow-chip-synth.*`.
+
+*Built in the Presets + Browser batch:* the browser in Live's structure (Collections / Library /
+Places, folders, search with tags; Audio Effects, MIDI Effects and Imported Projects not shown
+until they have content) and the in-instrument picker (◀ ▶ with one undo step for a run, Show in
+Browser, Save Preset As…), UX.md §4g.
 
 *Decided 2026-11-26:* this section is new.
 

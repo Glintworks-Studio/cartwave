@@ -1333,6 +1333,8 @@ impl View for TrackRow {
                     let m = *cx.modifiers();
                     cx.emit(AppEvent::EditorFocus(crate::shortcuts::Ctx::Arrangement));
                     cx.emit(AppEvent::SelectTrack(self.lane, m.shift() || crate::input::command(&m)));
+                    // A click on a track header shows its Device view (PB §3.1).
+                    cx.emit(AppEvent::ShowDevice);
                     // Keys (Delete, Ctrl+D, Ctrl+R) now act on the track: take the
                     // keyboard focus from wherever it was (a text field keeps Delete).
                     cx.focus();
