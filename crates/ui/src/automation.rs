@@ -72,17 +72,26 @@ fn to_auto(p: &[Pt]) -> Vec<AutoPoint> {
 }
 
 impl Envelope {
-    /// The points folded by a multiply-hash (about 1 ns each; every field
-    /// counts). `content_hash` and the lanes' draw cache use it: both run
-    /// often (every arrangement change, every drawn frame; B5-D14).
+    /// The points folded by a multiply-hash in four independent lanes (every
+    /// field counts). `content_hash` and the lanes' draw cache use it, several
+    /// times a frame while drawing: one serial chain cost 6 µs on 2,000
+    /// points (B5-D14).
     pub fn points_hash(&self) -> u64 {
-        let mut f: u64 = 0xcbf2_9ce4_8422_2325 ^ self.points.len() as u64;
-        for p in &self.points {
-            for w in [p.t as u64, p.v.to_bits() as u64, p.c.to_bits() as u64] {
-                f = (f ^ w).wrapping_mul(0x0100_0000_01b3).rotate_left(29);
-            }
+        const K: u64 = 0x9e37_79b9_7f4a_7c15;
+        let step = |f: u64, p: &Pt| {
+            let f = (f ^ (p.t as u64 | (p.v.to_bits() as u64) << 32)).wrapping_mul(K).rotate_left(29);
+            (f ^ p.c.to_bits() as u64).wrapping_mul(K).rotate_left(31)
+        };
+        let mut f = [1u64, 2, 3, 4];
+        let (chunks, rest) = self.points.as_chunks::<4>();
+        for c in chunks {
+            f = [step(f[0], &c[0]), step(f[1], &c[1]), step(f[2], &c[2]), step(f[3], &c[3])];
         }
-        f
+        let mut h = self.points.len() as u64;
+        for p in rest {
+            h = step(h, p);
+        }
+        f.into_iter().fold(h, |h, x| (h ^ x).wrapping_mul(K).rotate_left(29))
     }
 
     pub fn new(points: Vec<Pt>) -> Self {
@@ -201,27 +210,20 @@ impl Envelope {
             return;
         }
         let end = at.saturating_add(len);
-        if !self.points.is_empty() {
-            self.pin(at, end);
-            self.points.retain(|p| p.t < at || p.t > end);
-            // The outside's edge values stay; the pasted values meet them
-            // with a jump at each edge.
-            let before: Vec<Pt> = self.points.iter().filter(|p| p.t < at).copied().collect();
-            let after: Vec<Pt> = self.points.iter().filter(|p| p.t > end).copied().collect();
-            let edge_in = self.value_at(at as f64);
-            let edge_out = self.value_at(end as f64);
-            self.points = before;
-            if let Some(v) = edge_in {
-                self.points.push(Pt::new(at, v));
-            }
-            self.points.extend(clip.iter().map(|p| Pt { t: p.t.saturating_add(at), ..*p }));
-            if let Some(v) = edge_out {
-                self.points.push(Pt::new(end, v));
-            }
-            self.points.extend(after);
-        } else {
-            self.points = clip.iter().map(|p| Pt { t: p.t.saturating_add(at), ..*p }).collect();
-        }
+        // The values the outside reaches at each edge, read before anything is
+        // removed (a jump on an edge: its left value in, its right value out).
+        let (lo, hi) = (self.points.partition_point(|p| p.t < at), self.points.partition_point(|p| p.t <= end));
+        let edge_in = self.points.get(lo).filter(|p| p.t == at).map(|p| p.v).or_else(|| self.value_at(at as f64));
+        let last = if hi > lo { self.points.get(hi - 1) } else { None };
+        let edge_out = last.filter(|p| p.t == end).map(|p| p.v).or_else(|| self.value_at(end as f64));
+        // The pasted values meet them with a jump at each edge.
+        let mid: Vec<Pt> = edge_in
+            .map(|v| Pt::new(at, v))
+            .into_iter()
+            .chain(clip.iter().map(|p| Pt { t: p.t.saturating_add(at), ..*p }))
+            .chain(edge_out.map(|v| Pt::new(end, v)))
+            .collect();
+        self.points.splice(lo..hi, mid);
         self.sort();
         self.dedup();
     }
@@ -591,6 +593,71 @@ mod tests {
         }
         assert_eq!(e.value_at(100.0), Some(0.0), "before: kept");
         assert_eq!(e.value_at(3000.0), Some(0.0), "after: kept");
+    }
+
+    /// AU-02/AU-03: drawing and pasting never change the envelope outside.
+    #[test]
+    fn au03_paste_and_draw_keep_the_outside() {
+        // A peak inside the replaced range: the ramps outside it must not move.
+        let before = env(&[(0, 0.0), (100, 1.0), (200, 0.0)]);
+        let mut e = before.clone();
+        e.paste(90, 20, &[Pt::new(0, 0.5), Pt::new(20, 0.5)]);
+        for t in [0, 45, 89, 111, 150, 200] {
+            let (a, b) = (before.value_at(t as f64).unwrap(), e.value_at(t as f64).unwrap());
+            assert!((a - b).abs() < 1e-4, "paste changed tick {t}: {a} -> {b}");
+        }
+        let mut e = before.clone();
+        e.draw_steps(90, 91, 10, |_| 0.5);
+        for t in [0, 45, 89, 101, 150, 200] {
+            let (a, b) = (before.value_at(t as f64).unwrap(), e.value_at(t as f64).unwrap());
+            assert!((a - b).abs() < 1e-4, "draw changed tick {t}: {a} -> {b}");
+        }
+        // The whole envelope replaced: its end values still hold outside.
+        let mut e = env(&[(100, 1.0)]);
+        e.paste(50, 100, &[Pt::new(0, 0.5), Pt::new(100, 0.5)]);
+        assert_eq!((e.value_at(0.0), e.value_at(400.0)), (Some(1.0), Some(1.0)));
+    }
+
+    #[test]
+    fn points_hash_sees_every_field_and_position() {
+        let base: Vec<Pt> = (0..11).map(|i| Pt::new(i * 10, i as f32)).collect();
+        let h = Envelope { points: base.clone() }.points_hash();
+        for i in 0..base.len() {
+            for f in 0..3 {
+                let mut q = base.clone();
+                match f {
+                    0 => q[i].t += 1,
+                    1 => q[i].v += 0.25,
+                    _ => q[i].c = 0.5,
+                }
+                assert_ne!(Envelope { points: q }.points_hash(), h, "point {i} field {f}");
+            }
+            for j in 0..i {
+                let mut q = base.clone();
+                q.swap(i, j);
+                assert_ne!(Envelope { points: q }.points_hash(), h, "order {i} {j}");
+            }
+        }
+        assert_ne!(Envelope { points: base[..10].to_vec() }.points_hash(), h);
+    }
+
+    /// Not a gate: prints the per-edit costs (`--ignored --nocapture`, release).
+    #[test]
+    #[ignore]
+    fn bench_edit_costs() {
+        let e0 = Envelope::new((0..2141).map(|i| Pt::new(i * 100, (i % 7) as f32)).collect());
+        let t = std::time::Instant::now();
+        let mut x = 0;
+        for _ in 0..2000 {
+            x ^= std::hint::black_box(&e0).points_hash();
+        }
+        println!("points_hash {:.2} us ({x:x})", t.elapsed().as_secs_f64() * 1e6 / 2000.0);
+        let mut e = e0.clone();
+        let t = std::time::Instant::now();
+        for i in 0..2000u32 {
+            std::hint::black_box(&mut e).draw_steps(100_000 + i % 400 * 10, 100_001 + i % 400 * 10, 240, |_| (i % 5) as f32);
+        }
+        println!("draw_steps {:.2} us ({} points)", t.elapsed().as_secs_f64() * 1e6 / 2000.0, e.len());
     }
 
     /// AU-03: a time selection's envelope copies, pastes and deletes.

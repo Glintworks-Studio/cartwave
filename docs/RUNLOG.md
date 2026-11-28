@@ -2102,8 +2102,53 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   Automation Mode) and the lane headers exist only in the mode (outside it the row views are
   `main`'s); `mark` returns at once when the song has no envelopes. One pair after the fix:
   `s64_playing` −64, `s64_scroll` −23, `s64_insert_delete` +117, `s64_header_drag` −373,
-  `ruler_zoom` −52. The full 10 rounds were run again on the fixed build (results in BATCH5.md).
-  Harness bug: `$plain = if (…) { @("-Plain") }` unrolls to a string and splatting it passed
-  "-", "P", … as positional arguments, so the first run's plain (unautomated) automation baselines
-  never ran; `[string[]]$plain` fixes it, and `perf_auto_b5.ps1` runs the automation scenarios' 10
-  plain-vs-automated rounds on their own.
+  `ruler_zoom` −52. Harness bug: `$plain = if (…) { @("-Plain") }` unrolls to a string and
+  splatting it passed "-", "P", … as positional arguments, so the first run's plain (unautomated)
+  automation baselines never ran; `[string[]]$plain` fixes it, and `perf_auto_b5.ps1` runs the
+  automation scenarios' plain-vs-automated rounds on their own.
+  **Second run** (10 rounds, the fixed build): every main-vs-branch scenario passed except
+  `pr_dragging`; the automation scenarios failed on the UI thread (`auto_scroll` +1,012,
+  `auto_timesel` +1,400, `auto_draw_2000` +450 k/frame). Reading the proof lines then showed the
+  harness itself was wrong in four ways, all fixed before the third run:
+  1. **The piano roll's song was format 10** (`make_songs` from this branch), so `main` refused it
+     and opened its default song: every `pr_*` pair compared two different songs (`main`'s lines
+     said "NOT REACHED"). Now `main`'s `make_songs` writes it (format 9, both builds open it).
+  2. **The earlier scenarios ran at the wrong coordinates on both builds.** The Presets batch ran
+     its branch with the browser at the old 240 px and the pane 124 px taller (`perf_pb.ps1`'s
+     `-BrowserW 240 -PaneGrow 124`) so the old scripts' coordinates held; `main` now has both, and
+     `perf_b5.ps1` passed neither, so `s64_header_drag` dragged the top bar's Display and no track
+     moved ("64-track scenario NOT REACHED" on both sides). Both builds now run with the hooks.
+  3. **`perf_summary_b5.py` left unproven runs out of the CPU % columns only**: their cycles still
+     made the verdicts. It now drops each unproven scenario's cycle samples and lists them.
+  4. **`auto_timesel` was not a time selection on either side**: in the plain song an empty lane's
+     press adds a breakpoint, and in the automated song y 214 hit the Duty lane's line (547 → 548
+     points). A new dev line (`dev: automation time selection …`) is now the scenario's proof; the
+     press moved to the lane's step-0 band (below the line in both songs), and the plain fixture
+     keeps one flat envelope on that lane so the same press selects time there.
+  Real costs found on the way, fixed: `Envelope::value_at` copied the whole point list into a new
+  `Vec` on every call, and the locked lanes' stepped drawing calls it once per pixel column
+  (`chip::auto::eval_by` now evaluates the editor's points in place; the engine's `eval` is the same
+  code); `content_hash` ran SipHash over every point on every arrangement change (now a
+  multiply-fold, `Envelope::points_hash`); each lane's line and dots are cached as paths in
+  band-local coordinates, rebuilt only when the envelope, the view or the geometry changes. Two
+  pairs after these: `auto_scroll` +1,041 → +8, `auto_playing` +100 → +18. Investigated without a
+  fix: with Automation Mode on and the song playing, the automated song still costs ~+50 µs of
+  event processing and ~+130 µs of GPU flush per frame against the plain one; switching parts off
+  (an env toggle per part, removed) put most of the flush in the lane headers' drawing, but
+  neither redrawing them only on a value change, nor at 20 Hz, nor rounding their readout's time
+  changed it (all reverted). samply could not be used (its Windows trace never finished).
+- **B5-D15 (gate 5 fails on e265df8; a bug and a cost found; one rerun fixed in advance).** The third
+  10-round run (build e265df8, `../b5-work/perf3`) **fails `auto_draw_2000`**: UI +267.6 k/frame
+  (SE 58.1; limit 235). Every other scenario passes; the proofs hold in all 20 automation runs; the
+  one omission is `overview_drag`/`overview_zoom` in b5 round 7 (no Overview hover in its log).
+  The excess is in the events phase (+51 us a frame, about 240 k cycles); draw and custom are level.
+  Cause: `points_hash` took **6.1 us** on 2,141 points (one serial multiply chain; the "about 1 ns a
+  point" in its comment was wrong) and runs several times a frame; `draw_steps` took **13.9 us**
+  (copies and a full sort). Now 1.1 us and 1.3 us (`bench_edit_costs`, ignored test).
+  **Reading `paste` for this found a correctness bug, not a performance one:** the edge values were
+  evaluated after the edge points were removed, so Draw Mode and paste changed the envelope
+  *outside* their range (0,100,200 = 0,1,0 pasted at 90..110: tick 45 went 0.45 to 0). The earlier
+  AU-02/AU-03 tests only used flat outsides. New test: `au03_paste_and_draw_keep_the_outside`
+  (fails on e265df8). As Batch 4c's log says, a second sample of the same build would be choosing
+  the sample; this is a new build, so **every gate reruns on it, and the 10 performance rounds run
+  once: whatever they say is the result.**
