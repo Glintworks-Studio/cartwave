@@ -558,6 +558,52 @@ mod tests {
         assert_eq!(racks, 2, "the empty first rack and the 8-voice one came back");
     }
 
+    /// Batch 5: automation on every kind of target (a console lane's
+    /// register and macro, a studio track's fader, pan, register and
+    /// macro, the Main gain), played inside `process` under the allocation
+    /// checker (debug builds abort on an allocation).
+    #[test]
+    fn automation_plays_without_allocating() {
+        use crate::song::StudioLane;
+        use crate::studio::{StudioTrack, TrackCtl};
+        use chip::auto::{AutoEnv, AutoPoint, AutoTarget};
+        use chip::driver::ParamId;
+        use chip::voice::VoiceKind;
+        let (mut c, mut tx, _grx, shared) = core();
+        let samples = chip::samples::build(&mut [0u8; chip::dmc::ROM_SIZE]);
+        let ctl = Arc::new(TrackCtl::new(1.0, true, 0, chip::driver::Params::default().values[0]));
+        let rack = Box::new(crate::studio::Rack::new(vec![StudioTrack::new(1, VoiceKind::Pulse, ctl.clone(), 8, samples)]));
+        let ramp = |a: f32, b: f32| vec![AutoPoint { tick: 0, value: a, curve: 0.0 }, AutoPoint { tick: 3840, value: b, curve: 0.5 }];
+        let mut pts = Vec::new();
+        let mut envs = Vec::new();
+        for (t, a, b) in [(AutoTarget::Gain, 0.0, -20.0), (AutoTarget::Pan, -50.0, 50.0), (AutoTarget::Chip(ParamId::Duty), 0.0, 3.0), (AutoTarget::MacroArp, 0.0, 12.0)] {
+            envs.push(AutoEnv { target: t, start: pts.len() as u32, len: 2 });
+            pts.extend(ramp(a, b));
+        }
+        let chord = [(0u32, 19_200u32, 60u8, None), (0, 19_200, 64, None)];
+        let lane = StudioLane::build(1, chip::instrument::NONE, [ClipInput { lane: 0, start: 0, len: 19_200, inst: chip::instrument::NONE, notes: &chord }]).with_auto(envs, pts);
+        let notes = [(0u32, 19_200u32, 69u8, None)];
+        let mut console: [Vec<AutoEnv>; chip::driver::LANES] = Default::default();
+        console[0] = vec![AutoEnv { target: AutoTarget::Chip(ParamId::Volume), start: 0, len: 2 }, AutoEnv { target: AutoTarget::MacroPitch, start: 2, len: 2 }];
+        let mut cpts = ramp(15.0, 2.0);
+        cpts.extend(ramp(-100.0, 100.0));
+        let s = SongSnapshot::build([ClipInput { lane: 0, start: 0, len: 19_200, inst: chip::instrument::NONE, notes: &notes }], 1)
+            .with_studio(vec![lane])
+            .with_auto(console, cpts, ramp(0.0, -12.0));
+        assert!(s.has_auto());
+        tx.push(Command::Rack(rack)).ok().unwrap();
+        tx.push(Command::Song(Box::new(s))).ok().unwrap();
+        tx.push(Command::Play).ok().unwrap();
+        let mut out = vec![0f32; 256 * 2];
+        for _ in 0..400 {
+            c.process(&mut out, 2, 0);
+        }
+        assert!(out.iter().any(|&v| v != 0.0));
+        assert_eq!(ctl.sounding.load(Ordering::Relaxed), 2);
+        assert!(shared.position().unwrap().ticks > 3840.0, "past the envelopes' ends");
+        assert_eq!(c.mix.player.driver.effective(0, ParamId::Volume), 2, "the console lane's register follows its envelope");
+    }
+
     #[test]
     fn song_waits_for_garbage_space() {
         let (mut c, mut tx, mut grx, shared) = core();

@@ -1,5 +1,6 @@
 //! Immutable song snapshots, built on the UI thread and handed to the engine.
 
+use chip::auto::{AutoEnv, AutoPoint};
 use chip::driver::{Note, Song, LANES};
 use std::sync::Arc;
 
@@ -33,6 +34,11 @@ pub struct StudioLane {
     pub max_len: u32,
     /// The track's instrument (bank index; `NONE`: plain channel controls).
     pub inst: u8,
+    /// Batch 5: the track's automation envelopes and their points (empty:
+    /// none). Channel controls and macros are evaluated at each frame tick,
+    /// the fader and pan ramp in four fixed steps after it.
+    pub auto: Vec<AutoEnv>,
+    pub auto_points: Vec<AutoPoint>,
 }
 
 impl StudioLane {
@@ -61,7 +67,14 @@ impl StudioLane {
             }
         });
         let max_len = notes.iter().map(|n| n.end - n.start).max().unwrap_or(0);
-        Self { id, notes, max_len, inst }
+        Self { id, notes, max_len, inst, auto: Vec::new(), auto_points: Vec::new() }
+    }
+
+    /// Adds automation envelopes (Batch 5).
+    pub fn with_auto(mut self, auto: Vec<AutoEnv>, points: Vec<AutoPoint>) -> Self {
+        self.auto = auto;
+        self.auto_points = points;
+        self
     }
 }
 
@@ -85,6 +98,11 @@ pub struct SongSnapshot {
     pub version: u64,
     /// When the UI sent it (ns since the engine epoch; 0 if unknown).
     pub sent_ns: u64,
+    /// Batch 5: each console lane's automation envelopes, the points they
+    /// index, and the Main track's gain envelope (dB).
+    pub auto: [Vec<AutoEnv>; LANES],
+    pub auto_points: Vec<AutoPoint>,
+    pub main_auto: Vec<AutoPoint>,
 }
 
 /// One note of a [`ClipInput`]: (start relative to the clip, length, pitch,
@@ -114,7 +132,22 @@ impl SongSnapshot {
             instruments: &self.instruments,
             lane_inst: self.lane_inst,
             preview_inst: self.preview_inst,
+            auto: core::array::from_fn(|i| self.auto[i].as_slice()),
+            auto_points: &self.auto_points,
         }
+    }
+
+    /// Adds the console lanes' automation and the Main gain's (Batch 5).
+    pub fn with_auto(mut self, auto: [Vec<AutoEnv>; LANES], points: Vec<AutoPoint>, main: Vec<AutoPoint>) -> Self {
+        self.auto = auto;
+        self.auto_points = points;
+        self.main_auto = main;
+        self
+    }
+
+    /// Whether any envelope is in the song.
+    pub fn has_auto(&self) -> bool {
+        !self.main_auto.is_empty() || self.auto.iter().any(|a| !a.is_empty()) || self.studio.iter().any(|l| !l.auto.is_empty())
     }
 
     /// Flattens clips into lanes. Notes are cut at their clip's end. Within a
@@ -163,6 +196,9 @@ impl SongSnapshot {
             dpcm: Arc::new(DpcmBank::default()),
             version,
             sent_ns: 0,
+            auto: Default::default(),
+            auto_points: Vec::new(),
+            main_auto: Vec::new(),
         }
     }
 

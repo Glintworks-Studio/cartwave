@@ -25,6 +25,7 @@
 //! stays under its ceiling, which a single note always does.
 
 use crate::song::SongSnapshot;
+use chip::auto::AutoPoint;
 use crate::studio::{Rack, Steps};
 use chip::blep::MAX_FRAMES;
 use chip::dmc::ROM_SIZE;
@@ -86,6 +87,73 @@ impl Bus {
     }
 }
 
+/// Batch 5: the Main gain's automation, evaluated at each frame tick and
+/// applied from the output sample that tick falls on (its absolute index,
+/// `cycle × rate / CPU clock`), ramping over a fixed number of samples: the
+/// same render with any buffer size.
+#[derive(Clone)]
+struct MainAuto {
+    /// Pending (sample index, linear gain) events, oldest first.
+    ev: [(u64, f32); 32],
+    n: usize,
+    sample_rate: f64,
+    /// The ramp now: from, to, its first sample.
+    from: f32,
+    to: f32,
+    start: u64,
+    /// Envelopes were playing at the last block.
+    active: bool,
+}
+
+impl MainAuto {
+    fn new(sample_rate: f64) -> Self {
+        Self { ev: [(0, 0.0); 32], n: 0, sample_rate, from: 1.0, to: 1.0, start: 0, active: false }
+    }
+
+    /// The ramp length: a quarter of a frame (about 4 ms).
+    fn ramp(&self) -> u64 {
+        (self.sample_rate / 240.0) as u64
+    }
+
+    fn push(&mut self, cycle: u64, g: f32) {
+        let s = (cycle as f64 * self.sample_rate / CPU_HZ_NTSC) as u64;
+        if self.n < self.ev.len() {
+            self.ev[self.n] = (s, g);
+            self.n += 1;
+        }
+    }
+
+    fn at(&self, s: u64) -> f32 {
+        let r = self.ramp().max(1);
+        if s >= self.start + r {
+            self.to
+        } else {
+            let f = (s - self.start + 1) as f32 / r as f32;
+            self.from + (self.to - self.from) * f
+        }
+    }
+
+    fn tick(&mut self, pts: &[AutoPoint], cycle: u64, pos: f64) {
+        if let Some(db) = chip::auto::eval(pts, pos) {
+            self.push(cycle, chip::auto::db_to_gain(db));
+        }
+    }
+}
+
+/// The hook for a song with Main automation and no studio track: it only
+/// records the Main gain at each frame tick.
+struct MainHook<'a> {
+    main: &'a mut MainAuto,
+    pts: &'a [AutoPoint],
+}
+
+impl TickHook for MainHook<'_> {
+    fn tick(&mut self, _: &[u8; ROM_SIZE], cycle: u64, _: Option<f64>, pos: f64, _: bool) {
+        self.main.tick(self.pts, cycle, pos);
+    }
+    fn chunk(&mut self, _: &[u8; ROM_SIZE], _: u64, _: &mut [f32]) {}
+}
+
 #[derive(Clone)]
 pub struct Mixdown {
     pub player: Player,
@@ -99,6 +167,9 @@ pub struct Mixdown {
     /// The studio bus limiter's smallest gain since the last
     /// `take_limiter` (1.0: it didn't work).
     limiter_min: f32,
+    /// Output samples rendered so far (the Main automation's clock).
+    samples: u64,
+    main_auto: MainAuto,
 }
 
 struct Hook<'a> {
@@ -108,10 +179,14 @@ struct Hook<'a> {
     snap: &'a SongSnapshot,
     /// The limiter's smallest gain this chunk (for the meters and tests).
     min_gain: f32,
+    main: &'a mut MainAuto,
 }
 
 impl TickHook for Hook<'_> {
     fn tick(&mut self, rom: &[u8; ROM_SIZE], cycle: u64, prev: Option<f64>, pos: f64, playing: bool) {
+        if !self.snap.main_auto.is_empty() {
+            self.main.tick(&self.snap.main_auto, cycle, pos);
+        }
         self.rack.tick(self.song, &self.snap.studio, cycle, prev, pos, playing, rom, &mut self.bus.steps);
     }
 
@@ -157,6 +232,8 @@ impl Mixdown {
             master_now: 1.0,
             user: [SampleRef::default(); USER_SLOTS],
             limiter_min: 1.0,
+            samples: 0,
+            main_auto: MainAuto::new(sample_rate),
         }
     }
 
@@ -195,6 +272,8 @@ impl Mixdown {
     /// A new output rate (no stream running): the console and the bus.
     pub fn set_sample_rate(&mut self, sample_rate: f64) {
         self.player.synth.set_sample_rate(sample_rate);
+        self.main_auto = MainAuto::new(sample_rate);
+        self.samples = (self.player.synth.cycle as f64 * sample_rate / CPU_HZ_NTSC) as u64;
         let mode = self.bus.filter.mode;
         self.bus = Bus::new(sample_rate, mode);
     }
@@ -220,7 +299,7 @@ impl Mixdown {
     /// project can be stereo.)
     pub fn render(&mut self, snap: &SongSnapshot, out: &mut [f32]) {
         self.render_parts(snap, out, None);
-        self.apply_master(out, None);
+        self.apply_master(snap, out, None);
     }
 
     /// Renders both channels: `l` and `r` get the console and the studio
@@ -232,9 +311,9 @@ impl Mixdown {
         self.render_parts(snap, l, Some(r));
         let stereo = self.bus.steps.side;
         if stereo {
-            self.apply_master(l, Some(r));
+            self.apply_master(snap, l, Some(r));
         } else {
-            self.apply_master(l, None);
+            self.apply_master(snap, l, None);
             r.copy_from_slice(l);
         }
         stereo
@@ -244,6 +323,22 @@ impl Mixdown {
     /// the right channel there and the left side added into `out`.
     fn render_parts(&mut self, snap: &SongSnapshot, out: &mut [f32], mut right: Option<&mut [f32]>) {
         let song = snap.view();
+        if self.rack.is_empty() && !snap.main_auto.is_empty() {
+            // Main automation, no studio track: the console with a hook that
+            // only records the Main gain's frame ticks.
+            self.bus.synced = false;
+            let mut at = 0;
+            while at < out.len() {
+                let n = (out.len() - at).min(MAX_FRAMES);
+                let mut hook = MainHook { main: &mut self.main_auto, pts: &snap.main_auto };
+                self.player.render_with(&song, &mut out[at..at + n], &mut hook);
+                at += n;
+            }
+            if let Some(r) = right {
+                r.copy_from_slice(out);
+            }
+            return;
+        }
         if self.rack.is_empty() {
             self.bus.synced = false;
             self.player.render(&song, out);
@@ -266,7 +361,7 @@ impl Mixdown {
         while at < out.len() {
             let n = (out.len() - at).min(MAX_FRAMES);
             let piece = &mut out[at..at + n];
-            let mut hook = Hook { rack: &mut self.rack, bus: &mut self.bus, song: &song, snap, min_gain: 1.0 };
+            let mut hook = Hook { rack: &mut self.rack, bus: &mut self.bus, song: &song, snap, min_gain: 1.0, main: &mut self.main_auto };
             self.player.render_with(&song, piece, &mut hook);
             let min_gain = hook.min_gain;
             self.limiter_min = self.limiter_min.min(min_gain);
@@ -285,7 +380,44 @@ impl Mixdown {
         }
     }
 
-    fn apply_master(&mut self, out: &mut [f32], mut right: Option<&mut [f32]>) {
+    fn apply_master(&mut self, snap: &SongSnapshot, out: &mut [f32], mut right: Option<&mut [f32]>) {
+        let base = self.samples;
+        self.samples += out.len() as u64;
+        // Batch 5: the Main gain's envelope drives it (the fader is ignored
+        // while it plays; it takes over again from the envelope's last value).
+        if !snap.main_auto.is_empty() || self.main_auto.n > 0 {
+            let m = &mut self.main_auto;
+            if !m.active {
+                m.active = true;
+                m.from = self.master_now;
+                m.to = self.master_now;
+                m.start = base;
+            }
+            let mut k = 0;
+            for (i, v) in out.iter_mut().enumerate() {
+                let s = base + i as u64;
+                while k < m.n && m.ev[k].0 <= s {
+                    let now = m.at(s);
+                    m.from = now;
+                    m.to = m.ev[k].1;
+                    m.start = s;
+                    k += 1;
+                }
+                let g = m.at(s);
+                *v *= g;
+                if let Some(r) = right.as_deref_mut() {
+                    r[i] *= g;
+                }
+            }
+            // Events for later samples stay queued.
+            m.ev.copy_within(k..m.n, 0);
+            m.n -= k;
+            self.master_now = m.at(base + out.len() as u64);
+            return;
+        }
+        if self.main_auto.active {
+            self.main_auto.active = false;
+        }
         if self.master == 1.0 && self.master_now == 1.0 {
             return;
         }
@@ -661,5 +793,80 @@ mod tests {
         let _ = (ctl.take_out_peak(), ctl.take_level());
         m.render(&snap, &mut out);
         assert_eq!((ctl.take_out_peak(), ctl.take_level()), (0.0, 0.0), "a halted triangle is silent on the meter");
+    }
+
+    // ───────────── Batch 5: automation ─────────────
+
+    fn pts(v: &[(u32, f32)]) -> Vec<chip::auto::AutoPoint> {
+        v.iter().map(|&(tick, value)| chip::auto::AutoPoint { tick, value, curve: 0.0 }).collect()
+    }
+
+    /// Renders `secs` of `snap` with a fresh mixdown and rack, in chunks of `chunk`.
+    fn render_chunks(snap: &SongSnapshot, kind: VoiceKind, chunk: usize, secs: f64) -> Vec<f32> {
+        let (rack, _ctl) = rack_with(kind, 16, 0);
+        let mut m = Mixdown::new(48_000.0);
+        if !snap.studio.is_empty() {
+            m.adopt_rack(rack);
+        }
+        m.player.set_bpm(150.0);
+        m.player.play();
+        let mut out = vec![0f32; (secs * 48_000.0) as usize];
+        for c in out.chunks_mut(chunk) {
+            m.render(snap, c);
+        }
+        out
+    }
+
+    /// AU (engine): a studio track's fader, pan-free, automated from 0 dB to
+    /// silence over two bars; a held note fades out. The render is the same
+    /// bit for bit with any audio block size (the ramps sit at fixed cycles).
+    #[test]
+    fn studio_fader_automation_is_block_size_independent() {
+        use chip::auto::{AutoEnv, AutoTarget};
+        let notes = [(0u32, 7680u32, 60u8, None)];
+        let lane = StudioLane::build(7, NONE, [ClipInput { lane: 0, start: 0, len: 96_000, inst: NONE, notes: &notes }])
+            .with_auto(vec![AutoEnv { target: AutoTarget::Gain, start: 0, len: 2 }], pts(&[(0, 0.0), (3840, -70.0)]));
+        let snap = SongSnapshot::default().with_studio(vec![lane]);
+        let a = render_chunks(&snap, VoiceKind::Pulse, 64, 2.0);
+        for chunk in [480, 1000, 4096] {
+            let b = render_chunks(&snap, VoiceKind::Pulse, chunk, 2.0);
+            assert!(a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()), "chunk {chunk}");
+        }
+        // 150 BPM: the fade ends at 1.6 s.
+        let (early, late) = (rms(&a[2400..9600]), rms(&a[79_000..86_000]));
+        assert!(early > 0.03 && late < early * 0.01, "{early} {late}");
+    }
+
+    /// The Main gain's envelope on a console-only song: the same with any
+    /// block size; -inf at the end silences it; a song without one renders
+    /// exactly the console (the bit-identity rule).
+    #[test]
+    fn main_gain_automation_is_block_size_independent() {
+        let notes = [(0u32, 7680u32, 60u8, None)];
+        let plain = SongSnapshot::build([ClipInput { lane: 0, start: 0, len: 7680, inst: NONE, notes: &notes }], 1);
+        let auto = plain.clone().with_auto(Default::default(), Vec::new(), pts(&[(0, 0.0), (1920, 0.0), (3840, -70.0)]));
+        let a = render_chunks(&auto, VoiceKind::Pulse, 64, 2.0);
+        for chunk in [333, 4096] {
+            let b = render_chunks(&auto, VoiceKind::Pulse, chunk, 2.0);
+            assert!(a.iter().zip(&b).all(|(x, y)| x.to_bits() == y.to_bits()), "chunk {chunk}");
+        }
+        let p = render_chunks(&plain, VoiceKind::Pulse, 256, 2.0);
+        // Before the fade starts (0 dB) the two are the same sound.
+        assert!(a[4800..30_000].iter().zip(&p[4800..30_000]).all(|(x, y)| (x - y).abs() < 1e-6));
+        assert!(rms(&a[80_000..86_000]) < 1e-4 && rms(&p[80_000..86_000]) > 0.01);
+    }
+
+    /// A studio voice's channel control under automation: the volume
+    /// register follows the envelope per frame (a quieter second half).
+    #[test]
+    fn studio_register_automation_is_heard() {
+        use chip::auto::{AutoEnv, AutoTarget};
+        let notes = [(0u32, 7680u32, 60u8, None)];
+        let lane = StudioLane::build(7, NONE, [ClipInput { lane: 0, start: 0, len: 96_000, inst: NONE, notes: &notes }])
+            .with_auto(vec![AutoEnv { target: AutoTarget::Chip(chip::driver::ParamId::Volume), start: 0, len: 3 }], pts(&[(0, 15.0), (1920, 15.0), (1921, 3.0)]));
+        let snap = SongSnapshot::default().with_studio(vec![lane]);
+        let a = render_chunks(&snap, VoiceKind::Pulse, 256, 1.5);
+        let (loud, quiet) = (rms(&a[4800..33_000]), rms(&a[45_000..70_000]));
+        assert!(quiet < loud * 0.4, "{loud} {quiet}");
     }
 }

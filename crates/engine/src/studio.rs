@@ -22,6 +22,7 @@
 //! way through the same struct.
 
 use crate::song::StudioLane;
+use chip::auto::{self as auto, AutoTarget, LaneAuto};
 use chip::blep::Blep;
 use chip::dmc::ROM_SIZE;
 use chip::driver::{Note, ParamId, Song};
@@ -269,6 +270,54 @@ pub struct StudioTrack {
     /// Fresh voices (not carried over from an older rack) still need the
     /// console's clock and samples.
     fresh: bool,
+    /// Batch 5: the fader or pan is automated (the chunk's block ramp then
+    /// stays out of it), and the ramp in progress toward the automation's
+    /// value (four fixed steps after a frame tick).
+    automated: bool,
+    ramp: Option<AutoRamp>,
+}
+
+/// A fader / pan ramp at fixed CPU cycles (Batch 5): steps `k = 1..=4` at
+/// `start + k * RAMP_CYCLES`, whatever the audio blocks are, so a render is
+/// the same with any buffer size.
+#[derive(Clone, Copy, Debug)]
+struct AutoRamp {
+    start: u64,
+    k: u64,
+    from: (f32, (f64, f64)),
+    to: (f32, (f64, f64)),
+}
+
+/// One step of an automation ramp: about 1 ms (a sixteenth of a frame), so a
+/// change at a frame tick is complete in about 4 ms.
+pub const RAMP_CYCLES: u64 = 1861;
+const RAMP_STEPS: u64 = 4;
+
+impl StudioTrack {
+    /// Runs the voices up to `target`, applying the ramp steps that fall
+    /// before it, each at its own cycle.
+    fn run_to(&mut self, target: u64, rom: &[u8; ROM_SIZE], blep: &mut Steps) {
+        while let Some(mut r) = self.ramp {
+            let ck = r.start + r.k * RAMP_CYCLES;
+            if ck > target {
+                break;
+            }
+            let last = r.k >= RAMP_STEPS;
+            let f = r.k as f64 / RAMP_STEPS as f64;
+            let g = if last { r.to.0 as f64 } else { r.from.0 as f64 + (r.to.0 as f64 - r.from.0 as f64) * f };
+            let (l, rr) = if last { r.to.1 } else { (r.from.1 .0 + (r.to.1 .0 - r.from.1 .0) * f, r.from.1 .1 + (r.to.1 .1 - r.from.1 .1) * f) };
+            for s in self.slots.iter_mut() {
+                s.voice.run(ck, rom, blep);
+                s.voice.set_gain(g, blep);
+                s.voice.set_pan(pan_split(l, rr), blep);
+            }
+            r.k += 1;
+            self.ramp = if last { None } else { Some(r) };
+        }
+        for s in self.slots.iter_mut() {
+            s.voice.run(target, rom, blep);
+        }
+    }
 }
 
 impl StudioTrack {
@@ -284,7 +333,7 @@ impl StudioTrack {
                 Slot { voice, want: None, uni: 0, taken: false, given: false }
             })
             .collect();
-        Self { id, kind, ctl, slots, gain_now: g, pan_now: pan, fresh: true }
+        Self { id, kind, ctl, slots, gain_now: g, pan_now: pan, fresh: true, automated: false, ramp: None }
     }
 
     pub fn capacity(&self) -> usize {
@@ -339,6 +388,8 @@ impl Rack {
                 }
                 t.gain_now = o.gain_now;
                 t.pan_now = o.pan_now;
+                t.automated = o.automated;
+                t.ramp = o.ramp;
                 t.fresh = false;
             }
             if t.fresh {
@@ -376,12 +427,28 @@ impl Rack {
         self.ticks += 1;
         let tick = self.ticks;
         for (i, t) in self.tracks.iter_mut().enumerate() {
-            for s in t.slots.iter_mut() {
-                s.voice.run(cycle, rom, blep);
-            }
+            t.run_to(cycle, rom, blep);
             let lane = lanes.get(i).filter(|l| l.id == t.id);
-            let audible = t.ctl.audible();
+            let mut audible = t.ctl.audible();
             let params = t.ctl.params();
+            // Batch 5: the track's automation at this frame tick.
+            let ch = t.kind.lane();
+            let envs = lane.map_or(&[][..], |l| &l.auto[..]);
+            let la = if envs.is_empty() { LaneAuto::default() } else { LaneAuto::eval(envs, &lane.unwrap().auto_points, ch, pos) };
+            let (mut g_auto, mut p_auto, mut uni_auto) = (None, None, [None; 3]);
+            for e in envs {
+                let pts = e.points(&lane.unwrap().auto_points);
+                let Some(v) = auto::eval(pts, pos) else { continue };
+                match e.target {
+                    AutoTarget::Gain => g_auto = Some(auto::db_to_gain(v)),
+                    AutoTarget::Pan => p_auto = Some(auto::quantise(v, -(PAN_MAX as i32), PAN_MAX as i32) as i8),
+                    AutoTarget::Active => audible &= auto::quantise(v, 0, 1) != 0,
+                    AutoTarget::Unison => uni_auto[0] = Some(auto::quantise(v, 1, UNISON_MAX as i32) as u8),
+                    AutoTarget::Detune => uni_auto[1] = Some(auto::quantise(v, 0, DETUNE_MAX as i32) as u8),
+                    AutoTarget::Drift => uni_auto[2] = Some(auto::quantise(v, 0, DRIFT_MAX as i32) as u8),
+                    _ => {}
+                }
+            }
             let cap = match t.ctl.cap() {
                 0 => t.slots.len(),
                 c => (c as usize).min(t.slots.len()),
@@ -392,7 +459,20 @@ impl Rack {
             };
             let max_len = lane.map_or(0, |l| l.max_len);
             let inst = lane.map_or(NONE, |l| l.inst);
-            let (unison, detune, drift) = t.ctl.unison();
+            let (u0, d0, r0) = t.ctl.unison();
+            let (unison, detune, drift) = (uni_auto[0].unwrap_or(u0), uni_auto[1].unwrap_or(d0), uni_auto[2].unwrap_or(r0));
+            // The fader and pan: an envelope's value, ramped at fixed cycles.
+            if g_auto.is_some() || p_auto.is_some() || t.automated {
+                let g = g_auto.unwrap_or(t.ctl.gain());
+                let g = if unison <= 1 { g } else { (g as f64 * unison_trim(unison)) as f32 };
+                let p = pan_gains(p_auto.unwrap_or(t.ctl.pan()));
+                if (g, p) != (t.gain_now, t.pan_now) {
+                    t.ramp = Some(AutoRamp { start: cycle, k: 1, from: (t.gain_now, t.pan_now), to: (g, p) });
+                    t.gain_now = g;
+                    t.pan_now = p;
+                }
+                t.automated = g_auto.is_some() || p_auto.is_some();
+            }
             allocate(&mut t.slots[..cap], notes, max_len, prev, pos, &t.ctl, unison);
             // Voices past the cap (lowered while sounding) are released.
             for s in t.slots[cap..].iter_mut() {
@@ -404,6 +484,9 @@ impl Rack {
                 // period, as before).
                 let cents = unison_cents(s.uni, unison, detune) + drift_cents(k, tick, drift);
                 s.voice.set_detune(cents / 100.0);
+                if s.voice.driver.auto[ch] != la {
+                    s.voice.driver.auto[ch] = la;
+                }
                 // The note's clip instrument, else the track's.
                 let base = match s.want {
                     Some(n) if n.inst != NONE => n.inst,
@@ -421,10 +504,13 @@ impl Rack {
     /// The end of a rendered chunk: gains ramp (4 steps over the chunk), every
     /// voice runs to `end`, meters are published.
     pub fn chunk(&mut self, end: u64, rom: &[u8; ROM_SIZE], blep: &mut Steps) {
-        const RAMP_STEPS: u64 = 4;
         for t in self.tracks.iter_mut() {
-            let target = StudioTrack::target_gain(&t.ctl);
-            let pan = pan_gains(t.ctl.pan());
+            // An automation ramp (fixed cycles) first; an automated fader
+            // or pan has no block ramp.
+            if t.ramp.is_some() {
+                t.run_to(end, rom, blep);
+            }
+            let (target, pan) = if t.automated || t.ramp.is_some() { (t.gain_now, t.pan_now) } else { (StudioTrack::target_gain(&t.ctl), pan_gains(t.ctl.pan())) };
             let ramp = target != t.gain_now || pan != t.pan_now;
             let (g0, p0) = (t.gain_now as f64, t.pan_now);
             let mut level = 0f32;
