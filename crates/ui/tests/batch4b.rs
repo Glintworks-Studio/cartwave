@@ -20,8 +20,10 @@ fn panned_showcase() -> file::Project {
 
 /// The stereo golden hash (§4.3): a panned render is deterministic (pure
 /// arithmetic: the pan law and drift use `chip::math`, no platform libm), so
-/// this value is the same on every machine. Recorded by this build.
-const STEREO_GOLDEN: u64 = 0x3e54_3873_23b0_f321;
+/// this value is the same on every machine. Recorded by this build;
+/// re-baselined in Batch 5 A3 (studio voices made bipolar, was
+/// 0x3e54_3873_23b0_f321: docs/batch5/a3-rebaseline.md).
+const STEREO_GOLDEN: u64 = 0x3a95_c377_6a9b_c7d3;
 
 #[test]
 fn b4b_stereo_golden_render() {

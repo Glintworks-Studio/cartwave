@@ -8,6 +8,7 @@
 # (B5-D5: the out dir holds every game-export WAV, about 1.4 GB; copy only the hash lists and the
 # summary into docs/batch5/identity/.)
 set -u
+[ $# -eq 2 ] || { echo "usage: identity_b5.sh <base checkout> <out dir outside the repo>"; exit 2; }
 # OUT made absolute (the steps cd into each checkout).
 BASE=$(cd "$1" && pwd); mkdir -p "$2"; OUT=$(cd "$2" && pwd)
 case "$OUT" in "$(cd "$(dirname "$0")/../../.." && pwd)"/*) echo "the out dir must be outside the repo (B5-D5)"; exit 2;; esac
@@ -22,9 +23,19 @@ cp "$NEW/crates/ui/examples/corpus_hashes.rs" "$BASE/crates/ui/examples/corpus_h
 (cd "$BASE" && $CARGO run --release -q -p ui --example corpus_hashes -- "$OUT/list.txt" > "$OUT/corpus-hashes-main.tsv" 2>/dev/null)
 (cd "$NEW" && $CARGO run --release -q -p ui --example corpus_hashes -- "$OUT/list.txt" > "$OUT/corpus-hashes-b5.tsv" 2>/dev/null)
 n=$(wc -l < "$OUT/list.txt")
-same=$(paste "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-b5.tsv" | awk -F'	' '$2!="error" && $1==$5 && $2==$6 && $3==$7 && $4==$8' | wc -l)
+# Six columns per build (path, render, export, channels, console = the locked tracks alone,
+# the number of studio tracks).
+paste "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-b5.tsv" > "$OUT/corpus-paired.tsv"
+same=$(awk -F'	' '$2!="error" && $1==$7 && $2==$8 && $3==$9 && $4==$10 && $5==$11' "$OUT/corpus-paired.tsv" | wc -l)
+console=$(awk -F'	' '$2!="error" && $1==$7 && $5==$11' "$OUT/corpus-paired.tsv" | wc -l)
 errs=$(grep -c $'	error	' "$OUT/corpus-hashes-b5.tsv")
 echo "corpus: $n files, $same identical (render, export and channels), $errs that neither build opens"
+echo "corpus: $console with the locked tracks alone identical (every studio track muted)"
+# The files that changed, and whether each has a studio track (A3 may change only those).
+awk -F'	' '$2!="error" && !($2==$8 && $3==$9 && $4==$10 && $5==$11) {print $1 "\t" $12}' "$OUT/corpus-paired.tsv" > "$OUT/corpus-changed.txt"
+nchg=$(wc -l < "$OUT/corpus-changed.txt")
+nostudio=$(awk -F'	' '$2==0' "$OUT/corpus-changed.txt" | wc -l)
+echo "corpus: $nchg changed, $nostudio of them without a studio track"
 diff "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-b5.tsv" > "$OUT/corpus-diff.txt" && echo "corpus diff: none"
 cases=(
   "showcase|--rate 44100 --loop-bars 8 --stems channels --name showcase|docs/songs/showcase.mid docs/songs/hey.wav"

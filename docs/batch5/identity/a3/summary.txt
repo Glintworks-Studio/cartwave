@@ -1,0 +1,4 @@
+corpus: 299 files, 236 identical (render, export and channels), 0 that neither build opens
+corpus: 299 with the locked tracks alone identical (every studio track muted)
+corpus: 63 changed, 0 of them without a studio track
+game export: 101 files, 68 byte-identical; differing: studio 27 of 28 (all studio tracks; the JSON is identical), panned 6 of 28 (the panned studio lead: mix and its stem); showcase 28, demo 13, v2demo 4 all identical

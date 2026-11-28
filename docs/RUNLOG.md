@@ -1951,3 +1951,38 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   1.4 GB commit and nothing else of value; deleting that remote branch lets GitHub drop the blobs.
   Guards: `identity_b5.sh` refuses an out dir inside the repo, `.gitignore` covers
   `docs/batch5/identity/**/main|b5/`, and heavy outputs go to `../b5-work/`.
+- **B5-D6 (A3: studio voices' baseline steps).** *Cause (read in the source):* a studio voice
+  (`chip::voice::Voice`) adds its channel's DAC level relative to its power-up level, so the
+  output is **unipolar**: a pulse swings 0 … +L, carrying a DC offset of duty × L for as long as
+  the note sounds (the noise half its level, the saw and triangle their averages, a DPCM sample
+  its start level). The studio bus filters it with the project's output stage, which in a
+  studio-only project is `FilterMode::Off`: a **5 Hz one-pole DC blocker** (τ ≈ 32 ms), too slow
+  to keep a 50 ms mean flat at note starts and stops. Locked tracks go through the console's
+  37 / 90 Hz high-pass, hence flat. A per-voice 5–10 Hz blocker (the prompt's other option) would
+  still leave about a third of each step in a 50 ms mean, and a voice writes band-limited steps,
+  not samples. *Fix:* **bipolar voices.** Each voice subtracts its waveform's own mean
+  (`Voice::dc`): the duty's share of the volume (2A03 pulse: ones in its duty row / 8; VRC6 pulse:
+  (duty + 1) / 16, or all of it in its constant mode), half the volume for the noise, the 32-step
+  average for a running triangle (a halted one holds a step: all of it), the saw's 7-state
+  accumulator average for its rate, a DPCM sample's start level while it plays (the level it
+  stopped at after). The mean changes only with the volume, duty, rate or gating, so it is one
+  more band-limited step there; it is recomputed only after register writes and frame-counter
+  clocks (timer clocks move along the waveform only), so the cost is nil: the 64-track studio
+  stress song renders in 2.45–2.57 s against `main`'s 2.50–2.53 s (5 alternating runs). An idle or
+  halted voice contributes exactly 0 (`Voice::silent`), so a pool still grows without a step.
+  Deterministic (plain arithmetic), no allocation. Test: `voice::tests::studio_voices_are_bipolar`.
+  *Results* (`docs/batch5/a3-dc.md`, `bank_pack --dc`, every preset on a studio voice): the
+  50 ms swing is ≤ 0.005 for **27 → 141** of 202 presets, larger for none; studio worst 0.18 →
+  0.041; peak balance median 0.52 → 0.88 (Supersquare −0.09 / +0.34 → −0.12 / +0.30, Square Lead
+  0.56 → 0.99); the DC over each whole sound ≤ 0.0006 for every studio preset (was up to 0.0082;
+  `dc_overall.py`); no clipping. **Not met for 61 presets (reported):** the 54 over 0.005 and
+  outside their locked twin's own swing are basses (41–110 Hz fundamentals), noise drums, noise
+  FX and DPCM hits, where a 50 ms window catches the waveform itself: the locked renders of the
+  same kinds measure the same way (triangle bass 0.006, VRC6 saw bass 0.017, DPCM 0.011) and their
+  DC is ≤ 0.0006. Thin pulses stay lopsided by nature (12.5 %: +7/8, −1/8). **Loudness:** within
+  ±0.3 LU for 196 of 202; exceptions Thump Kick −0.56, Noise Explosion (its studio render) +0.35,
+  Boom +0.32, Static Crackle, Sampled Snare and Sample Snare −0.30 … −0.31. *Locked tracks
+  bit-identical:* all 299 project files with their studio tracks muted (`corpus_hashes`' new
+  console column). *Re-baseline* (this commit only): the studio goldens and migration hashes,
+  old → new with the reason in `docs/batch5/a3-rebaseline.md`; the listening pack and
+  `levels.md` re-rendered.

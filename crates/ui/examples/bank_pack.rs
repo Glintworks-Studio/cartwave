@@ -85,6 +85,28 @@ fn category(p: &Preset) -> String {
     p.path[..n.min(p.path.len())].join(" / ")
 }
 
+/// The 50 ms running mean's (minimum, maximum) from the first sample above
+/// -60 dBFS to the last (Batch 5 A3: the baseline swing).
+fn mean_swing(x: &[f32], sr: usize) -> (f64, f64) {
+    let floor = 10f32.powf(-60.0 / 20.0);
+    let (Some(a), Some(b)) = (x.iter().position(|v| v.abs() > floor), x.iter().rposition(|v| v.abs() > floor)) else {
+        return (0.0, 0.0);
+    };
+    let win = sr / 20;
+    let b = (b + 1).max(a + win).min(x.len());
+    if b < a + win {
+        return (0.0, 0.0);
+    }
+    let mut s: f64 = x[a..a + win].iter().map(|&v| v as f64).sum();
+    let (mut lo, mut hi) = (s / win as f64, s / win as f64);
+    for i in a + win..b {
+        s += x[i] as f64 - x[i - win] as f64;
+        lo = lo.min(s / win as f64);
+        hi = hi.max(s / win as f64);
+    }
+    (lo, hi)
+}
+
 /// Dated change lines for presets changed after they shipped.
 fn change_line(name: &str) -> &'static str {
     match name {
@@ -121,7 +143,29 @@ fn main() {
         for p in bank::all().iter().filter(|p| names.iter().any(|n| n.eq_ignore_ascii_case(&p.name))) {
             let (x, ch) = ui::export::render_channels(&project_for(p, p.authentic()));
             let (lufs, tp, peak) = ui::game_export::measure_ch(&x, 48_000, ch).unwrap_or((f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY));
-            println!("{}	{lufs:.2} LUFS	tp {tp:.2}	peak {peak:.2}	clips {}", p.name, x.iter().any(|v| v.abs() >= 1.0));
+            println!("{}\t{lufs:.2} LUFS\ttp {tp:.2}\tpeak {peak:.2}\tclips {}", p.name, x.iter().any(|v| v.abs() >= 1.0));
+        }
+        return;
+    }
+    // `--dc`: Batch 5 A3's table. Every preset on a studio voice (and an
+    // authentic one also on its locked channel): the 50 ms running mean's
+    // minimum and maximum while it sounds, the negative and positive peaks,
+    // loudness and clipping. Tab-separated on stdout.
+    if args.iter().any(|a| a == "--dc") {
+        println!("preset\tauthentic\trender\tmean_lo\tmean_hi\tpeak_neg\tpeak_pos\tlufs\tclips");
+        for p in bank::all() {
+            let mut renders = vec![("studio", project_for(p, false))];
+            if p.authentic() {
+                renders.push(("locked", project_for(p, true)));
+            }
+            for (what, pr) in renders {
+                let (x, ch) = ui::export::render_channels(&pr);
+                let first: Vec<f32> = x.iter().step_by(ch as usize).copied().collect();
+                let (lo, hi) = mean_swing(&first, 48_000);
+                let (neg, pos) = first.iter().fold((0f32, 0f32), |(a, b), &v| (a.min(v), b.max(v)));
+                let lufs = ui::game_export::measure_ch(&x, 48_000, ch).map_or(f64::NEG_INFINITY, |m| m.0);
+                println!("{}\t{}\t{what}\t{lo:.5}\t{hi:.5}\t{neg:.4}\t{pos:.4}\t{lufs:.2}\t{}", p.name, p.authentic(), x.iter().any(|v| v.abs() >= 1.0));
+            }
         }
         return;
     }

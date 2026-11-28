@@ -19,6 +19,19 @@
 //! idle voice to a pool (the pool grows from the UI thread) never steps the
 //! output.
 //!
+//! **Bipolar (Batch 5 A3).** A chip channel is unipolar: a pulse swings
+//! between 0 and its volume, so every note carries a DC offset of its duty x
+//! its level, and the baseline jumped with each note (the console's output
+//! filters remove it; the studio bus had only a 5 Hz blocker, too slow to
+//! keep a 50 ms mean flat). A voice now also subtracts its waveform's own mean
+//! (`Voice::dc`): the duty's share of the volume for the pulses, half of it
+//! for the noise, the 32-step average for a running triangle (a halted one
+//! holds a level: all DC), the saw's 7-step average, a sample's start level
+//! while it plays. The mean changes only where the volume, duty, rate or
+//! gating does, so it is one more band-limited step at those moments:
+//! deterministic, allocation-free, a few multiplies per change. A silent or
+//! idle voice's mean is 0, so a new idle voice still never steps the output.
+//!
 //! No allocation: everything is fixed-size.
 
 use crate::blep::{Blep, AMP_BITS};
@@ -140,6 +153,12 @@ pub struct Voice {
     /// The DAC value now, and at power-up (the zero of the contribution).
     dac: u8,
     dac0: u8,
+    /// The waveform's own mean now, in the mix's units relative to the
+    /// power-up level (subtracted: the voice is bipolar, Batch 5 A3).
+    mean: f64,
+    /// The running triangle's 32-step average (relative to the power-up
+    /// level), computed once.
+    tri_mean: f64,
     /// The contribution fed to the step buffers (fixed point, gain and pan
     /// applied): centre, left only, right only.
     amp: [i32; 3],
@@ -174,6 +193,8 @@ impl Voice {
             cycle,
             dac: 0,
             dac0: 0,
+            mean: 0.0,
+            tri_mean: 0.0,
             amp: [0; 3],
             gain: 1.0,
             pan: [1.0, 0.0, 0.0],
@@ -185,6 +206,11 @@ impl Voice {
         };
         v.dac = v.output();
         v.dac0 = v.dac;
+        if kind == VoiceKind::Triangle {
+            let base = level_of(kind, v.dac0);
+            let seq = crate::tables::TRIANGLE_SEQ;
+            v.tri_mean = seq.iter().map(|&t| level_of(kind, t) - base).sum::<f64>() / seq.len() as f64;
+        }
         // The peak starts at the power-up level (a triangle's is 15, not 0):
         // an idle voice has nothing to report.
         v.peak = v.dac;
@@ -202,11 +228,74 @@ impl Voice {
         }
     }
 
+    /// The waveform's mean level now (relative to the power-up level): what
+    /// the channel's output averages to over one period of its waveform, given
+    /// its volume, duty, rate and gating (0 when it is silent). Subtracting it
+    /// makes the voice bipolar (Batch 5 A3).
+    fn dc(&self) -> f64 {
+        let k = self.kind;
+        let base = level_of(k, self.dac0);
+        match k {
+            VoiceKind::Pulse => {
+                let p = &self.pulse;
+                if !p.len.active() || p.sweep_muted() {
+                    return 0.0;
+                }
+                let ones = crate::tables::PULSE_DUTY[p.duty as usize & 3].iter().filter(|&&b| b != 0).count();
+                (level_of(k, p.env.output()) - base) * ones as f64 / 8.0
+            }
+            VoiceKind::Noise => {
+                if !self.noise.len.active() {
+                    return 0.0;
+                }
+                // The 15-bit sequence's output is high on 16383 of its 32767
+                // states (the short sequences: about half too).
+                (level_of(k, self.noise.env.output()) - base) * 0.5
+            }
+            VoiceKind::Triangle => {
+                let t = &self.triangle;
+                if t.linear > 0 && t.len.active() {
+                    self.tri_mean
+                } else {
+                    // Halted: it holds its step, a level with no waveform.
+                    level_of(k, t.output()) - base
+                }
+            }
+            VoiceKind::Dpcm => {
+                // While a sample plays, the level it started from; after it,
+                // the level it stopped at (held: no waveform).
+                if self.dmc.sounding() {
+                    level_of(k, crate::samples::START_LEVEL) - base
+                } else {
+                    level_of(k, self.dmc.output()) - base
+                }
+            }
+            VoiceKind::Vrc6Pulse => {
+                let p = &self.vrc6.pulse1;
+                if !p.enabled {
+                    return 0.0;
+                }
+                let share = if p.mode { 1.0 } else { (p.duty as f64 + 1.0) / 16.0 };
+                (level_of(k, p.volume) - base) * share
+            }
+            VoiceKind::Saw => {
+                let s = &self.vrc6.saw;
+                if !s.enabled {
+                    return 0.0;
+                }
+                // Seven accumulator states (0, r, 2r ... 6r, wrapping), each
+                // held for two clocks.
+                let sum: u32 = (0..7u32).map(|j| ((j * s.rate as u32) & 0xFF) >> 3).sum();
+                (level_of(k, 1) - level_of(k, 0)) * sum as f64 / 7.0
+            }
+        }
+    }
+
     /// The fixed-point contribution for the current DAC value, gain and pan.
     /// Centred, the centre share is `fixed(x * 1.0)`: exactly the mono
     /// build's `fixed(x)`.
     fn amp_now(&self) -> [i32; 3] {
-        let x = (level_of(self.kind, self.dac) - level_of(self.kind, self.dac0)) * self.gain;
+        let x = (level_of(self.kind, self.dac) - level_of(self.kind, self.dac0) - self.mean) * self.gain;
         [fixed(x * self.pan[0]), fixed(x * self.pan[1]), fixed(x * self.pan[2])]
     }
 
@@ -216,7 +305,27 @@ impl Voice {
         self.amp = a;
     }
 
+    /// After a register write or a frame-counter clock: the output and the
+    /// waveform's mean (its inputs, the volume, duty, rate and gating, change
+    /// only there).
     fn refresh<S: StepOut>(&mut self, out: &mut S) {
+        let o = self.output();
+        let m = self.dc();
+        if o == self.dac && m == self.mean {
+            return;
+        }
+        self.dac = o;
+        self.mean = m;
+        self.peak = self.peak.max(o);
+        self.emit(out);
+    }
+
+    /// After a timer clock: only the output moves along the waveform (the
+    /// mean stays), except a sample's end, which a DMC clock decides.
+    fn refresh_wave<S: StepOut>(&mut self, out: &mut S) {
+        if self.kind == VoiceKind::Dpcm {
+            return self.refresh(out);
+        }
         let o = self.output();
         if o == self.dac {
             return;
@@ -224,6 +333,12 @@ impl Voice {
         self.dac = o;
         self.peak = self.peak.max(o);
         self.emit(out);
+    }
+
+    /// Whether the voice contributes nothing: its level minus its mean is 0
+    /// (idle at power-up, or a halted triangle holding a step).
+    fn silent(&self) -> bool {
+        level_of(self.kind, self.dac) - level_of(self.kind, self.dac0) - self.mean == 0.0
     }
 
     /// Changes the voice's gain at the current cycle (a band-limited step of
@@ -272,7 +387,7 @@ impl Voice {
 
     /// Sets the gain of a silent voice (at its power-up level nothing changes).
     pub fn set_gain_silently(&mut self, g: f64) -> bool {
-        let silent = self.dac == self.dac0;
+        let silent = self.silent();
         if silent {
             self.gain = g;
         }
@@ -281,7 +396,7 @@ impl Voice {
 
     /// Sets the pan split of a silent voice (nothing to move).
     pub fn set_pan_silently(&mut self, p: [f64; 3]) -> bool {
-        let silent = self.dac == self.dac0;
+        let silent = self.silent();
         if silent {
             self.pan = p;
         }
@@ -291,7 +406,7 @@ impl Voice {
     /// Moves a voice that has never run onto the console's clock (a fresh
     /// voice in a new pool starts at the current cycle).
     pub fn resync(&mut self, cycle: u64) {
-        if self.cycle < cycle && self.free() && self.dac == self.dac0 {
+        if self.cycle < cycle && self.free() && self.silent() {
             self.cycle = cycle;
         }
     }
@@ -369,6 +484,7 @@ impl Voice {
             }
             self.cycle += dt as u64;
             let mut dirty = false;
+            let mut frame_dirty = false;
             if !asleep {
                 let sh = self.vrc6.shift;
                 match self.kind {
@@ -440,10 +556,12 @@ impl Voice {
                     }
                     _ => {}
                 }
-                dirty = true;
+                frame_dirty = true;
             }
-            if dirty {
+            if frame_dirty {
                 self.refresh(blep);
+            } else if dirty {
+                self.refresh_wave(blep);
             }
         }
     }
@@ -617,5 +735,65 @@ mod tests {
         let db = 20.0 * (two_studio / two_console).log10();
         std::println!("two pulses at volume 15 (peak level): console {two_console:.4}, studio {two_studio:.4}: studio {db:+.2} dB louder; one: {one:.4}");
         assert!(db > 0.5 && db < 1.5, "{db}");
+    }
+
+    /// Batch 5 A3: a studio voice is bipolar. Short notes on every voice type
+    /// (a 12.5 % pulse, VRC6 pulse, saw, triangle, noise), raw (no output
+    /// filter): the 50 ms running mean stays near 0 while notes start and stop
+    /// (it swung by a duty x level before), and the output returns to exactly
+    /// 0 when the voice is silent.
+    #[test]
+    fn studio_voices_are_bipolar() {
+        use crate::instrument::NONE;
+        let sr = 48_000.0;
+        for kind in [VoiceKind::Pulse, VoiceKind::Vrc6Pulse, VoiceKind::Saw, VoiceKind::Triangle, VoiceKind::Noise] {
+            let samples = crate::samples::build(&mut [0u8; ROM_SIZE]);
+            let rom = [0u8; ROM_SIZE];
+            let mut v = Voice::new(kind, samples, 0);
+            let mut blep = Box::new(Blep::new(CPU_HZ_NTSC, sr));
+            let mut params = crate::driver::Params::default().values[kind.lane()];
+            // A thin pulse: the most lopsided waveform.
+            params[crate::driver::ParamId::Duty as usize] = if kind == VoiceKind::Vrc6Pulse { 1 } else { 0 };
+            // Four 150 ms notes, 100 ms apart (pitch 69, or the noise's own).
+            let notes: std::vec::Vec<Note> = (0..4).map(|k| Note { volume: Some(15), ..Note::new(k * 600, k * 600 + 360, 69) }).collect();
+            let song = Song::EMPTY;
+            let mut out = vec![0f32; 48_000];
+            let mut next_x2 = 0u64;
+
+            for c in out.chunks_mut(480) {
+                let end = blep.cycle_for(c.len());
+                while next_x2 / 2 < end {
+                    let t = next_x2 / 2;
+                    v.run(t, &rom, &mut *blep);
+                    let pos = t as f64 / CPU_HZ_NTSC * 2.5 * 960.0; // 150 BPM
+                    let want = notes.iter().find(|n| (n.start as f64) <= pos && pos < n.end as f64).copied();
+                    v.tick(&song, want, NONE, true, &params, 0, &rom, &mut *blep);
+                    next_x2 += CPU_CYCLES_PER_FRAME_X2;
+                }
+                v.run(end, &rom, &mut *blep);
+                blep.read(c, end);
+
+            }
+            let win = 2400;
+            let (mut lo, mut hi) = (0f64, 0f64);
+            let mut s: f64 = out[..win].iter().map(|&x| x as f64).sum();
+            for i in win..out.len() {
+                s += out[i] as f64 - out[i - win] as f64;
+                lo = lo.min(s / win as f64);
+                hi = hi.max(s / win as f64);
+            }
+            let peak = out.iter().fold(0f32, |m, x| m.max(x.abs())) as f64;
+            std::println!("{kind:?}: peak {peak:.4}, 50 ms mean {lo:+.5} … {hi:+.5}");
+            assert!(peak > 0.02, "{kind:?} sounds");
+            // A pulse at 12.5 % used to swing by 1/8 of its level (peak/8 =
+            // 0.0175 here); a bipolar voice stays within a few thousandths.
+            // The noise: a fresh voice's LFSR starts from seed 1, whose first few
+            // hundred clocks are mostly high (the hardware's own start-up
+            // sequence, not an offset; unipolar, its swing was half its level,
+            // 0.059 here).
+            let lim = if kind == VoiceKind::Noise { 0.02 } else { 0.004 };
+            assert!(lo > -lim && hi < lim, "{kind:?}: 50 ms mean {lo} … {hi}");
+            assert!(v.silent(), "{kind:?}: silent after its notes");
+        }
     }
 }

@@ -367,9 +367,11 @@ const V7: &[(&str, u64, u64)] = &[
     ("v6_rows_pan_mute", 0x73345965db691eee, 0xe88cde08b31d97df),
     ("v6_vrc6_unused", 0xa3faf8f55fe930af, 0xb5afeb969a8693ec),
     ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7),
-    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c),
-    ("v7_studio_fader_voices", 0xb6fe5013dffff23b, 0xd1ea1ac50678eab3),
-    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7),
+    // Studio tracks: re-baselined in Batch 5 A3 (studio voices made bipolar;
+    // the old hashes are in docs/batch5/a3-rebaseline.md).
+    ("v7_studio_demo", 0x22285f6d9072481c, 0x8a6792789e9b2cbe),
+    ("v7_studio_fader_voices", 0x72d142f12825b6c2, 0x1e081445b8abe424),
+    ("v7_studio_showcase", 0xfab8c43558778610, 0x9fb5eecddcf833f6),
 ];
 
 fn v7_dir() -> std::path::PathBuf {
@@ -420,7 +422,8 @@ fn a_v7_panned_studio_track_is_heard_now() {
     // is that sound exactly (the hash from the old build).
     let mut q = p.clone();
     q.arrangement.lanes[0].pan = 0;
-    assert_eq!(render::hash(&export::render(&q)), 0x1b1742f7c9b4dd4d);
+    // Batch 5 A3 re-baselined it (studio voices bipolar; was 0x1b1742f7c9b4dd4d).
+    assert_eq!(render::hash(&export::render(&q)), 0x110ab1b1ebd43407);
     // A v8 file keeps unison, detune and drift.
     let mut u = p.clone();
     u.arrangement.lanes[0].unison = ui::state::Unison { voices: 3, detune: 15, drift: 4 };
@@ -470,10 +473,11 @@ const V8: &[(&str, u64, u64, u16)] = &[
     ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
     ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
     ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
-    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c, 1),
-    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7, 1),
-    ("v8_studio_unison", 0x7e960f096a5aafdd, 0x65a6684d34702df3, 1),
-    ("v8_studio_unison_panned", 0x1f4b716b2b275954, 0x66de0d77b635b17a, 2),
+    // Studio tracks: re-baselined in Batch 5 A3 (docs/batch5/a3-rebaseline.md).
+    ("v7_studio_demo", 0x22285f6d9072481c, 0x8a6792789e9b2cbe, 1),
+    ("v7_studio_showcase", 0xfab8c43558778610, 0x9fb5eecddcf833f6, 1),
+    ("v8_studio_unison", 0x5885739af003e8d1, 0x3c8c18c309b815ab, 1),
+    ("v8_studio_unison_panned", 0x4b5e115b1b2cc7be, 0x96af9360943984cb, 2),
     ("v8_arps", 0xded480c12067065a, 0x29648228a85c2936, 1),
 ];
 

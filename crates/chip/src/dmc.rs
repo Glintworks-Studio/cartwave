@@ -142,6 +142,12 @@ impl Dmc {
         self.bytes_remaining > 0
     }
 
+    /// A sample is playing: bytes left, or bits of the last byte still
+    /// shifting out (Batch 5 A3: a studio voice's DC follows it).
+    pub fn sounding(&self) -> bool {
+        self.bytes_remaining > 0 || !self.silence
+    }
+
     #[inline]
     pub fn output(&self) -> u8 {
         self.level

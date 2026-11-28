@@ -1,0 +1,245 @@
+preset	authentic	render	mean_lo	mean_hi	peak_neg	peak_pos	lufs	clips
+Bright Square Lead	false	studio	-0.00708	0.01754	-0.0718	0.2372	-25.49	false
+Late Vibrato Lead	false	studio	-0.01333	0.03135	-0.1092	0.1867	-24.96	false
+Duty Sweep Lead	false	studio	-0.01414	0.01592	-0.0695	0.2301	-25.00	false
+Hollow 12.5%	false	studio	-0.00404	0.00882	-0.0524	0.2283	-25.56	false
+Nasal Reed Lead	false	studio	-0.01338	0.00581	-0.2192	0.0619	-25.28	false
+Glass Pulse Lead	false	studio	-0.00442	0.00166	-0.2484	0.0353	-29.64	false
+Echo Square	false	studio	-0.02367	0.04283	-0.0942	0.2193	-27.18	false
+Echo Saw Lead	false	studio	-0.07340	0.04456	-0.3917	0.1743	-24.96	false
+Supersquare	false	studio	-0.00962	0.02902	-0.0912	0.3393	-24.74	false
+Wide Detuned Lead	false	studio	-0.03699	0.01353	-0.3260	0.1228	-24.84	false
+Detuned Saw Lead	false	studio	-0.07188	0.02978	-0.3747	0.1872	-24.96	false
+Saw Lead	false	studio	-0.04535	0.01890	-0.2523	0.1530	-25.40	false
+Scoop Lead	false	studio	-0.00696	0.01670	-0.0688	0.2169	-25.11	false
+Trill Lead	false	studio	-0.00694	0.01699	-0.0711	0.2283	-25.08	false
+Soft Triangle Lead	false	studio	-0.07506	0.04844	-0.2725	0.2102	-23.09	false
+Round Triangle Bass	false	studio	-0.11708	0.09091	-0.3430	0.2688	-24.31	false
+Kick-Drop Triangle Bass	false	studio	-0.05697	0.05383	-0.2436	0.1767	-24.36	false
+Staccato Triangle Bass	false	studio	-0.06124	0.05375	-0.2367	0.2034	-27.45	false
+Triangle Slide Bass	false	studio	-0.07322	0.07578	-0.2581	0.2509	-24.34	false
+Thick Pulse Bass	false	studio	-0.02045	0.03888	-0.1184	0.1966	-25.14	false
+Pluck Pulse Bass	false	studio	-0.00669	0.01923	-0.0478	0.1652	-29.89	false
+Growl Pulse Bass	false	studio	-0.00970	0.01374	-0.0593	0.2323	-27.08	false
+Octave Bounce Bass	false	studio	-0.01999	0.03765	-0.1178	0.2027	-25.03	false
+Hollow Bass	false	studio	-0.01748	0.00998	-0.2243	0.0654	-27.13	false
+Saw Sub Bass	false	studio	-0.05040	0.02538	-0.2186	0.1728	-25.39	false
+Saw Pluck Bass	false	studio	-0.06438	0.02617	-0.2814	0.1532	-25.09	false
+Detuned Saw Bass	false	studio	-0.06007	0.03249	-0.2911	0.1688	-25.22	false
+Wide Pulse Bass	false	studio	-0.02672	0.04972	-0.1386	0.2292	-24.90	false
+Rubber Bass	false	studio	-0.01152	0.01847	-0.0720	0.2211	-27.09	false
+Fast Major Arp	false	studio	-0.00915	0.01695	-0.0645	0.2248	-25.95	false
+Fast Minor Arp	false	studio	-0.00910	0.01618	-0.0699	0.2215	-25.96	false
+Major Seventh Arp	false	studio	-0.02352	0.01348	-0.1992	0.0844	-25.47	false
+Minor Seventh Arp	false	studio	-0.00546	0.00855	-0.0425	0.2651	-26.80	false
+Dominant Arp	false	studio	-0.04094	0.02435	-0.2543	0.1316	-25.83	false
+Diminished Arp	false	studio	-0.01702	0.03105	-0.1000	0.1789	-25.62	false
+Suspended Shimmer Arp	false	studio	-0.01289	0.00773	-0.2450	0.0545	-26.12	false
+Octave Pump Arp	false	studio	-0.01657	0.03132	-0.1050	0.1797	-25.53	false
+Power Fifth Arp	false	studio	-0.04174	0.02440	-0.2481	0.1359	-25.73	false
+Slow Major Arp	false	studio	-0.00967	0.01610	-0.0717	0.2221	-25.84	false
+Slow Minor Arp	false	studio	-0.02711	0.01553	-0.1957	0.0915	-25.31	false
+Rolling Arp	false	studio	-0.00924	0.01689	-0.0676	0.2207	-25.84	false
+Detuned Chord Arp	false	studio	-0.05966	0.03455	-0.3141	0.1602	-25.75	false
+Triangle Octave Arp	false	studio	-0.07911	0.05870	-0.2722	0.2230	-24.13	false
+Breathing Duty Pad	false	studio	-0.01839	0.01877	-0.0743	0.1232	-26.08	false
+Warm Square Pad	false	studio	-0.01301	0.01216	-0.1015	0.1093	-25.71	false
+Soft Choir Pad	false	studio	-0.00695	0.00798	-0.0886	0.0632	-26.08	false
+Glass Pad	false	studio	-0.00422	0.00461	-0.1969	0.0487	-26.68	false
+Wide Saw Pad	false	studio	-0.01855	0.02292	-0.1651	0.1599	-25.98	false
+Organ Pad	false	studio	-0.01908	0.02591	-0.0767	0.1128	-25.69	false
+Shimmer Pad	false	studio	-0.01387	0.01272	-0.1122	0.0929	-26.11	false
+Clear Bell	false	studio	-0.00232	0.01562	-0.0464	0.1382	-26.14	false
+Glass Bell	false	studio	-0.00908	0.00138	-0.1801	0.0416	-26.27	false
+Music Box Tine	false	studio	-0.00218	0.00849	-0.0349	0.1726	-28.35	false
+Electric Piano	false	studio	-0.02651	0.00741	-0.1986	0.0855	-25.83	false
+Harpsichord Pluck	false	studio	-0.00837	0.01782	-0.0488	0.1621	-26.91	false
+Vibraphone	false	studio	-0.00544	0.03253	-0.0777	0.1555	-25.84	false
+Saw Celesta	false	studio	-0.04203	0.00813	-0.1937	0.0991	-26.29	false
+Rising Sweep	false	studio	-0.00606	0.01397	-0.0404	0.1255	-26.68	false
+Falling Bomb	false	studio	-0.01653	0.02682	-0.0693	0.1142	-26.80	false
+Warp Down	false	studio	-0.05279	0.05589	-0.2363	0.1351	-26.48	false
+Noise Riser	false	studio	-0.01403	0.02721	-0.0948	0.0898	-26.10	false
+Ocean Wash	false	studio	-0.02000	0.02091	-0.0986	0.1052	-26.75	false
+Static Crackle	false	studio	-0.04164	0.04082	-0.1214	0.1602	-26.61	false
+Alarm	false	studio	-0.01083	0.01518	-0.0458	0.1366	-26.68	false
+Teleport	false	studio	-0.00935	0.00176	-0.1680	0.0346	-30.04	false
+Ray Gun	false	studio	-0.04459	0.03772	-0.2149	0.1050	-26.71	false
+Heartbeat	false	studio	-0.06128	0.05649	-0.2436	0.2226	-29.28	false
+Coin Chime	false	studio	-0.00636	0.02439	-0.0580	0.1060	-30.33	false
+Hop	false	studio	-0.00642	0.01791	-0.0442	0.1662	-31.02	false
+Impact Crunch	false	studio	-0.02498	0.05272	-0.0953	0.2049	-30.00	false
+Cursor Blip	false	studio	-0.00464	0.00670	-0.0273	0.1679	-35.22	false
+Rising Power	false	studio	-0.00464	0.00978	-0.0289	0.0821	-30.46	false
+Extra Life	false	studio	-0.00979	0.01682	-0.0417	0.0741	-30.00	false
+Boom	false	studio	-0.00820	0.02287	-0.0570	0.1115	-30.30	false
+Zap Laser	false	studio	-0.00340	0.00885	-0.0303	0.1691	-32.42	false
+Confirm Select	false	studio	-0.01035	0.01540	-0.0416	0.1473	-30.11	false
+Error Buzz	false	studio	-0.01040	0.01094	-0.0388	0.1681	-30.66	false
+Door Slide	false	studio	-0.02178	0.01540	-0.0574	0.0602	-30.17	false
+Item Pickup	false	studio	-0.00824	0.00315	-0.1457	0.0345	-29.63	false
+Punchy Noise Kit	false	studio	-0.04510	0.08886	-0.1664	0.3404	-25.87	false
+Tight Noise Kit	false	studio	-0.04698	0.06510	-0.1399	0.3310	-27.98	false
+Big Room Noise Kit	false	studio	-0.04934	0.08547	-0.1604	0.3012	-25.82	false
+Metal Noise Kit	false	studio	-0.04986	0.09039	-0.1545	0.3346	-26.21	false
+Thump Kick	false	studio	-0.03302	0.06973	-0.1216	0.1959	-30.77	false
+Crack Snare	false	studio	-0.01905	0.02974	-0.0720	0.1640	-29.09	false
+Fat Snare	false	studio	-0.02006	0.02861	-0.0610	0.1116	-29.45	false
+Tick Hat	false	studio	-0.02077	0.02620	-0.1041	0.2384	-30.25	false
+Sizzle Hat	false	studio	-0.01915	0.02448	-0.0761	0.1339	-29.16	false
+Ride Ping	false	studio	-0.03742	0.04179	-0.0856	0.1472	-29.75	false
+Splash Cymbal	false	studio	-0.02208	0.02693	-0.0844	0.1264	-29.20	false
+Hand Clap	false	studio	-0.02032	0.02179	-0.0610	0.1285	-29.36	false
+Shaker	false	studio	-0.02095	0.03043	-0.0959	0.1644	-29.25	false
+Drop Kick	false	studio	-0.06371	0.06106	-0.2422	0.1709	-29.08	false
+Low Tom	false	studio	-0.06798	0.06671	-0.2363	0.2339	-27.72	false
+High Tom	false	studio	-0.06695	0.06594	-0.2449	0.2440	-27.36	false
+Sampled Kick	false	studio	-0.01523	0.17782	-0.3142	0.5393	-25.96	false
+Sampled Snare	false	studio	-0.00235	0.18049	-0.1381	0.4601	-33.94	false
+Sampled Tom	false	studio	-0.03045	0.16188	-0.3518	0.5202	-23.49	false
+Sampled Crash	false	studio	-0.01071	0.17577	-0.0822	0.3894	-34.57	false
+Duty Lead	true	studio	-0.00118	0.00185	-0.0797	0.1850	-27.49	false
+Duty Lead	true	locked	-0.00076	0.00108	-0.0522	0.1276	-27.81	false
+Square Melody	true	studio	-0.00165	0.00207	-0.0990	0.1107	-27.15	false
+Square Melody	true	locked	-0.00103	0.00137	-0.0662	0.0787	-27.55	false
+Thin Pulse Lead	true	studio	-0.00082	0.00113	-0.0545	0.2166	-27.48	false
+Thin Pulse Lead	true	locked	-0.00058	0.00082	-0.0384	0.1458	-27.77	false
+Duty Swell Lead	true	studio	-0.00105	0.00103	-0.0674	0.1429	-27.46	false
+Duty Swell Lead	true	locked	-0.00172	0.00129	-0.0634	0.1087	-27.76	false
+Echo Pulse Lead	true	studio	-0.00158	0.00250	-0.0795	0.2053	-28.33	false
+Echo Pulse Lead	true	locked	-0.00133	0.00182	-0.0632	0.1575	-28.47	false
+Pulse Pluck	true	studio	-0.00095	0.00176	-0.0631	0.1574	-28.37	false
+Pulse Pluck	true	locked	-0.00095	0.00176	-0.0632	0.1554	-28.37	false
+Firm Pulse Bass	true	studio	-0.00529	0.00549	-0.1844	0.2029	-27.68	false
+Firm Pulse Bass	true	locked	-0.00378	0.00405	-0.1235	0.1286	-27.94	false
+Major Chord Pulse	true	studio	-0.00210	0.00257	-0.0914	0.1957	-27.73	false
+Major Chord Pulse	true	locked	-0.00144	0.00144	-0.0696	0.1276	-27.84	false
+Minor Chord Pulse	true	studio	-0.00105	0.00174	-0.0614	0.2246	-27.87	false
+Minor Chord Pulse	true	locked	-0.00085	0.00093	-0.0515	0.1458	-27.97	false
+Hardware Sweep Zap	true	studio	-0.00148	0.00141	-0.0476	0.1549	-31.68	false
+Hardware Sweep Zap	true	locked	-0.00148	0.00141	-0.0476	0.1549	-31.68	false
+Decay Envelope Pluck	true	studio	-0.00083	0.00177	-0.0631	0.1571	-26.53	false
+Decay Envelope Pluck	true	locked	-0.00083	0.00176	-0.0632	0.1574	-26.54	false
+Pulse Bell	true	studio	-0.00059	0.00098	-0.0444	0.1089	-27.82	false
+Pulse Bell	true	locked	-0.00059	0.00095	-0.0454	0.1089	-27.82	false
+Pure Triangle Bass	true	studio	-0.00753	0.00613	-0.1467	0.1196	-26.00	false
+Pure Triangle Bass	true	locked	-0.00619	0.00571	-0.1218	0.1070	-26.02	false
+Triangle Kick Bass	true	studio	-0.00562	0.00609	-0.1978	0.1453	-25.72	false
+Triangle Kick Bass	true	locked	-0.00511	0.00558	-0.1978	0.1559	-25.70	false
+Triangle Staccato	true	studio	-0.00625	0.00625	-0.1457	0.1121	-28.31	false
+Triangle Staccato	true	locked	-0.00625	0.00642	-0.1413	0.1227	-28.30	false
+Triangle Flute	true	studio	-0.00637	0.00440	-0.2063	0.1780	-23.21	false
+Triangle Flute	true	locked	-0.00355	0.00117	-0.1978	0.1190	-23.21	false
+Triangle Kick	true	studio	-0.00668	0.00581	-0.1629	0.1319	-31.16	false
+Triangle Kick	true	locked	-0.00668	0.00581	-0.1629	0.1319	-31.16	false
+Triangle Tom	true	studio	-0.00446	0.00480	-0.1612	0.1116	-27.73	false
+Triangle Tom	true	locked	-0.00446	0.00480	-0.1612	0.1116	-27.73	false
+Noise Kit	true	studio	-0.00682	0.00758	-0.2177	0.2881	-27.44	false
+Noise Kit	true	locked	-0.00381	0.00392	-0.1109	0.1190	-31.02	false
+Short-Mode Kit	true	studio	-0.00917	0.00946	-0.2314	0.3111	-27.92	false
+Short-Mode Kit	true	locked	-0.00436	0.00449	-0.1294	0.1336	-31.51	false
+Noise Snare	true	studio	-0.00255	0.00329	-0.1023	0.1373	-28.33	false
+Noise Snare	true	locked	-0.00184	0.00238	-0.0741	0.0995	-31.15	false
+Noise Hat	true	studio	-0.00378	0.00351	-0.1298	0.1847	-32.27	false
+Noise Hat	true	locked	-0.00275	0.00255	-0.0944	0.1344	-35.05	false
+Noise Crash	true	studio	-0.00236	0.00256	-0.0898	0.1278	-28.69	false
+Noise Crash	true	locked	-0.00171	0.00185	-0.0650	0.0925	-31.51	false
+Noise Explosion	true	studio	-0.00160	0.00269	-0.0893	0.1147	-28.80	false
+Noise Explosion	true	locked	-0.00115	0.00195	-0.0645	0.0829	-31.28	false
+Noise Wind	true	studio	-0.00198	0.00116	-0.0697	0.0653	-28.24	false
+Noise Wind	true	locked	-0.00143	0.00084	-0.0503	0.0471	-31.09	false
+Hardware Decay Hat	true	studio	-0.00216	0.00334	-0.1198	0.1810	-29.21	false
+Hardware Decay Hat	true	locked	-0.00156	0.00243	-0.0871	0.1317	-32.00	false
+DPCM Kick	true	studio	-0.00730	0.01484	-0.2544	0.3671	-28.35	false
+DPCM Kick	true	locked	-0.00562	0.01105	-0.1915	0.2719	-30.67	false
+DPCM Snare	true	studio	-0.00268	0.01326	-0.1287	0.3671	-34.86	false
+DPCM Snare	true	locked	-0.00207	0.00985	-0.0979	0.2719	-37.18	false
+DPCM Low Tom	true	studio	-0.00998	0.01422	-0.1708	0.3671	-28.53	false
+DPCM Low Tom	true	locked	-0.00754	0.01062	-0.1288	0.2719	-30.89	false
+DPCM Drum Map	true	studio	-0.00761	0.01663	-0.2550	0.3671	-28.91	false
+DPCM Drum Map	true	locked	-0.00593	0.01105	-0.1915	0.2719	-31.96	false
+VRC6 Reed Lead	true	studio	-0.00257	0.00165	-0.2220	0.0667	-26.01	false
+VRC6 Reed Lead	true	locked	-0.00211	0.00099	-0.1433	0.0472	-26.41	false
+VRC6 Hollow Lead	true	studio	-0.00570	0.00347	-0.1713	0.1278	-26.22	false
+VRC6 Hollow Lead	true	locked	-0.00445	0.00199	-0.1302	0.0809	-26.54	false
+VRC6 Glass Lead	true	studio	-0.00100	0.00066	-0.2351	0.0353	-29.84	false
+VRC6 Glass Lead	true	locked	-0.00083	0.00038	-0.1655	0.0307	-30.05	false
+VRC6 Width Sweep	true	studio	-0.00245	0.00217	-0.2041	0.0674	-26.27	false
+VRC6 Width Sweep	true	locked	-0.00245	0.00397	-0.1420	0.0675	-26.53	false
+VRC6 Chord	true	studio	-0.00444	0.00392	-0.2012	0.0991	-25.80	false
+VRC6 Chord	true	locked	-0.00274	0.00254	-0.1466	0.0730	-25.89	false
+VRC6 Bell	true	studio	-0.00149	0.00065	-0.1754	0.0446	-26.27	false
+VRC6 Bell	true	locked	-0.00149	0.00060	-0.1751	0.0447	-26.27	false
+VRC6 Pad	true	studio	-0.00231	0.00249	-0.0941	0.0772	-26.08	false
+VRC6 Pad	true	locked	-0.00231	0.00249	-0.0938	0.0772	-26.09	false
+Saw Brass	true	studio	-0.01094	0.00657	-0.2342	0.2200	-22.17	false
+Saw Brass	true	locked	-0.01094	0.00428	-0.1626	0.1638	-22.44	false
+Fat Saw Bass	true	studio	-0.01810	0.01374	-0.2653	0.3166	-22.57	false
+Fat Saw Bass	true	locked	-0.01682	0.01104	-0.1892	0.2543	-22.74	false
+Saw Pluck	true	studio	-0.01295	0.00373	-0.3017	0.2023	-22.32	false
+Saw Pluck	true	locked	-0.01296	0.00373	-0.2977	0.2009	-22.32	false
+Saw Power Arp	true	studio	-0.01316	0.01155	-0.3080	0.2937	-21.94	false
+Saw Power Arp	true	locked	-0.01132	0.00719	-0.2288	0.1973	-22.06	false
+Saw Strings	true	studio	-0.00458	0.00518	-0.1568	0.1820	-22.08	false
+Saw Strings	true	locked	-0.00458	0.00518	-0.1576	0.1820	-22.09	false
+Square Lead	false	studio	-0.01519	0.02980	-0.0958	0.1709	-25.70	false
+Bright Lead	false	studio	-0.00806	0.01270	-0.0476	0.1861	-27.56	false
+Thin Lead	false	studio	-0.00434	0.00676	-0.0351	0.1869	-29.08	false
+Pluck	false	studio	-0.00394	0.01276	-0.0346	0.1373	-31.39	false
+Echo Lead	false	studio	-0.02192	0.02602	-0.0873	0.1318	-26.61	false
+Portamento Lead	false	studio	-0.01941	0.02863	-0.0929	0.1685	-24.55	false
+Hero Lead	false	studio	-0.01967	0.01607	-0.0712	0.1777	-25.40	false
+Triangle Bass	false	studio	-0.06430	0.04657	-0.2456	0.1998	-24.44	false
+Punch Bass	false	studio	-0.03306	0.03370	-0.0835	0.1344	-25.82	false
+Pulse Bass	false	studio	-0.02080	0.03034	-0.0813	0.1494	-28.24	false
+Saw Bass	false	studio	-0.07088	0.04859	-0.3731	0.2033	-23.12	false
+Slap Bass	false	studio	-0.00945	0.02016	-0.0499	0.1366	-31.51	false
+Cello	false	studio	-0.00675	0.00817	-0.0499	0.1251	-26.38	false
+Violin	false	studio	-0.00455	0.00497	-0.0297	0.1334	-27.90	false
+Pizzicato	false	studio	-0.00585	0.01380	-0.0361	0.1663	-31.57	false
+String Pad	false	studio	-0.00726	0.00938	-0.0485	0.0858	-28.53	false
+Flute	false	studio	-0.01850	0.01910	-0.0798	0.1004	-25.54	false
+Clarinet	false	studio	-0.02029	0.02427	-0.0784	0.1198	-26.15	false
+Oboe	false	studio	-0.00515	0.00573	-0.0304	0.1444	-28.55	false
+Ocarina	false	studio	-0.01976	0.02146	-0.0684	0.0876	-26.37	false
+Pan Pipe	false	studio	-0.01681	0.01886	-0.0754	0.1429	-27.04	false
+Brass	false	studio	-0.02167	0.02215	-0.0751	0.1279	-24.24	false
+Trumpet	false	studio	-0.01083	0.01551	-0.0558	0.1709	-25.65	false
+Horn Section	false	studio	-0.01754	0.01996	-0.0806	0.0644	-26.19	false
+Organ	false	studio	-0.02678	0.02687	-0.0744	0.1261	-25.39	false
+Harpsichord	false	studio	-0.00177	0.00632	-0.0256	0.1376	-31.48	false
+Bell	false	studio	-0.00590	0.01715	-0.0538	0.1372	-27.42	false
+Marimba	false	studio	-0.01025	0.02314	-0.0472	0.1378	-31.08	false
+Music Box	false	studio	-0.00221	0.00726	-0.0322	0.1726	-30.26	false
+Major Arp	false	studio	-0.01072	0.01458	-0.0519	0.1756	-26.79	false
+Minor Arp	false	studio	-0.01078	0.01394	-0.0512	0.1751	-26.80	false
+Octave Arp	false	studio	-0.02017	0.02692	-0.0837	0.1447	-26.45	false
+Power Arp	false	studio	-0.02155	0.02860	-0.0870	0.1535	-25.66	false
+Sus Arp	false	studio	-0.01071	0.01426	-0.0596	0.1735	-26.75	false
+Tri Kick	false	studio	-0.05978	0.03437	-0.2422	0.1552	-29.72	false
+Tri Tom	false	studio	-0.05861	0.06117	-0.2420	0.1838	-27.62	false
+Kick	false	studio	-0.02576	0.03830	-0.0791	0.1604	-30.62	false
+Snare	false	studio	-0.02550	0.03853	-0.0799	0.1639	-27.38	false
+Closed Hat	false	studio	-0.01887	0.02508	-0.0554	0.1360	-32.69	false
+Open Hat	false	studio	-0.02292	0.03569	-0.0694	0.1356	-28.78	false
+Crash	false	studio	-0.03162	0.04621	-0.0888	0.1603	-26.01	false
+Metal Hit	false	studio	-0.02894	0.04752	-0.0881	0.1603	-30.72	false
+Sample Kick	false	studio	-0.01523	0.17782	-0.3142	0.5393	-25.96	false
+Sample Snare	false	studio	-0.00235	0.18049	-0.1381	0.4601	-33.94	false
+Sample Kit	false	studio	-0.01659	0.17782	-0.3353	0.5393	-26.87	false
+Standard Kit	false	studio	-0.04717	0.07815	-0.1510	0.2880	-27.42	false
+Tight Kit	false	studio	-0.04717	0.07815	-0.1510	0.2880	-27.69	false
+Explosion	false	studio	-0.01794	0.03886	-0.0954	0.1753	-26.99	false
+Small Explosion	false	studio	-0.01713	0.03776	-0.0775	0.1605	-30.36	false
+Hit	false	studio	-0.02488	0.04253	-0.0854	0.1651	-32.05	false
+Thunder	false	studio	-0.02535	0.06003	-0.1332	0.1154	-31.55	false
+Engine	false	studio	-0.03819	0.04522	-0.0966	0.1101	-31.38	false
+Wind	false	studio	-0.01559	0.01281	-0.0478	0.0701	-30.23	false
+Laser	false	studio	-0.00282	0.00788	-0.0266	0.1379	-34.24	false
+Coin	false	studio	-0.00963	0.03172	-0.0733	0.1358	-30.20	false
+Jump	false	studio	-0.00777	0.01415	-0.0370	0.1257	-32.48	false
+Power Up	false	studio	-0.00734	0.01471	-0.0430	0.1252	-28.72	false
+1-Up	false	studio	-0.02399	0.02915	-0.0719	0.1260	-27.12	false
+Menu Blip	false	studio	-0.01154	0.01492	-0.0396	0.1647	-33.87	false
+Siren	false	studio	-0.02698	0.02731	-0.0695	0.1145	-26.46	false
+Fall	false	studio	-0.00588	0.02710	-0.0662	0.1159	-30.13	false
