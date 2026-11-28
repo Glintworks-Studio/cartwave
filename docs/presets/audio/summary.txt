@@ -1,0 +1,13 @@
+# summary: 600 s, device "VX3211-2K (NVIDIA High Definition Audio) · 48000 Hz · 2 ch · requested 256 frames"
+# callbacks 59996, frames/cb 480..1056, cost mean 0.201% p99 0.60% max 3.50% of period
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.35 ms
+# edits applied 31, edit->frame tick max 16.16 ms, send->engine max 9.47 ms, dropped commands 0
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# thread cycles: audio 125.9 k/callback, ui 3422.7 k/presented frame
+# audio thread: 0.0 k instr/callback, 0.00 uJ/callback, P-core share ?; ui thread: 0 k instr/frame, 0.0 uJ/frame, P-core share ?
+# process: 0.0 M instr/s, 0.0 mW, P-core share ?, 0.0 % of a core; audio thread 0.00 M instr/s, 0.00 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+# cb_hist_permille: 0:3067 1:33501 2:17717 3:3950 4:1042 5:343 6:155 7:83 8:16 9:5 11:2 12:14 13:20 14:18 15:6 16:4 17:2 29:7 30:22 31:12 32:4 33:2 34:2 35:2
+# match: 224974 blocks matched, 4 before lock, 0 mismatched; 0 mismatch runs: 0 dropouts (max 0.00 ms), 0 capture gaps, 0 foreign; tap lost 0; 1 locks; 28798230 samples compared
+# match jumps (app s: gap): 
+# loopback: 0 blocks, 0 pilot dropouts
