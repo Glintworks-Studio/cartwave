@@ -320,10 +320,17 @@ label {
 /* ───────────── Device inspector ───────────── */
 
 .device {
-    height: 232px;
-    padding: 16px;
-    gap: 16px;
+    height: 356px;
+    padding: 12px;
+    gap: 12px;
     layout-type: row;
+}
+
+/* The CLIP section's commands, stacked in its 200 px (the device's left). */
+.clip-actions {
+    layout-type: column;
+    height: auto;
+    gap: 8px;
 }
 
 /* Sections are boxes like the transport capsule: flat #151515 inside a

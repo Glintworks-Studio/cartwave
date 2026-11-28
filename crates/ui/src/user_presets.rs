@@ -2,10 +2,12 @@
 //! kept in `user_presets.json` in the app-data folder (next to the recovery
 //! file) and listed in the browser after the factory presets.
 //!
-//! Browser and event indices cover both kinds: `0..PRESETS.len()` are the
-//! factory presets, the rest are user presets in file order (`PresetView`).
+//! Browser and event indices cover both kinds: `0..bank::len()` are the
+//! factory presets (the bank, `crate::bank`), the rest are user presets in
+//! file order (`PresetView`).
 
-use chip::presets::{lane_kind, PRESETS};
+use chip::presets::lane_kind;
+use chip::voice::VoiceKind;
 use engine::ParamId;
 use serde::{Deserialize, Serialize};
 
@@ -59,7 +61,7 @@ pub fn load() -> Vec<UserPreset> {
 fn unique_name(base: &str, user: &[UserPreset]) -> String {
     let base = base.trim().trim_end_matches('*').trim();
     let base = if base.is_empty() { "My Instrument" } else { base };
-    let taken = |n: &str| PRESETS.iter().any(|p| p.name.eq_ignore_ascii_case(n)) || user.iter().any(|u| u.name.eq_ignore_ascii_case(n));
+    let taken = |n: &str| crate::bank::all().iter().any(|p| p.name.eq_ignore_ascii_case(n)) || user.iter().any(|u| u.name.eq_ignore_ascii_case(n));
     if !taken(base) {
         return base.to_string();
     }
@@ -168,32 +170,59 @@ pub const MAX_NAME: usize = 48;
 pub struct PresetView {
     pub name: String,
     pub blurb: String,
+    /// The voices it suits (`chip::presets::K_*`).
     pub kinds: u8,
+    /// The voice it remembers (a user preset: the one it was saved from).
+    pub voice: VoiceKind,
     pub inst: LaneInstrument,
     /// Channel controls a factory preset sets with it (user presets: none).
-    pub params: &'static [(ParamId, i8)],
+    pub params: Vec<(ParamId, i8)>,
+    /// Studio-only controls (factory presets; user presets: the default).
+    pub unison: crate::state::Unison,
+    /// An authentic preset's hardware profile (Hardware: it locks the track).
+    pub profile: Option<crate::state::SoundChip>,
     pub user: bool,
 }
 
 impl PresetView {
+    /// Whether it plays on a console channel (0..8) or a voice's channel.
     pub fn fits(&self, lane: usize) -> bool {
         self.kinds & lane_kind(lane) != 0
+    }
+
+    /// Whether it uses Unison, Detune or Drift (studio only).
+    pub fn studio_only(&self) -> bool {
+        self.unison != crate::state::Unison::default()
     }
 }
 
 pub fn view(p: usize, user: &[UserPreset]) -> Option<PresetView> {
-    if let Some(f) = PRESETS.get(p) {
+    if let Some(f) = crate::bank::get(p) {
         return Some(PresetView {
-            name: f.name.to_string(),
-            blurb: f.blurb.to_string(),
+            name: f.name.clone(),
+            blurb: f.blurb.clone(),
             kinds: f.kinds,
-            inst: LaneInstrument::from_preset(f),
-            params: f.params,
+            voice: f.voice,
+            inst: f.inst.clone(),
+            params: f.params.clone(),
+            unison: f.unison,
+            profile: f.profile,
             user: false,
         });
     }
-    let u = user.get(p - PRESETS.len())?;
-    Some(PresetView { name: u.name.clone(), blurb: "Your preset".into(), kinds: u.kinds, inst: u.inst.clone(), params: &[], user: true })
+    let u = user.get(p - crate::bank::len())?;
+    let voice = VoiceKind::ALL.into_iter().find(|v| u.kinds & lane_kind(v.lane()) != 0).unwrap_or(VoiceKind::Pulse);
+    Some(PresetView {
+        name: u.name.clone(),
+        blurb: "Your preset".into(),
+        kinds: u.kinds,
+        voice,
+        inst: u.inst.clone(),
+        params: Vec::new(),
+        unison: crate::state::Unison::default(),
+        profile: None,
+        user: true,
+    })
 }
 
 #[cfg(test)]

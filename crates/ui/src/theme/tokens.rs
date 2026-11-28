@@ -228,3 +228,17 @@ pub const CLIP_RESIZE_ZONE: f32 = 8.0;
 /// Time constant for hover/select/drag easing (seconds). Exponential approach
 /// reaches ~95% in 3τ ≈ 150 ms.
 pub const EASE_TAU: f32 = 0.05;
+
+// The device panel (Presets + Browser batch; `workflow-chip-synth` board)
+/// The one warm colour every instrument display draws in (waveforms,
+/// envelopes; VISUAL-SPEC.md §13): never the track colour, never lime.
+pub const DISPLAY_WARM: Rgba = Rgba::hex(0xE8DCC0);
+/// The device box (logical px) and the bottom pane holding it (12 px around).
+pub const DEVICE_W: f32 = 880.0;
+pub const DEVICE_H: f32 = 332.0;
+pub const DEVICE_PANE_H: f32 = 356.0;
+/// The inspector's CLIP section, left of the device (the board's first 200 px).
+pub const CLIP_SECTION_W: f32 = 200.0;
+/// The device's small labels: #8A8A8A, not the board's #808080, for 4.5 : 1 on
+/// the sections' lightest top (as the mixer's labels, B4B-D32; RUNLOG PB-D9).
+pub const DEVICE_INK_LO: Rgba = Rgba::hex(0x8A8A8A);

@@ -6,7 +6,7 @@ pub mod dial;
 pub mod export_dialog;
 pub mod gfx;
 pub mod header_layout;
-pub mod instrument;
+pub mod device;
 pub mod main_track;
 pub mod mixer;
 pub mod modal;

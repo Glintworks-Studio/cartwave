@@ -36,6 +36,11 @@ pub enum MenuSite {
     Problems,
     /// The status bar's message, whole (polish 2 §6.2).
     Message,
+    /// The device's Voice selector (a studio track's Chip Synth voice).
+    Voice(usize),
+    /// An item in the browser: its collections (and a user preset's Rename,
+    /// Delete, Show in Explorer).
+    BrowserItem(crate::bank::Item),
 }
 
 /// What an in-place rename edits.
@@ -521,6 +526,12 @@ impl AppState {
             self.s.dials.set(self.dial_values(lane));
             self.s.lane_sel.set(lane);
         }
+        // §3.1: selecting a track header shows its Device view (as clicking
+        // a track's title bar in the reference); Shift+Tab goes back.
+        if self.s.piano_open.get_untracked() {
+            self.detail_clip = self.s.piano.with_untracked(|p| p.clip);
+            self.close_piano();
+        }
     }
 
     // ───────────────────────────── Rename (A13, T2) ─────────────────────────────
@@ -683,7 +694,7 @@ impl AppState {
                 None => self.set_status(format!("\"{text}\" isn't a tempo. Type a number of beats per minute.")),
             },
             RenameTarget::Preset(i) => {
-                let user = i.saturating_sub(chip::presets::PRESETS.len());
+                let user = i.saturating_sub(crate::bank::len());
                 match crate::user_presets::rename(user, &text) {
                     Ok(n) => {
                         self.s.user_presets.set(crate::user_presets::load());
@@ -805,6 +816,31 @@ impl AppState {
                     .iter()
                     .map(|st| MenuItem::new(MenuAction::SpectrumStyle(*st), st.label()).checked(*st == cur))
                     .collect()
+            }
+            MenuSite::Voice(lane) => {
+                let cur = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.voice));
+                crate::bank::SYNTH_VOICES.iter().map(|v| MenuItem::new(MenuAction::SetVoice(lane, *v), crate::bank::voice_name(*v)).checked(cur == Some(*v))).collect()
+            }
+            MenuSite::BrowserItem(item) => {
+                let mut v: Vec<MenuItem> = crate::collections::COLLECTIONS
+                    .iter()
+                    .enumerate()
+                    .map(|(k, c)| {
+                        let on = crate::collections::contains(&self.settings.collections, k, item);
+                        let mut m = MenuItem::new(MenuAction::Collect(item, k as u8), if on { format!("Remove from {}", c.0) } else { format!("Add to {}", c.0) });
+                        m.swatch = Some(c.1);
+                        m
+                    })
+                    .collect();
+                if let crate::bank::Item::User(u) = item {
+                    let i = crate::bank::len() + u;
+                    self.preset_rename_at = (x, y);
+                    v.push(MenuItem::sep());
+                    v.push(MenuItem::new(MenuAction::PresetRename(i), "Rename"));
+                    v.push(MenuItem::new(MenuAction::PresetDelete(i), "Delete"));
+                    v.push(MenuItem::new(MenuAction::PresetReveal(i), if shortcuts::MACOS { "Show in Finder" } else { "Show in Explorer" }));
+                }
+                v
             }
             MenuSite::Preset(i) => {
                 self.preset_rename_at = (x, y);
@@ -949,12 +985,18 @@ impl AppState {
                 });
                 self.commit();
             }
+            MenuAction::SetVoice(l, k) => self.set_voice_cmd(l, k),
+            MenuAction::Collect(item, k) => {
+                crate::collections::toggle(&mut self.settings.collections, k as usize, item);
+                self.save_settings();
+                self.s.collections_rev.update(|r| *r += 1);
+            }
             MenuAction::PresetRename(i) => self.open_rename(RenameTarget::Preset(i)),
             MenuAction::PresetDelete(i) => {
                 let Some(p) = self.preset(i) else { return };
                 let text = format!("Delete your preset \"{}\"?\n\nProjects that use it keep their own copy of the instrument.", p.name);
                 if self.ask(cx, &text, "Delete", None) == Some(true) {
-                    match crate::user_presets::delete(i.saturating_sub(chip::presets::PRESETS.len())) {
+                    match crate::user_presets::delete(i.saturating_sub(crate::bank::len())) {
                         Ok(()) => {
                             self.s.user_presets.set(crate::user_presets::load());
                             self.s.browser_sel.set(None);

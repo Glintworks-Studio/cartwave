@@ -2,7 +2,9 @@
 //! inside a plugin window (baseview) as well as the standalone app.
 
 pub mod bank;
+pub mod collections;
 pub mod dev;
+pub mod preset_ui;
 pub mod edit;
 pub mod file;
 pub mod dpcm;
@@ -49,8 +51,7 @@ use crate::views::{
     browser::{browser, DragGhost, PresetDrag},
     chrome::{ContextMenu, Key, KeyAction, MenuBackdrop, SpectrumBox, SplitHandle},
     topbar::{CpuMem, DisplayWell, TopKey, TopKeyView},
-    dial::Dial,
-    instrument::InstrumentView,
+
     piano_roll::PianoRoll,
     overlay::StatsOverlay,
     ruler::Ruler,
@@ -138,6 +139,12 @@ pub struct Signals {
     pub export_dlg: Signal<Option<views::export_dialog::ExportDialog>>,
     /// The user's saved presets (browser indices after the factory presets).
     pub user_presets: Signal<Vec<user_presets::UserPreset>>,
+    /// The device's preset picker, open under its field (window logical x, y, width).
+    pub picker: Signal<Option<(f32, f32, f32)>>,
+    /// Show in Browser: the browser opens the folder holding this preset.
+    pub browser_reveal: Signal<Option<usize>>,
+    /// Bumped when the collections change (the browser re-reads them).
+    pub collections_rev: Signal<u32>,
     /// Unsaved changes since the last New, Open or Save (F-01).
     pub dirty: Signal<bool>,
     /// The open modal panel: Settings, Project Settings, About, shortcuts.
@@ -350,6 +357,11 @@ pub struct AppState {
     /// after its first commit (later taps amend that step).
     tap: tap::TapTempo,
     tap_step: Option<(usize, usize)>,
+    /// ◀ ▶ (§6.2): the track and the undo position of the last step, so a run
+    /// of steps folds into one undo step.
+    preset_step: Option<(usize, (usize, usize))>,
+    /// Shift+Tab back to the Clip view: the clip the Device view replaced.
+    detail_clip: Option<u32>,
     /// Where the BPM field opens (window logical x, y, width).
     bpm_rename_at: (f32, f32, f32),
     /// The track gains the engine has (it starts at unity).
@@ -484,6 +496,24 @@ pub enum AppEvent {
     Audition(Option<usize>),
     /// Load a preset onto a lane (`None`: the selected lane, or the first that fits).
     AssignPreset { lane: Option<usize>, preset: usize },
+    /// A preset dropped on empty space: a new track with it (§5.3).
+    PresetNewTrack(usize),
+    /// A clip from the browser's Clips folder: onto a track at a tick (the
+    /// insert marker if `None`), or (no track) a new track.
+    InsertPhrase { phrase: usize, lane: Option<usize>, tick: Option<u32> },
+    /// A DPCM sample from the browser onto a DPCM Sampler track (`None`: a new one).
+    AssignSample { slot: usize, lane: Option<usize> },
+    /// The device's ◀ ▶: the previous / next preset in the current one's folder.
+    StepPreset(i32),
+    /// The device's preset field: open the picker under it (window logical x, y, width).
+    OpenPicker(f32, f32, f32),
+    ClosePicker,
+    /// The picker's Show in Browser: open the browser at this preset.
+    ShowInBrowser(Option<usize>),
+    /// The picker's Save Preset As…: the instrument as a user preset.
+    SavePresetAs,
+    /// Set an instrument's arpeggio speed (frames per step). Undo groups a drag.
+    EditArpSpeed { inst: instruments::InstId, value: u8 },
     /// A preset dropped on a clip: it becomes the clip's own instrument.
     AssignPresetToClip { clip: u32, preset: usize },
     /// The selected clips get their own copy of the instrument they play.
@@ -703,8 +733,8 @@ impl Model for AppState {
                         };
                         // Drawing on an unused macro starts one: 16 neutral steps.
                         if q.len == 0 {
-                            let neutral = views::instrument::NEUTRAL[*which.min(&3)];
-                            *q = chip::instrument::Seq::new(&[neutral; views::instrument::NEW_SEQ_LEN], chip::instrument::NONE, chip::instrument::NONE);
+                            let neutral = views::device::NEUTRAL[*which.min(&3)];
+                            *q = chip::instrument::Seq::new(&[neutral; views::device::NEW_SEQ_LEN], chip::instrument::NONE, chip::instrument::NONE);
                             i.edited = true;
                         }
                         if *step < q.len as usize && q.data[*step] != *value {
@@ -759,7 +789,38 @@ impl Model for AppState {
                 self.audition(Some(*p));
                 self.audition_until = self.audition_lane.map(|_| Instant::now() + AUDITION_BRIEF);
             }
-            AppEvent::AssignPreset { lane, preset } => self.assign_preset(*lane, *preset),
+            AppEvent::AssignPreset { lane, preset } => self.assign_preset(cx, *lane, *preset),
+            AppEvent::PresetNewTrack(p) => self.preset_new_track(cx, *p),
+            AppEvent::InsertPhrase { phrase, lane, tick } => self.insert_phrase(*phrase, *lane, *tick),
+            AppEvent::AssignSample { slot, lane } => self.assign_sample(*slot, *lane),
+            AppEvent::StepPreset(d) => self.step_preset(cx, *d),
+            AppEvent::OpenPicker(x, y, w) => self.s.picker.set(Some((*x, *y, *w))),
+            AppEvent::ClosePicker => self.s.picker.set(None),
+            AppEvent::ShowInBrowser(p) => {
+                self.s.picker.set(None);
+                if !self.s.browser_open.get_untracked() {
+                    self.s.browser_open.set(true);
+                    self.settings.browser_open = true;
+                    self.save_settings();
+                }
+                self.s.browser_sel.set(*p);
+                self.s.browser_reveal.set(*p);
+            }
+            AppEvent::SavePresetAs => {
+                self.s.picker.set(None);
+                self.save_user_preset();
+            }
+            AppEvent::EditArpSpeed { inst, value } => {
+                self.s.arrangement.update(|a| {
+                    if let Some(i) = a.instruments.get_mut(*inst) {
+                        let v = (*value).clamp(1, chip::instrument::ARP_SPEED_MAX);
+                        if i.inst.arp_speed.max(1) != v {
+                            i.inst.arp_speed = v;
+                            i.edited = true;
+                        }
+                    }
+                });
+            }
             AppEvent::AssignPresetToClip { clip, preset } => self.assign_preset_to_clip(*clip, *preset),
             AppEvent::MakeInstrumentUnique => self.make_instrument_unique(),
             AppEvent::UseLaneInstrument => self.use_lane_instrument(),
@@ -1396,26 +1457,6 @@ impl AppState {
         self.s.user_presets.with_untracked(|u| user_presets::view(p, u))
     }
 
-    /// The track a preset goes to: `want` if given (and the preset suits its
-    /// voice type), else the selected track if it suits, else the first that
-    /// does (and isn't silenced by the profile).
-    fn lane_for(&self, preset: usize, want: Option<usize>) -> Option<usize> {
-        let p = self.preset(preset)?;
-        let chip = self.s.chip.get_untracked();
-        let sel = self.s.lane_sel.get_untracked();
-        self.s.arrangement.with_untracked(|a| {
-            let fits = |t: usize| a.lanes.get(t).is_some_and(|l| p.fits(l.chan()));
-            let ok = |t: usize| fits(t) && !state::lane_off(chip, a, t);
-            if let Some(t) = want {
-                return fits(t).then_some(t);
-            }
-            if ok(sel) {
-                return Some(sel);
-            }
-            (0..a.lanes.len()).find(|&t| ok(t))
-        })
-    }
-
     fn audition(&mut self, preset: Option<usize>) {
         self.audition_until = None;
         if let Some(lane) = self.audition_lane.take() {
@@ -1433,11 +1474,15 @@ impl AppState {
             // B2: no preview voice yet; say why nothing plays.
             return self.set_status("Presets play on click while the song is stopped: the channels are busy playing it. Stop (Space) to hear this one.".into());
         }
-        let Some(track) = self.lane_for(p, None) else { return };
         let Some(pr) = self.preset(p) else { return };
+        // Auditions play on the console channel of the selected track when
+        // the preset suits it, else on its own voice's.
+        let lane = match self.preset_target(None) {
+            Some(t) => self.s.arrangement.with_untracked(|a| a.lanes[t].chan()),
+            None => pr.voice.lane(),
+        };
+        let lane = if pr.fits(lane) { lane } else { pr.voice.lane() };
         self.s.arrangement.update(|a| a.audition = Some(pr.inst));
-        // Auditions play on the console channel of the track's type.
-        let lane = self.s.arrangement.with_untracked(|a| a.lanes[track].chan());
         let pitch = match lane {
             chip::driver::LANE_TRI => 48,
             chip::driver::LANE_NOISE => 56,
@@ -1450,22 +1495,6 @@ impl AppState {
         }
     }
 
-    /// Loads preset `p` on a lane, with its channel controls; one undo step.
-    fn assign_preset(&mut self, lane: Option<usize>, p: usize) {
-        let Some(pr) = self.preset(p) else { return };
-        if lane.is_some_and(|l| self.s.arrangement.with_untracked(|a| state::lane_off(self.s.chip.get_untracked(), a, l))) {
-            return self.set_status(state::VRC6_OFF_HINT.into());
-        }
-        let Some(lane) = self.lane_for(p, lane) else {
-            self.set_status(format!("{} can't play on that channel.", pr.name));
-            return;
-        };
-        self.load_preset_on(lane, pr.inst, pr.params);
-        self.commit();
-        let name = self.s.arrangement.with_untracked(|a| a.lanes[lane].name.clone());
-        self.set_status(format!("{} loaded on {name}", pr.name));
-    }
-
     /// A preset dropped on a clip becomes that clip's own instrument (a new
     /// table entry). The lane's channel controls stay as they are: they
     /// belong to the lane, not the clip. One undo step.
@@ -1475,8 +1504,9 @@ impl AppState {
         if self.s.arrangement.with_untracked(|a| state::lane_off(self.s.chip.get_untracked(), a, lane)) {
             return self.set_status(state::VRC6_OFF_HINT.into());
         }
-        if self.lane_for(p, Some(lane)) != Some(lane) {
-            self.set_status(format!("{} can't play on that channel.", pr.name));
+        // A clip's instrument plays on its track's voice (it can't switch it).
+        if !self.s.arrangement.with_untracked(|a| a.lanes.get(lane).is_some_and(|l| pr.fits(l.chan()))) {
+            self.set_status(format!("{} plays on the {} voice: drop it on the track header to switch the track's voice.", pr.name, bank::voice_name(pr.voice)));
             return;
         }
         let mut ok = false;
@@ -2174,7 +2204,7 @@ impl AppState {
 /// advances only once per presented frame (see `AppState::tick`).
 const ANIMATION_PUMP: Duration = Duration::from_millis(4);
 /// How long an arrow-key audition in the browser sounds.
-const AUDITION_BRIEF: Duration = Duration::from_millis(600);
+pub(crate) const AUDITION_BRIEF: Duration = Duration::from_millis(600);
 /// Pump interval while nothing animates (meter decay etc. still settles).
 const IDLE_PUMP: Duration = Duration::from_millis(50);
 
@@ -2310,6 +2340,9 @@ pub fn build_ui(cx: &mut Context) {
         browser_sel: Signal::new(None),
         drag_preset: Signal::new(None),
         user_presets: Signal::new(user_presets::load()),
+        picker: Signal::new(None),
+        browser_reveal: Signal::new(None),
+        collections_rev: Signal::new(0),
         export_dlg: Signal::new(None),
         dirty: Signal::new(false),
         modal: Signal::new(None),
@@ -2433,6 +2466,8 @@ pub fn build_ui(cx: &mut Context) {
         last_mem: None,
         tap: tap::TapTempo::default(),
         tap_step: None,
+        preset_step: None,
+        detail_clip: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
         sent_gains: [1.0; 8],
         underruns_seen: (0, None),
@@ -2633,7 +2668,8 @@ pub const MIN_WINDOW_SIZE: (u32, u32) = (
     // The inspector (two paddings and two gaps), but never narrower than
     // the top bar's fixed controls need.
     max_u32(
-        INSPECTOR_PAD * 4 + DIALS_SECTION_W as u32 + CLIP_SECTION_MIN_W + INSTRUMENT_SECTION_MIN_W as u32,
+        // The Device view: 12 px around and between, the CLIP section, the device.
+        3 * 12 + theme::tokens::CLIP_SECTION_W as u32 + theme::tokens::DEVICE_W as u32,
         TOPBAR_MIN_W,
     ),
     MIN_WINDOW_H,
@@ -2654,16 +2690,7 @@ pub fn status_bar_shown() -> bool {
 /// The minimum window height (logical px, on the 4 px grid).
 const MIN_WINDOW_H: u32 = 720;
 /// The device inspector's height, padding and gap; must match `.device` in style.css.
-const INSPECTOR_HEIGHT: u32 = 232;
-const INSPECTOR_PAD: u32 = 16;
-/// Inspector section widths (logical px). Dials and channels are fixed so
-/// they never squeeze; the CLIP section takes what's left.
-const DIALS_SECTION_W: f32 = MAX_DIALS as f32 * DIAL_W + (MAX_DIALS - 1) as f32 * DIAL_GAP + 24.0;
-const CLIP_SECTION_MIN_W: u32 = 240;
-/// The INSTRUMENT section's smallest width (its four graphs stay readable).
-const INSTRUMENT_SECTION_MIN_W: f32 = 320.0;
-// 320, not 480: the room the CHANNELS meters left goes to the instrument editor.
-const CLIP_SECTION_MAX_W: f32 = 320.0;
+const INSPECTOR_HEIGHT: u32 = theme::tokens::DEVICE_PANE_H as u32;
 /// The narrowest window the top bar's three groups fit with room between
 /// them: keys 297 + display and TAP 628 + spectrum and CPU/MEM 312 + 2 × 16
 /// padding = 1269, plus the groups' own 12 px gap on each side, on the 4 px
@@ -2801,55 +2828,14 @@ fn top_bar(cx: &mut Context, s: Signals) {
     .class("topbar");
 }
 
-/// Dial cell width and spacing (logical px); must match `.dial` in style.css.
-const DIAL_W: f32 = 84.0;
-const DIAL_GAP: f32 = 8.0;
 
+/// The bottom pane's Device view (PRESETS_PROMPT.md §3; Live's Detail
+/// View, Live 12 manual §42.1, R78): the inspector's CLIP section (what
+/// isn't the instrument) in the board's first 200 px, then the selected
+/// track's instrument, its one home (`views::device`). No device-chain
+/// slots until the device-chain batch: nothing pretends.
 fn device_panel(cx: &mut Context, s: Signals) {
     HStack::new(cx, |cx| {
-        // Dials
-        VStack::new(cx, |cx| {
-            let title = Memo::new(move |_| {
-                let lane = s.lane_sel.get();
-                // A locked track names its channel; a studio track its type.
-                s.arrangement.with(|a| {
-                    let Some(l) = a.lanes.get(lane) else { return String::new() };
-                    let name = l.name.to_uppercase();
-                    match l.lock {
-                        Some(c) => {
-                            let hw = state::default_lanes()[c].name.to_uppercase();
-                            if name == hw { format!("CHANNEL  ·  {name}") } else { format!("CHANNEL  ·  {name}  ·  {hw}") }
-                        }
-                        None => format!("TRACK  ·  {name}  ·  {} (STUDIO)", tracks::kind_name(l.voice).to_uppercase()),
-                    }
-                })
-            });
-            Label::new(cx, title).class("section-title");
-            // Only the controls the selected channel's hardware has.
-            Binding::new(cx, s.lane_sel, move |cx| {
-                let lane = s.lane_sel.get();
-                let chan = s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.chan()));
-                let dials = chan.map(lane_dials).unwrap_or_default();
-                HStack::new(cx, |cx| {
-                    if chan == Some(chip::driver::LANE_TRI) {
-                        Label::new(cx, "No controls: the triangle has no volume or duty.")
-                            .class("section-title");
-                    } else if chan.is_none() {
-                        Label::new(cx, "Select a clip to edit its channel.").class("section-title");
-                    }
-                    for (slot, (_, spec)) in dials.into_iter().enumerate() {
-                        Dial::new(cx, s, slot, spec).class("dial").help_fn(move || dial_tip(s, slot, spec.label));
-                    }
-                })
-                .gap(Pixels(DIAL_GAP))
-                .height(Auto)
-                .width(Auto);
-            });
-        })
-        .class("device-section")
-        .width(Pixels(DIALS_SECTION_W));
-
-
         // The clip: its name (renamed in place, UX.md §4) and the clip's
         // instrument commands as visible buttons (I3; disabled ones say why).
         VStack::new(cx, |cx| {
@@ -2866,7 +2852,7 @@ fn device_panel(cx: &mut Context, s: Signals) {
                     (none, unique, track)
                 })
             });
-            HStack::new(cx, |cx| {
+            VStack::new(cx, |cx| {
                 tip_wrap(cx, |cx| {
                     Button::new(cx, |cx| Label::new(cx, "Make Unique"))
                         .class("btn")
@@ -2888,59 +2874,15 @@ fn device_panel(cx: &mut Context, s: Signals) {
                         if none { "Select a clip that has its own instrument." } else if track { edit::WHY_TRACK_INST } else { "The selected clip(s) go back to the track's instrument." }.into()
                     });
             })
-            .class("inst-actions");
+            .class("clip-actions");
         })
         .class("device-section")
-        .width(Stretch(1.0))
-        .min_width(Pixels(CLIP_SECTION_MIN_W as f32))
-        .max_width(Pixels(CLIP_SECTION_MAX_W));
-
-        // The lane's instrument: its macros, editable.
-        VStack::new(cx, |cx| {
-            // Tracks both the arrangement and the selected lane: a lane change
-            // alone (the selection moving to another lane) must update it too.
-            let title = Memo::new(move |_| {
-                let lane = s.lane_sel.get();
-                s.arrangement.with(|a| {
-                    let id = a.current_instrument(lane);
-                    let name = a.instruments.get(id).map(|i| i.label()).unwrap_or_default();
-                    let whose = if id == a.instruments.lane_id(lane) { "TRACK DEFAULT" } else { "CLIP'S OWN" };
-                    let n = a.instruments.users(id, &a.clips);
-                    let shared = if n == 1 { "1 CLIP".to_string() } else { format!("{n} CLIPS") };
-                    format!("INSTRUMENT  ·  {}  ·  {whose}  ·  {shared}", name.to_uppercase())
-                })
-            });
-            HStack::new(cx, |cx| {
-                Label::new(cx, title).class("section-title");
-                Element::new(cx).width(Stretch(1.0)).height(Pixels(1.0));
-                Button::new(cx, |cx| Label::new(cx, "Save as Preset"))
-                    .class("btn")
-                    .on_press(|cx| cx.emit(AppEvent::SaveUserPreset))
-                    .help("Save this instrument to your presets (the browser lists them after the factory presets).");
-            })
-            .class("inst-actions");
-            InstrumentView::new(cx, s)
-                .width(Stretch(1.0))
-                .height(Stretch(1.0))
-                .help("Drag across a graph to draw the macro. Shift-click sets the loop point, Alt-click the release point; double-click a marker to remove it. Drag the vibrato values up or down.");
-        })
-        .class("device-section")
-        .width(Stretch(1.0))
-        .min_width(Pixels(INSTRUMENT_SECTION_MIN_W));
-        // No CHANNELS meters here: the top bar's spectrum shows the same
-        // levels at all times (STABILIZE.md §A4.5); the room goes to the
-        // instrument editor.
+        .width(Pixels(theme::tokens::CLIP_SECTION_W))
+        .height(Pixels(theme::tokens::DEVICE_H));
+        views::device::DeviceView::new(cx, s);
     })
     .class("panel")
     .class("device");
-}
-
-/// A dial's tooltip: what it is, and why it's inert when it is (I4).
-fn dial_tip(s: Signals, slot: usize, label: &str) -> String {
-    match s.dial_state.with_untracked(|d| d.get(slot).and_then(|d| d.locked)) {
-        Some(why) => format!("{label}: inert, {why}. The instrument's macro drives it; clear that macro to use the dial."),
-        None => format!("{label}: drag up or down (Shift for fine steps), or use the wheel."),
-    }
 }
 
 /// The piano roll's key hint, from the shortcut table and the platform's
@@ -3526,6 +3468,33 @@ impl AppState {
         }
         self.clamp_lane_scroll();
         self.sync_loop();
+    }
+
+    /// Shift+Tab (§3.1): the Clip view (the open clip's piano roll) ⇄ the
+    /// Device view (the selected track's instrument). Back to the Clip view
+    /// it reopens the clip the Device view replaced, else the selected clip.
+    fn toggle_detail(&mut self) {
+        if self.s.piano_open.get_untracked() {
+            self.detail_clip = self.s.piano.with_untracked(|p| p.clip);
+            self.close_piano();
+            if crate::dev::enabled() {
+                eprintln!("dev: detail device (clip {:?})", self.detail_clip);
+            }
+            return;
+        }
+        let clip = self
+            .s
+            .arrangement
+            .with_untracked(|a| a.first_selected().map(|c| c.id).or(self.detail_clip.filter(|id| a.clip(*id).is_some())));
+        match clip {
+            Some(id) => {
+                self.open_piano(id);
+                if crate::dev::enabled() {
+                    eprintln!("dev: detail clip {id}");
+                }
+            }
+            None => self.set_status("No clip to show: select a clip, or double-click one to open it in the Clip view.".into()),
+        }
     }
 
     fn close_piano(&mut self) {
@@ -4182,6 +4151,7 @@ impl AppState {
             }
             Action::ToggleBrowser => cx.emit(AppEvent::ToggleBrowser),
             Action::ToggleMixer => cx.emit(AppEvent::ShowMixer(!self.s.view_mixer.get_untracked())),
+            Action::ToggleDetail => self.toggle_detail(),
             Action::ShowOverview => {
                 let on = !self.settings.show_overview;
                 self.set_setting(cx, Set::ShowOverview(on));

@@ -569,6 +569,10 @@ pub enum MenuAction {
     PresetRename(usize),
     PresetDelete(usize),
     PresetReveal(usize),
+    /// The Voice selector: a studio track's voice.
+    SetVoice(usize, chip::voice::VoiceKind),
+    /// Add a browser item to collection n, or take it out.
+    Collect(crate::bank::Item, u8),
     /// The spectrum's style.
     SpectrumStyle(crate::views::chrome::SpectrumStyle),
     /// Settings ▸ Editing: the default track colour (auto colours off).

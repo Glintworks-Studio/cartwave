@@ -49,6 +49,11 @@ pub enum WarnKind {
     /// A dropped or imported MIDI file whose parts break the profile
     /// (Batch 4b §6: the "Unlock" answer is "Import as studio tracks").
     MidiImport,
+    /// A studio preset (another voice, or Unison / Detune / Drift) chosen
+    /// for a locked track (Presets + Browser §6.3: Unlock track · Cancel).
+    StudioPreset,
+    /// An authentic preset with no free channel of its type in the profile.
+    Budget,
 }
 
 impl WarnKind {
@@ -60,6 +65,8 @@ impl WarnKind {
             WarnKind::Dpcm => "dpcm-sample",
             WarnKind::Profile => "profile-channels",
             WarnKind::MidiImport => "midi-import",
+            WarnKind::StudioPreset => "studio-preset",
+            WarnKind::Budget => "no-free-channel",
         }
     }
 
@@ -72,10 +79,12 @@ impl WarnKind {
             WarnKind::Dpcm => "DPCM notes with no sample on a locked track",
             WarnKind::Profile => "A hardware profile without a channel in use",
             WarnKind::MidiImport => "MIDI parts that don't fit the hardware profile",
+            WarnKind::StudioPreset => "A studio preset chosen for a locked track",
+            WarnKind::Budget => "An authentic preset with no free channel",
         }
     }
 
-    pub const ALL: [WarnKind; 6] = [WarnKind::Chord, WarnKind::Range, WarnKind::Expansion, WarnKind::Dpcm, WarnKind::Profile, WarnKind::MidiImport];
+    pub const ALL: [WarnKind; 8] = [WarnKind::Chord, WarnKind::Range, WarnKind::Expansion, WarnKind::Dpcm, WarnKind::Profile, WarnKind::MidiImport, WarnKind::StudioPreset, WarnKind::Budget];
 }
 
 /// A silenced warning's stored form: `"{id}={choice}"` (the answer to give
@@ -101,6 +110,7 @@ pub fn describe(entry: &str) -> String {
     let label = WarnKind::ALL.iter().find(|k| k.id() == id).map_or(id, |k| k.label());
     match c {
         "unlock" if id == WarnKind::MidiImport.id() => format!("{label}: always Import as studio tracks"),
+        "unlock" if id == WarnKind::Budget.id() => format!("{label}: always Load unlocked"),
         "unlock" => format!("{label}: always Unlock track"),
         "fit" => format!("{label}: always Fit to hardware"),
         "fitarp" => format!("{label}: always Fit to hardware, chords as arpeggios"),

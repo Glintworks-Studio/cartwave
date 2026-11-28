@@ -1209,6 +1209,12 @@ pub struct Settings {
     pub browser_right: bool,
     /// View ▸ Show Overview (polish 2 §7; on by default).
     pub show_overview: bool,
+    // ── The browser (Presets + Browser batch) ──
+    /// The browser's collections: per collection (`collections::COLLECTIONS`),
+    /// its items' keys ("preset:Bright Square Lead"…).
+    pub collections: Vec<Vec<String>>,
+    /// The sidebar entry shown ("Sounds", "Hardware", "Collection 0"…).
+    pub browser_section: String,
 }
 
 /// Open Recent keeps this many projects.
@@ -1246,6 +1252,8 @@ impl Default for Settings {
             strip_by_clips: false,
             browser_right: false,
             show_overview: true,
+            collections: Vec::new(),
+            browser_section: "Sounds".into(),
         }
     }
 }

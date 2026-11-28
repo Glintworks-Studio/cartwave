@@ -135,6 +135,9 @@ pub enum Action {
     /// the reference's Tab between its two main views, R77, Live 12 manual
     /// ch. 42.1).
     ToggleMixer,
+    /// Shift+Tab: the bottom pane's Clip view ⇄ Device view (Live's Detail
+    /// View, R78, Live 12 manual §42.1; Presets + Browser §3.1).
+    ToggleDetail,
     DrawMode,
     GridNarrow,
     GridWiden,
@@ -271,6 +274,7 @@ pub static TABLE: &[Shortcut] = &[
     sc!(FitSong, "view.fit_song", "Fit the Whole Song", "View", &[k(Code::KeyW)], &[k(Code::KeyW)], ARR),
     sc!(ShowOverview, "view.overview", "Show Overview", "View", &[cmd_alt(Code::KeyO)], &[cmd_alt(Code::KeyO)], APP),
     sc!(ToggleMixer, "view.mixer", "Mixer", "View", &[k(Code::Tab)], &[k(Code::Tab)], APP),
+    sc!(ToggleDetail, "view.detail", "Clip / Device View", "View", &[shift(Code::Tab)], &[shift(Code::Tab)], APP),
     sc!(DrawMode, "view.draw_mode", "Draw Mode", "View", &[k(Code::KeyB)], &[k(Code::KeyB)], APP),
     // The grid of the focused editor (R56–R59).
     sc!(GridNarrow, "grid.narrow", "Narrow Grid", "Grid", &[cmd(Code::Digit1)], &[cmd(Code::Digit1)], EDITORS),
