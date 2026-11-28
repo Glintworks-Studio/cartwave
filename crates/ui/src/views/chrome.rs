@@ -1197,7 +1197,19 @@ impl TrackRow {
                     let Some(l) = a.lanes.get(lane) else { return (false, String::new()) };
                     (
                         a.first_selected().map(|c| c.lane) == Some(lane) || a.track_sel.contains(&lane),
-                        format!("{}\u{1}{}\u{1}{:?}\u{1}{}\u{1}{}\u{1}{}\u{1}{:?}\u{1}{:?}", a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(), l.name, l.color, l.height, l.pan, l.vol_db, l.lock, l.voice),
+                        format!(
+                            "{}\u{1}{}\u{1}{:?}\u{1}{}\u{1}{}\u{1}{}\u{1}{:?}\u{1}{:?}\u{1}{:?}",
+                            a.instruments.lane(lane).map(|i| i.label()).unwrap_or_default(),
+                            l.name,
+                            l.color,
+                            l.height,
+                            l.pan,
+                            l.vol_db,
+                            l.lock,
+                            l.voice,
+                            // Batch 5: the fader / pan automation marks.
+                            ["track.gain", "track.pan"].map(|id| crate::automation::mark(a, crate::automation::AutoOwner::Track(l.id), id))
+                        ),
                     )
                 });
                 if *seen.borrow() != now {
@@ -1511,6 +1523,10 @@ impl View for TrackRow {
             });
         } else {
             draw_pan(canvas, (r.left + lay.col_a() * s).round(), (r.top + row::PAN_WELL_Y * s).round(), pan, s);
+            // Batch 5: automated pan: the dot at the well's right end.
+            if let Some(over) = self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).and_then(|l| crate::automation::mark(a, crate::automation::AutoOwner::Track(l.id), "track.pan"))) {
+                crate::automation::draw_mark(canvas, ((r.left + (lay.col_a() + COL_A_W + 6.0) * s).round(), (r.top + (row::PAN_WELL_Y + row::PAN_WELL_H * 0.5) * s).round()), s, over);
+            }
         }
         // A header being dragged (T4): a 2 px line where it would land.
         if let Some((from, to)) = self.s.track_drag.get_untracked() {
@@ -1934,6 +1950,10 @@ impl View for VolumeFader {
             });
         } else {
             slider_thumb(canvas, th, s, lift);
+        }
+        // Batch 5: automated fader: the dot beside the clip mark.
+        if let Some(over) = self.s.arrangement.with_untracked(|a| a.lanes.get(self.lane).and_then(|l| crate::automation::mark(a, crate::automation::AutoOwner::Track(l.id), "track.gain"))) {
+            crate::automation::draw_mark(canvas, ((well.right + 5.0 * s).round(), (r.top + (CLIP_Y + CLIP_H * 0.5) * s).round()), s, over);
         }
     }
 }

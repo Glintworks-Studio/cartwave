@@ -372,10 +372,73 @@ impl Automation {
         }
     }
 
+    /// A hash of what the engine hears (envelopes and overrides): the song
+    /// snapshot is rebuilt when it changes.
+    pub fn content_hash(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for ((o, id), e) in &self.envs {
+            (o, id, e.points.len()).hash(&mut h);
+            for p in &e.points {
+                (p.t, p.v.to_bits(), p.c.to_bits()).hash(&mut h);
+            }
+        }
+        self.overridden.hash(&mut h);
+        h.finish()
+    }
+
+    /// Automation Mode's first look: a track showing no lane gets one, its
+    /// first automated parameter, else its first parameter (the fader on a
+    /// studio track, a channel control on a locked one).
+    pub fn default_lanes(&mut self, lanes: &[Lane]) {
+        for l in lanes {
+            let owner = AutoOwner::Track(l.id);
+            let reg = registry_for(lanes, owner).unwrap_or_default();
+            let shown = self.shown.entry(owner).or_default();
+            shown.retain(|id| reg.iter().any(|p| p.id == id.as_str()));
+            if shown.is_empty() {
+                let auto: Vec<String> = self.envs.iter().filter(|((o, _), e)| *o == owner && !e.is_empty()).map(|((_, id), _)| id.clone()).filter(|id| reg.iter().any(|p| p.id == id.as_str())).collect();
+                if let Some(first) = auto.into_iter().next().or_else(|| reg.first().map(|p| p.id.to_string())) {
+                    self.shown.insert(owner, vec![first]);
+                }
+            }
+        }
+    }
+
     /// Every point of every envelope (perf and tests).
     pub fn point_count(&self) -> usize {
         self.envs.values().map(|e| e.len()).sum()
     }
+}
+
+/// The registry id of a channel control.
+pub fn chip_param_id(p: ParamId) -> &'static str {
+    match p {
+        ParamId::Duty => "chip.duty",
+        ParamId::Volume => "chip.volume",
+        ParamId::Envelope => "chip.envelope",
+        ParamId::Sweep => "chip.sweep",
+        ParamId::SweepRate => "chip.sweep_rate",
+        ParamId::NoiseMode => "chip.noise_mode",
+        ParamId::NoisePeriod => "chip.noise_period",
+        ParamId::Sample => "chip.sample",
+        ParamId::Rate => "chip.rate",
+        ParamId::Loop => "chip.loop",
+    }
+}
+
+/// The automated-control marker's state: `None` (no automation), or
+/// whether it is overridden.
+pub fn mark(a: &crate::state::Arrangement, owner: AutoOwner, id: &str) -> Option<bool> {
+    let k = (owner, id.to_string());
+    a.automation.get(&k).map(|_| a.automation.overridden.contains(&k))
+}
+
+/// Draws the marker: a small white dot (grey while overridden) centred at
+/// `c` (device px). The reference's LED is red; ours is neither red nor lime.
+pub fn draw_mark(canvas: &vizia::vg::Canvas, c: (f32, f32), s: f32, overridden: bool) {
+    let col = if overridden { crate::theme::tokens::AUTO_OVERRIDDEN } else { crate::theme::tokens::AUTO_MARK };
+    canvas.draw_circle(c, crate::theme::tokens::AUTO_MARK_D * 0.5 * s, &crate::views::gfx::fill(col));
 }
 
 /// An owner's registry (`None`: a track that doesn't exist).

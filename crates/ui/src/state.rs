@@ -571,6 +571,14 @@ pub enum MenuAction {
     PresetReveal(usize),
     /// The Voice selector: a studio track's voice.
     SetVoice(usize, chip::voice::VoiceKind),
+    /// Batch 5: an automation lane's chooser: track row, lane, parameter
+    /// (index in the track's registry).
+    AutoParam(usize, usize, usize),
+    /// Batch 5: the track shows only its automated parameters' lanes.
+    AutoShowAutomated(usize),
+    /// Batch 5: another lane (the next parameter), or this lane hidden.
+    AutoLaneAdd(usize),
+    AutoLaneRemove(usize, usize),
     /// Add a browser item to collection n, or take it out.
     Collect(crate::bank::Item, u8),
     /// The spectrum's style.
@@ -966,6 +974,8 @@ impl Arrangement {
         self.instruments.hash(&mut h);
         self.audition.hash(&mut h);
         self.samples.hash(&mut h);
+        // Batch 5: what the automation plays.
+        self.automation.content_hash().hash(&mut h);
         h.finish()
     }
 

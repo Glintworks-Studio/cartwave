@@ -2038,3 +2038,31 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   rendered too, and the export's report (`Report.notes`, the existing pattern) names every
   studio track and lane whose automation has no hardware equivalent (`au09`). The loop stays
   seamless with automation (intro + loop × 3 = a continuous render).
+- **B5-D11 (automation: the UI).** *Automation Mode* (A, R104; View ▸ Automation Mode, the
+  shortcut table): each track shows its lanes under its row, each one row height (the headers'
+  row heights; `Arrangement::row_pitch`, `lane_top`, `lane_at` follow them); a track showing none
+  gets its first automated parameter, else its first one. *Lane headers* (a view under each
+  `TrackRow`): "Device › Parameter" with a drawn chevron (Inter has no ▸ / ▾: the glyph rule),
+  the value at the playhead, − (hide) and + (another parameter); the chooser lists the track's
+  registry with "(automated)" marks and **Show Automated Parameters Only**. *Editing*
+  (`views/autolanes.rs`, the reference's breakpoint behaviour; B5-D2 for the click-delete): a
+  click on the line adds a point, a click on a point deletes it, a drag moves it (grid snap;
+  Alt off the grid; Shift fine vertical), Alt-drag on a segment bends it, a drag elsewhere selects
+  the lane's time (Ctrl+C / X / V and Delete act on its envelope; a drag inside it moves it), a
+  double-click away from the line adds a point; **Draw Mode** (B, the one Draw Mode the app
+  already has, R5) draws steps at the grid. Each gesture is one undo step. *Locked lanes* draw the
+  frame-quantised staircase the chip plays; studio lanes the line with its curves. *Main*: its
+  gain's envelope is drawn and edited over the Main row. *Colours* (tokens.rs; VISUAL-SPEC §14):
+  line and dots `#D6D0C4` (1.5 px, 6 px), overridden `#5A5A5A`, a neutral white selection, lanes
+  `#111111`, labels `#A8A8A8` (7.9 : 1). *Lock Envelopes*: **Edit ▸ Lock Envelopes** (a check
+  item, saved in settings): the reference keeps it in its Options menu, which VISION.md's menu
+  bar doesn't have; Batch 4a put the track commands in Create for the same reason. *Transport*:
+  **Automation Arm** (a toggle; on, its envelope icon glows warm white: the prompt's "no lime
+  anywhere in automation" wins over "lime for toggle on-states") and **Re-Enable Automation**
+  (orange `#FF8A1F` while a control is overridden). *Recording* (armed and playing): a control's
+  moves write points at the playhead while it's held, replacing what was there since the
+  gesture's last point (touch); one undo step per gesture. *Overriding* (not armed): moving an
+  automated control overrides it (grey lane, the dot grey, Re-Enable lit) until Re-Enable; the
+  manual value plays (the envelope is left out of the snapshot). *Markers*: a 4 px white dot on
+  automated device knobs (channel controls, Unison / Detune / Drift) and the header's fader and
+  pan; grey when overridden.

@@ -38,6 +38,8 @@ pub enum MenuSite {
     Message,
     /// The device's Voice selector (a studio track's Chip Synth voice).
     Voice(usize),
+    /// Batch 5: an automation lane's parameter chooser (track row, lane).
+    AutoParam(usize, usize),
     /// An item in the browser: its collections (and a user preset's Rename,
     /// Delete, Show in Explorer).
     BrowserItem(crate::bank::Item),
@@ -811,6 +813,21 @@ impl AppState {
                     .map(|st| MenuItem::new(MenuAction::SpectrumStyle(*st), st.label()).checked(*st == cur))
                     .collect()
             }
+            MenuSite::AutoParam(lane, k) => {
+                let (reg, cur) = self.s.arrangement.with_untracked(|a| {
+                    let owner = a.lanes.get(lane).map(|l| crate::automation::AutoOwner::Track(l.id));
+                    let reg = owner.and_then(|o| crate::automation::registry_for(&a.lanes, o)).unwrap_or_default();
+                    let marks: Vec<bool> = reg.iter().map(|p| owner.is_some_and(|o| a.automation.has(o, p.id))).collect();
+                    (reg.into_iter().zip(marks).collect::<Vec<_>>(), a.auto_lanes(lane).get(k).cloned())
+                });
+                let mut v = vec![MenuItem::new(MenuAction::AutoShowAutomated(lane), "Show Automated Parameters Only"), MenuItem::sep()];
+                for (i, (p, automated)) in reg.iter().enumerate() {
+                    // An automated parameter is marked (the dot, as on its control).
+                    let label = format!("{}{}", crate::views::autolanes::lane_label(p), if *automated { " (automated)" } else { "" });
+                    v.push(MenuItem::new(MenuAction::AutoParam(lane, k, i), label).checked(cur.as_deref() == Some(p.id)));
+                }
+                v
+            }
             MenuSite::Voice(lane) => {
                 let cur = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.voice));
                 crate::bank::SYNTH_VOICES.iter().map(|v| MenuItem::new(MenuAction::SetVoice(lane, *v), crate::bank::voice_name(*v)).checked(cur == Some(*v))).collect()
@@ -980,6 +997,37 @@ impl AppState {
                 self.commit();
             }
             MenuAction::SetVoice(l, k) => self.set_voice_cmd(l, k),
+            MenuAction::AutoParam(lane, k, i) => self.auto_lanes_cmd(lane, |reg, shown| {
+                if let Some(p) = reg.get(i) {
+                    let id = p.id.to_string();
+                    if let Some(j) = shown.iter().position(|x| *x == id) {
+                        let last = shown.len() - 1;
+                        shown.swap(j, k.min(last));
+                    } else if k < shown.len() {
+                        shown[k] = id;
+                    } else {
+                        shown.push(id);
+                    }
+                }
+            }),
+            MenuAction::AutoShowAutomated(lane) => {
+                let automated = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| a.automation.automated(crate::automation::AutoOwner::Track(l.id))).unwrap_or_default());
+                if automated.is_empty() {
+                    self.set_status("This track has no automation yet: its lanes stay as they are.".into());
+                } else {
+                    self.auto_lanes_cmd(lane, |reg, shown| *shown = automated.into_iter().filter(|id| reg.iter().any(|p| p.id == id.as_str())).collect());
+                }
+            }
+            MenuAction::AutoLaneAdd(lane) => self.auto_lanes_cmd(lane, |reg, shown| {
+                if let Some(p) = reg.iter().find(|p| !shown.iter().any(|x| x == p.id)) {
+                    shown.push(p.id.to_string());
+                }
+            }),
+            MenuAction::AutoLaneRemove(lane, k) => self.auto_lanes_cmd(lane, |_, shown| {
+                if k < shown.len() {
+                    shown.remove(k);
+                }
+            }),
             MenuAction::Collect(item, k) => {
                 crate::collections::toggle(&mut self.settings.collections, k as usize, item);
                 self.save_settings();
@@ -1197,6 +1245,27 @@ fn reveal(path: Option<std::path::PathBuf>) {
     let _ = std::process::Command::new("open").arg("-R").arg(&p).spawn();
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     let _ = std::process::Command::new("xdg-open").arg(p.parent().unwrap_or(&p)).spawn();
+}
+
+// ───────────── Batch 5: automation lanes ─────────────
+
+impl AppState {
+    /// Changes which automation lanes track row `lane` shows (`f` gets its
+    /// registry and the shown ids). Shown lanes are saved, not undoable.
+    pub(crate) fn auto_lanes_cmd(&mut self, lane: usize, f: impl FnOnce(&[crate::params::Param], &mut Vec<String>)) {
+        self.s.arrangement.update(|a| {
+            let Some(id) = a.lanes.get(lane).map(|l| l.id) else { return };
+            let owner = crate::automation::AutoOwner::Track(id);
+            let reg = crate::automation::registry_for(&a.lanes, owner).unwrap_or_default();
+            let shown = a.automation.shown.entry(owner).or_default();
+            f(&reg, shown);
+        });
+        self.clamp_lane_scroll();
+        if crate::dev::enabled() {
+            let shown = self.s.arrangement.with_untracked(|a| a.auto_lanes(lane));
+            eprintln!("dev: automation lanes track {lane} {shown:?}");
+        }
+    }
 }
 
 #[cfg(test)]

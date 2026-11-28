@@ -139,6 +139,13 @@ pub enum Action {
     /// View, R78, Live 12 manual §42.1; Presets + Browser §3.1).
     ToggleDetail,
     DrawMode,
+    /// Batch 5: Automation Mode (A, R104).
+    AutomationMode,
+    /// Batch 5: Lock Envelopes (a toggle; the reference's Options menu).
+    LockEnvelopes,
+    /// Batch 5: the transport's Automation Arm and Re-Enable Automation.
+    AutomationArm,
+    ReEnableAutomation,
     GridNarrow,
     GridWiden,
     GridTriplet,
@@ -276,6 +283,10 @@ pub static TABLE: &[Shortcut] = &[
     sc!(ToggleMixer, "view.mixer", "Mixer", "View", &[k(Code::Tab)], &[k(Code::Tab)], APP),
     sc!(ToggleDetail, "view.detail", "Clip / Device View", "View", &[shift(Code::Tab)], &[shift(Code::Tab)], APP),
     sc!(DrawMode, "view.draw_mode", "Draw Mode", "View", &[k(Code::KeyB)], &[k(Code::KeyB)], APP),
+    sc!(AutomationMode, "view.automation", "Automation Mode", "View", &[k(Code::KeyA)], &[k(Code::KeyA)], APP),
+    sc!(LockEnvelopes, "edit.lock_envelopes", "Lock Envelopes", "Edit", &[], &[], APP),
+    sc!(AutomationArm, "transport.automation_arm", "Automation Arm", "Transport", &[], &[], APP),
+    sc!(ReEnableAutomation, "transport.re_enable", "Re-Enable Automation", "Transport", &[], &[], APP),
     // The grid of the focused editor (R56–R59).
     sc!(GridNarrow, "grid.narrow", "Narrow Grid", "Grid", &[cmd(Code::Digit1)], &[cmd(Code::Digit1)], EDITORS),
     sc!(GridWiden, "grid.widen", "Widen Grid", "Grid", &[cmd(Code::Digit2)], &[cmd(Code::Digit2)], EDITORS),

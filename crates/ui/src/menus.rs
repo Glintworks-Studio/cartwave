@@ -158,6 +158,10 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         a(Action::Rename),
         Separator,
         a(Action::Quantize),
+        // Batch 5: Lock Envelopes (the reference's Options menu, which
+        // VISION.md's menu bar doesn't have: B5-D11).
+        Separator,
+        Check(Cmd::Action(Action::LockEnvelopes)),
     ];
     if !mac {
         edit.push(Separator);
@@ -190,6 +194,8 @@ pub fn spec(mac: bool) -> Vec<MenuSpec> {
         a(Action::FitSong),
         Separator,
         Check(Cmd::Action(Action::DrawMode)),
+        // Batch 5: Automation Mode (A, R104).
+        Check(Cmd::Action(Action::AutomationMode)),
     ];
     let mut help = vec![Item(Cmd::ShortcutSheet), a(Action::GettingStarted)];
     if !mac {
@@ -283,6 +289,9 @@ pub struct MenuState {
     /// Batch 4a: a track is selected; how many tracks there are.
     pub track_selected: bool,
     pub tracks: usize,
+    /// Batch 5: Automation Mode, Lock Envelopes.
+    pub automation: bool,
+    pub lock_envelopes: bool,
 }
 
 impl MenuState {
@@ -318,6 +327,8 @@ impl MenuState {
             Cmd::Action(Action::ShowOverview) => self.overview,
             Cmd::Action(Action::ToggleMixer) => self.mixer,
             Cmd::Action(Action::DrawMode) => self.draw,
+            Cmd::Action(Action::AutomationMode) => self.automation,
+            Cmd::Action(Action::LockEnvelopes) => self.lock_envelopes,
             _ => false,
         }
     }
@@ -645,9 +656,13 @@ mod tests {
     #[test]
     fn no_placeholders() {
         let ids: Vec<String> = commands(&spec(false)).into_iter().map(|c| c.id()).collect();
-        // Later batches: time signatures, automation, MIDI clip export.
-        for later in ["time_signature", "automation", "export_midi"] {
+        // Later batches: time signatures, MIDI clip export.
+        for later in ["time_signature", "export_midi"] {
             assert!(!ids.iter().any(|i| i.contains(later)), "{later} belongs to a later batch");
+        }
+        // Batch 5: Automation Mode (View) and Lock Envelopes (Edit).
+        for b5 in ["view.automation", "edit.lock_envelopes"] {
+            assert!(ids.iter().any(|i| i == b5), "{b5} is missing from the menus");
         }
         // Batch 4a: the track commands are there (Create, R84).
         for b4 in ["create.track", "create.duplicate_track", "create.delete_track", "create.track.0", "create.track.5"] {

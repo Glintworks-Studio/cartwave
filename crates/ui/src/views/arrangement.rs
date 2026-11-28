@@ -19,6 +19,8 @@ thread_local! {
     /// The arrangement's left and right edges and scale as last drawn
     /// (physical px), so a browser drag can find the clip under the pointer.
     static ARRANGEMENT_AT: Cell<Option<(f32, f32, f32)>> = const { Cell::new(None) };
+    /// Batch 5: copied envelope (its length in ticks and relative points).
+    static AUTO_CLIPBOARD: RefCell<Option<(u32, Vec<crate::automation::Pt>)>> = const { RefCell::new(None) };
 }
 
 /// The arrangement's left and right edges and scale as last drawn
@@ -129,6 +131,8 @@ pub struct Arrangement {
     time_drag: Option<TimeDrag>,
     /// The lane under the mouse (for the dimmed-lane hint, F-04).
     hover_lane: Option<usize>,
+    /// Batch 5: the automation lanes' editor (Automation Mode).
+    auto: super::autolanes::Editor,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -206,6 +210,7 @@ impl Arrangement {
             sb_hover: None,
             time_drag: None,
             hover_lane: None,
+            auto: Default::default(),
         }
         .build(cx, |_| {})
         .navigable(true)
@@ -269,6 +274,26 @@ impl Arrangement {
         None
     }
 
+    /// Batch 5: the automation lane under the mouse: its breakpoint hover
+    /// and its help in the status bar.
+    fn auto_hover(&mut self, cx: &mut EventContext) {
+        let (mx, my) = self.local_mouse(cx);
+        let lanes = self.s.arrangement.with_untracked(super::autolanes::lanes);
+        if lanes.is_empty() {
+            return;
+        }
+        let was = self.auto.hover.as_ref().map(|h| h.0.clone());
+        if self.s.arrangement.with_untracked(|a| self.auto.hover(a, &lanes, mx, my)) {
+            cx.needs_redraw();
+        }
+        let now = self.auto.hover.as_ref().map(|h| h.0.clone());
+        if now != was {
+            let draw = self.s.piano.with_untracked(|p| p.draw);
+            let text = now.and_then(|k| lanes.iter().find(|g| g.key == k)).map(|g| super::autolanes::help(g, draw)).unwrap_or_default();
+            cx.emit(crate::AppEvent::HoverHelp(text));
+        }
+    }
+
     fn set_cursor(&mut self, cx: &mut EventContext, icon: CursorIcon) {
         if self.cursor != icon {
             self.cursor = icon;
@@ -280,6 +305,20 @@ impl Arrangement {
         let (mx, my) = self.local_mouse(cx);
         let mods = *cx.modifiers();
         let arr = self.s.arrangement;
+        // Batch 5: a press in an automation lane edits its envelope.
+        let lanes = arr.with_untracked(super::autolanes::lanes);
+        if !lanes.is_empty() {
+            if self.auto.press(cx, &self.s, &lanes, mx, my) {
+                self.s.time_sel.set(None);
+                cx.capture();
+                cx.focus();
+                cx.needs_redraw();
+                return;
+            }
+            if self.auto.sel.take().is_some() {
+                cx.needs_redraw();
+            }
+        }
         let hit = arr.with_untracked(|a| Self::hit_test(a, mx, my));
 
         // F-04: a dimmed VRC6 lane takes no edits (its hover says why).
@@ -579,6 +618,20 @@ impl Arrangement {
                     a.resolve_overlaps(&winners);
                 }
             });
+            // Batch 5: moved clips take their automation with them, unless
+            // Lock Envelopes is on (manual 26.9.2).
+            if drag.moved && drag.mode == DragMode::Move && !self.s.settings.with_untracked(|st| st.lock_envelopes) {
+                self.s.arrangement.update(|a| {
+                    for o in &drag.origins {
+                        let Some(c) = a.clip(o.id) else { continue };
+                        let (to_lane, to_start) = (c.lane, c.start_ticks);
+                        let (Some(from), Some(to)) = (a.lanes.get(o.lane).map(|l| l.id), a.lanes.get(to_lane).map(|l| l.id)) else { continue };
+                        let dt = to_start as i64 - o.start as i64;
+                        use crate::automation::AutoOwner::Track;
+                        a.automation.carry(Track(from), Track(to), o.start, o.len, dt);
+                    }
+                });
+            }
             if !drag.moved {
                 if let Some(id) = drag.collapse_to {
                     self.s.arrangement.update(|a| a.selection = vec![id]);
@@ -872,6 +925,19 @@ impl View for Arrangement {
             {
                 meta.consume();
             }
+            WindowEvent::MouseDoubleClick(MouseButton::Left)
+                if {
+                    let (mx, my) = self.local_mouse(cx);
+                    let lanes = self.s.arrangement.with_untracked(super::autolanes::lanes);
+                    !lanes.is_empty() && lanes.iter().any(|g| g.contains(my)) && {
+                        let s = self.s;
+                        self.auto.double_click(cx, &s, &lanes, mx, my)
+                    }
+                } =>
+            {
+                cx.needs_redraw();
+                meta.consume();
+            }
             WindowEvent::MouseDoubleClick(MouseButton::Left) => {
                 // On a clip: open it in the piano roll. On empty lane space: a
                 // new 1-bar clip at the snapped position (it wins overlaps).
@@ -901,6 +967,14 @@ impl View for Arrangement {
                 meta.consume();
             }
             WindowEvent::MouseMove(_, _) => {
+                if self.auto.busy() {
+                    let (mx, my) = self.local_mouse(cx);
+                    let lanes = self.s.arrangement.with_untracked(super::autolanes::lanes);
+                    let s = self.s;
+                    self.auto.drag(cx, &s, &lanes, mx, my);
+                    cx.needs_redraw();
+                    return;
+                }
                 if self.sb_drag.is_some() {
                     self.bar_drag(cx);
                 } else if self.time_drag.is_some() {
@@ -920,7 +994,14 @@ impl View for Arrangement {
                     self.set_cursor(cx, icon);
                 } else {
                     self.update_hover(cx);
+                    self.auto_hover(cx);
                 }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.auto.busy() => {
+                cx.release();
+                let s = self.s;
+                self.auto.release(cx, &s);
+                cx.needs_redraw();
             }
             WindowEvent::MouseUp(MouseButton::Left) => {
                 if self.sb_drag.take().is_some() {
@@ -979,6 +1060,46 @@ impl View for Arrangement {
                 // unidentified (e.g. remote desktop, injected input).
                 let logical_delete = matches!(key, Some(Key::Delete | Key::Backspace)) && !crate::input::command(&mods);
                 let action = if logical_delete { Some(Action::Delete) } else { lookup(*code, &mods, Ctx::Arrangement) };
+                // Batch 5: a lane's selected time takes Copy, Cut, Paste and
+                // Delete (its envelope).
+                if let Some(sel) = self.auto.sel.clone() {
+                    let done = match action {
+                        Some(Action::Copy) | Some(Action::Cut) => {
+                            let clip = self.s.arrangement.with_untracked(|a| super::autolanes::copy(a, &sel));
+                            AUTO_CLIPBOARD.with(|c| *c.borrow_mut() = Some((sel.t1 - sel.t0, clip)));
+                            if action == Some(Action::Cut) {
+                                self.s.arrangement.update(|a| {
+                                    a.automation.edit(&sel.key).delete_range(sel.t0, sel.t1);
+                                    a.automation.prune();
+                                });
+                                cx.emit(crate::AppEvent::Commit);
+                            }
+                            true
+                        }
+                        Some(Action::Paste) => {
+                            if let Some((len, clip)) = AUTO_CLIPBOARD.with(|c| c.borrow().clone()) {
+                                self.s.arrangement.update(|a| a.automation.edit(&sel.key).paste(sel.t0, len, &clip));
+                                self.auto.sel = Some(super::autolanes::LaneSel { t1: sel.t0 + len, ..sel.clone() });
+                                cx.emit(crate::AppEvent::Commit);
+                            }
+                            true
+                        }
+                        Some(Action::Delete) => {
+                            self.s.arrangement.update(|a| {
+                                a.automation.edit(&sel.key).delete_range(sel.t0, sel.t1);
+                                a.automation.prune();
+                            });
+                            cx.emit(crate::AppEvent::Commit);
+                            true
+                        }
+                        _ => false,
+                    };
+                    if done {
+                        cx.needs_redraw();
+                        meta.consume();
+                        return;
+                    }
+                }
                 // Esc and the app-wide keys bubble up to the app (F-30).
                 match action {
                     Some(Action::Delete) => {
@@ -1244,6 +1365,13 @@ impl View for Arrangement {
                         Rgba::hex(0x0A0A0A),
                     );
                 }
+            }
+
+            // Batch 5: the automation lanes over their bands (Automation Mode).
+            if a.auto_mode {
+                let lanes = super::autolanes::lanes(a);
+                let bpm = self.s.transport.with_untracked(|t| t.bpm);
+                super::autolanes::draw(canvas, a, (self.s.master_db.get_untracked(), bpm), &lanes, rect, lanes_top, s, &self.auto);
             }
 
             // Playhead: 1 px #E6E6E6 at 85% (neutral; the display shows the state).
@@ -1703,6 +1831,10 @@ fn header_column(cx: &mut Context, s: Signals, overview: bool) -> Handle<'_, Hea
                     Binding::new(cx, count, move |cx| {
                         for i in 0..count.get() {
                             TrackRow::new(cx, s, i).height(Memo::new(move |_| s.arrangement.with(|a| a.lanes.get(i).map_or(state::ROW_H_MIN + state::ROW_HAIRLINE, |l| l.pitch()))).map(|h| Pixels(*h)));
+                            // Batch 5: the track's automation lane headers
+                            // (none outside Automation Mode).
+                            super::autolanes::AutoLaneHeaders::new(cx, s, i)
+                                .height(Memo::new(move |_| s.arrangement.with(|a| a.row_pitch(i) - a.lanes.get(i).map_or(0.0, |l| l.pitch()))).map(|h| Pixels(*h)));
                         }
                     });
                 })

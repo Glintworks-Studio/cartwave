@@ -74,6 +74,8 @@ pub enum Set {
     BrowserRight(bool),
     /// View ▸ Show Overview (polish 2 §7.3).
     ShowOverview(bool),
+    /// Batch 5: Edit ▸ Lock Envelopes.
+    LockEnvelopes(bool),
     /// The headers' width (the boundary drag; saved when the drag ends).
     HeaderWidth(f32),
 }

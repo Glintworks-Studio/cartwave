@@ -1,4 +1,5 @@
 pub mod arrangement;
+pub mod autolanes;
 pub mod browser;
 pub mod chrome;
 pub mod clip;

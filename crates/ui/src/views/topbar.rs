@@ -54,6 +54,10 @@ pub enum Icon {
     Stop,
     Record,
     Loop,
+    /// Batch 5: an envelope (Automation Arm), and an envelope with a
+    /// return arrow (Re-Enable Automation).
+    AutoArm,
+    ReEnable,
 }
 
 impl Icon {
@@ -65,16 +69,26 @@ impl Icon {
             Icon::Stop => (12.0, 12.0),
             Icon::Record => (14.0, 14.0),
             Icon::Loop => (18.0, 14.0),
+            Icon::AutoArm => (18.0, 14.0),
+            Icon::ReEnable => (18.0, 14.0),
         }
     }
 
     /// Draws the icon with its top-left at `o` (device px), in `ink`, with
     /// an optional glow (alpha of the lime drop shadow).
     pub fn draw(self, canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba, glow_a: Option<f32>) {
+        self.draw_glowing(canvas, o, s, ink, glow_a.map(|a| ACCENT.with_alpha(a)));
+    }
+
+    /// `draw` with the glow's own colour (Batch 5: the automation keys never
+    /// glow lime).
+    pub fn draw_glowing(self, canvas: &Canvas, o: (f32, f32), s: f32, ink: Rgba, glow_c: Option<Rgba>) {
+        let glow_a = glow_c.map(|c| c.a);
+        let glow_rgb = glow_c.unwrap_or(ACCENT);
         let p = |d: &str| gfx::svg_path(d, o, s);
         let fill = |path: &vg::Path| {
             if let Some(a) = glow_a {
-                canvas.draw_path(path, &glow(ACCENT.with_alpha(a), ICON_GLOW_R * s));
+                canvas.draw_path(path, &glow(glow_rgb.with_alpha(a), ICON_GLOW_R * s));
             }
             canvas.draw_path(path, &gfx::fill(ink));
         };
@@ -83,7 +97,7 @@ impl Icon {
             st.set_stroke_cap(vg::PaintCap::Round);
             st.set_stroke_join(vg::PaintJoin::Round);
             if let Some(a) = glow_a {
-                let mut g = glow(ACCENT.with_alpha(a), ICON_GLOW_R * s);
+                let mut g = glow(glow_rgb.with_alpha(a), ICON_GLOW_R * s);
                 g.set_style(vg::PaintStyle::Stroke);
                 g.set_stroke_width(w * s);
                 canvas.draw_path(path, &g);
@@ -124,6 +138,19 @@ impl Icon {
                 stroke(&p("M4 4H13a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3"), 1.8, ink);
                 stroke(&p("M5 1.5L3 4L5 6.5"), 1.8, ink);
             }
+            Icon::AutoArm => {
+                stroke(&p("M1.5 11L6 4.5L11 8.5L16.5 2.5"), 1.6, ink);
+                let mut pb = vg::PathBuilder::new();
+                for (x, y) in [(6.0, 4.5), (11.0, 8.5)] {
+                    pb.add_circle((o.0 + x * s, o.1 + y * s), 1.9 * s, None);
+                }
+                fill(&pb.detach());
+            }
+            Icon::ReEnable => {
+                stroke(&p("M1.5 11L6 6L10 9"), 1.6, ink);
+                stroke(&p("M13 12.5a4 4 0 1 0-1-7.2"), 1.6, ink);
+                stroke(&p("M10.2 3.6L12 5.4L14.2 4"), 1.6, ink);
+            }
         }
     }
 }
@@ -140,6 +167,10 @@ pub enum TopKey {
     Record,
     Loop,
     Tap,
+    /// Batch 5: Automation Arm (a toggle) and Re-Enable Automation (a
+    /// momentary button, lit while a control is overridden).
+    AutoArm,
+    ReEnable,
 }
 
 impl TopKey {
@@ -164,6 +195,8 @@ impl TopKey {
             TopKey::Stop => Icon::Stop,
             TopKey::Record => Icon::Record,
             TopKey::Loop => Icon::Loop,
+            TopKey::AutoArm => Icon::AutoArm,
+            TopKey::ReEnable => Icon::ReEnable,
             TopKey::Tap => return None,
         })
     }
@@ -177,6 +210,8 @@ impl TopKey {
             TopKey::Record => "key-record",
             TopKey::Loop => "key-loop",
             TopKey::Tap => "key-tap",
+            TopKey::AutoArm => "key-auto-arm",
+            TopKey::ReEnable => "key-re-enable",
         }
     }
 }
@@ -207,6 +242,8 @@ impl TopKeyView {
             .height(Pixels(size))
             .cursor(if key.disabled() { CursorIcon::Default } else { CursorIcon::Hand })
             .bind(s.view_mixer, |mut h| h.needs_redraw())
+            .bind(s.auto_arm, |mut h| h.needs_redraw())
+            .bind(Memo::new(move |_| s.arrangement.with(|a| !a.automation.overridden.is_empty())), |mut h| h.needs_redraw())
     }
 }
 
@@ -242,6 +279,8 @@ impl View for TopKeyView {
                         TopKey::Loop => cx.emit(AppEvent::ToggleLoop),
                         TopKey::Arrangement => cx.emit(AppEvent::ShowMixer(false)),
                         TopKey::Mixer => cx.emit(AppEvent::ShowMixer(true)),
+                        TopKey::AutoArm => cx.emit(AppEvent::Run(crate::shortcuts::Action::AutomationArm)),
+                        TopKey::ReEnable => cx.emit(AppEvent::Run(crate::shortcuts::Action::ReEnableAutomation)),
                         _ => {}
                     }
                 }
@@ -285,7 +324,17 @@ impl View for TopKeyView {
                     TopKey::Record => (RECORD_GLYPH, None),
                     _ => (if look.lift > 0.0 { ICON_IDLE.lighten(0.3) } else { ICON_IDLE }, None),
                 };
-                icon.draw(canvas, o, s, ink, glow_a);
+                // Batch 5: the automation keys light in their own colours
+                // (warm white armed; orange while a control is overridden).
+                let lit = match self.key {
+                    TopKey::AutoArm if self.s.auto_arm.get_untracked() => Some(AUTO_LINE),
+                    TopKey::ReEnable if self.s.arrangement.with_untracked(|a| !a.automation.overridden.is_empty()) => Some(AUTO_REENABLE),
+                    _ => None,
+                };
+                match lit {
+                    Some(c) => icon.draw_glowing(canvas, o, s, c, Some(c.with_alpha(ICON_GLOW_A))),
+                    None => icon.draw(canvas, o, s, ink, glow_a),
+                }
             }
             None => {
                 let f = gfx::font(Face::Bold, TAP_PX * s);

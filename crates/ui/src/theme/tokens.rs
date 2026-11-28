@@ -242,3 +242,29 @@ pub const CLIP_SECTION_W: f32 = 200.0;
 /// The device's small labels: #8A8A8A, not the board's #808080, for 4.5 : 1 on
 /// the sections' lightest top (as the mixer's labels, B4B-D32; RUNLOG PB-D9).
 pub const DEVICE_INK_LO: Rgba = Rgba::hex(0x8A8A8A);
+
+// Automation (Batch 5; VISUAL-SPEC.md §14, the starting proposal): never
+// lime, never the track colour (identity only).
+/// Envelope lines and breakpoints: the warm white.
+pub const AUTO_LINE: Rgba = Rgba::hex(0xD6D0C4);
+/// An overridden envelope (the control was moved by hand): grey.
+pub const AUTO_OVERRIDDEN: Rgba = Rgba::hex(0x5A5A5A);
+/// The line's width and a breakpoint's diameter (logical px).
+pub const AUTO_LINE_W: f32 = 1.5;
+pub const AUTO_POINT_D: f32 = 6.0;
+/// The lanes' band under each track row, a step darker than the rows.
+pub const AUTO_LANE_BG: Rgba = Rgba::hex(0x111111);
+/// The lane header's label (≥ 4.5 : 1 on `AUTO_LANE_BG`: 7.2 : 1) and value.
+pub const AUTO_LABEL: Rgba = Rgba::hex(0xA8A8A8);
+/// Re-Enable Automation, lit: the meter's orange (a momentary button, not a
+/// toggle, so not lime).
+pub const AUTO_REENABLE: Rgba = Rgba::hex(0xFF8A1F);
+/// The automated-control marker: a small white dot (the reference's LED is
+/// red; ours is neither red nor lime).
+pub const AUTO_MARK: Rgba = Rgba::hex(0xF2F2F2);
+pub const AUTO_MARK_D: f32 = 4.0;
+/// Hit distances (logical px): a breakpoint, and the line.
+pub const AUTO_HIT_POINT: f32 = 5.0;
+pub const AUTO_HIT_LINE: f32 = 4.0;
+/// The value area's inset from the lane's top and bottom.
+pub const AUTO_INSET: f32 = 6.0;

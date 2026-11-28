@@ -143,6 +143,9 @@ struct Dev {
     inst_id: InstId,
     inst: LaneInstrument,
     states: [DialState; crate::state::MAX_DIALS],
+    /// Batch 5: automated controls (the white dot) and whether each is
+    /// overridden (grey).
+    marks: Vec<(Ctl, bool)>,
 }
 
 impl Dev {
@@ -153,7 +156,19 @@ impl Dev {
             let l = a.lanes.get(lane)?;
             let id = a.current_instrument(lane);
             let inst = a.instruments.get(id)?.clone();
-            Some(Dev { lane, voice: l.voice, lock: l.lock, color: l.color, chan: l.chan(), params: l.params, unison: l.unison, inst_id: id, inst, states })
+            let owner = crate::automation::AutoOwner::Track(l.id);
+            let mut marks = Vec::new();
+            for p in ParamId::ALL {
+                if let Some(o) = crate::automation::mark(a, owner, crate::automation::chip_param_id(p)) {
+                    marks.push((Ctl::Param(p), o));
+                }
+            }
+            for (k, id) in ["voice.unison", "voice.detune", "voice.drift"].into_iter().enumerate() {
+                if let Some(o) = crate::automation::mark(a, owner, id) {
+                    marks.push((Ctl::Uni(k), o));
+                }
+            }
+            Some(Dev { lane, voice: l.voice, lock: l.lock, color: l.color, chan: l.chan(), params: l.params, unison: l.unison, inst_id: id, inst, states, marks })
         })
     }
 
@@ -1224,6 +1239,10 @@ fn render(canvas: &Canvas, d: &Dev, tab: usize, preset: &(String, bool), hover: 
         }
         knob(c, o, k.d, norm, s, k.inert.is_some());
         c.restore();
+        // Batch 5: an automated control's dot, at the knob's top right.
+        if let Some(&(_, over)) = d.marks.iter().find(|m| m.0 == k.ctl) {
+            crate::automation::draw_mark(c, (o.0 + k.d * 0.42 * s, o.1 - k.d * 0.42 * s), s, over);
+        }
         // The label, or the value while hovered.
         let hovered = hover == Part::Knob(k.ctl);
         let text = if hovered { value_text(d, k.ctl, k.value).to_uppercase() } else { k.label.to_string() };
@@ -1313,6 +1332,7 @@ mod tests {
             inst_id: 1,
             inst: LaneInstrument::plain(),
             states: Default::default(),
+            marks: Vec::new(),
         }
     }
 

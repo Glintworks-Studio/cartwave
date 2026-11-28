@@ -1284,6 +1284,10 @@ pub struct Settings {
     pub collections: Vec<Vec<String>>,
     /// The sidebar entry shown ("Sounds", "Hardware", "Collection 0"…).
     pub browser_section: String,
+    /// Batch 5: Lock Envelopes (the reference's Options menu; here in Edit):
+    /// automation stays at its song position when clips move. Off by default
+    /// (manual 26.9.2).
+    pub lock_envelopes: bool,
 }
 
 /// Open Recent keeps this many projects.
@@ -1323,6 +1327,7 @@ impl Default for Settings {
             show_overview: true,
             collections: Vec::new(),
             browser_section: "Sounds".into(),
+            lock_envelopes: false,
         }
     }
 }

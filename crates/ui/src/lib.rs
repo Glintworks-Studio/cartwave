@@ -90,6 +90,9 @@ pub struct Signals {
     /// strips' PEAK / VOICES row shows; Shift+Tab shows or hides it there.
     /// Remembered for the session; the arrangement's pane is unaffected.
     pub mixer_detail: Signal<bool>,
+    /// Batch 5: the transport's Automation Arm (touch recording while the
+    /// song plays). Not saved, as in the reference.
+    pub auto_arm: Signal<bool>,
     /// The output device's name ("No output" without one): the Main track's
     /// OUT badge.
     pub out_device: Signal<String>,
@@ -376,6 +379,9 @@ pub struct AppState {
     /// Buffer underruns seen so far and when the count last rose (the
     /// status bar's dropout problem).
     underruns_seen: (u64, Option<Instant>),
+    /// Batch 5: touch recordings in progress (per envelope: the last tick
+    /// written this gesture).
+    auto_rec: std::collections::HashMap<automation::AutoKey, u32>,
 }
 
 /// A dropout problem clears after this long without another underrun.
@@ -656,12 +662,14 @@ impl Model for AppState {
                 if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| !l.locked() && l.vol_db != db)) {
                     self.s.arrangement.update(|a| a.lanes[*lane].vol_db = db);
                     self.sync_gains();
+                    self.auto_touch_track(*lane, "track.gain", if db.is_finite() { db } else { automation::DB_FLOOR });
                 }
             }
             AppEvent::SetLanePan(lane, pan) => {
                 let pan = (*pan).clamp(-state::PAN_MAX, state::PAN_MAX);
                 if self.s.arrangement.with_untracked(|a| a.lanes.get(*lane).is_some_and(|l| !l.locked() && l.pan != pan)) {
                     self.s.arrangement.update(|a| a.lanes[*lane].pan = pan);
+                    self.auto_touch_track(*lane, "track.pan", pan as f32);
                 }
             }
             AppEvent::ShowProblems(x, y) => self.open_context_menu(edit::MenuSite::Problems, *x, *y),
@@ -723,6 +731,12 @@ impl Model for AppState {
                         l.unison = u.clamped();
                     }
                 });
+                let id = match f {
+                    views::dial::UniField::Voices => "voice.unison",
+                    views::dial::UniField::Detune => "voice.detune",
+                    views::dial::UniField::Drift => "voice.drift",
+                };
+                self.auto_touch_track(lane, id, *v as f32);
                 if self.gesture_depth == 0 {
                     self.commit();
                 }
@@ -935,6 +949,7 @@ impl Model for AppState {
                     self.s.master_db.set(db);
                     self.sync_tracks();
                     self.update_dirty();
+                    self.auto_touch(automation::AutoOwner::Main, "main.gain", if db.is_finite() { db } else { automation::DB_FLOOR });
                 }
             }
             AppEvent::ResetPeak => self.s.master_peak.set(0.0),
@@ -1026,6 +1041,13 @@ impl Model for AppState {
             AppEvent::GestureBegin => self.gesture_depth += 1,
             AppEvent::GestureEnd => {
                 self.gesture_depth = self.gesture_depth.saturating_sub(1);
+                if self.gesture_depth == 0 {
+                    // A touch recording ends with its gesture (one undo step).
+                    if !self.auto_rec.is_empty() && dev::enabled() {
+                        eprintln!("dev: automation recorded {:?}", self.auto_rec.keys().map(|k| &k.1).collect::<Vec<_>>());
+                    }
+                    self.auto_rec.clear();
+                }
                 self.commit();
             }
             AppEvent::Commit => self.commit(),
@@ -1813,6 +1835,58 @@ impl AppState {
             self.s.dials.update(|d| d[slot] = v);
         }
         self.sync_piano_lane_volume();
+        let id = crate::params::registry(crate::params::Owner::Track { kind: chip::voice::VoiceKind::of_lane(chan), locked: true })
+            .into_iter()
+            .find(|p| crate::automation::target_of(p.id, chip::voice::VoiceKind::of_lane(chan)) == Some(chip::auto::AutoTarget::Chip(pid)))
+            .map(|p| p.id);
+        if let Some(id) = id {
+            self.auto_touch_track(lane, id, v.round());
+        }
+    }
+
+    /// Batch 5: a track's control was moved by hand (`auto_touch`).
+    fn auto_touch_track(&mut self, lane: usize, id: &str, v: f32) {
+        if let Some(tid) = self.s.arrangement.with_untracked(|a| a.lanes.get(lane).map(|l| l.id)) {
+            self.auto_touch(automation::AutoOwner::Track(tid), id, v);
+        }
+    }
+
+    /// Batch 5: a control moved by hand. **Armed** and playing: its
+    /// automation is recorded while it's held (the reference's touch
+    /// behaviour: from the gesture's start to now the envelope is replaced).
+    /// **Not armed**, on an automated control: it overrides its automation
+    /// (the lane turns grey, Re-Enable Automation lights) until re-enabled.
+    fn auto_touch(&mut self, owner: automation::AutoOwner, id: &str, v: f32) {
+        let key: automation::AutoKey = (owner, id.to_string());
+        let (known, has, overridden) = self.s.arrangement.with_untracked(|a| (automation::Automation::param_of(&a.lanes, owner, id).is_some(), a.automation.has(owner, id), a.automation.overridden.contains(&key)));
+        if !known {
+            return;
+        }
+        let (playing, t) = self.s.transport.with_untracked(|tr| (tr.playing, tr.playhead_ticks.max(0.0) as u32));
+        if self.s.auto_arm.get_untracked() && playing {
+            let from = self.auto_rec.get(&key).copied();
+            self.s.arrangement.update(|a| {
+                let e = a.automation.edit(&key);
+                // Touch: replace what was there since the last value of this
+                // gesture (a loop wrap starts a new stretch).
+                if let Some(f) = from.filter(|f| *f <= t) {
+                    e.points.retain(|p| !(p.t > f && p.t <= t));
+                }
+                e.add(t, v);
+                a.automation.overridden.remove(&key);
+            });
+            self.auto_rec.insert(key, t);
+            return;
+        }
+        if has && !overridden {
+            self.s.arrangement.update(|a| {
+                a.automation.override_key(&key);
+            });
+            if dev::enabled() {
+                eprintln!("dev: automation overridden {id}");
+            }
+            self.set_status(format!("{id} overrides its automation: Re-Enable Automation (in the transport) puts it back."));
+        }
     }
 
     fn log_format(&self) {
@@ -2348,6 +2422,7 @@ pub fn build_ui(cx: &mut Context) {
         view_mixer: Signal::new(false),
         mixer_scroll: Signal::new(0.0),
         mixer_detail: Signal::new(false),
+        auto_arm: Signal::new(false),
         track_drag: Signal::new(None),
         out_device: Signal::new("No output".into()),
         audio: Signal::new(AudioStats::default()),
@@ -2511,6 +2586,7 @@ pub fn build_ui(cx: &mut Context) {
         bpm_rename_at: (0.0, 0.0, 0.0),
         sent_gains: [1.0; 8],
         underruns_seen: (0, None),
+        auto_rec: Default::default(),
     };
     match state.recovery.as_ref().and_then(|r| r.start_session()) {
         Some(file::LastSession::Crashed) => {
@@ -2854,6 +2930,13 @@ fn top_bar(cx: &mut Context, s: Signals) {
                 TopKeyView::new(cx, s, TopKey::Stop).help(format!("Stop ({}) · press again to go back to the start ({})", shortcuts::label(Action::PlayStop), shortcuts::label(Action::Rewind)));
                 TopKeyView::new(cx, s, TopKey::Record).help("Record: arrives with MIDI input");
                 TopKeyView::new(cx, s, TopKey::Loop).help("Loop: plays the song between the loop brace's ends (the ruler)");
+            })
+            .class("key-group");
+            // Batch 5: automation (R111; manual 26.3–26.4).
+            Element::new(cx).class("bar-divider");
+            HStack::new(cx, |cx| {
+                TopKeyView::new(cx, s, TopKey::AutoArm).help("Automation Arm: while it's on and the song plays, moving a control records its automation (while you hold it)");
+                TopKeyView::new(cx, s, TopKey::ReEnable).help("Re-Enable Automation: lit (orange) when you moved an automated control by hand; a click puts every overridden control back under its automation");
             })
             .class("key-group");
         })
@@ -3543,6 +3626,32 @@ impl AppState {
     /// Shift+Tab (§3.1): the Clip view (the open clip's piano roll) ⇄ the
     /// Device view (the selected track's instrument). Back to the Clip view
     /// it reopens the clip the Device view replaced, else the selected clip.
+    /// Automation Mode (A): every track shows its automation lanes under it
+    /// (Batch 5, R104). A track showing none gets its first one.
+    fn toggle_automation_mode(&mut self) {
+        let on = !self.s.arrangement.with_untracked(|a| a.auto_mode);
+        self.s.arrangement.update(|a| {
+            a.auto_mode = on;
+            if on {
+                let lanes = a.lanes.clone();
+                a.automation.default_lanes(&lanes);
+            }
+        });
+        self.clamp_lane_scroll();
+        if crate::dev::enabled() {
+            let n = self.s.arrangement.with_untracked(|a| (0..a.lanes.len()).map(|i| a.auto_lanes(i).len()).sum::<usize>());
+            eprintln!("dev: automation mode {on} lanes {n}");
+        }
+        self.set_status(
+            if on {
+                "Automation Mode: each track's lanes are under it. Click a line to add a breakpoint, click a breakpoint to delete it; A hides them."
+            } else {
+                "Automation Mode off."
+            }
+            .into(),
+        );
+    }
+
     fn toggle_detail(&mut self) {
         // The mixer view: Shift+Tab shows or hides its Detail View (A1).
         if self.s.view_mixer.get_untracked() {
@@ -4143,6 +4252,7 @@ impl AppState {
             Set::StripByClips(b) => st.strip_by_clips = b,
             Set::BrowserRight(b) => st.browser_right = b,
             Set::ShowOverview(b) => st.show_overview = b,
+            Set::LockEnvelopes(b) => st.lock_envelopes = b,
             Set::HeaderWidth(w) => st.header_width = views::header_layout::clamp_width(w),
         }
         self.header_from_settings();
@@ -4313,6 +4423,30 @@ impl AppState {
             | Action::TextCopy
             | Action::TextCut
             | Action::TextPaste => return false,
+            Action::AutomationMode => self.toggle_automation_mode(),
+            Action::LockEnvelopes => {
+                let on = !self.settings.lock_envelopes;
+                self.set_setting(cx, Set::LockEnvelopes(on));
+                self.set_status(if on { "Lock Envelopes on: automation stays at its song position when clips move." } else { "Lock Envelopes off: clips take their automation with them when they move." }.into());
+            }
+            Action::AutomationArm => {
+                let on = !self.s.auto_arm.get_untracked();
+                self.s.auto_arm.set(on);
+                if dev::enabled() {
+                    eprintln!("dev: automation arm {on}");
+                }
+                self.set_status(if on { "Automation Arm on: moving a control while the song plays records its automation." } else { "Automation Arm off." }.into());
+            }
+            Action::ReEnableAutomation => {
+                let any = self.s.arrangement.with_untracked(|a| !a.automation.overridden.is_empty());
+                self.s.arrangement.update(|a| {
+                    a.automation.re_enable();
+                });
+                if dev::enabled() {
+                    eprintln!("dev: re-enable automation ({any})");
+                }
+                self.set_status(if any { "Automation re-enabled: every overridden control follows its envelope again." } else { "Nothing to re-enable: no control is overridden." }.into());
+            }
             Action::DevStats => cx.emit(AppEvent::ToggleStats),
             Action::DevStress => cx.emit(AppEvent::ToggleStress),
             Action::DevReloadStyles => cx.emit(WindowEvent::ReloadStyles),
@@ -4419,6 +4553,8 @@ impl AppState {
             mixer: self.s.view_mixer.get_untracked(),
             track_selected: self.s.arrangement.with_untracked(|a| !a.track_sel.is_empty()),
             tracks: self.s.arrangement.with_untracked(|a| a.lanes.len()),
+            automation: self.s.arrangement.with_untracked(|a| a.auto_mode),
+            lock_envelopes: self.settings.lock_envelopes,
             recent: self
                 .settings
                 .recent

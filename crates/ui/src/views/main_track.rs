@@ -262,14 +262,27 @@ pub struct MainLane {
     /// view, size or scale changes: while playing only the playhead moves
     /// (B4A-D26). Key: (scroll ticks, px per bar, w, h, scale) as bits.
     layer: RefCell<Option<(LaneKey, vg::Image)>>,
+    /// Batch 5: the Main gain's envelope, edited over this row in
+    /// Automation Mode.
+    ed: super::autolanes::Editor,
 }
 
 impl MainLane {
+    /// The Main gain's lane (view-local logical px), in Automation Mode.
+    fn lanes(&self) -> Vec<super::autolanes::LaneGeo> {
+        self.s.arrangement.with_untracked(|a| super::autolanes::main_lane(a, 2.0, MAIN_TOTAL_H - 2.0)).into_iter().collect()
+    }
+
+    fn local(cx: &EventContext) -> (f32, f32) {
+        let b = cx.bounds();
+        let s = cx.scale_factor();
+        ((cx.mouse().cursor_x - b.x) / s, (cx.mouse().cursor_y - b.y) / s)
+    }
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
         // (scroll, px per bar, playhead column ×4): what the lane shows.
         let last = std::rc::Rc::new(std::cell::Cell::new((f64::NAN, f64::NAN, f64::NAN)));
         let last2 = last.clone();
-        Self { s, layer: RefCell::new(None) }
+        Self { s, layer: RefCell::new(None), ed: Default::default() }
             .build(cx, |_| {})
             .class("main-lane")
             .height(Pixels(MAIN_TOTAL_H))
@@ -280,6 +293,8 @@ impl MainLane {
                     h.needs_redraw();
                 }
             })
+            // Batch 5: the Main envelope (Automation Mode, its edits).
+            .bind(Memo::new(move |_| s.arrangement.with(|a| (a.auto_mode, a.automation.content_hash()))), |mut h| h.needs_redraw())
             // The playhead: redraw only when its pixel column moves (not on
             // every transport update while playing).
             .bind(s.transport, move |mut h| {
@@ -299,10 +314,51 @@ impl View for MainLane {
     }
 
     fn event(&mut self, cx: &mut EventContext, event: &mut Event) {
-        event.map(|we, _| {
-            if let WindowEvent::MouseMove(..) = we {
-                cx.emit(AppEvent::HoverHelp("Main's lane: master automation arrives with automation".into()));
+        let s = self.s;
+        event.map(|we, meta| match we {
+            WindowEvent::MouseMove(..) => {
+                let lanes = self.lanes();
+                let (x, y) = Self::local(cx);
+                if self.ed.busy() {
+                    self.ed.drag(cx, &s, &lanes, x, y);
+                    cx.needs_redraw();
+                    return;
+                }
+                let help = match lanes.first() {
+                    Some(g) => {
+                        if s.arrangement.with_untracked(|a| self.ed.hover(a, &lanes, x, y)) {
+                            cx.needs_redraw();
+                        }
+                        super::autolanes::help(g, s.piano.with_untracked(|p| p.draw))
+                    }
+                    None => "Main's lane: its gain's automation shows here in Automation Mode (A)".into(),
+                };
+                cx.emit(AppEvent::HoverHelp(help));
             }
+            WindowEvent::MouseDown(MouseButton::Left) => {
+                let lanes = self.lanes();
+                let (x, y) = Self::local(cx);
+                if !lanes.is_empty() && self.ed.press(cx, &s, &lanes, x, y) {
+                    cx.capture();
+                    cx.needs_redraw();
+                    meta.consume();
+                }
+            }
+            WindowEvent::MouseUp(MouseButton::Left) if self.ed.busy() => {
+                cx.release();
+                self.ed.release(cx, &s);
+                cx.needs_redraw();
+                meta.consume();
+            }
+            WindowEvent::MouseDoubleClick(MouseButton::Left) => {
+                let lanes = self.lanes();
+                let (x, y) = Self::local(cx);
+                if !lanes.is_empty() && self.ed.double_click(cx, &s, &lanes, x, y) {
+                    cx.needs_redraw();
+                    meta.consume();
+                }
+            }
+            _ => {}
         });
     }
 
@@ -341,6 +397,12 @@ impl View for MainLane {
             if let Some((_, img)) = layer.as_ref() {
                 canvas.draw_image(img, (r.left, r.top), None);
             }
+        }
+        // Batch 5: the Main gain's envelope over the row (Automation Mode).
+        let lanes = self.lanes();
+        if !lanes.is_empty() {
+            let bpm = self.s.transport.with_untracked(|t| t.bpm);
+            self.s.arrangement.with_untracked(|a| super::autolanes::draw(canvas, a, (self.s.master_db.get_untracked(), bpm), &lanes, r, r.top, s, &self.ed));
         }
         let x_of = |t: f64| r.left + view.tick_to_x(t) as f32 * s;
         let px = x_of(playhead).round();
