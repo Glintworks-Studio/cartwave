@@ -127,6 +127,16 @@ const fn p(name: &'static str, category: Category, kinds: u8, blurb: &'static st
     Preset { name, category, kinds, blurb, inst, params: CONSTANT, zones: &[] }
 }
 
+/// The channel at full Volume (15): Batch 5 A2 raised three quiet presets'
+/// level this way (the bank's level mechanism: the channel Volume, then the
+/// volume macro scaled up only as far as its loudest step allows, so the
+/// envelope keeps its shape). Their duty, pitch and arpeggio are unchanged.
+const LOUD: &[(ParamId, i8)] = &[(ParamId::Envelope, 0), (ParamId::Sweep, 0), (ParamId::Volume, 15)];
+
+const fn p_loud(name: &'static str, category: Category, kinds: u8, blurb: &'static str, inst: Instrument) -> Preset {
+    Preset { name, category, kinds, blurb, inst, params: LOUD, zones: &[] }
+}
+
 const fn noise(name: &'static str, category: Category, blurb: &'static str, inst: Instrument) -> Preset {
     Preset { name, category, kinds: K_NOISE, blurb, inst, params: NOISE_SET, zones: &[] }
 }
@@ -177,8 +187,9 @@ pub static PRESETS: &[Preset] = &[
         inst(s(&[4, 6, 8, 9, 10, 11, 12, 12, 11, 9, 7, 5, 3, 2, 1, 0], N, 7), E, s(&[-6, 2, 2, 2], N, N), s(&[4, 4, 5, 5], 2, N), vib(22, 6, 10))),
     p("Violin", Category::Strings, K_SQUARE | K_SAW, "Thin bowed tone with expressive vibrato",
         inst(s(&[5, 8, 10, 11, 12, 12, 9, 6, 3, 1, 0], N, 5), E, E, s(&[2, 3, 2, 3], 0, N), vib(28, 5, 8))),
-    p("Pizzicato", Category::Strings, K_VOICED, "Plucked strings",
-        inst(s(&[14, 10, 7, 5, 4, 3, 2, 1, 1, 0], N, N), E, E, s(&[4], N, N), NOVIB)),
+    // Batch 5 A2: level raised (Volume 15; the macro ×15/14, was 14 10 7 5 4 3 2 1 1 0).
+    p_loud("Pizzicato", Category::Strings, K_VOICED, "Plucked strings",
+        inst(s(&[15, 11, 8, 5, 4, 3, 2, 1, 1, 0], N, N), E, E, s(&[4], N, N), NOVIB)),
     p("String Pad", Category::Strings, K_VOICED, "Very slow swell with a breathing duty cycle",
         inst(s(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 9, 8, 6, 5, 4, 3, 2, 1, 0], N, 10), E, E, s(&[4, 4, 5, 6, 7, 6, 5], 0, N), vib(12, 8, 30))),
 
@@ -211,8 +222,9 @@ pub static PRESETS: &[Preset] = &[
         inst(s(&[15, 14, 12, 11, 10, 10, 9, 9, 8, 8, 7, 7, 6, 6, 6, 5, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 0], N, N), s(&[12, 24, 0], N, N), E, s(&[8, 4], N, N), NOVIB)),
     p("Marimba", Category::Keys, K_VOICED | K_TRI, "Woody mallet",
         inst(s(&[15, 11, 8, 6, 4, 3, 2, 1, 0], N, N), s(&[12, 0], N, N), E, s(&[8], N, N), NOVIB)),
-    p("Music Box", Category::Keys, K_SQUARE, "Tiny and twinkly",
-        inst(s(&[10, 8, 6, 5, 4, 4, 3, 3, 2, 2, 1, 1, 0], N, N), s(&[12], N, N), E, s(&[2], N, N), vib(8, 4, 0))),
+    // Batch 5 A2: level raised (Volume 15; the macro ×1.5, was 10 8 6 5 4 4 3 3 2 2 1 1 0).
+    p_loud("Music Box", Category::Keys, K_SQUARE, "Tiny and twinkly",
+        inst(s(&[15, 12, 9, 8, 6, 6, 5, 5, 3, 3, 2, 2, 0], N, N), s(&[12], N, N), E, s(&[2], N, N), vib(8, 4, 0))),
 
     // ── Arpeggios
     p("Major Arp", Category::Chords, K_MELODIC, "Fast major-chord arpeggio: one channel, a full chord",
@@ -281,8 +293,9 @@ pub static PRESETS: &[Preset] = &[
     p("1-Up", Category::Sfx, K_SQUARE, "Bright fanfare arpeggio",
         inst(s(&[13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 9, 5, 0], N, N),
             s(&[4, 4, 4, 7, 7, 7, 16, 16, 16, 12, 12, 12, 14, 14, 14, 19, 19, 19], N, N), E, s(&[8], N, N), NOVIB)),
-    p("Menu Blip", Category::Sfx, K_SQUARE, "Cursor move",
-        inst(s(&[12, 10, 6, 0], N, N), E, E, s(&[4], N, N), NOVIB)),
+    // Batch 5 A2: level raised (Volume 15; the macro ×1.25, was 12 10 6 0).
+    p_loud("Menu Blip", Category::Sfx, K_SQUARE, "Cursor move",
+        inst(s(&[15, 13, 8, 0], N, N), E, E, s(&[4], N, N), NOVIB)),
     p("Siren", Category::Sfx, K_SQUARE | K_SAW, "Wailing pitch loop (hold the note)",
         inst(s(&[12, 0], 0, 0), E, s(&[8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8, -8], 0, N), s(&[8], N, N), NOVIB)),
     p("Fall", Category::Sfx, K_SQUARE | K_TRI | K_SAW, "Long falling whistle",

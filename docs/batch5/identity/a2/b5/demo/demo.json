@@ -1,0 +1,30 @@
+{
+  "bars_in_loop": 32.0,
+  "bits": 16,
+  "bpm": 150.0,
+  "channels": 1,
+  "files": {
+    "intro": "demo_intro.wav",
+    "loop": "demo_loop.wav",
+    "single": "demo.wav"
+  },
+  "format": "cartwave-loop",
+  "gain_db": 0.0,
+  "intro_samples": 2457600,
+  "loop_end_bar": 33.0,
+  "loop_end_sample": 4915200,
+  "loop_length_samples": 2457600,
+  "loop_start_bar": 1.0,
+  "loop_start_sample": 2457600,
+  "master_gain_db": 0.0,
+  "musical_loop_start_sample": 0,
+  "note": "Play from sample 0; when playback reaches loop_end_sample, continue at loop_start_sample. With the split files: play the intro once, then repeat the loop file.",
+  "sample_rate": 48000,
+  "tracks": [
+    "demo",
+    "demo_stem_melody",
+    "demo_stem_bass",
+    "demo_stem_drums"
+  ],
+  "version": 1
+}

@@ -1,0 +1,35 @@
+{
+  "bars_in_loop": 8.0,
+  "bits": 16,
+  "bpm": 140.00013732910156,
+  "channels": 1,
+  "files": {
+    "intro": "showcase_intro.wav",
+    "loop": "showcase_loop.wav",
+    "single": "showcase.wav"
+  },
+  "format": "cartwave-loop",
+  "gain_db": 0.0,
+  "intro_samples": 1209598,
+  "loop_end_bar": 17.0,
+  "loop_end_sample": 1814397,
+  "loop_length_samples": 604799,
+  "loop_start_bar": 9.0,
+  "loop_start_sample": 1209598,
+  "master_gain_db": 0.0,
+  "musical_loop_start_sample": 604799,
+  "note": "Play from sample 0; when playback reaches loop_end_sample, continue at loop_start_sample. With the split files: play the intro once, then repeat the loop file.",
+  "sample_rate": 44100,
+  "tracks": [
+    "showcase",
+    "showcase_stem_pulse_1",
+    "showcase_stem_pulse_2",
+    "showcase_stem_triangle",
+    "showcase_stem_noise",
+    "showcase_stem_dpcm",
+    "showcase_stem_vrc6_pulse_1",
+    "showcase_stem_vrc6_pulse_2",
+    "showcase_stem_vrc6_saw"
+  ],
+  "version": 1
+}

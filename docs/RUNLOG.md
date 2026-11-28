@@ -1917,3 +1917,27 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   (labelled); 150 % has none. A strip clicked in the mixer now leaves the strips' PEAK / VOICES /
   readout row visible (`docs/screens/batch5/mixer-pane-hidden.png`; `pre-presets` opened its
   232 px inspector over them). Reports: `docs/batch5/regression/a1-diff-*/`.
+- **B5-D4 (A2: three quiet classic presets).** *How a project stores an instrument:* a full
+  copy (`file.rs` `inst_to_file`: the volume, arpeggio, pitch and duty sequences, vibrato and arp
+  speed, per entry of the project's instrument table; version 1 files have none and play raw
+  channels). Nothing re-reads a preset by name when a file loads, so changing the presets in place
+  can't change an old project: A2 goes ahead. Checked: `identity_b5.sh` (every `.chipdaw` /
+  `.cartwave` in the repo rendered and exported by `main` and by this build) **299 of 299
+  identical**, game export **101 of 101 byte-identical**; `cargo test` all pass.
+  *The change* (the bank's mechanism, `design_bank.py apply_level`: the channel Volume where it has
+  room, then the volume macro scaled up only as far as its loudest step allows, so the envelope
+  keeps its shape; here both, as each alone falls short): the three presets now set **Volume 15**
+  (it was the track's default 12) and their volume macros are scaled to a loudest step of 15
+  (Pizzicato ×15/14, Music Box ×1.5, Menu Blip ×1.25, rounded half up). Duty, pitch, arpeggio,
+  vibrato and the macros' lengths are unchanged. *Result* (`bank_pack`, studio Pulse voice):
+  Pizzicato −33.4 → **−31.6 LUFS** (target −26.3, still −5.3 LU), Music Box −34.7 → **−30.3**
+  (−4.0 LU), Menu Blip −37.3 → **−33.9** (Game Sounds −30.1: −3.8 LU). True peaks −15.2 … −15.5
+  dBTP, no clipping. **None reaches ±1.5 LU**: each is at its voice's maximum (Volume 15, the
+  loudest macro step 15); going further would flatten the envelope against 15 (changing the
+  pluck's character) or change the duty or voice. The remaining gaps are reported for Mika (a
+  thin 12.5 % / 25 % pulse with a fast decay is quiet by nature). The WAVs, `levels.md` and the
+  three PROVENANCE rows (a dated change line) were rewritten by `bank_pack --write`.
+  *A tool fault found on the way:* `bank_pack --write` also rewrote `presets/levels.json`, whose
+  gains are iterated (each pass multiplies a refinement in, for `design_bank.py --levels` to fold
+  in): a plain re-render moved 30-odd gains with nothing folded in. Restored, and the file is now
+  written only with `--iterate`. `--measure "A,B"` prints chosen presets' levels.
