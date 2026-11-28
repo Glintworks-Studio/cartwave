@@ -1986,3 +1986,17 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   console column). *Re-baseline* (this commit only): the studio goldens and migration hashes,
   old → new with the reason in `docs/batch5/a3-rebaseline.md`; the listening pack and
   `levels.md` re-rendered.
+- **B5-D7 (A4: the private reference render).** `.gitignore` got `/reference-private/` and
+  `/private/` before anything was written (B5-D2: VISION.md names the folder
+  `reference-private/`). No `.mid` was there, so one fan transcription was downloaded into it
+  (its URL in `reference-private/SOURCE.txt`, ignored like everything there). A generic tool,
+  `crates/ui/examples/midi_render.rs` (names no song; writes where it is told), imports a `.mid`
+  through the app's own MIDI import and renders it: with a profile, **Fit to hardware** and an
+  authentic preset per locked track (in turn from the Hardware folder of its voice); with
+  `--studio`, studio tracks and Sounds / Drums presets that fit. **A bug found on the way (4b's
+  MIDI import):** under 2A03 + VRC6, `channels_for` plans a third and later pulse part onto the
+  VRC6 pulses and the saw, but `import` made each one a Pulse track, which can't lock to those
+  channels, and the `_ => {}` arm left it a studio track with nothing in the report. Now a Fit
+  track takes its channel's voice, and a part that still can't lock says so. Test
+  `midi_tracks::tests::fit_puts_extra_pulse_parts_on_the_vrc6`. Before every push: `git status
+  --ignored` shows `reference-private/` ignored and `git ls-files` lists nothing under it.

@@ -320,7 +320,14 @@ pub fn import(a: &mut Arrangement, parts: &[PlannedPart], at: u32, target: Targe
                 Target::End => a.lanes.len(),
                 Target::Onto(_) => next + 1,
             };
-            let i = a.insert_track(at_ix, part.kind, pick_colour(part.kind));
+            // Fit: a new track takes its channel's voice (a pulse part on a
+            // VRC6 pulse or the saw; Batch 5: they were made as Pulse tracks,
+            // which can't lock there, and silently stayed studio tracks).
+            let kind = match mode {
+                Mode::Fit { .. } => chans.get(k).copied().flatten().map_or(part.kind, VoiceKind::of_lane),
+                Mode::Studio => part.kind,
+            };
+            let i = a.insert_track(at_ix, kind, pick_colour(kind));
             a.lanes[i].name = part.name.chars().take(crate::user_presets::MAX_NAME).collect();
             i
         };
@@ -352,7 +359,8 @@ pub fn import(a: &mut Arrangement, parts: &[PlannedPart], at: u32, target: Targe
                     how.push_str(&format!("locked to {}", crate::tracks::channel_name(c)));
                 }
                 None => how.push_str("no free channel: a studio track"),
-                _ => {}
+                // The part's own track (dropped onto) can't take the channel.
+                Some(_) => how.push_str("its track can't lock there: a studio track"),
             }
         }
         let first = part.first;
@@ -477,5 +485,21 @@ mod tests {
         let (_, l2) = import(&mut b, &parts[..1], 0, Target::End, Mode::Fit { arp: true }, SoundChip::Base2A03, 150.0, &mut col);
         let arp = b.clips.iter().find(|c| c.lane == l2[0]).unwrap();
         assert!(arp.notes.len() > 20, "a beat of 40-tick steps plus the D");
+    }
+
+    /// Batch 5: under 2A03 + VRC6, pulse parts past the two 2A03 pulses go
+    /// onto the VRC6 pulses and the saw, as `channels_for` plans (they were
+    /// left as studio Pulse tracks without a word).
+    #[test]
+    fn fit_puts_extra_pulse_parts_on_the_vrc6() {
+        let mut a = Arrangement::empty();
+        a.lanes.clear();
+        let parts: Vec<PlannedPart> = (0..5).map(|i| p(&format!("Lead {i}"), VoiceKind::Pulse, vec![(0, 960, 60 + i as u8, 100)])).collect();
+        let mut col = |_| Rgba::hex(0x4FA8E0);
+        let (rep, lanes) = import(&mut a, &parts, 0, Target::End, Mode::Fit { arp: false }, SoundChip::WithVrc6, 150.0, &mut col);
+        let locks: Vec<Option<usize>> = lanes.iter().map(|&l| a.lanes[l].lock).collect();
+        assert_eq!(locks, vec![Some(0), Some(1), Some(5), Some(6), Some(7)], "{rep}");
+        assert_eq!(a.lanes[lanes[4]].voice, VoiceKind::Saw);
+        assert!(rep.contains("locked to"), "{rep}");
     }
 }
