@@ -1,0 +1,8 @@
+shell exit 0; PASS lines 49; no FAIL lines
+batch3 exit 0; PASS lines 77; FAIL: FAIL AT-29: a double-click asks about the profile (a template, decision 5) | FAIL AT-29: and then loads the layout
+design exit 0; PASS lines 23; no FAIL lines
+polish exit 0; PASS lines 14; no FAIL lines
+p2 exit 0; PASS lines 92; no FAIL lines
+b4a exit 0; PASS lines 53; no FAIL lines
+b4b exit 0; PASS lines 43; no FAIL lines
+pb exit 0; PASS lines 13; no FAIL lines

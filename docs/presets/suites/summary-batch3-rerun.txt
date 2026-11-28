@@ -1,0 +1,1 @@
+batch3 exit 0; PASS lines 79; no FAIL lines

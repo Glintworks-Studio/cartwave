@@ -1857,3 +1857,11 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   starved 0, late 0, 0 allocation violations; the 30 steps one undo step. Gate 7: lime 0 in 18
   scenes (a lime-free locked fixture: `fx_board`'s track colours hold lime, so its first run
   counted the project's colours), contrast ≥ 4.61.
+- **PB-D20 (final suite run).** On the final build: shell 49, design 23, polish 14, polish 2 92,
+  4a 53, 4b 43, PB 13 all pass; Batch 3 77/79 with AT-29 failing once. Its screenshot shows the
+  Hardware section open but NES (2A03) not expanded, and the log has no "browser open" line: the
+  press on the folder row never reached the browser (a left press on a folder row toggles it and
+  logs synchronously, no frame in between, so the app has no path that drops it). Same layout as
+  the passing runs (screenshots compared). AT-29 alone 3/3 PASS, then the whole Batch 3 suite
+  79/79 PASS on the same build. Recorded as one unexplained input miss in the harness, not hidden:
+  both logs are in `docs/presets/suites/`.

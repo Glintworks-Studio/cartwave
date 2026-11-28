@@ -1,0 +1,97 @@
+PASS AT-07: two more clips (4 -> 6)
+PASS AT-07: a copy of Harm A starts at bar 9 with identical notes
+PASS AT-07: a copy of Harm B follows at bar 11, identical notes
+PASS AT-08: Ctrl+R renamed the clip: 'Verse'
+PASS AT-08: Ctrl+R on a track header: 'Bass Line'
+PASS AT-08: double-click a track name: 'Lead'
+PASS AT-08: Tab went on to the next track (R9): 'Harmony'
+PASS AT-08: one undo takes back one rename
+PASS AT-09: the piano roll opened (dev line)
+PASS AT-09: double-click on empty C4, bar 1: one 1/16 note: [{'id': 1, 'start': 0, 'len': 240, 'pitch': 60}]
+PASS AT-09: double-click on the note: zero notes
+PASS AT-09: Draw Mode off: a single click draws nothing
+PASS AT-09: B, then a click: one note
+PASS AT-10: Track menu: Rename|Colour|Insert Track|Duplicate Track|Delete Track|Lock
+PASS AT-10: Ruler menu: -Set Loop to Selection|Zoom to Fit
+PASS AT-10: Piano(true) menu: Cut|Copy|-Paste|Duplicate|Delete|Quantize|Select All|Draw Mode
+PASS AT-10: Piano(false) menu: -Cut|-Copy|-Paste|-Duplicate|-Delete|-Quantize|Select All|Draw Mode
+PASS AT-10: Clip menu: Cut|Copy|-Paste|Duplicate|Delete|-Split|-Consolidate|Rename|Colour|Loop Clip|Make Instrument Unique|-Use Track Instrument|Save Instrument as Preset
+PASS AT-10: Empty menu: -Paste|Insert MIDI Clip|Loop Selection|Insert Silence|Delete Time|Grid (1/16)
+PASS AT-10: with no note selected, the note commands are disabled (they say why)
+PASS AT-10: screenshot at10_track
+PASS AT-10: screenshot at10_ruler
+PASS AT-10: screenshot at10_note
+PASS AT-10: screenshot at10_piano_empty
+PASS AT-10: screenshot at10_clip
+PASS AT-10: screenshot at10_empty
+PASS AT-10: screenshot at10_grid_sub
+PASS AT-11: Ctrl+E at bar 3: clips 1-2 and 3-4: [(0, 7680), (7680, 15360)]
+PASS AT-11: the notes are split between them, none lost
+PASS AT-11: Ctrl+J: one clip again: [(0, 15360)]
+PASS AT-11: with all the notes
+PASS AT-12: Z zooms to bars 5-6: dev: zoom ZoomToSelection range (15360, 23040) px_per_bar 379.17 scroll 15053
+PASS AT-12: bars 5-6 fill the view (~389 px per bar at 840 px): 379.2
+PASS AT-12: X restores the earlier zoom: dev: zoom ZoomBack px_per_bar 92.00 scroll 0
+PASS AT-12: double-click on the ruler fits the song: dev: zoom ZoomToFit range (0, 122880) px_per_bar 24.00 scroll 0
+PASS AT-14: a new project shows the guide; it goes with the first clip (luma 42.3 -> 16.9)
+PASS AT-14: Help > Getting Started shows it again; Esc closes it (luma 41.8 -> 19.9)
+PASS AT-22: track 1: split at bars 2 and 4: [(0, 3840), (11520, 15360)]
+PASS AT-22: track 1: no notes left in bars 2-3
+PASS AT-22: track 1: the notes outside are untouched
+PASS AT-22: track 2: split at bars 2 and 4: [(0, 3840), (11520, 15360)]
+PASS AT-22: track 2: no notes left in bars 2-3
+PASS AT-22: track 2: the notes outside are untouched
+PASS AT-23: -> -> nudges by 2 x 1/16: 480
+PASS AT-23: Ctrl+2 widens the grid to 1/8: -> moves 480 (an eighth)
+PASS AT-24: Ctrl+I: a bar of silence at bar 2 on Pulse 1: [(0, 3840), (7680, 19200)]
+PASS AT-24: and on every other track
+PASS AT-24: Ctrl+Shift+Del takes the time out again: every note back in place
+PASS AT-25: a click on a track header selects it; the inspector shows it (I1): dev: device Chip Synth Pulse locked preset "Bright Lead": knobs DUTY|SWEEP|SWEEP RATE|VIB DEPTH|VIB RATE|ARP SPEED|VIB DELAY|VOLUME|ENVELOPE ╖ tabs VOLUME|ARPEGGIO|PITCH|DUTY
+PASS AT-25: exclusive solo, Ctrl-click adds: [False, True, True]
+PASS AT-25: a disabled button's tooltip (screenshot)
+PASS AT-26: track colour from its menu is saved: #4FA8E0
+PASS AT-26: clip colour from its menu is saved: #E0705A
+PASS AT-27: Shift+->: every note one 1/16 longer
+PASS AT-27: Ctrl+E chops on the grid: 48 notes
+PASS AT-27: Ctrl+J joins them again: 16 notes
+PASS AT-28: Ctrl+Shift+R opens the dialog over a backdrop (screenshot)
+PASS AT-28: Esc closes it
+PASS AT-28: the choices are remembered, rate and depth from the project: ['range:loop', 'rate:48000', 'bits:16', 'single:1', 'split:1', 'json:1', 'stems:none', 'loud:authentic', 'groups:00122001']
+PASS AT-28: the disabled Selection choice says why (tooltip screenshot)
+PASS AT-28: Enter exports
+PASS AT-29: typed into the search: ['field:ab']
+PASS AT-29: Esc clears it: ['field:']
+PASS AT-29: a click on a layout loads nothing
+FAIL AT-29: a double-click asks about the profile (a template, decision 5)
+FAIL AT-29: and then loads the layout
+PASS AT-30: screenshot at30_menu_edit
+PASS AT-30: screenshot at30_menu_view
+PASS AT-30: screenshot at30_menu_help
+PASS AT-30: the shortcut sheet lists Split
+PASS AT-30: the shortcut sheet lists Consolidate
+PASS AT-30: the shortcut sheet lists Rename
+PASS AT-30: the shortcut sheet lists Cut Time
+PASS AT-30: the shortcut sheet lists Insert Silence
+PASS AT-30: the shortcut sheet lists Zoom to Selection
+PASS AT-30: the shortcut sheet lists Draw Mode
+PASS AT-30: the shortcut sheet lists Narrow Grid
+PASS AT-31: Save as Preset (a visible button, I3) wrote a user preset
+PASS AT-31: a user preset's menu: Add to Favourites|Add to Red|Add to Yellow|Add to Green|Add to Blue|Add to Purple|Add to Grey|Rename|Delete|Show in Explorer
+
+AT-07: PASS (3/3)
+AT-08: PASS (5/5)
+AT-09: PASS (5/5)
+AT-10: PASS (14/14)
+AT-11: PASS (4/4)
+AT-12: PASS (4/4)
+AT-14: PASS (2/2)
+AT-22: PASS (6/6)
+AT-23: PASS (2/2)
+AT-24: PASS (3/3)
+AT-25: PASS (3/3)
+AT-26: PASS (2/2)
+AT-27: PASS (3/3)
+AT-28: PASS (5/5)
+AT-29: FAIL (3/5)
+AT-30: PASS (11/11)
+AT-31: PASS (2/2)
