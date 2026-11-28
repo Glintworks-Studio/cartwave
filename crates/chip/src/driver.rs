@@ -8,6 +8,7 @@
 //! - Only controls the hardware has: see `ParamId` and `ENGINE.md`.
 //! - No allocation: writes go into a fixed-size `Writes` buffer.
 
+use crate::auto::{AutoEnv, AutoPoint, LaneAuto};
 use crate::instrument::{duty_2a03, duty_vrc6, scale_volume, Frame, Instrument, MacroState, NONE};
 use crate::pitch::{self, Osc};
 use crate::samples::{sample_for_pitch, SampleRef, BUILTIN_COUNT, SAMPLE_COUNT, START_LEVEL, USER_SLOTS};
@@ -61,14 +62,18 @@ pub struct Song<'a> {
     pub lane_inst: [u8; LANES],
     /// Instrument for audition notes (`Driver::preview`); `NONE` = the lane's.
     pub preview_inst: u8,
+    /// Batch 5: each console lane's automation envelopes (empty: none), and
+    /// the points they index.
+    pub auto: [&'a [AutoEnv]; LANES],
+    pub auto_points: &'a [AutoPoint],
 }
 
 impl<'a> Song<'a> {
-    pub const EMPTY: Song<'static> = Song { lanes: [&[]; LANES], instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE };
+    pub const EMPTY: Song<'static> = Song { lanes: [&[]; LANES], instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE, auto: [&[]; LANES], auto_points: &[] };
 
     /// Notes only; every lane plays its plain channel controls.
     pub const fn plain(lanes: [&'a [Note]; LANES]) -> Self {
-        Song { lanes, instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE }
+        Song { lanes, instruments: &[], lane_inst: [NONE; LANES], preview_inst: NONE, auto: [&[]; LANES], auto_points: &[] }
     }
 
     pub fn instrument(&self, idx: u8) -> &Instrument {
@@ -111,7 +116,7 @@ pub enum EnvMode {
 
 /// Every per-channel control the hardware actually has. Which ones apply to
 /// which lane: `ParamId::for_lane`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum ParamId {
     /// Pulse: 0..=3 (12.5/25/50/75%). VRC6 pulse: 0..=7 (1..8 / 16), 8 = digitized (constant).
@@ -297,6 +302,10 @@ pub struct Driver {
     /// fine pitch: a studio voice's unison detune and drift (Batch 4b §5).
     /// 0.0 everywhere on the console, so its periods are unchanged.
     pub detune: [f64; LANES],
+    /// Batch 5: each lane's automation for this frame (channel controls in
+    /// place of `params`, macros in place of the instrument's): set by `tick`
+    /// from the song for the console, by the rack for a studio voice.
+    pub auto: [LaneAuto; LANES],
 }
 
 impl Driver {
@@ -314,7 +323,26 @@ impl Driver {
             ticks: 0,
             preview: [None; LANES],
             detune: [0.0; LANES],
+            auto: [LaneAuto::default(); LANES],
         }
+    }
+
+    /// Channel control `p` of `lane` as it plays this frame: the automation's
+    /// value where an envelope drives it, else the control's.
+    #[inline]
+    fn pv(&self, lane: usize, p: ParamId) -> i32 {
+        let a = &self.auto[lane];
+        if a.mask & (1 << p as u16) != 0 {
+            a.vals[p as usize] as i32
+        } else {
+            self.params.get(lane, p)
+        }
+    }
+
+    /// The value channel control `p` of `lane` plays with now (automation
+    /// applied): for the UI's displays and tests.
+    pub fn effective(&self, lane: usize, p: ParamId) -> i32 {
+        self.pv(lane, p)
     }
 
     fn audible(&self, lane: usize) -> bool {
@@ -360,6 +388,18 @@ impl Driver {
     pub fn tick(&mut self, song: &Song, prev: Option<f64>, pos: f64, playing: bool, w: &mut Writes) {
         self.ticks += 1;
         self.tick_init(w);
+        // Batch 5: the console lanes' automation at this frame (quantised to
+        // the registers' steps); nothing to do on a song without any.
+        for lane in 0..LANES {
+            let envs = song.auto[lane];
+            if envs.is_empty() {
+                if self.auto[lane] != LaneAuto::default() {
+                    self.auto[lane] = LaneAuto::default();
+                }
+            } else {
+                self.auto[lane] = LaneAuto::eval(envs, song.auto_points, lane, pos);
+            }
+        }
         let mut sounding = 0u8;
         for lane in 0..LANES {
             let vrc6_lane = lane >= LANE_V1;
@@ -481,7 +521,7 @@ impl Driver {
 
     /// The sample a DMC note plays: the Sample control, or the note's own.
     fn dmc_sample(&self, pitch: u8) -> usize {
-        let sel = self.params.get(LANE_DMC, ParamId::Sample);
+        let sel = self.pv(LANE_DMC, ParamId::Sample);
         if sel < 0 {
             sample_for_pitch(pitch)
         } else {
@@ -498,7 +538,7 @@ impl Driver {
     /// everything the lane plays, like a driver's channel volume column:
     /// out = note volume × volume macro × channel volume.
     fn level(&self, lane: usize) -> u8 {
-        self.params.get(lane, ParamId::Volume) as u8
+        self.pv(lane, ParamId::Volume) as u8
     }
 
     /// The sounding note's own volume, or full (15).
@@ -518,7 +558,7 @@ impl Driver {
     /// above 42 it overdrives into the wrap distortion).
     fn saw_rate(&self, lane: usize) -> u8 {
         let base = self.lanes[lane].vol.map_or(42, saw_rate_for_volume) as u32;
-        let r = self.params.get(lane, ParamId::Rate) as u32;
+        let r = self.pv(lane, ParamId::Rate) as u32;
         ((base * r + 21) / 42).min(63) as u8
     }
 
@@ -531,7 +571,7 @@ impl Driver {
         // the channel volume can't scale it: the note's volume, else the
         // control (shown as "Decay" in the UI) sets the speed.
         let decay = || self.lanes[lane].vol.map_or(self.level(lane), |v| v.min(15));
-        match self.params.get(lane, ParamId::Envelope) {
+        match self.pv(lane, ParamId::Envelope) {
             0 => 0x30 | self.out_volume(lane, f, false), // halt length, constant volume
             1 => decay(),                                 // length runs (254 half frames), decay
             _ => 0x20 | decay(),                          // halt length + loop, decay
@@ -539,16 +579,16 @@ impl Driver {
     }
 
     fn pulse_duty(&self, lane: usize, f: &Frame) -> u8 {
-        f.duty.map_or(self.params.get(lane, ParamId::Duty) as u8, duty_2a03)
+        f.duty.map_or(self.pv(lane, ParamId::Duty) as u8, duty_2a03)
     }
 
     fn pulse_sweep(&self, lane: usize) -> u8 {
-        let s = self.params.get(lane, ParamId::Sweep);
+        let s = self.pv(lane, ParamId::Sweep);
         if s == 0 {
             // Negate set: the target can never overflow, so low notes aren't muted.
             0x08
         } else {
-            let p = self.params.get(lane, ParamId::SweepRate) as u8;
+            let p = self.pv(lane, ParamId::SweepRate) as u8;
             0x80 | (p << 4) | if s < 0 { 0x08 } else { 0 } | s.unsigned_abs() as u8
         }
     }
@@ -558,7 +598,7 @@ impl Driver {
         match f.duty {
             Some(d) => (duty_vrc6(d) << 4) | v,
             None => {
-                let d = self.params.get(lane, ParamId::Duty);
+                let d = self.pv(lane, ParamId::Duty);
                 if d >= 8 {
                     0x80 | 0x70 | v
                 } else {
@@ -569,8 +609,8 @@ impl Driver {
     }
 
     fn noise_period(&self, lane: usize, f: &Frame) -> u8 {
-        let p = self.params.get(LANE_NOISE, ParamId::NoisePeriod);
-        let short = f.duty.map_or(self.params.get(LANE_NOISE, ParamId::NoiseMode) != 0, |d| d != 0);
+        let p = self.pv(LANE_NOISE, ParamId::NoisePeriod);
+        let short = f.duty.map_or(self.pv(LANE_NOISE, ParamId::NoiseMode) != 0, |d| d != 0);
         let base = if p < 0 { pitch::noise_index_for(self.lanes[lane].play_pitch) as i32 } else { p };
         ((short as u8) << 7) | (base - f.arp).clamp(0, 15) as u8
     }
@@ -626,8 +666,9 @@ impl Driver {
         // where the envelope reaches 0 within 1 s anyway.
         const LEN: u8 = 1 << 3;
         let inst = self.lanes[lane].instr;
-        let f = self.lanes[lane].mac.frame(&inst);
-        let macro_vol = !inst.volume.is_empty();
+        let ovr = self.auto[lane].mac;
+        let f = self.lanes[lane].mac.frame_with(&inst, &ovr);
+        let macro_vol = !inst.volume.is_empty() || ovr.volume.is_some() || ovr.gate.is_some();
         let st = self.lanes[lane];
         match lane {
             LANE_P1 | LANE_P2 => {
@@ -681,8 +722,8 @@ impl Driver {
             LANE_DMC => {
                 let s = self.samples[self.dmc_sample(st.play_pitch)];
                 // A user sample plays at the rate it was encoded for.
-                let rate = s.rate.unwrap_or(self.params.get(lane, ParamId::Rate) as u8);
-                let ctl = ((self.params.get(lane, ParamId::Loop) as u8) << 6) | rate;
+                let rate = s.rate.unwrap_or(self.pv(lane, ParamId::Rate) as u8);
+                let ctl = ((self.pv(lane, ParamId::Loop) as u8) << 6) | rate;
                 if first {
                     w.push(0x4010, ctl);
                     w.push(0x4011, START_LEVEL);
@@ -730,7 +771,7 @@ impl Driver {
             LANE_NOISE => w.push(0x400C, 0x30),
             // One-shot samples finish on their own; a looping one is stopped.
             LANE_DMC => {
-                if self.params.get(lane, ParamId::Loop) != 0 {
+                if self.pv(lane, ParamId::Loop) != 0 {
                     w.push(0x4015, 0x0F);
                 }
             }
@@ -780,7 +821,7 @@ mod tests {
         let notes = [Note { inst: 0, ..Note::new(0, 960, 69) }, Note { inst: 1, ..Note::new(960, 1920, 69) }];
         let mut lanes: [&[Note]; LANES] = [&[]; LANES];
         lanes[0] = &notes;
-        let song = Song { lanes, instruments: &bank, lane_inst: [NONE; LANES], preview_inst: NONE };
+        let song = Song { lanes, instruments: &bank, lane_inst: [NONE; LANES], preview_inst: NONE, auto: [&[]; LANES], auto_points: &[] };
         d.tick(&song, None, 0.0, true, &mut w);
         assert_eq!(duty_written(&w), Some(0), "clip 1: 12.5%");
         w.clear();
@@ -795,7 +836,7 @@ mod tests {
         let reordered = [wide, thin];
         let mut lanes2: [&[Note]; LANES] = [&[]; LANES];
         lanes2[0] = &moved;
-        let song2 = Song { lanes: lanes2, instruments: &reordered, lane_inst: [NONE; LANES], preview_inst: NONE };
+        let song2 = Song { lanes: lanes2, instruments: &reordered, lane_inst: [NONE; LANES], preview_inst: NONE, auto: [&[]; LANES], auto_points: &[] };
         w.clear();
         for i in 1..10 {
             d.tick(&song2, Some((i - 1) as f64 * 40.0), i as f64 * 40.0, true, &mut w);
@@ -957,6 +998,60 @@ mod tests {
         assert_eq!(d.pulse_sweep(0), 0x80 | 0x50 | 2);
         d.params.set(0, ParamId::Sweep, 0);
         assert_eq!(d.pulse_sweep(0), 0x08);
+    }
+
+    /// Batch 5 (AU-07): a locked lane's automation is evaluated once per
+    /// frame tick and quantised to the register: the volume nibble written
+    /// each frame equals the rounded envelope at that frame's position, and
+    /// a duty envelope plays only the 2A03's four duties. With no envelope
+    /// the writes are the plain ones.
+    #[test]
+    fn locked_automation_writes_the_quantised_envelope_each_frame() {
+        use crate::auto::{eval, quantise, AutoEnv, AutoPoint, AutoTarget};
+        let notes = [Note::new(0, 7680, 69)];
+        let mut lanes: [&[Note]; LANES] = [&[]; LANES];
+        lanes[0] = &notes;
+        let points = [
+            AutoPoint { tick: 0, value: 0.0, curve: 0.0 },
+            AutoPoint { tick: 3840, value: 15.0, curve: 0.4 },
+            AutoPoint { tick: 0, value: 0.2, curve: 0.0 },
+            AutoPoint { tick: 7680, value: 3.4, curve: 0.0 },
+        ];
+        let envs = [AutoEnv { target: AutoTarget::Chip(ParamId::Volume), start: 0, len: 2 }, AutoEnv { target: AutoTarget::Chip(ParamId::Duty), start: 2, len: 2 }];
+        let mut auto: [&[AutoEnv]; LANES] = [&[]; LANES];
+        auto[0] = &envs;
+        let song = Song { auto, auto_points: &points, ..Song::plain(lanes) };
+        let mut d = drv();
+        let mut w = Writes::default();
+        let (mut vol, mut duty) = (None, None);
+        let mut prev = None;
+        let mut frames = 0;
+        let mut pos = 0.0;
+        while pos < 7600.0 {
+            w.clear();
+            d.tick(&song, prev, pos, true, &mut w);
+            for &(a, v) in w.as_slice() {
+                if a == 0x4000 {
+                    vol = Some(v & 15);
+                    duty = Some(v >> 6);
+                }
+            }
+            let want_v = quantise(eval(&points[..2], pos).unwrap(), 0, 15) as u8;
+            let want_d = quantise(eval(&points[2..], pos).unwrap(), 0, 3) as u8;
+            // Constant-volume mode: out = note (15) x channel volume.
+            assert_eq!(vol, Some(crate::instrument::scale_volume(15, want_v)), "frame {frames} at {pos}");
+            assert_eq!(duty, Some(want_d), "frame {frames}");
+            assert_eq!(d.effective(0, ParamId::Volume), want_v as i32);
+            prev = Some(pos);
+            pos += 39.93; // a frame tick at 150 BPM
+            frames += 1;
+        }
+        assert!(frames > 180);
+        // The envelope is gone: the channel's own Volume plays again.
+        let plain = Song::plain(lanes);
+        w.clear();
+        d.tick(&plain, prev, pos, true, &mut w);
+        assert_eq!(d.effective(0, ParamId::Volume), d.params.get(0, ParamId::Volume));
     }
 
     #[test]

@@ -397,7 +397,7 @@ mod tests {
                 lanes[lane] = &notes;
                 let mut lane_inst = [NONE; LANES];
                 lane_inst[lane] = (bank.len() - 1) as u8;
-                let song = Song { lanes, instruments: &bank, lane_inst, preview_inst: NONE };
+                let song = Song { lanes, instruments: &bank, lane_inst, preview_inst: NONE, auto: [&[]; LANES], auto_points: &[] };
                 let mut p = Player::new(48_000.0);
                 for (id, v) in pr.params {
                     p.driver.params.set(lane, *id, *v as i32);

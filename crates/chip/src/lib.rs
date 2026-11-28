@@ -14,6 +14,7 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod auto;
 pub mod blep;
 pub mod dmc;
 pub mod driver;

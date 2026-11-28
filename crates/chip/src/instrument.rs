@@ -230,6 +230,53 @@ impl MacroState {
         Self::default()
     }
 
+    /// The frame's values with automation replacing some macros (Batch 5):
+    /// the volume (or the triangle's gate), arpeggio, duty, the pitch (in
+    /// place of the pitch macro's sum) and the vibrato depth. Without
+    /// overrides it is exactly `frame`.
+    pub fn frame_with(&self, inst: &Instrument, ovr: &crate::auto::MacroOvr) -> Frame {
+        let mut f = self.frame(inst);
+        if !ovr.any() {
+            return f;
+        }
+        if let Some(v) = ovr.volume {
+            f.volume = v.min(15);
+        }
+        if let Some(g) = ovr.gate {
+            f.volume = if g { 15 } else { 0 };
+        }
+        if let Some(a) = ovr.arp {
+            f.arp = a as i32;
+        }
+        if let Some(d) = ovr.duty {
+            f.duty = Some(d.min(16));
+        }
+        if ovr.pitch.is_some() || ovr.vibrato.is_some() {
+            let pitch = ovr.pitch.map_or(self.pitch_acc as f64 / 16.0, |c| c as f64 / 100.0);
+            let mut v = inst.vibrato;
+            if let Some(d) = ovr.vibrato {
+                v.depth = d;
+                if v.period == 0 {
+                    // An instrument without vibrato: a moderate 6-frame cycle.
+                    v.period = 6;
+                }
+            }
+            f.fine = pitch + Self::vibrato_of(v, self.frames);
+        }
+        f
+    }
+
+    fn vibrato_of(v: Vibrato, frames: u32) -> f64 {
+        if v.depth > 0 && v.period > 0 && frames >= v.delay as u32 {
+            let t = frames - v.delay as u32;
+            let fade = if v.delay == 0 { 1.0 } else { (t as f64 / v.delay as f64).min(1.0) };
+            let phase = (t % v.period as u32) as f64 / v.period as f64;
+            fade * v.depth as f64 / 100.0 * crate::math::sin(phase * 2.0 * core::f64::consts::PI)
+        } else {
+            0.0
+        }
+    }
+
     /// The current frame's values (call `advance` once per later frame first).
     pub fn frame(&self, inst: &Instrument) -> Frame {
         let vol = inst.volume.at(self.pos[0], 15).clamp(0, 15) as u8;
