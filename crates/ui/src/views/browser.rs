@@ -34,6 +34,14 @@ use crate::{AppEvent, Signals};
 /// The browser's width (logical px): the board's 150 px sidebar and 270 px
 /// content pane.
 pub const BROWSER_W: f32 = 420.0;
+
+/// The browser's width as built: `BROWSER_W`, or (dev mode only) the
+/// `CARTWAVE_BROWSER_W` hook, which the earlier scenario suites set to the
+/// old 240 so their arrangement coordinates hold (as `CARTWAVE_OVERVIEW=0`
+/// does for theirs; RUNLOG P2-D16, PB-D12).
+pub fn browser_w() -> f32 {
+    crate::dev::var("CARTWAVE_BROWSER_W").and_then(|v| v.parse::<f32>().ok()).map_or(BROWSER_W, |w| w.clamp(160.0, 800.0))
+}
 const SIDEBAR_W: f32 = 150.0;
 const ROW_H: f32 = 24.0;
 const TITLE_H: f32 = 28.0;
@@ -908,7 +916,7 @@ pub fn browser(cx: &mut Context, s: Signals) {
         LibraryView::new(cx, s).height(Stretch(1.0)).width(Stretch(1.0));
     })
     .class("browser")
-    .width(Pixels(BROWSER_W))
+    .width(Pixels(browser_w()))
     .display(s.browser_open.map(|o| if *o { Display::Flex } else { Display::None }));
 }
 
