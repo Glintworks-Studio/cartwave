@@ -1702,3 +1702,26 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   violations (`docs/batch4c/audio/gate30/`). Gate 4 passes. **Merge held** (§1.4): gate 5 fails
   (D13); every other gate passes. No tag and no change to `main`. The owner's options are in
   BATCH4C.md §7.
+
+## Presets + Browser + device panel (PRESETS_PROMPT.md, branch `presets/browser`, Windows PC), 2026-11-27
+
+- **PB-D1 (pre-flight).** `main` = `origin/main` = `batch4c/profile-ab` = 1b8a288 (Batch 4c,
+  merged by the owner after its held run; `pre-batch4c` exists). Branch `presets/browser` from it.
+  Baseline: `main` exported with `git archive` to `../before-presets` and built there (release).
+  Machine: Windows 11 Pro 26200 (this session is on Windows, not macOS).
+- **PB-D2 (conflicts between the prompt and the board, VISION.md wins).** VISION.md calls the
+  `workflow-chip-synth` board "locked for layout"; where the prompt's text and the board differ,
+  the board's layout is built and the difference logged:
+  (a) the **Voice selector** sits in the OSCILLATOR section's title row (the board), not in the
+  device header (the prompt's §4.1 list); the header keeps the colour tab, the name, the
+  STUDIO/LOCKED badge and the centred preset field with ◀ ▶;
+  (b) the board's **dashed MIDI-effects and device-chain boxes** are not drawn (the prompt §3.3,
+  "nothing pretends", wins over the board's placeholders);
+  (c) the board's **locked labels** are darker than 4.5 : 1 (`#808080` at about 40 %); the
+  prompt's and VISION's ≥ 4.5 : 1 wins, measured and reported in the contrast gate.
+- **PB-D3 (Arp Speed is built, not faked).** The board and the prompt put an ARP SPEED knob
+  under the envelopes. The engine had no such control, and "nothing pretends", so it is built:
+  `Instrument::arp_speed` (frames per arpeggio step, 1–8; 1 = every frame, today's behaviour),
+  stepped by the driver like the other macros (a driver-side feature, so allowed on locked
+  tracks, as game drivers did). Saved in the instrument JSON: **format 9** (v8 files load with
+  speed 1 and render bit-identically; migration hash test with a v8 corpus written by `main`).
