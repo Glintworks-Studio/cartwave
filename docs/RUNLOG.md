@@ -1882,3 +1882,12 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
      (SE 74) in the check rounds. clippy clean, `cargo test` 299 passed.
   The summary printed its table twice (`set(cyc) | set(cpu) - set(order)`: precedence); fixed.
   The gate reruns in full.
+- **PB-D22 (perf gate, second run: PASS; merge).** 10 rounds with the bench fixed (PB-D21): every
+  scenario passes the §2 rule. One branch run (pb-5) shows no Overview hover in its kept log (its
+  drags were over the top bar's Display: 2.9 ms draw, layout every frame, like the check run's
+  outlier); `perf_summary_pb.py` now leaves a run out of overview_drag / overview_zoom when its
+  log lacks the hover, and names it. Both figures reported (+1087 SE 1067 with it, +20 SE 47
+  without: a pass either way). Idle process CPU 0.5 → 1.3 % (context; the counters are flat).
+  After the device's GPU cache: mockup 47/47, lime 0, contrast 4.61, PB 13/13, 4b 43/43,
+  `cargo test` 299 passed in release and debug, clippy clean, 0 warnings. All gates pass:
+  `pre-presets` tags the old main; main fast-forwarded.

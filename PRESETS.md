@@ -1,13 +1,13 @@
 # PRESETS.md: Chip Synth, the browser, the in-instrument picker, the first preset bank
 
 Branch **`presets/browser`** (from `main` 1b8a288, Batch 4c merged), pushed. Prompt: `PRESETS_PROMPT.md`.
-Decisions: [`docs/RUNLOG.md`](docs/RUNLOG.md) **PB-D1…D21**. Spec: [`VISION.md`](VISION.md) ("Instruments",
+Decisions: [`docs/RUNLOG.md`](docs/RUNLOG.md) **PB-D1…D22**. Spec: [`VISION.md`](VISION.md) ("Instruments",
 "Presets and the browser"), [`UX.md`](UX.md) §4g. Baseline: `main` exported to `../before-presets`.
 Machine: Windows 11 Pro 26200, Ryzen 7 9800X3D, RTX 4070 SUPER, 2560 × 1440.
 
 ## 1. Summary (one screen)
 
-**Merge: __MERGE__**
+**Merge: done** after every gate passed: `pre-presets` tags the old `main`; `main` fast-forwarded to this branch**
 
 | # | Gate | Result |
 |---|---|---|
@@ -16,7 +16,7 @@ Machine: Windows 11 Pro 26200, Ryzen 7 9800X3D, RTX 4070 SUPER, 2560 × 1440.
 | 3 | Mockup match (`workflow-chip-synth`) | **PASS: 47 of 47** board parts within 2 px in the studio and locked layouts (header, ◀ ▶, the preset field's ends, the sections' corners and titles, the displays' corners, every knob the board draws, the meter), measured by normalised cross-correlation of board patches ([report](docs/presets/mockup-match/report-100.md), [image](docs/screens/presets/device-mockup-match.png)); the display colour `#E8DCC0` exact (841 px in the studio displays) |
 | 4 | Tests | **PASS**: every earlier suite on the final build (shell 49, Batch 3 79 (one run lost one input event in AT-29, then 3/3 alone and 79/79 again: PB-D20), design 23, polish 14, polish 2 92, Batch 4a 53, Batch 4b 43; harness changes where controls moved, PB-D16); **PB 13/13** scenarios (`docs/presets/tools/at_pb.ps1`) and the offline PB-B1…B5 (`tests/presets.rs`); `cargo test` **299 passed, 0 failed, 2 ignored** in release and debug; clippy clean; release build 0 warnings |
 | 5 | Audio (10 min, ◀ ▶ through 30 presets) | **PASS**: the demo 600 s at 256 frames with ▶ every 19 s through **30 presets** while playing: **0 dropouts** (224,974 blocks matched against the offline render, 0 mismatched, 0 capture gaps; 28.8 M samples compared), starved 0, late 0, **0 allocation violations**, 0 dropped commands; the 30 steps are **one undo step** ([summary](docs/presets/audio/summary.txt), [steps](docs/presets/audio/steps.txt)) |
-| 6 | Performance (the §2 rule) | __G6__ |
+| 6 | Performance (the §2 rule) | **PASS** (second run; the first **failed**: PB-D21): 10 interleaved rounds, 25 scenarios, per-thread cycle counters; no scenario over its limit (UI +235 k/frame, audio +141 k/callback) and over 2× its noise. The device open while playing +93 k (SE 69); browser search −69, scroll −484; ◀ ▶ stepping (this branch only) 4,382 k/frame, 103 k/callback; insert / delete +41 (SE 66, the device's 13–35 ms hitch fixed). One branch run's Overview drags aimed at the Display (no Overview hover in its log) and are left out of those two scenarios: with it, overview_drag +1,087 (SE 1,067, still a pass); without, +20 (SE 47). Idle process CPU 0.5 → 1.3 % of a core (context; the cycle counters are flat; 0.7 → 0.8 in the first run) ([summary](docs/presets/perf/summary.md), [first run](docs/presets/perf/summary-first-run.md)) |
 | 7 | Lime audit, contrast | **PASS**: lime 0 violations in 18 scenes of the new UI (the DPCM Sampler's LOOP key while on is the only new lime: a toggle on-state) ([report](docs/presets/lime/report.md)); the new text ≥ **4.61 : 1** everywhere, the locked device's labels 4.77–5.34 ([contrast](docs/presets/lime/contrast.md)) |
 
 **What changed.**
@@ -69,7 +69,7 @@ lists the bank's ten phrases; Samples the built-in DPCM samples and the project'
 
 ## 3. Decisions taken alone
 
-All in RUNLOG **PB-D1…D21**; the ones that shape what the owner sees:
+All in RUNLOG **PB-D1…D22**; the ones that shape what the owner sees:
 
 1. **The board wins where it and the prompt differ** (PB-D2): the Voice selector in the
    OSCILLATOR title (the board), not the header; no dashed MIDI-effects / device-chain boxes
@@ -111,7 +111,14 @@ All in RUNLOG **PB-D1…D21**; the ones that shape what the owner sees:
    edge (as the headers') is a small follow-up (IDEAS.md).
 5. **Collections have fixed names** (Favourites and six colours); renaming is a follow-up.
 6. The prompt says 60 classic presets; the table has 61 (PB-D5).
+7. **The perf gate failed once** (PB-D21): the bench aimed past main's shorter pane, and the
+   device's CPU-drawn cache cost 13–35 ms on a track change. Both fixed; the second run passes.
+   After the device moved to a GPU surface, the mockup match, lime, contrast, PB and 4b suites
+   and `cargo test` were rerun on it; the other earlier suites ran on the build before it (a
+   draw-only change in the device).
 
 ## 5. Merge
 
-__MERGE_DETAIL__
+Every gate passed (§1), so per the prompt: `git tag pre-presets main` (the old `main`, 1b8a288),
+the tag pushed, `main` fast-forwarded to `presets/browser` and pushed. No force-push, no history
+rewritten, no branch deleted. To go back: `git checkout -b back pre-presets`.

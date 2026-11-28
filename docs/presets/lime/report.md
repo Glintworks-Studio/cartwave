@@ -13,7 +13,7 @@
 | browser_sounds | 4261 | 0 | - |
 | browser_user | 4261 | 0 | - |
 | device_locked | 4261 | 0 | - |
-| device_locked_playing | 4261 | 0 | - |
+| device_locked_playing | 4318 | 0 | - |
 | device_studio | 4261 | 0 | - |
 | device_studio_playing | 4318 | 0 | - |
 | dpcm_loop_on | 4369 | 0 | - |

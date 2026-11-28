@@ -82,6 +82,19 @@ for kind, wins in FIXED.items():
         for name, t0, t1 in wins:
             cyc[name][m.group(1)][int(m.group(2))] = window(rs, t0, t1)
 
+# Proof per run (bench_pb.ps1 keeps each run's stderr as err-<label>-main.txt): the Overview
+# drags must have hovered the Overview (its help line). A run without it aimed elsewhere (one
+# branch run dragged the top bar's Display: the tempo) and is left out of those two scenarios.
+unproven = []
+for fn in sorted(os.listdir(work)):
+    m = re.match(r"err-(main|pb)-(\d+)-main\.txt$", fn)
+    if not m:
+        continue
+    if "help Overview" not in open(os.path.join(work, fn), encoding="utf-8", errors="replace").read():
+        unproven.append(f"{m.group(1)}-{m.group(2)} (overview_drag, overview_zoom: no Overview hover in its log)")
+        for name in ("overview_drag", "overview_zoom"):
+            cyc[name][m.group(1)].pop(int(m.group(2)), None)
+
 # CPU % from the bench logs.
 cpu = defaultdict(lambda: defaultdict(dict))
 invalid = []
@@ -105,6 +118,12 @@ if os.path.exists(p):
         if m:
             cpu["pr_playing"][m.group(1)][int(m.group(2))] = float(m.group(3))
             cpu["pr_dragging"][m.group(1)][int(m.group(2))] = float(m.group(4))
+
+
+for u in unproven:
+    b, r = u.split(" ")[0].split("-")
+    for name in ("overview_drag", "overview_zoom"):
+        cpu[name][b].pop(int(r), None)
 
 
 def paired(d):
@@ -170,6 +189,7 @@ head = (
     "is over the limit and more than 2x its noise floor (SE).\n\n"
 )
 verdict = f"**{'PASS' if not fails else 'FAIL: ' + ', '.join(fails)}**" + (f"; runs left out (focus lost or scenario not reached): {', '.join(invalid)}" if invalid else "; 0 runs left out")
+verdict += (f"; left out of single scenarios for want of proof: {'; '.join(unproven)}" if unproven else "")
 text = head + verdict + "\n\n" + "\n".join(lines) + "\n"
 open(os.path.join(work, "perf_summary.md"), "w", encoding="utf-8").write(text)
 print(text)
