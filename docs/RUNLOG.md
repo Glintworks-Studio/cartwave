@@ -1674,3 +1674,31 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   proposed now except a measured tnd calibration once a hardware recording exists. The pack:
   every pattern in full, the songs as 12 s excerpts (41 MB; the full songs would have added
   17 MB more); listed in ASSETS.md.
+- **B4C-D12 (gates 1–3, 6, 7).** Gate 1: 290 corpus files and 252 export files identical to
+  `main`, every hash test passes. Gate 2 (`regress_b4c.ps1`, 100 % and 150 %): 0 changed pixels in
+  every state apart from the About build stamp (the baseline is a `git archive` build: "build
+  unknown") and 13 px outside the rounded corner at 100 % (RN-D14); K1 changed no code, so no K1
+  region. Gate 3: every suite without a FAIL line, B4C 3/3, `cargo test` 279/0/2 in debug and
+  release, clippy clean, 0 warnings. Gate 6: K1 0 flash frames (D7). Gate 7: AB.md and the pack.
+- **B4C-D13 (gate 5: NOT MET, reported as measured).** `perf_b4c.ps1 -Rounds 10`, three builds
+  interleaved, 0 runs left out (`docs/batch4c/perf/gate/`). Against `main`, 15 of 21 rows pass;
+  six exceed +0.3: 200drag +0.53 (SE 0.46), zoom_wheel +0.97 (0.53), header_width +0.81 (0.57),
+  ruler_zoom +3.15 (1.71), overview_drag +2.91 (2.58), s64_insert_delete +0.83 (0.63). Every one is
+  within 2 SE of zero, and none is in the code the fixes touched, but the gate is judged on the
+  means by its letter (no noise allowance; the summary script follows that). Against pre-batch4b,
+  idle −0.11 and row_resize −0.66 pass; the four 64-track rows fail: playing +0.65 (0.61), scroll
+  +2.11 (1.32), insert/delete +1.61 (0.97), header drag +0.49 (0.86). `main` itself reads +0.6 /
+  +1.9 / +0.8 / +0.8 over pre-batch4b on those rows, so by process CPU the branch hasn't recovered
+  4b's excess there. That is consistent with the cycle counters' scale: the UI fix is −68 k
+  cycles per frame (≈ 0.1 point of a core at 60 fps), and what is left over pre-batch4b (UI
+  +117 k per frame, the unattributed draw +18 µs, and the stereo bus on the audio thread, accepted
+  in 4b) adds up to ≈ 0.4 points before the gesture rows' heavier frames. Not re-run in the hope of
+  a pass: a second 10-round set would be choosing the sample. **Gate 5 fails; the merge is held**
+  (§1.4). What is left to find: the draw phase's +18 µs (D6) and the scroll/insert rows' frames,
+  where the excess is largest.
+- **B4C-D14 (gate 4 and the merge).** `audio_b4c.ps1 -Secs 1800`: fx_s64u (1,024 voices), Main at
+  0 dB, 256 frames, the reference match on. Result: 0 match dropouts, 0 mismatch runs, 0 capture
+  gaps / foreign / tap lost, 99.998 % of the run compared; starved 0, late 0, 0 allocation
+  violations (`docs/batch4c/audio/gate30/`). Gate 4 passes. **Merge held** (§1.4): gate 5 fails
+  (D13); every other gate passes. No tag and no change to `main`. The owner's options are in
+  BATCH4C.md §7.
