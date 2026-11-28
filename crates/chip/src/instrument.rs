@@ -156,6 +156,11 @@ pub struct Instrument {
     pub pitch: Seq,
     pub duty: Seq,
     pub vibrato: Vibrato,
+    /// Frames per arpeggio step (0 and 1: every frame, the classic fast
+    /// arpeggio). The driver holds each arpeggio step this many frames, as
+    /// game sound drivers' sequence speeds did: a driver feature, so it is
+    /// allowed on locked tracks.
+    pub arp_speed: u8,
     /// Number of used `kit` zones; > 0 makes this a kit.
     pub kit_len: u8,
     pub kit: [Option<KitZone>; KIT_ZONES],
@@ -169,6 +174,7 @@ impl Instrument {
         pitch: Seq::EMPTY,
         duty: Seq::EMPTY,
         vibrato: Vibrato { depth: 0, period: 0, delay: 0 },
+        arp_speed: 1,
         kit_len: 0,
         kit: [None; KIT_ZONES],
     };
@@ -200,7 +206,12 @@ pub struct MacroState {
     pub pitch_acc: i32,
     /// Frames since note-on.
     pub frames: u32,
+    /// Frames the arpeggio has held its current step (`Instrument::arp_speed`).
+    pub arp_hold: u8,
 }
+
+/// Most frames per arpeggio step.
+pub const ARP_SPEED_MAX: u8 = 8;
 
 /// The values one frame of an instrument produces.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -255,7 +266,23 @@ impl MacroState {
 
     pub fn advance(&mut self, inst: &Instrument) {
         let seqs = [&inst.volume, &inst.arp, &inst.pitch, &inst.duty];
+        // The arpeggio moves on every `arp_speed`-th frame (1: every frame).
+        let speed = inst.arp_speed.clamp(1, ARP_SPEED_MAX);
+        let arp_moves = if speed <= 1 {
+            true
+        } else {
+            self.arp_hold += 1;
+            if self.arp_hold >= speed {
+                self.arp_hold = 0;
+                true
+            } else {
+                false
+            }
+        };
         for (i, s) in seqs.iter().enumerate() {
+            if i == 1 && !arp_moves {
+                continue;
+            }
             self.pos[i] = s.step(self.pos[i], self.released);
         }
         self.frames = self.frames.saturating_add(1);
@@ -363,6 +390,31 @@ mod tests {
         // Vibrato at phase 1/4 of the cycle: +depth.
         let f = MacroState { frames: 1, pitch_acc: 0, ..Default::default() }.frame(&inst);
         assert!((f.fine - 0.5).abs() < 1e-6, "{}", f.fine);
+    }
+
+    #[test]
+    fn arp_speed_holds_each_step() {
+        let arp = Seq::new(&[0, 4, 7], 0, NONE);
+        let seen = |speed: u8| {
+            let inst = Instrument { arp, arp_speed: speed, ..Instrument::PLAIN };
+            let mut st = MacroState::note_on(&inst);
+            let mut v = std::vec::Vec::new();
+            for _ in 0..9 {
+                v.push(st.frame(&inst).arp);
+                st.advance(&inst);
+            }
+            v
+        };
+        assert_eq!(seen(1), [0, 4, 7, 0, 4, 7, 0, 4, 7]);
+        // 0 is treated as 1 (every frame).
+        assert_eq!(seen(0), seen(1));
+        assert_eq!(seen(3), [0, 0, 0, 4, 4, 4, 7, 7, 7]);
+        // The other macros keep stepping every frame.
+        let inst = Instrument { arp, arp_speed: 3, volume: Seq::new(&[15, 10, 5], NONE, NONE), ..Instrument::PLAIN };
+        let mut st = MacroState::note_on(&inst);
+        st.advance(&inst);
+        assert_eq!(st.frame(&inst).volume, 10);
+        assert_eq!(st.frame(&inst).arp, 0);
     }
 
     #[test]

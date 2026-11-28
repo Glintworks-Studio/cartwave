@@ -40,7 +40,7 @@ use crate::state::{default_lanes, Arrangement, Clip, SoundChip};
 /// (RENAME.md, RN-D).
 pub const FORMAT: &str = "chipdaw";
 /// The format version this build writes and reads.
-pub const VERSION: u32 = 8;
+pub const VERSION: u32 = 9;
 /// A new project's format (the display's indicators, the export default).
 pub const DEFAULT_PROJECT_RATE: u32 = 48_000;
 pub const DEFAULT_BIT_DEPTH: u16 = 24;
@@ -344,8 +344,19 @@ struct InstV2 {
     /// [depth cents, period frames, delay frames]
     #[serde(default, skip_serializing_if = "is_zero3")]
     vibrato: [u8; 3],
+    /// Version 9: frames per arpeggio step (missing: 1, every frame).
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    arp_speed: u8,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     kit: Vec<KitV2>,
+}
+
+fn one() -> u8 {
+    1
+}
+
+fn is_one(v: &u8) -> bool {
+    *v == 1
 }
 
 fn yes() -> bool {
@@ -407,6 +418,7 @@ fn inst_to_file(name: &str, edited: bool, i: &Instrument) -> InstV2 {
         pitch: seq_text(&i.pitch),
         duty: seq_text(&i.duty),
         vibrato: [i.vibrato.depth, i.vibrato.period, i.vibrato.delay],
+        arp_speed: i.arp_speed.max(1),
         kit: Vec::new(),
     }
 }
@@ -418,6 +430,7 @@ fn inst_from_file(f: &InstV2) -> Result<Instrument, String> {
         pitch: seq_parse(&f.pitch)?,
         duty: seq_parse(&f.duty)?,
         vibrato: Vibrato { depth: f.vibrato[0], period: f.vibrato[1], delay: f.vibrato[2] },
+        arp_speed: f.arp_speed.clamp(1, chip::instrument::ARP_SPEED_MAX),
         ..Instrument::PLAIN
     })
 }
@@ -649,8 +662,9 @@ pub fn from_str(text: &str) -> Result<Project, String> {
         Some(v) => return Err(format!("Unsupported file format version {v}.")),
         None => return Err("The project file has no format version.".into()),
     }
-    // Version 8 is version 7 plus optional unison fields (same reader).
-    if matches!(h.version, Some(7 | 8)) {
+    // Version 8 is version 7 plus optional unison fields, version 9 plus the
+    // instruments' optional arpeggio speed (same reader).
+    if matches!(h.version, Some(7..=9)) {
         return from_v7(text);
     }
     let f: FileV1 = serde_json::from_str(text).map_err(|e| format!("The project file is damaged: {e}"))?;
@@ -1608,7 +1622,7 @@ mod tests {
     #[test]
     fn the_file_is_readable_json_with_one_note_per_line() {
         let text = to_string(&sample_project());
-        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 8,"));
+        assert!(text.starts_with("{\n  \"format\": \"chipdaw\",\n  \"version\": 9,"));
         assert!(text.contains("{ \"id\": 1, \"start\": 0,"), "{}", &text[..2000]);
         assert!(text.contains("\"volume\": 7 }"));
         assert!(!text.contains("\"fx\""), "empty effects are not written");
@@ -1620,9 +1634,9 @@ mod tests {
 
     #[test]
     fn newer_version_fails_with_a_clear_message() {
-        let text = to_string(&sample_project()).replacen("\"version\": 8,", "\"version\": 9,", 1);
+        let text = to_string(&sample_project()).replacen("\"version\": 9,", "\"version\": 10,", 1);
         let err = from_str(&text).unwrap_err();
-        assert!(err.contains("newer Cartwave") && err.contains("version 9"), "{err}");
+        assert!(err.contains("newer Cartwave") && err.contains("version 10"), "{err}");
         // A future file with effects on a note is refused by version first;
         // and even with version 1, unknown note fields are rejected.
         let fx = to_string(&sample_project()).replacen("\"volume\": 7 }", "\"volume\": 7, \"fx\": { \"arp\": [0, 4, 7] } }", 1);

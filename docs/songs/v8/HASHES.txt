@@ -1,0 +1,14 @@
+Version 8 corpus, written by the build before the Presets + Browser batch (main 1b8a288,
+exported to ../before-presets) with v8corpus.rs.txt (run as an example of crates/ui).
+(file, render::render hash, export::render_channels hash, channels) from that build;
+tests/migration.rs checks them in format 9.
+
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64, 1),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
+    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c, 1),
+    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7, 1),
+    ("v8_studio_unison", 0x7e960f096a5aafdd, 0x65a6684d34702df3, 1),
+    ("v8_studio_unison_panned", 0x1f4b716b2b275954, 0x66de0d77b635b17a, 2),
+    ("v8_arps", 0xded480c12067065a, 0x29648228a85c2936, 1),

@@ -398,7 +398,7 @@ fn version_7_files_render_bit_identically_in_version_8() {
         let (x, ch) = export::render_channels(&p);
         assert_eq!((ch, render::hash(&x)), (1, e), "{name}: render_channels");
         let v8 = file::to_string(&p);
-        assert!(v8.contains("\"version\": 8") && !v8.contains("\"unison\""), "{name}: defaults aren't written");
+        assert!(v8.contains(&format!("\"version\": {}", file::VERSION)) && !v8.contains("\"unison\""), "{name}: defaults aren't written");
         let again = file::from_str(&v8).unwrap();
         assert_eq!(again.arrangement.lanes, p.arrangement.lanes, "{name}");
         assert_eq!(render::hash(&export::render(&again)), e, "{name}: v8 round trip");
@@ -437,7 +437,7 @@ fn a_v7_panned_studio_track_is_heard_now() {
 fn every_corpus_file_round_trips_through_a_cartwave_file() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut files: Vec<std::path::PathBuf> = vec![root.join("docs/songs/scale_test.chipdaw"), root.join("docs/batch4a/songs/stress64.chipdaw")];
-    for v in ["v2", "v3", "v4", "v5", "v6", "v7"] {
+    for v in ["v2", "v3", "v4", "v5", "v6", "v7", "v8"] {
         for e in std::fs::read_dir(root.join("docs/songs").join(v)).unwrap() {
             let path = e.unwrap().path();
             if path.extension().is_some_and(|x| x == file::LEGACY_EXTENSION) {
@@ -460,4 +460,61 @@ fn every_corpus_file_round_trips_through_a_cartwave_file() {
         assert_eq!(render::hash(&render::render(&q, 2.0)), render::hash(&render::render(&p, 2.0)), "{}", path.display());
     }
     let _ = std::fs::remove_dir_all(out);
+}
+
+/// Version 8 files (docs/songs/v8, written by the build before the Presets +
+/// Browser batch, hashes from it): (file, render::render hash,
+/// export::render_channels hash, channels).
+const V8: &[(&str, u64, u64, u16)] = &[
+    ("demo_band", 0x0c984c632801ef74, 0x5080530f47f64c64, 1),
+    ("showcase", 0x7ec54ac5dd1d130d, 0x075f22c0555c07c8, 1),
+    ("layout_2", 0x88f50e7e43f9f59e, 0x74293fd8cb504efd, 1),
+    ("scale_test", 0x24a6182d8624e32d, 0x6fbb168621f8eeb7, 1),
+    ("v7_studio_demo", 0xfaa80d8bb5a43098, 0xdecd97a4045f332c, 1),
+    ("v7_studio_showcase", 0x5ee888eb6ce72c4b, 0x3943be55e2b424f7, 1),
+    ("v8_studio_unison", 0x7e960f096a5aafdd, 0x65a6684d34702df3, 1),
+    ("v8_studio_unison_panned", 0x1f4b716b2b275954, 0x66de0d77b635b17a, 2),
+    ("v8_arps", 0xded480c12067065a, 0x29648228a85c2936, 1),
+];
+
+/// PB (format 9): version 8 files open with every instrument's arpeggio
+/// speed at 1 (every frame, the only speed there was) and render exactly as
+/// the build before the batch did; saved as version 9 (the default speed
+/// isn't written) and reloaded, still the same.
+#[test]
+fn version_8_files_render_bit_identically_in_version_9() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v8");
+    let mut bad = Vec::new();
+    for &(name, want_r, want_e, want_ch) in V8 {
+        let text = std::fs::read_to_string(dir.join(format!("{name}.chipdaw"))).unwrap();
+        assert!(text.contains("\"version\": 8"), "{name} is a version 8 file");
+        let p = file::from_str(&text).unwrap();
+        assert!(p.arrangement.instruments.entries.iter().all(|e| e.inst.inst.arp_speed == 1 && e.inst.kit.iter().all(|k| k.inst.arp_speed == 1)), "{name}");
+        let r = render::hash(&render::render(&p, secs(&p)));
+        let (x, ch) = export::render_channels(&p);
+        let e = render::hash(&x);
+        if (r, e, ch) != (want_r, want_e, want_ch) {
+            bad.push(format!("{name}: render {r:#018x} (want {want_r:#018x}), export {e:#018x} (want {want_e:#018x}), {ch} channels"));
+        }
+        let v9 = file::to_string(&p);
+        assert!(v9.contains("\"version\": 9") && !v9.contains("\"arp_speed\""), "{name}: the default isn't written");
+        let again = file::from_str(&v9).unwrap();
+        assert_eq!(render::hash(&export::render_channels(&again).0), e, "{name}: v9 round trip");
+    }
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}
+
+/// A version 9 instrument keeps its arpeggio speed, and the speed is heard.
+#[test]
+fn arp_speed_is_saved_and_heard() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/songs/v8");
+    let p = file::load(&dir.join("v8_arps.chipdaw")).unwrap();
+    let mut q = p.clone();
+    let id = q.arrangement.instruments.lane_id(0);
+    q.arrangement.instruments.get_mut(id).unwrap().inst.arp_speed = 3;
+    let text = file::to_string(&q);
+    assert!(text.contains("\"arp_speed\": 3"));
+    let again = file::from_str(&text).unwrap();
+    assert_eq!(again.arrangement.instruments.get(id).unwrap().inst.arp_speed, 3);
+    assert_ne!(render::hash(&export::render(&again)), render::hash(&export::render(&p)), "a slower arpeggio sounds different");
 }

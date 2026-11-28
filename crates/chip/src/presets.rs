@@ -115,7 +115,7 @@ const fn vib(depth: u8, period: u8, delay: u8) -> Vibrato {
 }
 
 const fn inst(volume: Seq, arp: Seq, pitch: Seq, duty: Seq, vibrato: Vibrato) -> Instrument {
-    Instrument { volume, arp, pitch, duty, vibrato, kit_len: 0, kit: [None; KIT_ZONES] }
+    Instrument { volume, arp, pitch, duty, vibrato, arp_speed: 1, kit_len: 0, kit: [None; KIT_ZONES] }
 }
 
 const E: Seq = Seq::EMPTY;

@@ -1,0 +1,48 @@
+//! Writes docs/songs/v8 (version 8 files) and their hashes, run on the build
+//! before the Presets + Browser batch (main 1b8a288, exported to
+//! ../before-presets): the v8 -> v9 migration corpus (format 9 adds the
+//! instruments' arpeggio speed, PRESETS_PROMPT.md, RUNLOG PB-D3).
+//! Run as an example of crates/ui in ../before-presets:
+//!   cargo run --release -p ui --example v8corpus -- <dst dir>
+use ui::{export, file, render};
+
+fn secs(p: &file::Project) -> f64 {
+    p.loop_end_ticks as f64 / ui::state::PPQ as f64 * 60.0 / p.bpm as f64 + 1.0
+}
+
+fn main() {
+    let dst = std::path::PathBuf::from(std::env::args().nth(1).expect("dst dir"));
+    let src = std::path::Path::new("docs/songs/v7");
+    let mut out = Vec::new();
+    let mut put = |name: &str, p: &file::Project| {
+        let text = file::to_string(p);
+        assert!(text.contains("\"version\": 8"));
+        std::fs::write(dst.join(format!("{name}.chipdaw")), &text).unwrap();
+        let q = file::from_str(&text).unwrap();
+        let r = render::hash(&render::render(&q, secs(&q)));
+        let (x, ch) = export::render_channels(&q);
+        let e = render::hash(&x);
+        out.push(format!("    (\"{name}\", {r:#018x}, {e:#018x}, {ch}),"));
+    };
+    for name in ["demo_band", "showcase", "layout_2", "scale_test", "v7_studio_demo", "v7_studio_showcase"] {
+        let p = file::load(&src.join(format!("{name}.chipdaw"))).unwrap();
+        put(name, &p);
+    }
+    // Batch 4b: unison, detune and drift on studio tracks, one panned.
+    let mut p = file::load(&src.join("v7_studio_demo.chipdaw")).unwrap();
+    p.arrangement.lanes[0].unison = ui::state::Unison { voices: 3, detune: 15, drift: 4 };
+    p.arrangement.lanes[1].unison = ui::state::Unison { voices: 2, detune: 8, drift: 0 };
+    put("v8_studio_unison", &p);
+    p.arrangement.lanes[1].pan = 25;
+    p.arrangement.lanes[0].pan = -10;
+    put("v8_studio_unison_panned", &p);
+    // Arpeggio-heavy instruments (the arpeggio macro is what format 9 touches).
+    let mut a = file::load(&src.join("demo_band.chipdaw")).unwrap();
+    for lane in 0..2 {
+        let mut li = ui::instruments::LaneInstrument::named(if lane == 0 { "Major Arp" } else { "Power Up" });
+        li.edited = true;
+        a.arrangement.instruments.set_lane(lane, li);
+    }
+    put("v8_arps", &a);
+    println!("{}", out.join("\n"));
+}
