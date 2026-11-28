@@ -750,15 +750,23 @@ impl Arrangement {
         }
         let Some(l) = self.lanes.get(i) else { return Vec::new() };
         let owner = crate::automation::AutoOwner::Track(l.id);
-        let reg = crate::automation::registry_for(&self.lanes, owner).unwrap_or_default();
-        self.automation.shown.get(&owner).map_or_else(Vec::new, |v| v.iter().filter(|id| reg.iter().any(|p| p.id == id.as_str())).cloned().collect())
+        self.automation.shown.get(&owner).map_or_else(Vec::new, |v| v.iter().filter(|id| crate::automation::valid_for(id, l.voice, l.lock.is_some())).cloned().collect())
+    }
+
+    /// How many automation lanes row `i` shows (no allocation).
+    fn auto_lane_count(&self, i: usize) -> usize {
+        if !self.auto_mode {
+            return 0;
+        }
+        let Some(l) = self.lanes.get(i) else { return 0 };
+        self.automation.shown.get(&crate::automation::AutoOwner::Track(l.id)).map_or(0, |v| v.iter().filter(|id| crate::automation::valid_for(id, l.voice, l.lock.is_some())).count())
     }
 
     /// Row `i`'s full pitch: the track's row plus its automation lanes (each
     /// as tall as the row: the headers' row heights, Batch 5).
     pub fn row_pitch(&self, i: usize) -> f32 {
         let Some(l) = self.lanes.get(i) else { return 0.0 };
-        l.pitch() * (1 + self.auto_lanes(i).len()) as f32
+        l.pitch() * (1 + self.auto_lane_count(i)) as f32
     }
 
     /// The top of row `i` in lane space (logical px from the first row's top);

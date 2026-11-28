@@ -1,0 +1,5 @@
+Gate 1 (final build) against main (../before-batch5):
+corpus: 308 files, 242 identical (render, export and channels), 0 that neither build opens
+corpus: 308 with the locked tracks alone identical (every studio track muted)
+corpus: 66 changed, 0 of them without a studio track: A3's 63 plus the v9 corpus's three studio files (docs/songs/v9, new)
+game export: 101 files, 68 byte-identical to main; all 101 byte-identical to the A3 build (316b921), so nothing after A3 changed a sound

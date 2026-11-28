@@ -372,6 +372,9 @@ pub struct AppState {
     detail_clip: Option<u32>,
     /// The `CARTWAVE_AUTO_STEP` hook: when it started, steps made.
     auto_steps: Option<(Instant, u32)>,
+    /// The `CARTWAVE_AUTO_OVERRIDE` hook (Batch 5's audio gate): when it
+    /// started, toggles made.
+    auto_over: Option<(Instant, u32)>,
     /// Where the BPM field opens (window logical x, y, width).
     bpm_rename_at: (f32, f32, f32),
     /// The track gains the engine has (it starts at unity).
@@ -1301,6 +1304,7 @@ impl AppState {
         self.sync_header_layout();
         self.midi_drag_tick();
         self.auto_step(cx);
+        self.auto_override();
         // Re-applies the cap if the window moved to a display with another rate.
         self.apply_frame_cap(cx);
         self.sync_engine();
@@ -2590,6 +2594,7 @@ pub fn build_ui(cx: &mut Context) {
         preset_step: None,
         detail_clip: None,
         auto_steps: None,
+        auto_over: None,
         bpm_rename_at: (0.0, 0.0, 0.0),
         sent_gains: [1.0; 8],
         underruns_seen: (0, None),
@@ -2939,13 +2944,17 @@ fn top_bar(cx: &mut Context, s: Signals) {
                 TopKeyView::new(cx, s, TopKey::Loop).help("Loop: plays the song between the loop brace's ends (the ruler)");
             })
             .class("key-group");
-            // Batch 5: automation (R111; manual 26.3–26.4).
-            Element::new(cx).class("bar-divider");
-            HStack::new(cx, |cx| {
-                TopKeyView::new(cx, s, TopKey::AutoArm).help("Automation Arm: while it's on and the song plays, moving a control records its automation (while you hold it)");
-                TopKeyView::new(cx, s, TopKey::ReEnable).help("Re-Enable Automation: lit (orange) when you moved an automated control by hand; a click puts every overridden control back under its automation");
-            })
-            .class("key-group");
+            // Batch 5: automation (R111; manual 26.3–26.4). The dev hook
+            // CARTWAVE_NO_AUTO_KEYS leaves them out so the earlier scenario
+            // suites' top-bar coordinates hold (RUNLOG B5-D12).
+            if crate::dev::var("CARTWAVE_NO_AUTO_KEYS").is_none() {
+                Element::new(cx).class("bar-divider");
+                HStack::new(cx, |cx| {
+                    TopKeyView::new(cx, s, TopKey::AutoArm).help("Automation Arm: while it's on and the song plays, moving a control records its automation (while you hold it)");
+                    TopKeyView::new(cx, s, TopKey::ReEnable).help("Re-Enable Automation: lit (orange) when you moved an automated control by hand; a click puts every overridden control back under its automation");
+                })
+                .class("key-group");
+            }
         })
         .class("bar-group");
         Element::new(cx).class("bar-spacer");
@@ -3609,6 +3618,38 @@ impl AppState {
         self.sync_loop();
     }
 
+    /// Dev hook `CARTWAVE_AUTO_OVERRIDE=<s>` (Batch 5's audio gate,
+    /// BATCH5_PROMPT.md §8.4): every that many seconds, alternately a hand
+    /// on the first automated studio fader (its value now: the automation is
+    /// overridden) and Re-Enable Automation.
+    fn auto_override(&mut self) {
+        let Some(every) = dev::var("CARTWAVE_AUTO_OVERRIDE").and_then(|v| v.parse::<f64>().ok()) else { return };
+        let now = Instant::now();
+        let (start, done) = *self.auto_over.get_or_insert((now, 0));
+        if now.duration_since(start).as_secs_f64() < every * (done + 1) as f64 {
+            return;
+        }
+        self.auto_over = Some((start, done + 1));
+        if done % 2 == 0 {
+            let target = self.s.arrangement.with_untracked(|a| {
+                a.lanes.iter().enumerate().find(|(_, l)| l.lock.is_none() && a.automation.has(automation::AutoOwner::Track(l.id), "track.gain")).map(|(i, l)| (i, l.vol_db))
+            });
+            if let Some((lane, db)) = target {
+                // A hand on the fader: a tiny move, as SetLaneVolume does.
+                let db = if db.is_finite() { (db - 0.5).max(state::VOL_DB_MIN_TYPED) } else { -12.0 };
+                self.s.arrangement.update(|a| a.lanes[lane].vol_db = db);
+                self.sync_gains();
+                self.auto_touch_track(lane, "track.gain", db);
+            }
+            eprintln!("dev: auto override {} (override)", done + 1);
+        } else {
+            self.s.arrangement.update(|a| {
+                a.automation.re_enable();
+            });
+            eprintln!("dev: auto override {} (re-enable)", done + 1);
+        }
+    }
+
     /// Dev hook `CARTWAVE_AUTO_STEP=<s>` (the audio gate, PRESETS_PROMPT.md
     /// §8.5): every that many seconds, ▶ on the first track (selected for
     /// it), as a user stepping through its folder while the song plays;
@@ -3630,9 +3671,6 @@ impl AppState {
         eprintln!("dev: auto step {} of {max}", done + 1);
     }
 
-    /// Shift+Tab (§3.1): the Clip view (the open clip's piano roll) ⇄ the
-    /// Device view (the selected track's instrument). Back to the Clip view
-    /// it reopens the clip the Device view replaced, else the selected clip.
     /// Automation Mode (A): every track shows its automation lanes under it
     /// (Batch 5, R104). A track showing none gets its first one.
     fn toggle_automation_mode(&mut self) {
@@ -3659,6 +3697,9 @@ impl AppState {
         );
     }
 
+    /// Shift+Tab (§3.1): the Clip view (the open clip's piano roll) ⇄ the
+    /// Device view (the selected track's instrument). Back to the Clip view
+    /// it reopens the clip the Device view replaced, else the selected clip.
     fn toggle_detail(&mut self) {
         // The mixer view: Shift+Tab shows or hides its Detail View (A1).
         if self.s.view_mixer.get_untracked() {

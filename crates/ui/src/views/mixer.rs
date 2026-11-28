@@ -997,6 +997,11 @@ impl View for Strip {
             readout_text(canvas, &super::main_track::peak_text(self.s.master_peak.get_untracked()), pr, 11.0, 0.0, s, false);
             let ro = vg::Rect::from_xywh(at(12.0, 0.0).0, at(0.0, READOUT.0).1, (MAIN_W - 2.0 * INSET - 24.0) * s, READOUT.1 * s);
             readout_text(canvas, &crate::state::format_db(self.db()), ro, 11.0, 0.02, s, false);
+            // Batch 5: an automated Main gain: the dot beside the cap.
+            if let Some(over) = self.s.arrangement.with_untracked(|a| crate::automation::mark(a, crate::automation::AutoOwner::Main, "main.gain")) {
+                let (x, y) = at(cap_x + CAP_W + 6.0, cap_y(self.db()));
+                crate::automation::draw_mark(canvas, (x.round(), y.round()), s, over);
+            }
             return;
         }
         // The track's moving parts.
@@ -1014,6 +1019,18 @@ impl View for Strip {
         if lock.is_none() {
             draw_indicator(canvas, o, ang, s);
         }
+        // Batch 5: automated pan / fader: the dot at the knob's top right and
+        // beside the cap (grey while overridden).
+        self.s.arrangement.with_untracked(|a| {
+            let owner = crate::automation::AutoOwner::Track(id);
+            if let Some(over) = crate::automation::mark(a, owner, "track.pan") {
+                crate::automation::draw_mark(canvas, ((o.0 + KNOB_R * 0.85 * s).round(), (o.1 - KNOB_R * 0.85 * s).round()), s, over);
+            }
+            if let Some(over) = crate::automation::mark(a, owner, "track.gain") {
+                let (x, y) = at(cap_x + CAP_W + 6.0, cap_y(self.db()));
+                crate::automation::draw_mark(canvas, (x.round(), y.round()), s, over);
+            }
+        });
         // The pan value under the knob ("C" and the lock glyph when locked).
         let pt = vg::Rect::from_xywh(r.left, at(0.0, PAN_TEXT_Y).1, r.width(), 12.0 * s);
         let pan_text = if lock.is_some() { "C".to_string() } else { crate::state::format_pan(pan) };

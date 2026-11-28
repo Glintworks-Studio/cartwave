@@ -1,0 +1,7 @@
+{
+  "*": [[0, -20, 1440, 77, "the top bar: the transport's two new keys (Automation Arm, Re-Enable Automation; B4) and a divider shift the display, TAP and the meters box"],
+        [1420, 900, 1441, 921, "the window's bottom-right rounded corner (frame anti-aliasing, outside the app)"]],
+  "about": [[300, 120, 1000, 260, "About: the build line (main's source export has no commit: 'build unknown'; this build's commit)"]],
+  "menu_edit": [[0, 0, 340, 560, "the Edit menu: Lock Envelopes added (B3.5, B5-D11)"]],
+  "menu_view": [[60, 0, 400, 330, "the View menu: Automation Mode added (B2)"]]
+}

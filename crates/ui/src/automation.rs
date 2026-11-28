@@ -441,6 +441,23 @@ pub fn draw_mark(canvas: &vizia::vg::Canvas, c: (f32, f32), s: f32, overridden: 
     canvas.draw_circle(c, crate::theme::tokens::AUTO_MARK_D * 0.5 * s, &crate::views::gfx::fill(col));
 }
 
+/// Whether a track of `kind` (locked or not) has parameter `id`: the
+/// registry's rule without building it (no allocation: the arrangement asks
+/// for every row on every frame in Automation Mode). Kept equal to
+/// `params::registry` by `valid_for_matches_the_registry`.
+pub fn valid_for(id: &str, kind: chip::voice::VoiceKind, locked: bool) -> bool {
+    use chip::voice::VoiceKind as K;
+    match id {
+        "track.gain" | "track.pan" | "track.active" | "voice.unison" | "voice.detune" | "voice.drift" => !locked,
+        "macro.arpeggio" | "macro.pitch" | "macro.vibrato" => true,
+        "macro.volume" => kind != K::Triangle,
+        "macro.gate" => kind == K::Triangle,
+        "macro.duty" => matches!(kind, K::Pulse | K::Vrc6Pulse | K::Noise),
+        id if id.starts_with("chip.") => target_of(id, kind).is_some(),
+        _ => false,
+    }
+}
+
 /// An owner's registry (`None`: a track that doesn't exist).
 pub fn registry_for(lanes: &[Lane], owner: AutoOwner) -> Option<Vec<Param>> {
     match owner {
@@ -630,6 +647,22 @@ mod tests {
         assert!(Automation::param_of(&lanes, AutoOwner::Track(3), "chip.duty").is_none(), "the triangle has no duty");
         assert!(Automation::param_of(&lanes, AutoOwner::Track(3), "macro.volume").is_none(), "nor a volume");
         assert!(a.has(AutoOwner::Track(3), "track.gain"), "kept for an unlock");
+    }
+
+    #[test]
+    fn valid_for_matches_the_registry() {
+        let ids = [
+            "track.gain", "track.pan", "track.active", "chip.duty", "chip.volume", "chip.envelope", "chip.sweep", "chip.sweep_rate", "chip.noise_mode", "chip.noise_period", "chip.sample", "chip.rate", "chip.loop",
+            "macro.volume", "macro.arpeggio", "macro.pitch", "macro.vibrato", "macro.duty", "macro.gate", "voice.unison", "voice.detune", "voice.drift", "main.gain",
+        ];
+        for kind in chip::voice::VoiceKind::ALL {
+            for locked in [false, true] {
+                let reg = params::registry(Owner::Track { kind, locked });
+                for id in ids {
+                    assert_eq!(valid_for(id, kind, locked), reg.iter().any(|p| p.id == id), "{kind:?} locked {locked} {id}");
+                }
+            }
+        }
     }
 
     #[test]

@@ -251,3 +251,23 @@ implement them, and each line names where today's build differs. Boards:
 
 Mixer knobs: `knobs` option A (machined: brushed cap, knurled skirt, thin white value ring).
 Fader caps: plastic, as on the `mixer` board.
+
+## 14. Automation (Batch 5; the starting proposal, for Sam's review)
+
+No board yet: these are the values Batch 5 built (`crates/ui/src/theme/tokens.rs`, `AUTO_*`), to be
+reviewed from `docs/screens/batch5/`.
+
+| Element | Value | Note |
+|---|---|---|
+| Envelope line | `#D6D0C4` (warm white), 1.5 px, anti-aliased | Never lime (the CEO flagged green volume automation), never the track colour (identity only). |
+| Breakpoints | 6 px dots, `#D6D0C4`; hovered 8 px | Closer than 3 px apart when zoomed out: only the line shows them. |
+| Selected breakpoint | white 1.5 px outline + a white glow at 10 % | Neutral, like every selection. |
+| Overridden envelope | `#5A5A5A` (line and dots) | The control was moved by hand: it plays its own value until Re-Enable. |
+| No envelope | the control's value as a dashed line, `#D6D0C4` at 35 % (6 px dashes, 4 px gaps) | Click it to start an envelope. |
+| Locked lanes | the frame-quantised staircase (one sample per frame tick at least, per pixel when zoomed out) | What the chip plays. |
+| Lane band | `#111111`, a step under the rows (`#171717` / `#141414`), with the row hairline `#1A1A1A` | One row height per lane (the header's). |
+| Lane time selection | white at 6 %, edges white at 18 % | As the arrangement's time selection. |
+| Lane header label / value | `#A8A8A8` on `#111111` (7.9 : 1); value in JetBrains Mono 10 | "Device › Parameter" and a drawn 6 × 3.5 px chevron (Inter has no ▸ / ▾). |
+| Automated-control marker | a 4 px dot `#F2F2F2`; `#5A5A5A` while overridden | The reference's LED is red; ours is neither red nor lime. |
+| Automation Arm, on | the envelope icon in `#D6D0C4` with a 65 % glow of it | A toggle, but automation never uses lime (B6 over the lime-for-toggles rule). |
+| Re-Enable Automation, lit | `#FF8A1F` (the meter's orange) with a 65 % glow | A momentary button: lit only while a control is overridden. |
