@@ -1832,3 +1832,18 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
   and P2-01's "saved by this build". One behaviour fixed on the way: a right-click on a track
   header (its menu) no longer closes the open piano roll; only a click shows the Device view (AT-10
   caught it).
+- **PB-D17 (the perf gate's coordinates).** Batch 4c's bench clicks main's layout; this branch
+  runs those scenarios with the dev hook `CARTWAVE_BROWSER_W=240`, so the coordinates hold and
+  the arrangement has main's width (the same work measured); the new scenarios (the device panel
+  while playing, the browser searched and scrolled, ◀ ▶ stepping) run at the real 420 px.
+  Cycle counters per scenario come from each run's audio log (one row per second) averaged over
+  the scenario's window (`bench_pb.ps1` writes them; `perf_summary_pb.py` judges by §2's rule).
+- **PB-D18 (a drawing bug the regression gate found).** On a locked track the device's meter
+  layer was opened with a `save` before `save_layer`, and closed once: one canvas level stayed
+  open, clipped to the meter, so everything drawn after the device in that frame went nowhere.
+  The window stopped showing updates (the display kept the old time after a click, the insert
+  marker didn't move on screen) until something redrew the whole window. Found by the regression
+  gate's "inspector" state (main 0:01.40, this branch 0:00.00), located by replacing the device
+  with an empty element (the display updated), fixed (one save or layer, one restore). The suites
+  had passed: their checks read dev lines and saved files, and the screenshot tool moves the
+  window, which repaints it.

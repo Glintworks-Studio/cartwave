@@ -13,7 +13,6 @@
 # -Shift: logical px the main area moved right (180 on this branch: the 420 px browser; 0 for
 # the baseline), so a click on the arrangement lands on the same clip or track in both builds.
 param([string]$Exe = ".\target\release\cartwave.exe", [string]$Out = "regress", [int]$Scale = 100, [string]$Prefix = "CARTWAVE_", [string[]]$Only = @(), [int]$Shift = 0)
-elease\cartwave.exe", [string]$Out = "regress", [int]$Scale = 100, [string]$Prefix = "CARTWAVE_", [string[]]$Only = @(), [int]$Shift = 0)
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $ErrorActionPreference = "Continue"

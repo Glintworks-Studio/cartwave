@@ -942,6 +942,9 @@ impl Model for AppState {
                 }
             }
             AppEvent::SetInsert(t, l) => {
+                if dev::enabled() {
+                    eprintln!("dev: insert marker {t} track {l}");
+                }
                 self.set_insert(*t, *l);
                 self.s.arrangement.update(|a| a.track_sel.clear());
             }

@@ -778,9 +778,13 @@ impl View for DeviceView {
         let level = self.s.meters.with_untracked(|m| m.level_of(d.lane));
         let lit = ((super::mixer::lit_segments(level) as f32) * METER_SEGS as f32 / 65.0).round() as usize;
         let (mx, my) = meter_origin(&d);
-        canvas.save();
+        // One save, one restore: a locked device's meter is a 40 % layer. (A save before the
+        // layer left one level open, and every view drawn after it was clipped into the
+        // meter: the window stopped showing updates; the regression gate found it.)
         if d.locked() {
             canvas.save_layer_alpha_f(vg::Rect::from_xywh(b.x + mx * s, b.y + my * s, METER_W * s, METER_H * s), 0.4);
+        } else {
+            canvas.save();
         }
         for k in 0..lit.min(METER_SEGS) {
             let r = vg::Rect::from_xywh(b.x + (mx + 2.0) * s, b.y + (my + METER_H - 2.0 - 3.0 - 4.0 * k as f32) * s, (METER_W - 4.0) * s, 3.0 * s);
