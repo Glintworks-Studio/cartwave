@@ -4,7 +4,7 @@ Written by `cargo run --release -p ui --example bank_pack -- --write`. Each pres
 
 **202 presets (141 new, 61 classic); clipping: none; new presets within ±1.5 LU of their category's target: 112 of 141 (largest deviation 6.0 LU); authentic presets identical on a studio voice: 0 of 42.**
 
-Level matching: a category's target is fixed from the first pass at the 35th percentile of its new presets (a level the quieter voices can reach); `presets/levels.json` holds the gains `design_bank.py --levels` folded in. The classic presets (Batch 1) are listed but not changed (RUNLOG PB-D6).
+Level matching: a category's target is fixed from the first pass at the 35th percentile of its new presets (a level the quieter voices can reach); `presets/levels.json` holds the gains `design_bank.py --levels` folded in. The classic presets (Batch 1) are listed but not changed (RUNLOG PB-D6), except Music Box, Pizzicato and Menu Blip, raised in Batch 5 A2 as far as their voice allows (RUNLOG B5-D4).
 
 | Category | Target (LUFS) |
 |---|---|
@@ -181,7 +181,7 @@ Level matching: a category's target is fixed from the first pass at the 35th per
 | Slap Bass | Sounds / Basses | classic | -31.5 | -6.4 | -17.1 | -17.3 | no | – |
 | Cello | Sounds / Leads | classic | -26.4 | -1.3 | -17.7 | -18.1 | no | – |
 | Violin | Sounds / Leads | classic | -27.9 | -2.8 | -17.5 | -17.5 | no | – |
-| Pizzicato | Sounds / Bells & Keys | classic | -33.4 | -7.1 | -17.1 | -17.2 | no | – |
+| Pizzicato | Sounds / Bells & Keys | classic | -31.6 | -5.3 | -15.5 | -15.6 | no | – |
 | String Pad | Sounds / Pads | classic | -28.5 | -2.4 | -21.1 | -21.3 | no | – |
 | Flute | Sounds / Leads | classic | -25.5 | -0.4 | -20.0 | -20.0 | no | – |
 | Clarinet | Sounds / Leads | classic | -26.2 | -1.1 | -18.4 | -18.4 | no | – |
@@ -195,7 +195,7 @@ Level matching: a category's target is fixed from the first pass at the 35th per
 | Harpsichord | Sounds / Bells & Keys | classic | -31.5 | -5.2 | -17.1 | -17.2 | no | – |
 | Bell | Sounds / Bells & Keys | classic | -27.4 | -1.1 | -17.2 | -17.3 | no | – |
 | Marimba | Sounds / Bells & Keys | classic | -31.1 | -4.8 | -17.1 | -17.2 | no | – |
-| Music Box | Sounds / Bells & Keys | classic | -34.7 | -8.4 | -20.0 | -20.1 | no | – |
+| Music Box | Sounds / Bells & Keys | classic | -30.3 | -4.0 | -15.2 | -15.3 | no | – |
 | Major Arp | Sounds / Arps | classic | -26.8 | -1.0 | -15.0 | -15.1 | no | – |
 | Minor Arp | Sounds / Arps | classic | -26.8 | -1.0 | -15.0 | -15.1 | no | – |
 | Octave Arp | Sounds / Arps | classic | -26.5 | -0.7 | -16.7 | -16.8 | no | – |
@@ -225,6 +225,6 @@ Level matching: a category's target is fixed from the first pass at the 35th per
 | Jump | Sounds / Game Sounds | classic | -32.5 | -2.4 | -17.8 | -18.0 | no | – |
 | Power Up | Sounds / Game Sounds | classic | -28.7 | +1.4 | -17.9 | -18.0 | no | – |
 | 1-Up | Sounds / Game Sounds | classic | -27.1 | +3.0 | -17.8 | -18.0 | no | – |
-| Menu Blip | Sounds / Game Sounds | classic | -37.3 | -7.2 | -18.5 | -18.7 | no | – |
+| Menu Blip | Sounds / Game Sounds | classic | -33.9 | -3.8 | -15.4 | -15.7 | no | – |
 | Siren | Sounds / FX | classic | -26.5 | +0.1 | -18.6 | -18.8 | no | – |
 | Fall | Sounds / FX | classic | -30.1 | -3.5 | -18.5 | -18.7 | no | – |

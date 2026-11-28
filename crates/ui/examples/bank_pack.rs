@@ -1,7 +1,8 @@
 //! The preset bank's listening pack, level report and provenance table
 //! (PRESETS_PROMPT.md §7.3–§7.5).
 //!
-//! usage: cargo run --release -p ui --example bank_pack -- [--write]
+//! usage: cargo run --release -p ui --example bank_pack -- [--write] [--iterate] [--measure "A,B"]
+//! (`--iterate`: also rewrite `presets/levels.json`, a level-matching pass)
 //!
 //! Every factory preset (`ui::bank::all()`) plays its role's phrase
 //! (`bank::PHRASES`, 150 BPM) on one track: a studio track of its voice, or,
@@ -84,6 +85,14 @@ fn category(p: &Preset) -> String {
     p.path[..n.min(p.path.len())].join(" / ")
 }
 
+/// Dated change lines for presets changed after they shipped.
+fn change_line(name: &str) -> &'static str {
+    match name {
+        "Music Box" | "Pizzicato" | "Menu Blip" => "; **changed 2026-11-28** (Batch 5 A2): level only, raised to the voice's maximum (channel Volume 15, the volume macro scaled up to a loudest step of 15, its shape kept); duty, pitch, arpeggio and vibrato unchanged",
+        _ => "",
+    }
+}
+
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -104,6 +113,18 @@ struct Row {
 
 fn main() {
     let write = std::env::args().any(|a| a == "--write");
+    // `--measure "A,B"`: only print these presets' loudness, true peak and
+    // sample peak (Batch 5 A2's quick check), then stop.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(k) = args.iter().position(|a| a == "--measure") {
+        let names: Vec<&str> = args.get(k + 1).map_or("", |s| s.as_str()).split(',').collect();
+        for p in bank::all().iter().filter(|p| names.iter().any(|n| n.eq_ignore_ascii_case(&p.name))) {
+            let (x, ch) = ui::export::render_channels(&project_for(p, p.authentic()));
+            let (lufs, tp, peak) = ui::game_export::measure_ch(&x, 48_000, ch).unwrap_or((f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY));
+            println!("{}	{lufs:.2} LUFS	tp {tp:.2}	peak {peak:.2}	clips {}", p.name, x.iter().any(|v| v.abs() >= 1.0));
+        }
+        return;
+    }
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let out = root.join("docs/audio/presets");
     let all = bank::all();
@@ -225,10 +246,16 @@ fn main() {
         return;
     }
     let levels = serde_json::json!({ "targets": target, "gains": gains });
-    std::fs::write(root.join("presets/levels.json"), serde_json::to_string_pretty(&levels).unwrap() + "\n").unwrap();
+    // The gains are iterated (each pass refines them and `design_bank.py
+    // --levels` folds them in): only an explicit level pass rewrites them
+    // (Batch 5: a re-render alone left the file claiming gains nothing had
+    // folded in).
+    if std::env::args().any(|a| a == "--iterate") {
+        std::fs::write(root.join("presets/levels.json"), serde_json::to_string_pretty(&levels).unwrap() + "\n").unwrap();
+    }
     let targets: Vec<String> = target.iter().map(|(k, v)| format!("| {k} | {v:.1} |")).collect();
     let md = format!(
-        "# The preset bank: levels\n\nWritten by `cargo run --release -p ui --example bank_pack -- --write`. Each preset plays its role's phrase at 150 BPM (48 kHz); authentic presets on a locked track (the console's mixer and filter), the others on a studio track. Loudness is EBU R128 integrated (LUFS), true peak in dBTP, sample peak in dBFS.\n\n**{summary}.**\n\nLevel matching: a category's target is fixed from the first pass at the 35th percentile of its new presets (a level the quieter voices can reach); `presets/levels.json` holds the gains `design_bank.py --levels` folded in. The classic presets (Batch 1) are listed but not changed (RUNLOG PB-D6).\n\n| Category | Target (LUFS) |\n|---|---|\n{}\n\n| Preset | Category | Bank | Loudness (LUFS) | vs target (LU) | True peak | Sample peak | Clips | Authentic on a studio voice |\n|---|---|---|---|---|---|---|---|---|\n{}\n",
+        "# The preset bank: levels\n\nWritten by `cargo run --release -p ui --example bank_pack -- --write`. Each preset plays its role's phrase at 150 BPM (48 kHz); authentic presets on a locked track (the console's mixer and filter), the others on a studio track. Loudness is EBU R128 integrated (LUFS), true peak in dBTP, sample peak in dBFS.\n\n**{summary}.**\n\nLevel matching: a category's target is fixed from the first pass at the 35th percentile of its new presets (a level the quieter voices can reach); `presets/levels.json` holds the gains `design_bank.py --levels` folded in. The classic presets (Batch 1) are listed but not changed (RUNLOG PB-D6), except Music Box, Pizzicato and Menu Blip, raised in Batch 5 A2 as far as their voice allows (RUNLOG B5-D4).\n\n| Category | Target (LUFS) |\n|---|---|\n{}\n\n| Preset | Category | Bank | Loudness (LUFS) | vs target (LU) | True peak | Sample peak | Clips | Authentic on a studio voice |\n|---|---|---|---|---|---|---|---|---|\n{}\n",
         targets.join("\n"),
         table.join("\n")
     );
@@ -268,7 +295,7 @@ table{border-collapse:collapse;width:100%}td{padding:4px 8px;border-bottom:1px s
     std::fs::write(out.join("index.html"), html).unwrap();
     // Provenance: one entry per preset (G14).
     let mut prov = String::from(
-        "# Preset provenance\n\nOne entry per factory preset (PRESETS_PROMPT.md §7.4, VISION.md \"Presets\"; linked from `docs/ASSETS.md`). Every preset is **designed from scratch** with Cartwave's own macros (volume, arpeggio and its speed, pitch and duty sequences, vibrato, the channel controls, and on studio presets Unison / Detune / Drift). **Nothing is copied from games, ROMs, ripped patches or any third-party library**, and no name refers to a game, console maker or brand. Author of every preset: **Jeffrey Scott Frederick**. Licence: MIT OR Apache-2.0, as the code.\n\n- **New bank** (2026-11-27): generated by [`presets/tools/design_bank.py`](tools/design_bank.py) into [`presets/bank.json`](bank.json), level-matched with `crates/ui/examples/bank_pack.rs` (gains in `presets/levels.json`).\n- **Classic presets** (2026-11-25, Batch 1): the 60 hand-written presets in `crates/chip/src/presets.rs`, folded into the bank in each role's Classic folder (RUNLOG PB-D5), unchanged.\n\nWritten by `cargo run --release -p ui --example bank_pack -- --write`.\n\n| # | Preset | Folder | Voice | Authentic | Author | Date | Origin | Generated by | Tags | Render |\n|---|---|---|---|---|---|---|---|---|---|---|\n",
+        "# Preset provenance\n\nOne entry per factory preset (PRESETS_PROMPT.md §7.4, VISION.md \"Presets\"; linked from `docs/ASSETS.md`). Every preset is **designed from scratch** with Cartwave's own macros (volume, arpeggio and its speed, pitch and duty sequences, vibrato, the channel controls, and on studio presets Unison / Detune / Drift). **Nothing is copied from games, ROMs, ripped patches or any third-party library**, and no name refers to a game, console maker or brand. Author of every preset: **Jeffrey Scott Frederick**. Licence: MIT OR Apache-2.0, as the code.\n\n- **New bank** (2026-11-27): generated by [`presets/tools/design_bank.py`](tools/design_bank.py) into [`presets/bank.json`](bank.json), level-matched with `crates/ui/examples/bank_pack.rs` (gains in `presets/levels.json`).\n- **Classic presets** (2026-11-25, Batch 1): the 60 hand-written presets in `crates/chip/src/presets.rs`, folded into the bank in each role's Classic folder (RUNLOG PB-D5), unchanged except where a dated change line says so.\n\nWritten by `cargo run --release -p ui --example bank_pack -- --write`.\n\n| # | Preset | Folder | Voice | Authentic | Author | Date | Origin | Generated by | Tags | Render |\n|---|---|---|---|---|---|---|---|---|---|---|\n",
     );
     for (k, p) in all.iter().enumerate() {
         let auth = match p.profile {
@@ -277,7 +304,7 @@ table{border-collapse:collapse;width:100%}td{padding:4px 8px;border-bottom:1px s
             _ => "–",
         };
         prov.push_str(&format!(
-            "| {} | {} | {} | {} | {} | {} | {} | designed from scratch | `{}` | {} | [wav](../docs/audio/presets/{}) |\n",
+            "| {} | {} | {} | {} | {} | {} | {} | designed from scratch{} | `{}` | {} | [wav](../docs/audio/presets/{}) |\n",
             k + 1,
             p.name,
             p.folder(),
@@ -285,6 +312,7 @@ table{border-collapse:collapse;width:100%}td{padding:4px 8px;border-bottom:1px s
             auth,
             p.author,
             p.date,
+            change_line(&p.name),
             p.tool,
             p.tags.join(", "),
             rel_path(p)

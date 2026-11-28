@@ -36,3 +36,9 @@ __pycache__/
 
 # Private reference listening (VISION.md "Reference listening"): never committed
 /reference-private/
+
+# Batch 5 (B5-D5): bulky gate outputs never go into the repo; private reference listening (VISION.md)
+/docs/batch5/identity/**/main/
+/docs/batch5/identity/**/b5/
+/private/
+/reference-private/
