@@ -343,11 +343,13 @@ pub struct DeviceView {
     drag: Option<Drag>,
     wheel: crate::input::WheelSteps,
     cache: RefCell<Option<(u64, vg::Image)>>,
+    /// Dev mode: the control set last reported (the scenario checks).
+    reported: RefCell<String>,
 }
 
 impl DeviceView {
     pub fn new(cx: &mut Context, s: Signals) -> Handle<'_, Self> {
-        Self { s, tab: 0, hover: Part::None, drag: None, wheel: Default::default(), cache: RefCell::new(None) }
+        Self { s, tab: 0, hover: Part::None, drag: None, wheel: Default::default(), cache: RefCell::new(None), reported: RefCell::new(String::new()) }
             .build(cx, |_| {})
             .class("device-view")
             .width(Pixels(DEVICE_W))
@@ -739,6 +741,22 @@ impl View for DeviceView {
             (b.w as i32, b.h as i32, (s * 100.0) as i32).hash(&mut h);
             h.finish()
         };
+        if crate::dev::enabled() {
+            let tabs: Vec<&str> = (0..4).filter(|m| macro_used(d.voice, *m)).map(|m| macro_label(d.voice, m)).collect();
+            let line = format!(
+                "dev: device {} {:?} {} preset {:?}: knobs {} · tabs {}",
+                if d.voice == VoiceKind::Dpcm { "DPCM Sampler" } else { "Chip Synth" },
+                d.voice,
+                if d.locked() { "locked" } else { "studio" },
+                preset.0,
+                knobs(&d).iter().map(|k| k.label).collect::<Vec<_>>().join("|"),
+                tabs.join("|")
+            );
+            if *self.reported.borrow() != line {
+                eprintln!("{line}");
+                *self.reported.borrow_mut() = line;
+            }
+        }
         let mut cache = self.cache.borrow_mut();
         if cache.as_ref().map(|c| c.0) != Some(key) {
             *cache = render(&d, tab, &preset, self.hover, b.w, b.h, s).map(|img| (key, img));

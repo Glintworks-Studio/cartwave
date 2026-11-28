@@ -499,6 +499,22 @@ stalls of 10/19/30/40 ms: the match finds exactly the 12 stalls of 30/40 ms and 
 shorter ones; the pilot reports 460 "dropouts". The ≥ 22 ms threshold of §8.1 is the MOTU's
 (a 1,126-frame buffer); each device has its own.
 
+## 7b. The performance gate: cycle counters and a noise allowance (since the Presets + Browser batch)
+
+The rule every later prompt inherits (PRESETS_PROMPT.md §2, from BATCH4C.md §2's findings):
+
+- **The primary measure is per-thread cycle counters** (Batch 4c's method,
+  `docs/batch4c/tools/threads_b4c.ps1`): **UI cycles per presented frame** and **audio cycles per
+  callback**, read from the threads' `QueryThreadCycleTime`. Process CPU % (tick-sampled, its
+  audio share swung 3.4–6.4 % between runs of one build) is still reported, for context.
+- **10 interleaved rounds** of the two builds, the order alternating each round; judged on the
+  **means**, with the **standard error of the paired round differences** reported (the noise
+  floor).
+- **A scenario fails only if its difference is over its limit *and* more than 2× its noise
+  floor.** A difference inside 2 SE of zero is not evidence of a regression and is reported as
+  noise, never re-run to fish for a pass.
+- Every run proves it tested what it claims (the scenario's proof line, focus held), as before.
+
 ## 8. Windows audio findings, and what will differ on macOS
 
 ### 8.1 Windows (WASAPI shared mode through cpal 0.18.2; probes in `crates/engine/examples/probe.rs`, `headless.rs`)

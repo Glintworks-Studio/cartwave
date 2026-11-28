@@ -1765,3 +1765,57 @@ Entries above this heading keep the working title as written. Report: [RENAME.md
 - **PB-D8 (the listening pack's size).** 202 WAVs, 48 kHz 16-bit mono, the phrase plus its
   tail cut 20 ms after the last sample above −70 dBFS; the one-shot phrases (game sounds, drum
   hits) are one bar. 51 MB (4c's A/B pack is 41 MB).
+- **PB-D9 (the device's controls: where each one lives).** The board places Duty, Unison and
+  Detune under the oscillator and Vib Depth, Vib Rate, Arp Speed under the envelopes. Every
+  instrument control the old inspector had must keep one home (VISION principle 2), so: **Drift**
+  (the prompt lists it, the board omits it) joins the OSCILLATOR row; **Vibrato Delay** (an
+  existing control) joins the ENVELOPES row (four knobs, `space-around`); the channel's other
+  hardware controls get a second row of 28 px knobs: **Sweep and Sweep rate** (pulse) and the
+  noise **Period** under the oscillator, the hardware **Envelope** mode under OUTPUT's Volume
+  (which reads DECAY when the envelope decays, as the old dial did). Each voice shows only the
+  controls its registry row has (`ParamId::for_lane`, the studio trio only on studio tracks).
+  Labels are `#8A8A8A`, not the board's `#808080` (4.45 : 1 on the sections' lightest top), as the
+  mixer's (B4B-D32). Knob arcs run from the minimum (the board draws them from 12 o'clock, which
+  reads as "a lot" at zero). The **DPCM Sampler** shows SAMPLE (the note-picks row, the built-in
+  and user slots, Import), PLAYBACK (Rate, Loop, and the sample and its rate in the display) and
+  OUTPUT; no envelopes, and no Unison / Detune / Drift: the DMC ignores the macros (only sample,
+  rate and loop reach it, `driver.rs`), so drawing them would pretend (their stored values are
+  kept). The old inspector's DPCM arpeggio and pitch graphs pretended the same way.
+- **PB-D10 (the Detail View).** Live 12 manual §42.1 (R78): Shift+Tab switches the lower panel
+  between the clip and the device chain. Shift+Tab was free in the shortcut table; it is
+  `ToggleDetail` ("Clip / Device View"), so it shows on the Help sheet (the one-table rule) but
+  not in the View menu (it would change a menu outside the allowed regions; the reference doesn't
+  list one either). The Clip view is the piano roll; the Device view is the inspector's **CLIP**
+  section in the board's first 200 px (where the board drew the MIDI-effects placeholder, so the
+  device sits at the board's x 224) and the instrument. Selecting a track header shows its Device
+  view; opening a clip its Clip view; Shift+Tab back reopens the clip the Device view replaced.
+  The bottom pane is the board's 356 px (it was 232).
+- **PB-D11 (the browser's width and the regression gate).** The board's browser is 420 px (a
+  150 px sidebar and a 270 px content pane); it was 240. The 180 px moves the headers, lanes and
+  mixer right. The regression diff (`docs/presets/tools/diff_pb.py`) counts a pixel unchanged if
+  it matches the baseline in place or 180 px to the left; what is left is sorted into the
+  browser, the bottom pane and OTHER, every OTHER region listed.
+- **PB-D12 (the earlier suites' coordinates).** Their clicks assume the 240 px browser: they run
+  with a dev-only hook, `CARTWAVE_BROWSER_W=240` (as polish 2 runs the oldest ones with the
+  Overview and status bar hidden, P2-D16), via `docs/presets/tools/run_suites_pb.ps1`.
+- **PB-D13 (what "a studio-only preset" is on a locked track).** VISION: "choosing a studio-only
+  preset asks first: Unlock track · Cancel". A preset is studio-only for a locked track when it
+  uses Unison, Detune or Drift, or plays on a voice the channel isn't. Any other preset loads
+  without a question (principle 6: ask only when it matters): the hardware can play it. ◀ ▶ on a
+  locked track skips presets it can't play rather than asking at every step.
+- **PB-D14 (loading from Hardware).** An authentic preset puts the project under its profile and
+  locks the track to a free channel of its type (one undo step with the profile change). From
+  None (studio only) the profile is set without a question (nothing can break); a VRC6 preset in a
+  NES project asks as a layout does (Switch to Famicom + VRC6 · Load unlocked · Cancel, the
+  Expansion warning); no free channel asks (Load unlocked · Cancel, a new "no free channel"
+  warning); locking keeps 4a's rules (fader / pan reset asks; chords ask Fit and lock). A track
+  locked to another type of channel can't take it (a status-bar message says where to drop it).
+- **PB-D15 (Collections, Clips, Samples, Places).** Collections are seven fixed coloured labels
+  (Favourites, Red, Yellow, Green, Blue, Purple, Grey; none lime), assigned from any item's context
+  menu, kept per user in settings.json by item key; the sidebar always shows Favourites and any
+  other collection that has items. **Clips** lists the bank's phrases (the ones the listening
+  pack plays): a double-click puts one on the selected track at the insert marker, a drag at the
+  dropped bar or (empty space) on a new track. **Samples** lists the four built-in DPCM samples,
+  the project's imported ones and Import audio. **User Library**: the user presets. **Current
+  Project**: the presets and samples the project's tracks use. Audio Effects, MIDI Effects and
+  Imported Projects aren't shown (nothing pretends).

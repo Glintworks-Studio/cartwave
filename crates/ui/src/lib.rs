@@ -820,6 +820,9 @@ impl Model for AppState {
                 }
                 self.s.browser_sel.set(*p);
                 self.s.browser_reveal.set(*p);
+                if dev::enabled() {
+                    eprintln!("dev: show in browser {p:?}");
+                }
             }
             AppEvent::SavePresetAs => {
                 self.s.picker.set(None);

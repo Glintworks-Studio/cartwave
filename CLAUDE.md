@@ -55,6 +55,10 @@ hardware profiles (VISION.md roadmap).
 - **When two sources disagree, resolve it with a third, never dismiss one** (measurements,
   docs, tools).
 - **Measure before and after** any change that could affect performance or sound.
+- **The performance gate** (ENGINE.md §7b, since the Presets + Browser batch): per-thread cycle
+  counters first (UI cycles per presented frame, audio cycles per callback; process CPU % for
+  context), 10 interleaved rounds alternating order, means with the standard error of the paired
+  differences; **a scenario fails only if it is over its limit and more than 2× its noise floor**.
 - **Trust probes over earlier documents.** A probe or measurement made now beats a claim in an
   older report.
 - **Every benchmark must prove it is testing what it claims** (a screenshot, a log line or a

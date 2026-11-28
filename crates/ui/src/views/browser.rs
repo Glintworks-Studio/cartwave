@@ -429,6 +429,10 @@ impl LibraryView {
         }
         self.rows = rows;
         self.hover = None;
+        if crate::dev::enabled() {
+            let items = self.rows.iter().filter(|r| matches!(r, Row::Item { .. })).count();
+            eprintln!("dev: browser {} rows {} items {items} query {:?}", self.section.key(), self.rows.len(), words.join(" "));
+        }
     }
 
     /// Show in Browser: the preset's section, its folders opened, selected.
@@ -499,8 +503,12 @@ impl LibraryView {
                 return;
             }
             let key = path.join("/");
-            if !self.open.remove(&key) {
-                self.open.insert(key);
+            let opened = !self.open.remove(&key);
+            if opened {
+                self.open.insert(key.clone());
+            }
+            if crate::dev::enabled() {
+                eprintln!("dev: browser {} {key}", if opened { "open" } else { "close" });
             }
             self.refresh();
         }

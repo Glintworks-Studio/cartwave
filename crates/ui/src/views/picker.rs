@@ -100,6 +100,9 @@ impl PickerView {
             v.scroll = (i as f32 * ROW_H - 4.0 * ROW_H).max(0.0);
         }
         let h = v.height();
+        if crate::dev::enabled() {
+            eprintln!("dev: picker open: roots {} current {:?}", v.roots.iter().map(|r| r.1.name.clone()).collect::<Vec<_>>().join("|"), v.current);
+        }
         let (x, y, _) = s.picker.get_untracked().unwrap_or((0.0, 0.0, W));
         v.build(cx, |_| {})
             .position_type(PositionType::Absolute)

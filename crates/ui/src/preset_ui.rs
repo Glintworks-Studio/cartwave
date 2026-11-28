@@ -349,6 +349,9 @@ impl AppState {
         self.commit();
         let name = self.s.arrangement.with_untracked(|a| a.lanes[at].name.clone());
         self.set_status(format!("New track \"{name}\" with {}", pr.name));
+        if crate::dev::enabled() {
+            eprintln!("dev: new track {at} from preset {p} undo steps {:?}", self.history.steps());
+        }
     }
 
     /// A clip from the Clips folder: on track `lane` at `tick` (the insert
