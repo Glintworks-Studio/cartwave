@@ -503,6 +503,8 @@ pub enum AppEvent {
     InsertPhrase { phrase: usize, lane: Option<usize>, tick: Option<u32> },
     /// A DPCM sample from the browser onto a DPCM Sampler track (`None`: a new one).
     AssignSample { slot: usize, lane: Option<usize> },
+    /// The browser's sidebar entry (remembered in settings.json).
+    BrowserSection(String),
     /// The device's ◀ ▶: the previous / next preset in the current one's folder.
     StepPreset(i32),
     /// The device's preset field: open the picker under it (window logical x, y, width).
@@ -794,7 +796,20 @@ impl Model for AppState {
             AppEvent::InsertPhrase { phrase, lane, tick } => self.insert_phrase(*phrase, *lane, *tick),
             AppEvent::AssignSample { slot, lane } => self.assign_sample(*slot, *lane),
             AppEvent::StepPreset(d) => self.step_preset(cx, *d),
-            AppEvent::OpenPicker(x, y, w) => self.s.picker.set(Some((*x, *y, *w))),
+            AppEvent::BrowserSection(k) => {
+                if self.settings.browser_section != *k {
+                    self.settings.browser_section = k.clone();
+                    self.save_settings();
+                }
+            }
+            AppEvent::OpenPicker(x, y, w) => {
+                // Under the field, or above it when the window has no room below.
+                let h = views::picker::HEIGHT;
+                let win = self.window_logical;
+                let top = if *y + h > win.1 - 8.0 { (*y - 30.0 - h).max(8.0) } else { *y };
+                let left = x.min(win.0 - views::picker::WIDTH - 8.0).max(8.0);
+                self.s.picker.set(Some((left, top, *w)));
+            }
             AppEvent::ClosePicker => self.s.picker.set(None),
             AppEvent::ShowInBrowser(p) => {
                 self.s.picker.set(None);
@@ -2575,6 +2590,8 @@ pub fn build_ui(cx: &mut Context) {
         views::rename::build(cx, s);
         views::export_dialog::build(cx, s);
         views::modal::build(cx, s);
+        // The device's preset picker (§6).
+        views::picker::build(cx, s);
         // Menus open above the modal panels too (Settings' colour grid).
         context_menu(cx, s);
     })

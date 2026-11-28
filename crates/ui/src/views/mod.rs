@@ -13,6 +13,7 @@ pub mod modal;
 pub mod overlay;
 pub mod overview;
 pub mod piano_roll;
+pub mod picker;
 pub mod rename;
 pub mod statusbar;
 pub mod ruler;

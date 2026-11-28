@@ -1016,6 +1016,7 @@ impl View for Arrangement {
         let s = cx.scale_factor();
         let rect: vg::Rect = b.into();
         ARRANGEMENT_AT.with(|a| a.set(Some((rect.left, rect.right, s))));
+        super::browser::register_lanes_area(rect.left, rect.top, rect.right, rect.bottom);
 
         let dt = gfx::frame_dt(&self.last_draw);
 
@@ -1318,7 +1319,7 @@ impl View for Arrangement {
         // Dragging a preset from the browser: dim lanes it can't play on,
         // tint the one it would land on.
         if self.s.drag_preset.with_untracked(|d| d.is_some()) {
-            for lane in 0..8 {
+            for lane in 0..self.s.arrangement.with_untracked(|a| a.lanes.len()) {
                 let (Some((fits, target)), Some((y0, y1))) =
                     (super::browser::drag_state(&self.s, lane), super::browser::lane_span(lane))
                 else {

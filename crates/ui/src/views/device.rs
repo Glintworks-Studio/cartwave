@@ -791,7 +791,7 @@ fn preset_label(d: &Dev) -> (String, bool) {
     (d.inst.label(), authentic)
 }
 
-fn lock_glyph(c: &vg::Canvas, o: (f32, f32), s: f32, ink: Rgba) {
+pub(crate) fn lock_glyph(c: &vg::Canvas, o: (f32, f32), s: f32, ink: Rgba) {
     c.draw_path(&gfx::svg_path("M1 4H7V8.5H1Z", o, s), &gfx::fill(ink));
     c.draw_path(&gfx::svg_path("M2 4V2.8a2 2 0 0 1 4 0V4", o, s), &gfx::stroke(ink, 1.2 * s));
 }

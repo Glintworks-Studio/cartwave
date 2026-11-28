@@ -391,8 +391,8 @@ impl AppState {
         self.set_status(format!("Added the clip \"{}\"", ph.name));
     }
 
-    /// A DPCM sample from the Samples folder onto a DPCM Sampler track (a
-    /// new one when dropped on empty space): every note plays it.
+    /// A DPCM sample from the Samples folder onto a DPCM Sampler track
+    /// (`None`: a new one, as a drop on empty space): every note plays it.
     pub(crate) fn assign_sample(&mut self, slot: usize, lane: Option<usize>) {
         self.commit();
         let lane = match lane {
