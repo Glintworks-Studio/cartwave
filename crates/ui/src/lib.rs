@@ -1,6 +1,7 @@
 //! Cartwave's user interface. A library crate so the same UI can later be hosted
 //! inside a plugin window (baseview) as well as the standalone app.
 
+pub mod bank;
 pub mod dev;
 pub mod edit;
 pub mod file;

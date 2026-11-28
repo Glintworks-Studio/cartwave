@@ -421,6 +421,23 @@ impl Arrangement {
         // (the caller fits them first if the user chose to).
     }
 
+    /// The Voice selector (PRESETS_PROMPT.md §4.2): studio track `i` plays
+    /// voice `k` from now on. Its channel controls start at `k`'s defaults
+    /// (the old ones mean other registers); its name, colour, clips, fader,
+    /// pan, Voices and unison stay. The rack (its voice pool) is rebuilt by
+    /// the UI thread when the shape changes. A locked track's voice is its
+    /// channel's: `false`, nothing changes.
+    pub fn set_voice(&mut self, i: usize, k: VoiceKind) -> bool {
+        let Some(t) = self.lanes.get_mut(i) else { return false };
+        if t.lock.is_some() || t.voice == k {
+            return false;
+        }
+        t.voice = k;
+        t.params = engine::Params::default().values[k.lane()];
+        t.short = short_for(t);
+        true
+    }
+
     /// Unlocks track `i`: a studio track that sounds the same, with its
     /// fader and pan back where they were before locking.
     pub fn unlock_track(&mut self, i: usize) {
