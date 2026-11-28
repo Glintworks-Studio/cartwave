@@ -625,7 +625,7 @@ impl View for LibraryView {
                     Code::ArrowUp | Code::ArrowDown => {
                         let down = *code == Code::ArrowDown;
                         let n = self.rows.len();
-                        let from = cur.map_or(if down { usize::MAX } else { n }, |c| c);
+                        let from = cur.unwrap_or(if down { usize::MAX } else { n });
                         let next = if down { (from.wrapping_add(1)..n).find(|i| matches!(self.rows[*i], Row::Item { .. })) } else { (0..from.min(n)).rev().find(|i| matches!(self.rows[*i], Row::Item { .. })) };
                         if let Some(i) = next {
                             if let Row::Item { item, .. } = self.rows[i] {

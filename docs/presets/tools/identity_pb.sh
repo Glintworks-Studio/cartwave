@@ -10,14 +10,17 @@ BASE=$(cd "$1" && pwd); OUT=$2
 NEW=$(cd "$(dirname "$0")/../../.." && pwd)
 CARGO=${CARGO:-~/.cargo/bin/cargo}
 mkdir -p "$OUT"
-# The list: every project file under the repo (not target/).
-(cd "$NEW" && find . -path ./target -prune -o \( -name '*.chipdaw' -o -name '*.cartwave' \) -print | sort | sed "s|^\.|$NEW|") > "$OUT/list.txt"
+# The list: every project file under the repo (not target/), as Windows paths (the binaries
+# can't open MSYS /c/... paths: a first run listed 299 "can't open" lines, identical and useless).
+WNEW=$(cd "$NEW" && pwd -W)
+(cd "$NEW" && find . -path ./target -prune -o \( -name '*.chipdaw' -o -name '*.cartwave' \) -print | sort | sed "s|^\.|$WNEW|") > "$OUT/list.txt"
 cp "$NEW/crates/ui/examples/corpus_hashes.rs" "$BASE/crates/ui/examples/corpus_hashes.rs" 2>/dev/null || true
 (cd "$BASE" && $CARGO run --release -q -p ui --example corpus_hashes -- "$OUT/list.txt" > "$OUT/corpus-hashes-main.tsv" 2>/dev/null)
 (cd "$NEW" && $CARGO run --release -q -p ui --example corpus_hashes -- "$OUT/list.txt" > "$OUT/corpus-hashes-pb.tsv" 2>/dev/null)
 n=$(wc -l < "$OUT/list.txt")
-same=$(paste "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-pb.tsv" | awk -F'\t' '$1==$5 && $2==$6 && $3==$7 && $4==$8' | wc -l)
-echo "corpus: $n files, $same identical (render, export and channels)"
+same=$(paste "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-pb.tsv" | awk -F'	' '$2!="error" && $1==$5 && $2==$6 && $3==$7 && $4==$8' | wc -l)
+errs=$(grep -c $'	error	' "$OUT/corpus-hashes-pb.tsv")
+echo "corpus: $n files, $same identical (render, export and channels), $errs that neither build opens"
 diff "$OUT/corpus-hashes-main.tsv" "$OUT/corpus-hashes-pb.tsv" > "$OUT/corpus-diff.txt" && echo "corpus diff: none"
 cases=(
   "showcase|--rate 44100 --loop-bars 8 --stems channels --name showcase|docs/songs/showcase.mid docs/songs/hey.wav"
