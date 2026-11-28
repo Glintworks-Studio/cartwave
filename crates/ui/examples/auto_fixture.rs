@@ -42,8 +42,8 @@ fn main() {
             while t <= end {
                 // A slow wave, its phase per lane.
                 let x = ((j + k as u32 * 3 + i as u32) % 8) as f32 / 7.0;
-                let v = lo + (hi - lo) * if (j / 8) % 2 == 0 { x } else { 1.0 - x };
-                pts.push(Pt { t, v, c: if j % 3 == 0 { 0.4 } else { 0.0 } });
+                let v = lo + (hi - lo) * if (j / 8).is_multiple_of(2) { x } else { 1.0 - x };
+                pts.push(Pt { t, v, c: if j.is_multiple_of(3) { 0.4 } else { 0.0 } });
                 t += 2 * bar;
                 j += 1;
             }

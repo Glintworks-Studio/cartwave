@@ -1,0 +1,12 @@
+# underruns: starved 0 late 0 (overruns 0), max callback gap 10.34 ms
+# edits applied 32, edit->frame tick max 16.63 ms, send->engine max 9.74 ms, dropped commands 0
+# alloc violations 0, ui stalls 0, device rebuilds 0
+# thread cycles: audio 183.4 k/callback, ui 3913.5 k/presented frame
+# audio thread: 0.0 k instr/callback, 0.00 uJ/callback, P-core share ?; ui thread: 0 k instr/frame, 0.0 uJ/frame, P-core share ?
+# process: 0.0 M instr/s, 0.0 mW, P-core share ?, 0.0 % of a core; audio thread 0.00 M instr/s, 0.00 mW
+# overloads (CoreAudio kAudioDeviceProcessorOverload via cpal Xrun): 0; silent callbacks 0
+# cb_hist_permille: 1:8675 2:24758 3:16296 4:4918 5:2617 6:1464 7:570 8:286 9:136 10:75 11:50 12:45 13:41 14:21 15:9 16:12 17:4 18:5 19:2 20:3 21:1 22:3 24:2 26:1 27:1 28:2 31:1 32:1
+# match: 224981 blocks matched, 4 before lock, 0 mismatched; 0 mismatch runs: 0 dropouts (max 0.00 ms), 0 capture gaps, 0 foreign; tap lost 0; 1 locks; 28799150 samples compared
+# match jumps (app s: gap): 
+# loopback: 0 blocks, 0 pilot dropouts
+override events 16 (automation overridden lines 16), re-enable events 15

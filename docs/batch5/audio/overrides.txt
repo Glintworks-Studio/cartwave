@@ -1,0 +1,47 @@
+dev: automation overridden track.gain
+dev: auto override 1 (override)
+dev: auto override 2 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 3 (override)
+dev: auto override 4 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 5 (override)
+dev: auto override 6 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 7 (override)
+dev: auto override 8 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 9 (override)
+dev: auto override 10 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 11 (override)
+dev: auto override 12 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 13 (override)
+dev: auto override 14 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 15 (override)
+dev: auto override 16 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 17 (override)
+dev: auto override 18 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 19 (override)
+dev: auto override 20 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 21 (override)
+dev: auto override 22 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 23 (override)
+dev: auto override 24 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 25 (override)
+dev: auto override 26 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 27 (override)
+dev: auto override 28 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 29 (override)
+dev: auto override 30 (re-enable)
+dev: automation overridden track.gain
+dev: auto override 31 (override)
