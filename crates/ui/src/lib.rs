@@ -1885,7 +1885,14 @@ impl AppState {
             if dev::enabled() {
                 eprintln!("dev: automation overridden {id}");
             }
-            self.set_status(format!("{id} overrides its automation: Re-Enable Automation (in the transport) puts it back."));
+            let what = self.s.arrangement.with_untracked(|a| {
+                let name = automation::Automation::param_of(&a.lanes, owner, id).map_or(id.to_string(), |p| p.name.to_string());
+                match owner {
+                    automation::AutoOwner::Track(t) => a.lanes.iter().find(|l| l.id == t).map_or(name.clone(), |l| format!("{}'s {name}", l.name)),
+                    automation::AutoOwner::Main => format!("Main's {name}"),
+                }
+            });
+            self.set_status(format!("{what} overrides its automation (moved by hand): Re-Enable Automation, in the transport, puts it back."));
         }
     }
 
